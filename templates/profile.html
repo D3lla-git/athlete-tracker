@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}My Profile{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-7">
+    <div class="card shadow">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">My Profile</h4>
+        <span class="badge bg-success">Verified</span>
+      </div>
+
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('update_profile') }}" enctype="multipart/form-data">
+          <div class="row">
+
+            <!-- Left side - Profile Circle -->
+            <div class="col-md-4 text-center">
+              <label for="profile_picture" style="cursor: pointer;">
+                {% if current_user.profile_picture %}
+                  <img src="{{ url_for('uploaded_file', filename=current_user.profile_picture) }}"
+                       class="rounded-circle"
+                       style="width: 140px; height: 140px; object-fit: cover; border: 3px solid #dee2e6;"
+                       onerror="this.style.display='none'; document.getElementById('initial-avatar').style.display='flex';">
+                {% endif %}
+
+                <div id="initial-avatar"
+                     class="rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center"
+                     style="width: 140px; height: 140px; font-size: 3.2rem; font-weight: 500;{% if current_user.profile_picture %} display: none;{% endif %}">
+                  {{ current_user.full_name[0] | upper }}
+                </div>
+              </label>
+
+              <input type="file" name="profile_picture" id="profile_picture"
+                     accept=".png,.jpg,.jpeg" style="display: none;"
+                     onchange="this.form.submit()">
+
+              <p class="text-muted small mt-2">Profile Picture (optional)</p>
+            </div>
+
+            <!-- Right side - Form fields -->
+            <div class="col-md-8">
+              <div class="mb-3">
+                <label class="form-label">Full Name</label>
+                <input type="text" class="form-control" value="{{ current_user.full_name }}" disabled>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">School</label>
+                <input type="text" name="school" class="form-control" value="{{ current_user.school }}">
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Role</label>
+                <input type="text" class="form-control" value="Student" disabled>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Upload New Profile Picture</label>
+                <input type="file" name="profile_picture" class="form-control" accept=".png,.jpg,.jpeg">
+              </div>
+
+              <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Search{% endblock %}
+{% block content %}
+<h2 class="mb-4">Search Student-Athletes</h2>
+<form method="GET" class="row g-3 mb-4">
+  <div class="col-md-5">
+    <input type="text" name="name" class="form-control" placeholder="Full Name" value="{{ name }}">
+  </div>
+  <div class="col-md-5">
+    <input type="text" name="school" class="form-control" placeholder="School Name" value="{{ school }}">
+  </div>
+  <div class="col-md-2">
+    <button class="btn btn-primary w-100">Search</button>
+  </div>
+</form>
+
+{% if results %}
+  {% for item in results %}
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5>{{ item.student.full_name }}</h5>
+      <p class="text-muted">{{ item.student.school }}</p>
+      {% if item.records %}
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered">
+            <thead class="table-light">
+              <tr>
+                <th>Sport</th>
+                <th>Year</th>
+                <th>Position</th>
+                <th>Games</th>
+                <th>Stats</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in item.records %}
+              <tr>
+                <td>{{ r.sport }}</td>
+                <td>{{ r.year }}</td>
+                <td>{{ r.position or '-' }}</td>
+                <td>{{ r.games_played }}</td>
+                <td>
+                  {% if r.sport == 'Football' %}
+                    Goals: {{ r.goals }} | Assists: {{ r.assists }} | YC: {{ r.yellow_cards }} | RC: {{ r.red_cards }}
+                  {% elif r.sport == 'Basketball' %}
+                    Points: {{ r.points }} | Assists: {{ r.assists }} | Blocks: {{ r.blocks }} | Sent Off: {{ r.sent_off }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if name or school %}
+  {% if results %}
+    <!-- existing results display here -->
+  {% else %}
+    <div class="alert alert-secondary">
+      No athletes found matching your search.
+    </div>
+  {% endif %}
+{% else %}
+  <div class="alert alert-light border text-center py-4">
+    <p class="mb-0 text-muted">Enter a student name or school name above to search for athletes.</p>
+  </div>
+{% endif %}
+      {% else %}
+        <p class="text-muted">No approved records yet.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <p>No students found.</p>
+{% endif %}
+{% endblock %}
