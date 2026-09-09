@@ -11,8 +11,8 @@ class User(UserMixin, db.Model):
     school = db.Column(db.String(150), nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), default='student')  # student or admin
-    id_document = db.Column(db.String(255))
-    profile_picture = db.Column(db.String(255), nullable=True)
+    id_document = db.Column(db.String(255), nullable=True)      # from registration
+    profile_picture = db.Column(db.String(255), nullable=True)  # optional update
     is_verified = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -31,6 +31,9 @@ class SportRecord(db.Model):
     year = db.Column(db.Integer, nullable=False)
     position = db.Column(db.String(50))
     games_played = db.Column(db.Integer, default=0)
+    trophy = db.Column(db.String(100), nullable=True)
+    team = db.Column(db.String(100), nullable=True)
+    school = db.Column(db.String(150), nullable=True)
 
     # Football fields
     goals = db.Column(db.Integer, default=0)

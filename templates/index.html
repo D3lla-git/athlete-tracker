@@ -2,9 +2,23 @@
 {% block title %}Home - Athlete Tracker{% endblock %}
 {% block content %}
 <div class="text-center py-5">
-  <h1 class="display-5 fw-bold">Student-Athlete Records Tracker</h1>
-  <p class="lead">Search sports records of high school athletes — even after they graduate.</p>
-  <a href="{{ url_for('search') }}" class="btn btn-primary btn-lg me-2">Search Athletes</a>
-  <a href="{{ url_for('register') }}" class="btn btn-outline-primary btn-lg">Student Register</a>
+  <h1 class="display-5 fw-bold">Athlete Records Tracker</h1>
+  <p class="lead">Search sports records of athletes.</p>
+ <div class="mt-4 d-flex flex-column flex-sm-row justify-content-center gap-3">
+
+<div class="mt-4 d-flex flex-column flex-sm-row justify-content-center gap-3">
+<a href="{{ url_for('search') }}" 
+   class="btn btn-lg rounded-5 btn-search-hover">
+  Search Athletes <i class="fa-solid fa-magnifying-glass"></i>
+</a> 
+
+<a href="{{ url_for('register') }}" 
+   class="btn btn-lg rounded-5 btn-register-hover">
+  <i class="fa-solid fa-user-plus"></i> Register as Athlete <i class="fa-solid fa-running"></i>
+</a>
+<a href="{{ url_for('register_coach') }}" class="btn btn-lg rounded-5 btn-coach-hover">
+  Register as Coach/Admin <i class="fa-solid fa-chalkboard-teacher"></i>
+</a>
+</div>
 </div>
 {% endblock %}

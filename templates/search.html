@@ -1,78 +1,235 @@
 {% extends "base.html" %}
-{% block title %}Search{% endblock %}
-{% block content %}
-<h2 class="mb-4">Search Student-Athletes</h2>
-<form method="GET" class="row g-3 mb-4">
-  <div class="col-md-5">
-    <input type="text" name="name" class="form-control" placeholder="Full Name" value="{{ name }}">
-  </div>
-  <div class="col-md-5">
-    <input type="text" name="school" class="form-control" placeholder="School Name" value="{{ school }}">
-  </div>
-  <div class="col-md-2">
-    <button class="btn btn-primary w-100">Search</button>
-  </div>
-</form>
+{% block title %}Search Athletes{% endblock %}
 
-{% if results %}
-  {% for item in results %}
-  <div class="card mb-3">
-    <div class="card-body">
-      <h5>{{ item.student.full_name }}</h5>
-      <p class="text-muted">{{ item.student.school }}</p>
-      {% if item.records %}
-        <div class="table-responsive">
-          <table class="table table-sm table-bordered">
-            <thead class="table-light">
-              <tr>
-                <th>Sport</th>
-                <th>Year</th>
-                <th>Position</th>
-                <th>Games</th>
-                <th>Stats</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for r in item.records %}
-              <tr>
-                <td>{{ r.sport }}</td>
-                <td>{{ r.year }}</td>
-                <td>{{ r.position or '-' }}</td>
-                <td>{{ r.games_played }}</td>
-                <td>
-                  {% if r.sport == 'Football' %}
-                    Goals: {{ r.goals }} | Assists: {{ r.assists }} | YC: {{ r.yellow_cards }} | RC: {{ r.red_cards }}
-                  {% elif r.sport == 'Basketball' %}
-                    Points: {{ r.points }} | Assists: {{ r.assists }} | Blocks: {{ r.blocks }} | Sent Off: {{ r.sent_off }}
-                  {% else %}
-                    —
-                  {% endif %}
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% if name or school %}
-  {% if results %}
-    <!-- existing results display here -->
-  {% else %}
-    <div class="alert alert-secondary">
-      No athletes found matching your search.
+{% block content %}
+<div class="container py-4">
+  <h2 class="mb-4">Search Student-Athletes</h2>
+
+  <!-- Search Form -->
+  <form method="GET" action="{{ url_for('search') }}" class="row g-3 mb-4">
+    <div class="col-md-5 position-relative">
+      <input type="text" 
+             name="name" 
+             id="nameInput" 
+             value="{{ name }}" 
+             class="form-control form-control-lg" 
+             placeholder="Full Name" 
+             autocomplete="off">
+      <div id="nameSuggestions" class="list-group position-absolute w-100 shadow-sm" 
+           style="z-index: 1050; display: none; max-height: 250px; overflow-y: auto;">
+      </div>
     </div>
-  {% endif %}
-{% else %}
-  <div class="alert alert-light border text-center py-4">
-    <p class="mb-0 text-muted">Enter a student name or school name above to search for athletes.</p>
-  </div>
-{% endif %}
+
+    <div class="col-md-4">
+      <input type="text" name="school" value="{{ school }}" class="form-control form-control-lg" placeholder="School Name (optional)">
+    </div>
+
+    <div class="col-md-3">
+      <button type="submit"  class="btn btn-success btn-lg rounded-5"
+   style="border: 2px solid black; color: white;">Search <i class="fa-solid fa-magnifying-glass"></i></button>
+</a>
+    </div>
+  </form>
+
+  <!-- ===================== RESULTS ===================== -->
+  {% if name or school %}
+    {% if results %}
+
+      <!-- DESKTOP TABLE -->
+      <div class="d-none d-md-block">
+        {% for item in results %}
+          <div class="card mb-4 shadow-sm">
+            <div class="card-body">
+              <h5 class="mb-1">
+                {{ item.student.full_name }} <i class="fa-solid fa-user"></i>
+              </h5>
+              <p class="text-muted mb-3">
+                {{ item.student.school }} <i class="fa-solid fa-school"></i>
+              </p>
+
+              {% if item.records %}
+                <div class="table-responsive">
+                  <table class="table table-bordered table-hover mb-0">
+                    <thead class="table-dark">
+                      <tr>
+                        <th><i class="fa-solid fa-futbol"></i> Sport <i class="fa-solid fa-basketball" style="color:orangered;"></i></th>
+                        <th>Year <i class="fa-solid fa-calendar" style="color:lightgreen;"></i></th>
+                        <th>Team <i class="fa-solid fa-users"></i></th>
+                        <th>Position <i class="fa-solid fa-shirt"></i></th>
+                        <th>Games Played <i class="fa-solid fa-person-running"></i></th>
+                        <th>Trophy <i class="fa-solid fa-trophy" style="color:goldenrod;"></i></th>
+                        <th>Stats <i class="fa-solid fa-chart-line"></i></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for r in item.records %}
+                      <tr>
+                        <td>{{ r.sport }}</td>
+                        <td>{{ r.year }}</td>
+                       <td>{{ r.team or item.student.school }}</td>
+                        <td>{{ r.position or '-' }}</td>
+                        <td>{{ r.games_played }}</td>
+                        <td>{{ r.trophy or '-' }}</td>
+                        <td>
+                          {% if r.sport == 'Football' %}
+                            <i class="fa-solid fa-futbol"></i> Goals: {{ r.goals }} |
+                            <i class="fa-solid fa-handshake-angle"></i> Assists: {{ r.assists }} |
+                            Yellow Card <i class="fa-solid fa-square" style="color:#FFCC00;"></i>: {{ r.yellow_cards }} |
+                            Red Card <i class="fa-solid fa-square" style="color:#FF0000;"></i>: {{ r.red_cards }}
+                          {% else %}
+                            <i class="fa-solid fa-basketball" style="color:orangered;"></i> Points: {{ r.points }} |
+                            <i class="fa-solid fa-handshake-angle"></i> Assists: {{ r.assists }} |
+                            Blocks <i class="fa-solid fa-hand"></i>: {{ r.blocks }} |
+                            <i class="fa-solid fa-ban"></i> Times Sent Off Court: {{ r.sent_off }}
+                          {% endif %}
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% else %}
+                <p class="text-muted mb-0">No approved records yet.</p>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+<!-- ========== MOBILE SLIDER CARDS ========== -->
+<div class="d-md-none">
+  {% for item in results %}
+    <div class="mb-5">
+      <h5 class="mb-1">{{ item.student.full_name }} <i class="fa-solid fa-user"></i></h5>
+      <p class="text-muted small mb-3">{{ item.student.school }} <i class="fa-solid fa-school"></i></p>
+
+      {% if item.records %}
+        {% set carousel_id = 'searchCarousel' ~ loop.index %}
+
+        <div id="{{ carousel_id }}" class="carousel slide" data-bs-ride="false" data-bs-touch="true">
+          
+          <!-- Cards -->
+          <div class="carousel-inner">
+            {% for r in item.records %}
+              <div class="carousel-item {% if loop.first %}active{% endif %}">
+                <div class="record-card mx-auto">
+
+                  <div class="card-sport text-center mb-3">
+                    {% if r.sport == 'Football' %}
+                      {{ r.sport | upper }} <i class="fa-solid fa-futbol"></i>
+                    {% else %}
+                      {{ r.sport | upper }} <i class="fa-solid fa-basketball" style="color:orangered;"></i>
+                    {% endif %}
+                  </div>
+
+                  <div class="card-grid">
+                    <div><strong>Year <i class="fa-solid fa-calendar" style="color: green;"></i> :</strong> {{ r.year }}</div>
+                    <div><strong>Team / School <i class="fa-solid fa-users"></i> :</strong> {{ r.team or item.student.school }}</div>
+                    {% if r.sport == 'Football' %}
+                      <div><strong>Goals <i class="fa-solid fa-futbol"></i> :</strong> {{ r.goals or 'None' }}</div>
+                    {% else %}
+                      <div><strong>Points  <i class="fa-solid fa-basketball" style="color:orangered;"></i> :</strong> {{ r.points or 0 }}</div>
+                    {% endif %}
+
+                    <div><strong>Position <i class="fa-solid fa-shirt"></i> :</strong> {{ r.position or '-' }}</div>
+                    <div><strong>Assist <i class="fa-solid fa-handshake-angle"></i> :</strong> {{ r.assists or 0 }}</div>
+                    <div><strong>Games <i class="fa-solid fa-person-running"></i>:</strong> {{ r.games_played or 0 }}</div>
+
+                    {% if r.sport == 'Football' %}
+                      <div>
+                        <strong>Yellow Card <i class="fa-solid fa-square" style="color:#FFCC00;"></i> :</strong> {{ r.yellow_cards or 0 }}
+                      </div>
+                    {% else %}
+                      <div><strong>Blocks <i class="fa-regular fa-hand"></i> :</strong> {{ r.blocks or 0 }}</div>
+                    {% endif %}
+
+                    <div>
+                      <strong>Trophies Won <i class="fa-solid fa-trophy" style="color:goldenrod;"></i> :</strong> {{ r.trophy or 'None' }}
+                    </div>
+
+                    {% if r.sport == 'Football' %}
+                      <div>
+                        <strong>Red Card <i class="fa-solid fa-square" style="color:#FF0000;"></i> :</strong> {{ r.red_cards or 0 }}
+                      </div>
+                    {% else %}
+                      <div>
+                        <strong>Sent Off Court   <i class="fa-solid fa-x" style="color:red;"></i> :</strong> {{ r.sent_off or 0 }}
+                      </div>
+                    {% endif %}
+                  </div>
+
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+
+          <!-- Dots -->
+          {% if item.records|length > 1 %}
+          <div class="carousel-indicators position-relative mt-3">
+            {% for r in item.records %}
+              <button type="button"
+                      data-bs-target="#{{ carousel_id }}"
+                      data-bs-slide-to="{{ loop.index0 }}"
+                      class="{% if loop.first %}active{% endif %}">
+              </button>
+            {% endfor %}
+          </div>
+          {% endif %}
+
+        </div>
       {% else %}
         <p class="text-muted">No approved records yet.</p>
       {% endif %}
     </div>
-  </div>
   {% endfor %}
-{% else %}
-  <p>No students found.</p>
-{% endif %}
+</div>
+
+    {% else %}
+      <div class="alert alert-light">No student-athletes found.</div>
+    {% endif %}
+  {% endif %}
+</div>
+
+<script>
+const nameInput = document.getElementById('nameInput');
+const suggestions = document.getElementById('nameSuggestions');
+
+if (nameInput) {
+  nameInput.addEventListener('input', async function () {
+    const q = this.value.trim();
+    if (q.length === 0) {
+      suggestions.style.display = 'none';
+      return;
+    }
+
+    const res = await fetch(`/api/suggest-names?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+
+    if (data.length === 0) {
+      suggestions.style.display = 'none';
+      return;
+    }
+
+    suggestions.innerHTML = '';
+    data.forEach(student => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'list-group-item list-group-item-action';
+      btn.textContent = student.full_name;
+      btn.addEventListener('click', () => {
+        nameInput.value = student.full_name;
+        suggestions.style.display = 'none';
+      });
+      suggestions.appendChild(btn);
+    });
+    suggestions.style.display = 'block';
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!nameInput.contains(e.target) && !suggestions.contains(e.target)) {
+      suggestions.style.display = 'none';
+    }
+  });
+}
+</script>
 {% endblock %}

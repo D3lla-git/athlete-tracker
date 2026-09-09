@@ -7,9 +7,217 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.0/css/all.min.css">
-</head>
-<body class="bg-light"> 
+  <!-- Required: default theme + autoloader -->
+<link rel="stylesheet" href="https://ka-f.webawesome.com/webawesome@3.12.0/styles/themes/default.css">
+<script type="module" src="https://ka-f.webawesome.com/webawesome@3.12.0/webawesome.loader.js"></script>
+<style>/* ===== Mobile Swipe Cards ===== */
+.records-swipe {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  gap: 16px;
+  padding: 10px 5px 20px;
+  -webkit-overflow-scrolling: touch;
+}
 
+.records-swipe::-webkit-scrollbar {
+  display: none;
+}
+
+.record-card {
+  flex: 0 0 85%;
+  scroll-snap-align: center;
+  background: #fff;
+  border-radius: 20px;
+  padding: 24px 20px;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+  border: 2px solid #c8e6c9;
+  min-height: 320px;
+}
+
+.card-sport {
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 20px;
+  color: #1a1a1a;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 10px;
+  font-size: 0.95rem;
+}
+
+.card-status {
+  text-align: center;
+  margin-top: 22px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.record-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 22px 18px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+  border: 2px solid #c8e6c9;
+  max-width: 340px;
+  min-height: 340px;
+}
+
+.card-sport {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 12px;
+  font-size: 0.95rem;
+}
+
+/* Dots style */
+.carousel-indicators {
+  margin-bottom: 0;
+}
+
+.carousel-indicators [data-bs-target] {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: #adb5bd;
+  border: none;
+  opacity: 1;
+}
+
+.carousel-indicators .active {
+  background-color: #0d6efd;
+}
+.record-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 22px 18px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.12);
+  border: 2px solid #c8e6c9;
+  max-width: 340px;
+  min-height: 320px;
+}
+
+.card-sport {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 13px 10px;
+  font-size: 0.95rem;
+}
+
+.carousel-indicators [data-bs-target] {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: #adb5bd;
+  border: none;
+}
+
+.carousel-indicators .active {
+  background-color: #0d6efd;
+}
+/* Navbar link hover effect */
+.navbar-nav .nav-link {
+  color: white !important;
+  transition: all 0.25s ease;
+  border-radius: 6px;
+  padding: 8px 14px !important;
+  margin: 0 2px;
+}
+
+.navbar-nav .nav-link:hover {
+  background-color: darkgreen !important;
+  color: #ffffff !important;
+}
+/* Custom button styles 
+.btn-custom-search {
+  background-color: green;
+  border: 2px solid black;
+  color: white;
+}
+
+.btn-custom-search:hover {
+  background-color: green;
+  border-color: red;
+  color: white;
+}
+
+.btn-custom-register {
+  background-color: transparent;
+  border: 2px solid #198754;
+  color: #198754;
+}
+
+.btn-custom-register:hover {
+  background-color: #198759;
+  color: white;
+}
+.btn-search {
+  border: 2px solid green !important;
+}
+
+.btn-register {
+  border: 2px solid #198754 !important;
+}*/
+.btn-search-hover {
+  background-color: black;
+  border: 2px solid darkgreen !important;
+  color: white;
+  transition: all 0.3s ease;
+}
+.btn-search-hover:hover {
+  background-color: darkgreen;
+  border-color: black !important;
+  color: white;
+}
+.btn-register-hover {
+  background-color: darkgreen;
+  border: 2px solid black !important;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.btn-register-hover:hover {
+  background-color: black;
+  border-color: black !important;
+  color: white;
+}
+.btn-coach-hover {
+  background-color: black;
+  border: 2px solid darkgreen !important;
+  color: white;
+  transition: all 0.3s ease;
+}
+ 
+.btn-coach-hover:hover {
+  background-color: darkgreen;
+  border-color: black !important; 
+  color: white;
+}
+@media (min-width: 992px) {
+  .navbar .dropdown:hover .dropdown-menu {
+    display: block;
+    margin-top: 0;
+  }
+}
+</style>
+</head>
+
+<body class="bg-light"> 
   <!-- ========== NAVBAR ========== -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container">
@@ -26,31 +234,46 @@
       <div class="collapse navbar-collapse" id="mainNavbar">
         <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
           <li class="nav-item">
-  <a class="nav-link" href="{{ url_for('search') }}">Search <i class="bi bi-search"></i></a>
+  <a class="nav-link" href="{{ url_for('search') }}"style="color: white;">Search <i class="bi bi-search"></i></a>
 </li>
 <li class="nav-item">
-  <a class="nav-link" href="{{ url_for('profile') }}">My Profile <i class="bi bi-person-circle"></i></a>
+  <a class="nav-link" href="{{ url_for('profile') }}"style="color: white;">My Profile <i class="bi bi-person-circle"></i></a>
 </li>
           {% if current_user.is_authenticated %}
             {% if current_user.role == 'admin' %}
               <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('admin_dashboard') }}">Admin <i class="fa-solid fa-user-shield"></i></a>
+                <a class="nav-link" href="{{ url_for('admin_dashboard') }}"style="color: white;">Admin <i class="fa-solid fa-user-shield"></i></a>
               </li>
             {% else %}
               <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('student_dashboard') }}">My Records <i class="fa-solid fa-book"></i></a>
+                <a class="nav-link" href="{{ url_for('student_dashboard') }}"style="color: white;">My Records <i class="fa-solid fa-book"></i></a>
               </li>
             {% endif %}
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('logout') }}">Logout <i class="fa-solid fa-right-from-bracket"></i></a>
+              <a class="nav-link" href="{{ url_for('logout') }}"style="color: white;">Logout <i class="fa-solid fa-right-from-bracket"></i></a>
             </li>
           {% else %}
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('login') }}"></i>Login <i class="bi bi-box-arrow-in-right"></i></a>
+              <a class="nav-link" href="{{ url_for('login') }}"style="color: white;">Login <i class="bi bi-box-arrow-in-right"></i></a>
             </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('register') }}">Register <i class="bi bi-person-plus"></i></a>
-            </li>
+            <li class="nav-item dropdown">
+  <a class="nav-link dropdown-toggle" href="#" id="registerDropdown" role="button" 
+     data-bs-toggle="dropdown" aria-expanded="false" style="color: white;">
+    Register <i class="bi bi-person-plus"></i>
+  </a>
+  <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="registerDropdown">
+    <li>
+      <a class="dropdown-item" href="{{ url_for('register') }}">
+        Register as Athlete
+      </a>
+    </li>
+    <li>
+      <a class="dropdown-item" href="{{ url_for('register_coach') }}">
+        Register as Coach
+      </a>
+    </li>
+  </ul>
+</li>
           {% endif %}
         </ul>
       </div>
@@ -74,6 +297,6 @@
   <!-- Bootstrap JS (needed for the hamburger menu) -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
  
-  <center><p>&copy; 2026 Student Athlete Tracker 🇱🇷. All rights reserved.</p></center>
+  <center><p>&copy; 2026 Student Athlete Tracker 🇱🇷. All rights reserved.<i class="fa-regular fa-registered"></i></p></center>
 </body>
 </html>

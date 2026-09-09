@@ -3,8 +3,43 @@
 
 {% block content %}
 <h2 class="mb-4">Admin / Coach Dashboard</h2>
-
 <!-- ========== PENDING STUDENT VERIFICATIONS ========== -->
+{% if pending_coaches %}
+<div class="card mb-4 border-warning">
+  <div class="card-header bg-warning text-dark">
+    <strong>Pending Coach Approvals (Super Admin Only)</strong>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Coach Name</th>
+            <th>School / Club</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for coach in pending_coaches %}
+          <tr>
+            <td>{{ coach.full_name }}</td>
+            <td>{{ coach.school }}</td>
+            <td>
+              <a href="{{ url_for('approve_coach', user_id=coach.id) }}" 
+                 class="btn btn-success btn-sm"
+                 onclick="return confirm('Approve this coach?')">
+                Approve Coach
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <h4>Pending Student Verifications</h4>
 {% if pending_users %}
   {% for u in pending_users %}
@@ -13,7 +48,7 @@
       <div>
         <strong>{{ u.full_name }}</strong> — {{ u.school }}
         <br>
-        <a href="{{ url_for('uploaded_file', filename=u.id_document) }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
+        <a href="{{ url_for('id_document', filename=u.id_document) }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
           View ID / Passport
         </a>
       </div>
@@ -27,48 +62,293 @@
   <p class="text-muted">No students waiting for verification.</p>
 {% endif %}
 
-<!-- ========== PENDING SPORTS RECORDS ========== -->
-<h4 class="mt-5">Pending Sports Records</h4>
+<!-- ==================== MOBILE VIEW - PENDING RECORDS SLIDER ==================== -->
+<div class="d-md-none">
+  <h4 class="mt-4 mb-3">Pending Sports Records</h4>
 
-{% if pending_records %}
-  {% for r in pending_records %}
-  <div class="card mb-3">
-    <div class="card-body">
-      <div class="d-flex justify-content-between align-items-start">
-        <div>
-          <h5 class="mb-1">{{ r.user.full_name }} <small class="text-muted">({{ r.user.school }})</small></h5>
-          <p class="mb-1">
-            <strong>{{ r.sport }}</strong> — {{ r.year }} | Position: {{ r.position or 'N/A' }} | Games: {{ r.games_played }}
-          </p>
+  {% if pending_records %}
+    <div id="adminRecordsCarousel" class="carousel slide" data-bs-ride="false" data-bs-touch="true">
+      
+      <div class="carousel-inner px-2">
+        {% for r in pending_records %}
+        <div class="carousel-item {% if loop.first %}active{% endif %}">
+          <div class="record-card mx-auto">
 
-          {% if r.sport == 'Football' %}
-            <p class="mb-0">
-              <span class="badge bg-primary">Goals: {{ r.goals }}</span>
-              <span class="badge bg-info">Assists: {{ r.assists }}</span>
-              <span class="badge bg-warning text-dark">Yellow Cards: {{ r.yellow_cards }}</span>
-              <span class="badge bg-danger">Red Cards: {{ r.red_cards }}</span>
-            </p>
-          {% elif r.sport == 'Basketball' %}
-            <p class="mb-0">
-              <span class="badge bg-primary">Points: {{ r.points }}</span>
-              <span class="badge bg-info">Assists: {{ r.assists }}</span>
-              <span class="badge bg-success">Blocks: {{ r.blocks }}</span>
-              <span class="badge bg-danger">Sent Off: {{ r.sent_off }}</span>
-            </p>
-          {% endif %}
+            <!-- Header -->
+            <div class="card-sport text-center mb-3">
+              {% if r.sport == 'Football' %}
+                {{ r.sport | upper }} <i class="fa-solid fa-futbol"></i>
+              {% else %}
+                {{ r.sport | upper }} <i class="fa-solid fa-basketball" style="color:orangered;"></i>
+              {% endif %}
+            </div>
+
+            <div class="text-center mb-3">
+              <strong>{{ r.user.full_name }}</strong><br>
+              <small class="text-muted">{{ r.team or r.user.school }} <i class="fa-solid fa-school"></i></small>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="card-grid">
+              <div><strong>Year <i class="fa-solid fa-calendar" style="color: green;"></i>:</strong> {{ r.year }}</div>
+              <div><strong>Position <i class="fa-solid fa-shirt"></i>:</strong> {{ r.position or '-' }}</div>
+              <div><strong>Games <i class="fa-solid fa-person-running"></i>:</strong> {{ r.games_played }}</div>
+              <div><strong>Trophies <i class="fa-solid fa-trophy" style="color: goldenrod;"></i>:</strong> {{ r.trophy or 'None' }}</div>
+
+              {% if r.sport == 'Football' %}
+                <div><strong>Goals <i class="fa-solid fa-futbol"></i>:</strong> {{ r.goals }}</div>
+                <div><strong>Assists <i class="fa-solid fa-handshake-angle"></i>:</strong> {{ r.assists }}</div>
+                <div><strong>Yellow Cards <i class="fa-solid fa-circle" style="color: gold;"></i>:</strong> {{ r.yellow_cards }}</div>
+                <div><strong>Red Cards <i class="fa-solid fa-circle" style="color: red;"></i>:</strong> {{ r.red_cards }}</div>
+              {% else %}
+                <div><strong>Points <i class="fa-solid fa-basketball" style="color:orangered;"></i>:</strong> {{ r.points }}</div>
+                <div><strong>Assists <i class="fa-solid fa-handshake-angle"></i>:</strong> {{ r.assists }}</div>
+                <div><strong>Blocks <i class="fa-solid fa-shield-alt"></i>:</strong> {{ r.blocks }}</div>
+                <div><strong>Sent Off <i class="fa-solid fa-user-times"></i>:</strong> {{ r.sent_off }}</div>
+              {% endif %}
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="d-flex justify-content-center gap-2 mt-4">
+              <a href="{{ url_for('approve_record', record_id=r.id) }}" 
+                 class="btn btn-success btn-sm px-4">
+                Approve
+              </a>
+              <a href="{{ url_for('reject_record', record_id=r.id) }}" 
+                 class="btn btn-outline-danger btn-sm px-4">
+                Reject
+              </a>
+            </div>
+
+          </div>
         </div>
-
-        <div class="text-end">
-          <a href="{{ url_for('approve_record', record_id=r.id) }}" class="btn btn-success btn-sm mb-1">Approve</a>
-          <br>
-          <a href="{{ url_for('reject_record', record_id=r.id) }}" class="btn btn-outline-danger btn-sm">Reject</a>
-        </div>
+        {% endfor %}
       </div>
+
+      <!-- Dots -->
+      {% if pending_records|length > 1 %}
+      <div class="carousel-indicators position-relative mt-3">
+        {% for r in pending_records %}
+          <button type="button"
+                  data-bs-target="#adminRecordsCarousel"
+                  data-bs-slide-to="{{ loop.index0 }}"
+                  class="{% if loop.first %}active{% endif %}">
+          </button>
+        {% endfor %}
+      </div>
+      {% endif %}
+
     </div>
+  {% else %}
+    <p class="text-muted text-center">No records waiting for approval.</p>
+  {% endif %}
+</div>
+
+<!-- ==================== DESKTOP VIEW - PENDING RECORDS ==================== -->
+<div class="d-none d-md-block">
+  <h4 class="mt-4 mb-3">Pending Sports Records</h4>
+
+  {% if pending_records %}
+
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover align-middle">
+
+      <thead class="table-light">
+        <tr>
+          <th>Student <i class="fa-solid fa-user"></i></th>
+          <th>Sport <i class="fa-solid fa-futbol"></i></th>
+          <th>Year <i class="fa-solid fa-calendar" style="color: green;"></i></th>
+          <th>Position <i class="fa-solid fa-shirt"></i></th>
+          <th>Games <i class="fa-solid fa-person-running"></i></th>
+          <th>Trophies <i class="fa-solid fa-trophy" style="color: goldenrod;"></i></th>
+          <!-- Sport-specific columns -->
+          {% set has_football = false %}
+          {% set has_basketball = false %}
+
+          {% for r in pending_records %}
+            {% if r.sport == 'Football' %}
+              {% set has_football = true %}
+            {% elif r.sport == 'Basketball' %}
+              {% set has_basketball = true %}
+            {% endif %}
+          {% endfor %}
+
+          <th>Team <i class="fa-solid fa-users"></i></th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+
+      <tbody>
+
+        {% for r in pending_records %}
+
+        <tr>
+
+          <!-- Student -->
+          <td>
+            <strong>{{ r.user.full_name }}</strong>
+          </td>
+          <!-- Sport -->
+          <td>
+            {% if r.sport == 'Football' %}
+              <strong>{{ r.sport | upper }}</strong>
+            {% else %}
+              <strong>{{ r.sport | upper }}</strong>
+            {% endif %}
+          </td>
+          <!-- Year -->
+          <td>{{ r.year }}</td>
+          <!-- Position -->
+          <td>{{ r.position or '-' }}</td>
+          <!-- Games -->
+          <td>{{ r.games_played }}</td>
+          <!-- Trophies -->
+          <td>{{ r.trophy or 'None' }}</td>
+          <!-- Team -->
+          <td>{{ r.team or r.user.school }}</td>
+          <!-- Status -->
+          <td>{% if r.status == 'pending' %}
+              <span class="badge bg-warning text-dark">
+                Pending
+              </span>
+            {% elif r.status == 'rejected' %}
+              <span class="badge bg-danger">
+                Rejected
+              </span>
+            {% else %}
+              <span class="badge bg-secondary">
+                {{ r.status | title }}
+              </span>
+            {% endif %}
+          </td>
+          <!-- Action -->
+          <td>
+            <div class="d-flex gap-2">
+
+              <a href="{{ url_for('approve_record', record_id=r.id) }}"
+                 class="btn btn-success btn-sm">
+                <i class="fa-solid fa-check"></i>
+                Approve
+              </a>
+              <a href="{{ url_for('reject_record', record_id=r.id) }}"
+                 class="btn btn-outline-danger btn-sm">
+                <i class="fa-solid fa-xmark"></i>
+                Reject
+              </a>
+            </div>
+          </td>
+
+        </tr>
+        <!-- ================= FOOTBALL DETAILS ================= -->
+        {% if r.sport == 'Football' %}
+
+        <tr class="table-light">
+          <td colspan="10">
+
+            <div class="d-flex flex-wrap gap-4 small">
+
+              <span>
+                <strong>
+                  Goals
+                  <i class="fa-solid fa-futbol"></i>:
+                </strong>
+                {{ r.goals }}
+              </span>
+
+              <span>
+                <strong>
+                  Assists
+                  <i class="fa-solid fa-handshake-angle"></i>:
+                </strong>
+                {{ r.assists }}
+              </span>
+
+              <span>
+                <strong>
+                  Yellow Cards
+                  <i class="fa-solid fa-circle"
+                     style="color: gold;"></i>:
+                </strong>
+                {{ r.yellow_cards }}
+              </span>
+
+              <span>
+                <strong>
+                  Red Cards
+                  <i class="fa-solid fa-circle"
+                     style="color: red;"></i>:
+                </strong>
+                {{ r.red_cards }}
+              </span>
+
+            </div>
+
+          </td>
+        </tr>
+
+        <!-- ================= BASKETBALL DETAILS ================= -->
+        {% elif r.sport == 'Basketball' %}
+
+        <tr class="table-light">
+          <td colspan="10">
+
+            <div class="d-flex flex-wrap gap-4 small">
+
+              <span>
+                <strong>
+                  Points
+                  <i class="fa-solid fa-basketball"
+                     style="color:orangered;"></i>:
+                </strong>
+                {{ r.points }}
+              </span>
+
+              <span>
+                <strong>
+                  Assists
+                  <i class="fa-solid fa-handshake-angle"></i>:
+                </strong>
+                {{ r.assists }}
+              </span>
+
+              <span>
+                <strong>
+                  Blocks
+                  <i class="fa-solid fa-shield-alt"></i>:
+                </strong>
+                {{ r.blocks }}
+              </span>
+
+              <span>
+                <strong>
+                  Sent Off
+                  <i class="fa-solid fa-user-times"></i>:
+                </strong>
+                {{ r.sent_off }}
+              </span>
+
+            </div>
+
+          </td>
+        </tr>
+
+        {% endif %}
+
+        {% endfor %}
+
+      </tbody>
+
+    </table>
   </div>
-  {% endfor %}
-{% else %}
-  <p class="text-muted">No records waiting for approval.</p>
-{% endif %}
+
+  {% else %}
+
+    <p class="text-muted text-center">
+      No records waiting for approval.
+    </p>
+
+  {% endif %}
+</div>
 
 {% endblock %}

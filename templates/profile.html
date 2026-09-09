@@ -3,42 +3,43 @@
 
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-md-8 col-lg-7">
+  <div class="col-md-8 col-lg-6">
     <div class="card shadow">
       <div class="card-header d-flex justify-content-between align-items-center">
         <h4 class="mb-0">My Profile</h4>
-        <span class="badge bg-success">Verified</span>
+        {% if current_user.is_verified %}
+          <span class="badge bg-success">Verified</span>
+        {% else %}
+          <span class="badge bg-warning text-dark">Pending</span>
+        {% endif %}
       </div>
 
       <div class="card-body">
         <form method="POST" action="{{ url_for('update_profile') }}" enctype="multipart/form-data">
-          <div class="row">
+          <div class="row align-items-center">
 
-            <!-- Left side - Profile Circle -->
-            <div class="col-md-4 text-center">
-              <label for="profile_picture" style="cursor: pointer;">
-                {% if current_user.profile_picture %}
-                  <img src="{{ url_for('uploaded_file', filename=current_user.profile_picture) }}"
-                       class="rounded-circle"
-                       style="width: 140px; height: 140px; object-fit: cover; border: 3px solid #dee2e6;"
-                       onerror="this.style.display='none'; document.getElementById('initial-avatar').style.display='flex';">
-                {% endif %}
-
-                <div id="initial-avatar"
-                     class="rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center"
-                     style="width: 140px; height: 140px; font-size: 3.2rem; font-weight: 500;{% if current_user.profile_picture %} display: none;{% endif %}">
+            <!-- Profile Picture -->
+            <div class="col-md-4 text-center mb-4">
+              {% if current_user.profile_picture %}
+                <img src="{{ url_for('profile_picture', filename=current_user.profile_picture) }}"
+                     class="rounded-circle shadow"
+                     style="width: 150px; height: 150px; object-fit: cover; border: 3px solid #dee2e6;"
+                     alt="Profile Picture">
+              {% elif current_user.id_document %}
+                <img src="{{ url_for('id_document', filename=current_user.id_document) }}"
+                     class="rounded-circle shadow"
+                     style="width: 150px; height: 150px; object-fit: cover; border: 3px solid #dee2e6;"
+                     alt="ID Document">
+              {% else %}
+                <div class="rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center shadow"
+                     style="width: 150px; height: 150px; font-size: 3.5rem; font-weight: 600;">
                   {{ current_user.full_name[0] | upper }}
                 </div>
-              </label>
-
-              <input type="file" name="profile_picture" id="profile_picture"
-                     accept=".png,.jpg,.jpeg" style="display: none;"
-                     onchange="this.form.submit()">
-
-              <p class="text-muted small mt-2">Profile Picture (optional)</p>
+              {% endif %}
+              <p class="text-muted small mt-2">Profile</p>
             </div>
 
-            <!-- Right side - Form fields -->
+            <!-- Form Fields -->
             <div class="col-md-8">
               <div class="mb-3">
                 <label class="form-label">Full Name</label>
@@ -52,11 +53,11 @@
 
               <div class="mb-3">
                 <label class="form-label">Role</label>
-                <input type="text" class="form-control" value="Student" disabled>
+                <input type="text" class="form-control" value="{{ current_user.role|title }}" disabled>
               </div>
 
               <div class="mb-3">
-                <label class="form-label">Upload New Profile Picture</label>
+                <label class="form-label">Upload / Change Profile Picture</label>
                 <input type="file" name="profile_picture" class="form-control" accept=".png,.jpg,.jpeg">
               </div>
 

@@ -15,7 +15,7 @@
   <!-- Name and Info -->
   <div>
     <h2 class="mb-1">{{ current_user.full_name }}</h2>
-    <p class="text-muted mb-1">{{ current_user.school }}</p>
+    <p class="text-muted mb-1">{{ current_user.school }} <i class="fa-solid fa-school"></i></p>
     
     {% if current_user.is_verified %}
       <span class="badge bg-success">Verified Student</span>
@@ -32,95 +32,144 @@
     <div class="card-body">
       <form method="POST" action="{{ url_for('submit_record') }}">
 
-        <div class="row g-3">
-          <div class="col-md-3">
-            <label class="form-label">Sport<i class="fa-solid fa-futbol"></i> <i class="fa-solid fa-basketball"></i></label>
-            <select name="sport" id="sportSelect" class="form-select" required>
-              <option value="">-- Select Sport --</option>
-              <option value="Football">Football <i class="fa-solid fa-futbol"></i></option>
-              <option value="Basketball">Basketball <i class="fa-solid fa-basketball"></i></option>
-            </select>
-          </div>
+  <div class="row g-3">
+    <div class="col-md-3">
+      <label class="form-label">Sport <i class="fa-solid fa-futbol"></i> <i class="fa-solid fa-basketball" style="color: orangered;"></i></label>
+      <select name="sport" id="sportSelect" class="form-select" required>
+        <option value="">-- Select Sport --</option>
+        <option value="Football">Football</option>
+        <option value="Basketball">Basketball</option>
+      </select>
+    </div>
 
-          <div class="col-md-2">
-            <label class="form-label">Year / Season <i class="fa-regular fa-calendar"></i></label>
-            <input type="number" name="year" class="form-control" placeholder="e.g. 2025" required>
-          </div>
+<div class="col-md-3">
+  <label class="form-label">Team / School Played For <i class="fa-solid fa-users"></i></label>
+  <input type="text" name="team" class="form-control" 
+         placeholder="e.g. SOS International School / LPRC Oilers" required>
+</div>
 
-          <div class="col-md-3">
-            <label class="form-label">Position <i class="fa-solid fa-dice-d6"></i></label>
-            <input type="text" name="position" class="form-control" placeholder="e.g. Striker / Point Guard">
-          </div>
+    <div class="col-md-2">
+      <label class="form-label">Year / Season <i class="fa-regular fa-calendar" style="color: green;"></i></label>
+      <input type="number" name="year" class="form-control" placeholder="e.g. 2025" required>
+    </div>
 
-          <div class="col-md-2">
-            <label class="form-label">Games Played <i class="fa-solid fa-gamepad"></i></label>
-            <input type="number" name="games_played" class="form-control" min="0" value="0">
-          </div>
-        </div>
+    <div class="col-md-3">
+      <label class="form-label">Position Played <i class="fa-solid fa-shirt"></i></label>
+      <input type="text" name="position" class="form-control" placeholder="e.g. Striker / Point Guard" required>
+    </div>
 
-        <!-- Football Fields -->
-        <div class="row g-3 mt-1" id="footballFields" style="display: none;">
-          <div class="col-md-2">
-            <label class="form-label">Goals <i class="fa-solid fa-futbol"></i></label>
-            <input type="number" name="goals" class="form-control" min="0" value="0">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">Assists <i class="fa-solid fa-handshake-angle"></i></label>
-            <input type="number" name="assists" class="form-control" min="0" value="0">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">Yellow Cards <i class="fa-solid fa-scroll"></i></label>
-            <input type="number" name="yellow_cards" class="form-control" min="0" value="0">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">Red Cards <i class="fa-solid fa-scroll"></i></label>
-            <input type="number" name="red_cards" class="form-control" min="0" value="0">
-          </div>
-        </div>
+    <div class="col-md-2">
+      <label class="form-label">Games Played <i class="fa-solid fa-person-running"></i> <i class="fa-solid fa-trophy"></i></label>
+      <input type="number" name="games_played" class="form-control" min="0" value="0">
+    </div>
+<div class="col-12 mt-3">
+  <label class="form-label fw-bold">
+    Trophies Won 
+    <i class="fa-solid fa-trophy" style="color: silver;"></i>
+    <i class="fa-solid fa-medal"></i>
+    <i class="fa-solid fa-trophy" style="color: goldenrod;"></i>
+  </label>
 
-        <!-- Basketball Fields -->
-        <div class="row g-3 mt-1" id="basketballFields" style="display: none;">
-          <div class="col-md-2">
-            <label class="form-label">Points <i class="fa-solid fa-basketball"></i></label>
-            <input type="number" name="points" class="form-control" min="0" value="0">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">Assists <i class="fa-solid fa-handshake-angle"></i></label>
-            <input type="number" name="assists" class="form-control" min="0" value="0">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">Blocks <i class="fa-solid fa-circle-stop"></i></label>
-            <input type="number" name="blocks" class="form-control" min="0" value="0">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">Times Sent Off <i class="fa-solid fa-toggle-off"></i></label>
-            <input type="number" name="sent_off" class="form-control" min="0" value="0">
-          </div>
-        </div>
+  <div class="row">
+    <div class="col-md-4">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="trophy" value="University Championship" id="trophy1">
+        <label class="form-check-label" for="trophy1">University Championship</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="trophy" value="Classes League" id="trophy2">
+        <label class="form-check-label" for="trophy2">Classes League</label>
+      </div>
+    </div>
 
-        <div class="mt-3">
-          <button type="submit" class="btn btn-primary">Submit Record</button>
-        </div>
-      </form>
+    <div class="col-md-4">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="trophy" value="County Meet" id="trophy3">
+        <label class="form-check-label" for="trophy3">County Meet</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="trophy" value="Club Trophy" id="trophy4">
+        <label class="form-check-label" for="trophy4">Club Trophy</label>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="trophy" value="Community Trophy" id="trophy5">
+        <label class="form-check-label" for="trophy5">Community Trophy</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="trophy" value="None" id="trophy6">
+        <label class="form-check-label" for="trophy6">None</label>
+      </div>
     </div>
   </div>
+</div>
+  </div>
 
-  <script>
-    const sportSelect = document.getElementById('sportSelect');
-    const footballFields = document.getElementById('footballFields');
-    const basketballFields = document.getElementById('basketballFields');
+  <!-- Football Fields -->
+  <div class="row g-3 mt-1" id="footballFields" style="display: none;">
+    <div class="col-md-2">
+      <label class="form-label">Goals <i class="fa-solid fa-futbol"></i></label>
+      <input type="number" name="goals" class="form-control" min="0" value="0">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Assists <i class="fa-solid fa-handshake-angle"></i></label>
+      <input type="number" name="assists" class="form-control" min="0" value="0">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Yellow Cards <i class="fa-solid fa-scroll" style="color: yellow;"></i></label>
+      <input type="number" name="yellow_cards" class="form-control" min="0" value="0">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Red Cards <i class="fa-solid fa-scroll" style="color: red;"></i></label>
+      <input type="number" name="red_cards" class="form-control" min="0" value="0">
+    </div>
 
-    sportSelect.addEventListener('change', function () {
-      footballFields.style.display = 'none';
-      basketballFields.style.display = 'none';
+  </div>
 
-      if (this.value === 'Football') {
-        footballFields.style.display = 'flex';
-      } else if (this.value === 'Basketball') {
-        basketballFields.style.display = 'flex';
-      }
-    });
-  </script>
+  <!-- Basketball Fields -->
+  <div class="row g-3 mt-1" id="basketballFields" style="display: none;">
+    <div class="col-md-2">
+      <label class="form-label">Points <i class="fa-solid fa-basketball" style="color: orangered;"></i></label>
+      <input type="number" name="points" class="form-control" min="0" value="0">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Assists <i class="fa-solid fa-handshake-angle"></i></label>
+      <input type="number" name="assists" class="form-control" min="0" value="0">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Blocks <i class="fa-regular fa-hand" style="color: black;"></i></label>
+      <input type="number" name="blocks" class="form-control" min="0" value="0">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Sent Off Court <i class="fa-solid fa-x" style="color: red;"></i></label>
+      <input type="number" name="sent_off" class="form-control" min="0" value="0">
+    </div>
+
+  </div>
+
+  <div class="mt-3">
+    <button type="submit" class="btn btn-success">Submit Record</button>
+  </div>
+</form>
+
+<script>
+  const sportSelect = document.getElementById('sportSelect');
+  const footballFields = document.getElementById('footballFields');
+  const basketballFields = document.getElementById('basketballFields');
+
+  sportSelect.addEventListener('change', function () {
+    footballFields.style.display = 'none';
+    basketballFields.style.display = 'none';
+
+    if (this.value === 'Football') {
+      footballFields.style.display = 'flex';
+    } else if (this.value === 'Basketball') {
+      basketballFields.style.display = 'flex';
+    }
+  });
+</script>
 
 {% else %}
   <div class="alert alert-warning">
@@ -129,15 +178,19 @@
 {% endif %}
 
 <!-- ==================== MY RECORDS TABLE ==================== -->
-<h4 class="mt-4">My Submitted Records</h4>
-<div class="table-responsive">
+<!-- ==================== MY SUBMITTED RECORDS ==================== -->
+<h4 class="mt-4 mb-3">My Submitted Records <i class="fa-solid fa-book"></i></h4>
+<!-- ===== DESKTOP TABLE (hidden on mobile) ===== -->
+<div class="table-responsive d-none d-md-block">
   <table class="table table-bordered table-hover">
     <thead class="table-dark">
       <tr>
-        <th>Sport <i class="fa-solid fa-futbol"></i> <i class="fa-solid fa-basketball"></i></th>
-        <th>Year <i class="fa-solid fa-calendar"></i></th>
-        <th>Position <i class="fa-solid fa-dice-d6"></i></th>
-        <th>Games <i class="fa-solid fa-gamepad"></i></th>
+       <th><i class="fa-solid fa-futbol"></i>Sport<i class="fa-solid fa-basketball" style="color: orangered;"></i></th>
+        -<th>Team / School <i class="fa-solid fa-users"></i></th>
+        <th>Year <i class="fa-solid fa-calendar" style="color: lightgreen;"></i></th>
+        <th>Position <i class="fa-solid fa-shirt"></i></th>
+        <th>Games Played <i class="fa-solid fa-person-running"></i></th>
+        <th>Trophy <i class="fa-solid fa-trophy" style="color: goldenrod;"></i></th>
         <th>Stats <i class="fa-solid fa-chart-line"></i></th>
         <th>Status <i class="bi bi-check2-circle"></i></th>
       </tr>
@@ -146,33 +199,169 @@
       {% for r in records %}
       <tr>
         <td>{{ r.sport }}</td>
+        <td>{{ r.team or '-' }}</td>
         <td>{{ r.year }}</td>
         <td>{{ r.position or '-' }}</td>
         <td>{{ r.games_played }}</td>
-        <td>
+        <td>{{ r.trophy or '-' }}</td>
+       <td>
           {% if r.sport == 'Football' %}
-            Goals: {{ r.goals }} | Assists: {{ r.assists }} | YC: {{ r.yellow_cards }} | RC: {{ r.red_cards }}
+            Goals <i class="fa-solid fa-futbol"></i> : {{ r.goals }} | Assists <i class="fa-solid fa-handshake-angle"></i> : {{ r.assists }} | Yellow Card <i class="fa-solid fa-square" style="color: #FFCC00;"></i> : {{ r.yellow_cards }} | Red Card <i class="fa-solid fa-square" style="color: #FF0000;"></i> : {{ r.red_cards }}
           {% else %}
-            Points: {{ r.points }} | Assists: {{ r.assists }} | Blocks: {{ r.blocks }} | Sent Off: {{ r.sent_off }}
+          Points <i class="fa-solid fa-basketball" style="color: orangered;"></i> : {{ r.points }} | Assists <i class="fa-solid fa-handshake-angle"></i> : {{ r.assists }} | Blocks <i class="fa-solid fa-hand"></i> : {{ r.blocks }} | Sent Off Court <i class="fa-solid fa-ban"></i> : {{ r.sent_off }}
           {% endif %}
         </td>
-        <td>
-          {% if r.status == 'approved' %}
-            <span class="badge bg-success">Approved <i class="fa-regular fa-thumbs-up"></i></span>
-          {% elif r.status == 'rejected' %}
-            <span class="badge bg-danger">Rejected <i class="fa-solid fa-person-circle-xmark"></i></span>
-          {% else %}
-            <span class="badge bg-warning text-dark">Pending</span>
-          {% endif %}
-        </td>
+
+<td>
+  <div class="d-flex align-items-center gap-1 flex-wrap">
+    {% if r.status == 'approved' %}
+      <span class="badge bg-success">Approved</span>
+    {% elif r.status == 'rejected' %}
+      <span class="badge bg-danger">Rejected</span>
+    {% else %}
+      <span class="badge bg-warning text-dark">Pending</span>
+    {% endif %}
+
+    {% if r.status == 'rejected' %}
+      <a href="{{ url_for('delete_record', record_id=r.id) }}" 
+         class="btn btn-outline-danger btn-sm py-0 px-2"
+         style="font-size: 0.75rem;"
+         onclick="return confirm('Delete this rejected record?')">
+        Delete
+      </a>
+      <a href="{{ url_for('resubmit_record', record_id=r.id) }}" 
+         class="btn btn-warning btn-sm py-0 px-2"
+         style="font-size: 0.75rem;"
+         onclick="return confirm('Resubmit this record?')">
+        Resubmit
+      </a>
+    {% endif %}
+
+    {% if r.year|string == current_year|string %}
+      <a href="{{ url_for('edit_record', record_id=r.id) }}" 
+         class="btn btn-primary btn-sm py-0 px-2"
+         style="font-size: 0.75rem;">
+        Edit
+      </a>
+    {% endif %}
+  </div>
+</td>
       </tr>
       {% else %}
       <tr>
-        <td colspan="6" class="text-center">No records submitted yet.</td>
+        <td colspan="7" class="text-center">No records submitted yet.</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+</div>
+<!-- ===== MOBILE SLIDER CARDS (with dots) ===== -->
+<div class="d-md-none">
+  {% if records %}
+  <div id="recordsCarousel" class="carousel slide" data-bs-ride="false" data-bs-touch="true">
+    
+    <!-- The Cards -->
+    <div class="carousel-inner px-2">
+      {% for r in records %}
+      <div class="carousel-item {% if loop.first %}active{% endif %}">
+        <div class="record-card mx-auto">
+          
+          <!-- Sport Title with Icon -->
+          <div class="card-sport text-center mb-3">
+            {% if r.sport == 'Football' %}
+              {{ r.sport | upper }} <i class="fa-solid fa-futbol"></i>
+            {% else %}
+              {{ r.sport | upper }} <i class="fa-solid fa-basketball" style="color: orangered;"></i>
+            {% endif %}
+          </div>
+
+          <!-- Stats Grid -->
+          <div class="card-grid">
+            <div><strong>Team / School <i class="fa-solid fa-users"></i> :</strong> {{ r.team or '-' }}</div>
+            <div><strong>Year <i class="fa-solid fa-calendar" style="color: green;"></i> :</strong> {{ r.year }}</div>
+
+            {% if r.sport == 'Football' %}
+              <div><strong>Goals <i class="fa-solid fa-futbol"></i> :</strong> {{ r.goals or 'None' }}</div>
+            {% else %}
+              <div><strong>Points <i class="fa-solid fa-basketball" style="color: orangered;"></i> :</strong> {{ r.points or 0 }}</div>
+            {% endif %}
+
+            <div><strong>Position <i class="fa-solid fa-shirt"></i> :</strong> {{ r.position or '-' }}</div>
+            <div><strong>Assist <i class="fa-solid fa-handshake-angle"></i> :</strong> {{ r.assists or 0 }}</div>
+            <div><strong>Games <i class="fa-solid fa-person-running"></i> :</strong> {{ r.games_played or 0 }}</div>
+
+            {% if r.sport == 'Football' %}
+              <div><strong>Yellow Card <i class="fa-solid fa-square" style="color: #FFCC00;"></i> :</strong> {{ r.yellow_cards or 0 }} 
+              </div>
+            {% else %}
+              <div><strong>Blocks <i class="fa-regular fa-hand"></i> :</strong> {{ r.blocks or 0 }}</div>
+            {% endif %}
+
+            <div>
+              <strong>Trophies <i class="fa-solid fa-trophy" style="color: goldenrod;"></i> :</strong> {{ r.trophy or 'None' }}
+            </div>
+
+            {% if r.sport == 'Football' %}
+              <div><strong>Red Card <i class="fa-solid fa-square" style="color: #FF0000;"></i> :</strong> {{ r.red_cards or 0 }}  
+              </div>
+            {% else %}
+              <div><strong>Sent Off Court <i class="fa-solid fa-x" style="color: red;"></i> :</strong> {{ r.sent_off or 0 }} 
+              </div>
+            {% endif %}
+          </div>
+
+          <!-- Status -->
+<div class="d-flex justify-content-center align-items-center gap-2 mt-3 flex-wrap">
+  {% if r.status == 'approved' %}
+    <span class="badge bg-success px-3 py-2">Approved</span>
+  {% elif r.status == 'rejected' %}
+    <span class="badge bg-danger px-3 py-2">Rejected</span>
+  {% else %}
+    <span class="badge bg-warning text-dark px-3 py-2">Pending</span>
+  {% endif %}
+
+  {% if r.status == 'rejected' %}
+    <a href="{{ url_for('delete_record', record_id=r.id) }}" 
+       class="btn btn-outline-danger btn-sm px-3"
+       onclick="return confirm('Delete this rejected record?')">
+      Delete
+    </a>
+    <a href="{{ url_for('resubmit_record', record_id=r.id) }}" 
+       class="btn btn-warning btn-sm px-3"
+       onclick="return confirm('Resubmit this record?')">
+      Resubmit
+    </a>
+  {% endif %}
+
+  {% if r.year|string == current_year|string %}
+    <a href="{{ url_for('edit_record', record_id=r.id) }}" 
+       class="btn btn-primary btn-sm px-3">
+      Edit
+    </a>
+  {% endif %}
+</div>
+
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- DOTS at the bottom -->
+    <div class="carousel-indicators position-relative mt-3 mb-2">
+      {% for r in records %}
+        <button type="button" 
+                data-bs-target="#recordsCarousel" 
+                data-bs-slide-to="{{ loop.index0 }}"
+                class="{% if loop.first %}active{% endif %}"
+                aria-label="Slide {{ loop.index }}">
+        </button>
+      {% endfor %}
+    </div>
+
+  </div>
+  {% else %}
+    <div class="text-center text-muted py-4">No records submitted yet.</div>
+  {% endif %}
 </div>
 
 {% endblock %}

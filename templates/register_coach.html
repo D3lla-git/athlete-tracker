@@ -1,22 +1,27 @@
 {% extends "base.html" %}
-{% block title %}Register{% endblock %}
+{% block title %}Register as Coach{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-md-6">
+  <div class="col-md-6 col-lg-5">
     <div class="card shadow">
-      <div class="card-header"><h4>Student/Athlete Registration <i class="fa-solid fa-futbol"></i><i class="fa-solid fa-basketball-ball" style="color: orangered;"></i></h4></div> 
+      <div class="card-header text-center">
+        <h4 class="mb-0">Register as Coach / Admin <i class="fa-solid fa-user-tie"></i></h4>
+      </div>
       <div class="card-body">
-        <form method="POST" enctype="multipart/form-data">
+        <form method="POST">
           <div class="mb-3">
-            <label>Full Name <i class="fa-solid fa-user"></i></label>
-            <input type="text" name="full_name" placeholder="Example: John Brown" class="form-control" required>
+            <label class="form-label">Coach Name  <i class="fa-solid fa-user-tie"></i></i></label>
+            <input type="text" name="full_name" placeholder="Example: 'Coach John'" class="form-control" required>
           </div>
+
           <div class="mb-3">
-            <label>School Name <i class="fa-solid fa-school"></i></label>
+             <label class="form-label">High School/Club/University/Community Team</label>
             <input type="text" name="school" placeholder="Example: St. John's High School" class="form-control" required>
           </div>
-          <div class="mb-3">
-  <label class="form-label">Password <i class="fa-solid fa-key"></i></label>
+
+         <div class="mb-3">
+  <label class="form-label">Password</label>
   <div class="input-group">
     <input type="password" name="password" id="password" placeholder="Example: @Xxxxx" class="form-control" required>
     <button type="button" class="btn btn-outline-secondary" id="togglePassword">
@@ -45,13 +50,16 @@
     }
   });
 </script>
+
           <div class="mb-3">
-            <label>Student ID or Passport (PNG/JPG/PDF)</label>
+            <label class="form-label">Coach Secret Code</label>
+            <input type="text" name="secret_code" class="form-control" placeholder="Enter secret code" required>
+          </div>
+<div class="mb-3">
+            <label>ID or Passport (PNG/JPG/PDF)</label>
             <input type="file" name="id_document" class="form-control" accept=".png,.jpg,.jpeg,.pdf" required>
           </div>
-          <button type="submit"  class="btn btn-success btn-lg rounded-5"
-                  style="border: 2px solid black; color: white;">Register 
-                  <i class="fa-solid fa-user-plus"></i></button>
+          <button type="submit" class="btn btn-primary w-100">Create Coach Account</button>
         </form>
       </div>
     </div>
