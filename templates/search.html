@@ -40,9 +40,17 @@
         {% for item in results %}
           <div class="card mb-4 shadow-sm">
             <div class="card-body">
-              <h5 class="mb-1">
-                {{ item.student.full_name }} <i class="fa-solid fa-user"></i>
-              </h5>
+             <h5 class="mb-1">
+  {{ item.student.full_name }}
+
+  {% if item.student.gender == 'Male' %}
+    <i class="fa-solid fa-mars" title="Male" style="color: #0d6efd;"></i>
+  {% elif item.student.gender == 'Female' %}
+    <i class="fa-solid fa-venus" title="Female" style="color: #d63384;"></i>
+  {% endif %}
+
+  <i class="fa-solid fa-user"></i>
+</h5>
               <p class="text-muted mb-3">
                 {{ item.student.school }} <i class="fa-solid fa-school"></i>
               </p>
@@ -123,7 +131,17 @@
 <div class="d-md-none">
   {% for item in results %}
     <div class="mb-5">
-      <h5 class="mb-1">{{ item.student.full_name }} <i class="fa-solid fa-user"></i></h5>
+      <h5 class="mb-1">
+  {{ item.student.full_name }}
+
+  {% if item.student.gender == 'Male' %}
+    <i class="fa-solid fa-mars" title="Male" style="color: #0d6efd;"></i>
+  {% elif item.student.gender == 'Female' %}
+    <i class="fa-solid fa-venus" title="Female" style="color: #d63384;"></i>
+  {% endif %}
+
+  <i class="fa-solid fa-user"></i>
+</h5>
       <p class="text-muted small mb-3">{{ item.student.school }} <i class="fa-solid fa-school"></i></p>
 
       {% if item.records %}

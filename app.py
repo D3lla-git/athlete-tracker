@@ -120,7 +120,12 @@ def register():
     if request.method == 'POST':
         full_name = request.form['full_name'].strip()
         school = request.form['school'].strip()
+        gender = request.form.get('gender', '').strip()
         password = request.form['password']
+
+        if gender not in ['Male', 'Female']:
+            flash('Please select a valid gender.', 'danger')
+            return redirect(url_for('register'))
 
         # Check duplicate
         existing = User.query.filter_by(full_name=full_name, school=school).first()
@@ -158,11 +163,12 @@ def register():
         #file.save(filepath)
 
         user = User(
-            full_name=full_name,
-            school=school,
-            id_document=storage_path,
-            role='student'
-        )
+        full_name=full_name,
+        school=school,
+        gender=gender,
+        id_document=filename,
+        role='student'
+)
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
@@ -416,7 +422,7 @@ def edit_record(record_id):
             record.assists = int(request.form.get('assists') or 0)
             record.yellow_cards = int(request.form.get('yellow_cards') or 0)
             record.red_cards = int(request.form.get('red_cards') or 0)
-            
+
         elif record.sport == 'Kickball':
             record.home_runs = int(request.form.get('home_runs') or 0)
             record.kickball_red_cards = int(request.form.get('kickball_red_cards') or 0)
@@ -524,6 +530,12 @@ def update_profile():
     if new_school:
         current_user.school = new_school
 
+            # Update gender
+    new_gender = request.form.get('gender', '').strip()
+
+    if new_gender in ['Male', 'Female']:
+        current_user.gender = new_gender
+
     # Handle profile picture upload
     file = request.files.get('profile_picture')
     if file and file.filename != '':
@@ -610,9 +622,13 @@ def register_coach():
     if request.method == 'POST':
         full_name = request.form['full_name'].strip()
         school = request.form['school'].strip()
+        gender = request.form.get('gender', '').strip()
         password = request.form['password']
         secret_code = request.form['secret_code'].strip()
 
+        if gender not in ['Male', 'Female']:
+            flash('Please select a valid gender.', 'danger')
+            return redirect(url_for('register_coach'))
         # Check secret code
         if secret_code != app.config.get('COACH_SECRET_CODE', 'ATHLETE-COACH-2025'):
             flash('Invalid Coach Secret Code.', 'danger')
@@ -627,6 +643,7 @@ def register_coach():
         coach = User(
             full_name=full_name,
             school=school,
+            gender=gender,
             role='admin',
             is_verified=False          # Pending Super Admin approval
         )

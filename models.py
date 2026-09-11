@@ -9,6 +9,7 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     full_name = db.Column(db.String(150), nullable=False)
     school = db.Column(db.String(150), nullable=False)
+    gender = db.Column(db.String(10), nullable=True)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), default='student')  # student or admin
     id_document = db.Column(db.String(255), nullable=True)      # from registration

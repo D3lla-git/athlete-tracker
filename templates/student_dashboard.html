@@ -14,7 +14,15 @@
 
   <!-- Name and Info -->
   <div>
-    <h2 class="mb-1">{{ current_user.full_name }}</h2>
+  <h2 class="mb-1">
+  {{ current_user.full_name }}
+
+  {% if current_user.gender == 'Male' %}
+    <i class="fa-solid fa-mars" title="Male" style="color: #0d6efd;"></i>
+  {% elif current_user.gender == 'Female' %}
+    <i class="fa-solid fa-venus" title="Female" style="color: #d63384;"></i>
+  {% endif %}
+</h2>
     <p class="text-muted mb-1">{{ current_user.school }} <i class="fa-solid fa-school"></i></p>
     
     {% if current_user.is_verified %}
