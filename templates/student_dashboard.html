@@ -39,6 +39,7 @@
         <option value="">-- Select Sport --</option>
         <option value="Football">Football</option>
         <option value="Basketball">Basketball</option>
+        <option value="Kickball">Kickball</option>
       </select>
     </div>
 
@@ -62,6 +63,96 @@
       <label class="form-label">Games Played <i class="fa-solid fa-person-running"></i> <i class="fa-solid fa-trophy"></i></label>
       <input type="number" name="games_played" class="form-control" min="0" value="0">
     </div>
+
+<div class="row g-3 mt-1">
+  <div class="col-md-6">
+    <label class="form-label" id="motm-label">
+      Man of the Match <i class="fa-solid fa-medal"></i>
+    </label>
+    <input type="number"
+           name="man_of_the_match"
+           class="form-control"
+           min="0"
+           step="1"
+           value="0">
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">
+      MVP <i class="fa-solid fa-star"></i>
+    </label>
+    <input type="number"
+           name="mvp"
+           class="form-control"
+           min="0"
+           step="1"
+           value="0">
+  </div>
+</div>
+
+<!-- Kickball Statistics -->
+<div id="kickball-stats" class="row g-3 mt-1" style="display: none;">
+  <div class="col-md-6">
+    <label class="form-label">
+      Home Run <i class="fa-solid fa-baseball"></i>
+    </label>
+    <input type="number"
+           name="home_runs"
+           class="form-control"
+           min="0"
+           step="1"
+           value="0">
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">
+      Red Card <i class="fa-solid fa-square"></i>
+    </label>
+    <input type="number"
+           name="kickball_red_cards"
+           class="form-control"
+           min="0"
+           step="1"
+           value="0">
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">
+      Yellow Card <i class="fa-solid fa-square"></i>
+    </label>
+    <input type="number"
+           name="kickball_yellow_cards"
+           class="form-control"
+           min="0"
+           step="1"
+           value="0">
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">
+      Cut Base <i class="fa-solid fa-person-running"></i>
+    </label>
+    <input type="number"
+           name="cut_base"
+           class="form-control"
+           min="0"
+           step="1"
+           value="0">
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">
+      Foul Played <i class="fa-solid fa-triangle-exclamation" style="color: yellow;"></i>
+    </label>
+    <input type="number"
+           name="foul_played"
+           class="form-control"
+           min="0"
+           step="1"
+           value="0">
+  </div>
+</div>
+
 <div class="col-12 mt-3">
   <label class="form-label fw-bold">
     Trophies Won 
@@ -158,15 +249,26 @@
   const sportSelect = document.getElementById('sportSelect');
   const footballFields = document.getElementById('footballFields');
   const basketballFields = document.getElementById('basketballFields');
+  const kickballFields = document.getElementById('kickball-stats');
+  const motmLabel = document.getElementById('motm-label');
 
   sportSelect.addEventListener('change', function () {
     footballFields.style.display = 'none';
     basketballFields.style.display = 'none';
+    kickballFields.style.display = 'none';
+
+    // Default label
+    motmLabel.innerHTML = 'Man of the Match <i class="fa-solid fa-trophy"></i>';
 
     if (this.value === 'Football') {
       footballFields.style.display = 'flex';
     } else if (this.value === 'Basketball') {
       basketballFields.style.display = 'flex';
+    } else if (this.value === 'Kickball') {
+      kickballFields.style.display = 'flex';
+
+      // Kickball uses QOTM
+      motmLabel.innerHTML = 'QOTM <i class="fa-solid fa-trophy"></i>';
     }
   });
 </script>
@@ -186,10 +288,12 @@
     <thead class="table-dark">
       <tr>
        <th><i class="fa-solid fa-futbol"></i>Sport<i class="fa-solid fa-basketball" style="color: orangered;"></i></th>
-        -<th>Team / School <i class="fa-solid fa-users"></i></th>
+        <th>Team <i class="fa-solid fa-users"></i></th>
         <th>Year <i class="fa-solid fa-calendar" style="color: lightgreen;"></i></th>
         <th>Position <i class="fa-solid fa-shirt"></i></th>
         <th>Games Played <i class="fa-solid fa-person-running"></i></th>
+        <th>MOTM/QOTM <i class="fa-solid fa-trophy" style="color: silver;"></i></th>
+        <th>MVP <i class="fa-solid fa-star" style="color: goldenrod"></i></th>
         <th>Trophy <i class="fa-solid fa-trophy" style="color: goldenrod;"></i></th>
         <th>Stats <i class="fa-solid fa-chart-line"></i></th>
         <th>Status <i class="bi bi-check2-circle"></i></th>
@@ -203,13 +307,33 @@
         <td>{{ r.year }}</td>
         <td>{{ r.position or '-' }}</td>
         <td>{{ r.games_played }}</td>
+        <td>{{ r.man_of_the_match or 0 }}</td>
+        <td>{{ r.mvp or 0 }}</td>
         <td>{{ r.trophy or '-' }}</td>
        <td>
-          {% if r.sport == 'Football' %}
-            Goals <i class="fa-solid fa-futbol"></i> : {{ r.goals }} | Assists <i class="fa-solid fa-handshake-angle"></i> : {{ r.assists }} | Yellow Card <i class="fa-solid fa-square" style="color: #FFCC00;"></i> : {{ r.yellow_cards }} | Red Card <i class="fa-solid fa-square" style="color: #FF0000;"></i> : {{ r.red_cards }}
-          {% else %}
-          Points <i class="fa-solid fa-basketball" style="color: orangered;"></i> : {{ r.points }} | Assists <i class="fa-solid fa-handshake-angle"></i> : {{ r.assists }} | Blocks <i class="fa-solid fa-hand"></i> : {{ r.blocks }} | Sent Off Court <i class="fa-solid fa-ban"></i> : {{ r.sent_off }}
-          {% endif %}
+         {% if r.sport == 'Football' %}
+
+    <div><strong>Goals <i class="fa-solid fa-futbol"></i>:</strong> {{ r.goals }}</div>
+    <div><strong>Assists <i class="fa-solid fa-handshake-angle"></i>:</strong> {{ r.assists }}</div>
+    <div><strong>Yellow <i class="fa-solid fa-square" style="color: #FFCC00;"></i>:</strong> {{ r.yellow_cards }}</div>
+    <div><strong>Red <i class="fa-solid fa-square" style="color: #FF0000;"></i>:</strong> {{ r.red_cards }}</div>
+
+{% elif r.sport == 'Kickball' %}
+
+    <div><strong>Home Runs <i class="fa-solid fa-baseball"></i>:</strong> {{ r.home_runs }}</div>
+    <div><strong>Red Cards <i class="fa-solid fa-square" style="color: #FF0000;"></i>:</strong> {{ r.kickball_red_cards }}</div>
+    <div><strong>Yellow Cards <i class="fa-solid fa-square" style="color: #FFCC00;"></i>:</strong> {{ r.kickball_yellow_cards }}</div>
+    <div><strong>Cut Base <i class="fa-solid fa-baseball-bat"></i>:</strong> {{ r.cut_base }}</div>
+    <div><strong>Foul Played <i class="fa-solid fa-triangle-exclamation"></i>:</strong> {{ r.foul_played }}</div>
+
+{% else %}
+
+    <div><strong>Points <i class="fa-solid fa-basketball" style="color: orangered;"></i>:</strong> {{ r.points }}</div>
+    <div><strong>Assists <i class="fa-solid fa-handshake-angle"></i>:</strong> {{ r.assists }}</div>
+    <div><strong>Blocks <i class="fa-solid fa-shield-alt"></i>:</strong> {{ r.blocks }}</div>
+    <div><strong>Sent Off Court <i class="fa-solid fa-user-times"></i>:</strong> {{ r.sent_off }}</div>
+
+{% endif %}
         </td>
 
 <td>
@@ -249,7 +373,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="7" class="text-center">No records submitted yet.</td>
+      <td colspan="10" class="text-center">No records submitted yet.</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -267,47 +391,108 @@
         <div class="record-card mx-auto">
           
           <!-- Sport Title with Icon -->
-          <div class="card-sport text-center mb-3">
-            {% if r.sport == 'Football' %}
-              {{ r.sport | upper }} <i class="fa-solid fa-futbol"></i>
-            {% else %}
-              {{ r.sport | upper }} <i class="fa-solid fa-basketball" style="color: orangered;"></i>
-            {% endif %}
-          </div>
+<div class="card-sport text-center mb-3">
+  {% if r.sport == 'Football' %}
+    {{ r.sport | upper }} <i class="fa-solid fa-futbol"></i>
+  {% elif r.sport == 'Kickball' %}
+    {{ r.sport | upper }} <i class="fa-solid fa-baseball"></i>
+  {% else %}
+    {{ r.sport | upper }} <i class="fa-solid fa-basketball" style="color: orangered;"></i>
+  {% endif %}
+</div>
 
           <!-- Stats Grid -->
           <div class="card-grid">
-            <div><strong>Team / School <i class="fa-solid fa-users"></i> :</strong> {{ r.team or '-' }}</div>
+            <div><strong>Team <i class="fa-solid fa-users"></i> :</strong> {{ r.team or '-' }}</div>
             <div><strong>Year <i class="fa-solid fa-calendar" style="color: green;"></i> :</strong> {{ r.year }}</div>
 
             {% if r.sport == 'Football' %}
-              <div><strong>Goals <i class="fa-solid fa-futbol"></i> :</strong> {{ r.goals or 'None' }}</div>
-            {% else %}
-              <div><strong>Points <i class="fa-solid fa-basketball" style="color: orangered;"></i> :</strong> {{ r.points or 0 }}</div>
-            {% endif %}
+  <div><strong>Goals <i class="fa-solid fa-futbol"></i> :</strong> {{ r.goals or 0 }}</div>
 
+{% elif r.sport == 'Kickball' %}
+  <div><strong>Home Runs <i class="fa-solid fa-baseball"></i> :</strong> {{ r.home_runs or 0 }}</div>
+
+{% else %}
+  <div><strong>Points <i class="fa-solid fa-basketball" style="color: orangered;"></i> :</strong> {{ r.points or 0 }}</div>
+{% endif %}
             <div><strong>Position <i class="fa-solid fa-shirt"></i> :</strong> {{ r.position or '-' }}</div>
             <div><strong>Assist <i class="fa-solid fa-handshake-angle"></i> :</strong> {{ r.assists or 0 }}</div>
             <div><strong>Games <i class="fa-solid fa-person-running"></i> :</strong> {{ r.games_played or 0 }}</div>
+            <div>
+  <strong>
+    {% if r.sport == 'Kickball' %}
+      QOTM
+    {% else %}
+      MOTM
+    {% endif %}
+    <i class="fa-solid fa-medal" style="color: goldenrod;"></i> :
+  </strong>
+  {{ r.man_of_the_match or 0 }}
+</div>
 
-            {% if r.sport == 'Football' %}
-              <div><strong>Yellow Card <i class="fa-solid fa-square" style="color: #FFCC00;"></i> :</strong> {{ r.yellow_cards or 0 }} 
-              </div>
-            {% else %}
-              <div><strong>Blocks <i class="fa-regular fa-hand"></i> :</strong> {{ r.blocks or 0 }}</div>
-            {% endif %}
+<div>
+  <strong>MVP <i class="fa-solid fa-star" style="color: goldenrod;"></i> :</strong>
+  {{ r.mvp or 0 }}
+</div>
+          {% if r.sport == 'Football' %}
+
+  <div>
+    <strong>Yellow Card <i class="fa-solid fa-square" style="color: #FFCC00;"></i> :</strong>
+    {{ r.yellow_cards or 0 }}
+  </div>
+
+{% elif r.sport == 'Kickball' %}
+
+  <div>
+    <strong>Red Cards <i class="fa-solid fa-square" style="color: #FF0000;"></i> :</strong>
+    {{ r.kickball_red_cards or 0 }}
+  </div>
+
+{% else %}
+
+  <div>
+    <strong>Blocks <i class="fa-regular fa-hand"></i> :</strong>
+    {{ r.blocks or 0 }}
+  </div>
+
+{% endif %}
 
             <div>
               <strong>Trophies <i class="fa-solid fa-trophy" style="color: goldenrod;"></i> :</strong> {{ r.trophy or 'None' }}
             </div>
 
-            {% if r.sport == 'Football' %}
-              <div><strong>Red Card <i class="fa-solid fa-square" style="color: #FF0000;"></i> :</strong> {{ r.red_cards or 0 }}  
-              </div>
-            {% else %}
-              <div><strong>Sent Off Court <i class="fa-solid fa-x" style="color: red;"></i> :</strong> {{ r.sent_off or 0 }} 
-              </div>
-            {% endif %}
+       {% if r.sport == 'Football' %}
+
+  <div>
+    <strong>Red Card <i class="fa-solid fa-square" style="color: #FF0000;"></i> :</strong>
+    {{ r.red_cards or 0 }}
+  </div>
+
+{% elif r.sport == 'Kickball' %}
+
+  <div>
+    <strong>Yellow Cards <i class="fa-solid fa-square" style="color: #FFCC00;"></i> :</strong>
+    {{ r.kickball_yellow_cards or 0 }}
+  </div>
+
+  <div>
+    <strong>Cut Base <i class="fa-solid fa-person-running"></i> :</strong>
+    {{ r.cut_base or 0 }}
+  </div>
+
+  <div>
+    <strong>Foul Played <i class="fa-solid fa-triangle-exclamation"></i> :</strong>
+    {{ r.foul_played or 0 }}
+  </div>
+
+{% else %}
+
+  <div>
+    <strong>Sent Off Court <i class="fa-solid fa-x" style="color: red;"></i> :</strong>
+    {{ r.sent_off or 0 }}
+  </div>
+
+{% endif %}
           </div>
 
           <!-- Status -->

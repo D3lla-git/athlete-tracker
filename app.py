@@ -313,6 +313,8 @@ def submit_record():
         games_played=safe_int(games_played),
         trophy=trophy_value,
         team=team,
+        man_of_the_match=safe_int(request.form.get('man_of_the_match')),
+        mvp=safe_int(request.form.get('mvp')),
         status='pending'
     )
 
@@ -327,6 +329,13 @@ def submit_record():
         record.assists = safe_int(request.form.get('assists'))
         record.blocks = safe_int(request.form.get('blocks'))
         record.sent_off = safe_int(request.form.get('sent_off'))
+
+    elif sport == 'Kickball':
+        record.home_runs = safe_int(request.form.get('home_runs'))
+        record.kickball_red_cards = safe_int(request.form.get('kickball_red_cards'))
+        record.kickball_yellow_cards = safe_int(request.form.get('kickball_yellow_cards'))
+        record.cut_base = safe_int(request.form.get('cut_base'))
+        record.foul_played = safe_int(request.form.get('foul_played'))
         
     db.session.add(record)
     db.session.commit()
@@ -395,7 +404,9 @@ def edit_record(record_id):
     if request.method == 'POST':
         record.position = request.form.get('position')
         record.games_played = int(request.form.get('games_played') or 0)
-        record.team = request.form.get('team')          # ← Add this line
+        record.team = request.form.get('team')
+        record.man_of_the_match = int(request.form.get('man_of_the_match') or 0)
+        record.mvp = int(request.form.get('mvp') or 0)
 
         trophies = request.form.getlist('trophy')
         record.trophy = ", ".join(trophies) if trophies else None
@@ -405,6 +416,14 @@ def edit_record(record_id):
             record.assists = int(request.form.get('assists') or 0)
             record.yellow_cards = int(request.form.get('yellow_cards') or 0)
             record.red_cards = int(request.form.get('red_cards') or 0)
+            
+        elif record.sport == 'Kickball':
+            record.home_runs = int(request.form.get('home_runs') or 0)
+            record.kickball_red_cards = int(request.form.get('kickball_red_cards') or 0)
+            record.kickball_yellow_cards = int(request.form.get('kickball_yellow_cards') or 0)
+            record.cut_base = int(request.form.get('cut_base') or 0)
+            record.foul_played = int(request.form.get('foul_played') or 0)
+
         else:
             record.points = int(request.form.get('points') or 0)
             record.assists = int(request.form.get('assists') or 0)

@@ -19,6 +19,37 @@
               <label class="form-label">Games Played</label>
               <input type="number" name="games_played" class="form-control" value="{{ record.games_played }}" min="0">
             </div>
+<div class="row g-3 mt-1">
+  <div class="col-md-6">
+   <label class="form-label">
+    {% if record.sport == 'Kickball' %}
+        QOTM
+    {% else %}
+        Man of the Match
+    {% endif %}
+    <i class="fa-solid fa-medal"></i>
+</label>
+    <input type="number"
+           name="man_of_the_match"
+           class="form-control"
+           value="{{ record.man_of_the_match or 0 }}"
+           min="0"
+           step="1">
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">
+      MVP <i class="fa-solid fa-star"></i>
+    </label>
+    <input type="number"
+           name="mvp"
+           class="form-control"
+           value="{{ record.mvp or 0 }}"
+           min="0"
+           step="1">
+  </div>
+</div>
+
 <div class="mb-4">
   <label class="form-label">Team Played For <i class="fa-solid fa-users"></i></label>
   <input type="text" name="team" class="form-control" value="{{ record.team or '' }}" placeholder="e.g. LPRC Oilers / St. John High School">
@@ -61,45 +92,162 @@
   </div>
           </div>
 
-          {% if record.sport == 'Football' %}
-          <div class="row g-3 mt-2">
-            <div class="col-md-3">
-              <label class="form-label">Goals</label>
-              <input type="number" name="goals" class="form-control" value="{{ record.goals or 0 }}">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">Assists</label>
-              <input type="number" name="assists" class="form-control" value="{{ record.assists or 0 }}">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">Yellow Cards</label>
-              <input type="number" name="yellow_cards" class="form-control" value="{{ record.yellow_cards or 0 }}">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">Red Cards</label>
-              <input type="number" name="red_cards" class="form-control" value="{{ record.red_cards or 0 }}">
-            </div>
-          </div>
-          {% else %}
-          <div class="row g-3 mt-2">
-            <div class="col-md-3">
-              <label class="form-label">Points</label>
-              <input type="number" name="points" class="form-control" value="{{ record.points or 0 }}">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">Assists</label>
-              <input type="number" name="assists" class="form-control" value="{{ record.assists or 0 }}">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">Blocks</label>
-              <input type="number" name="blocks" class="form-control" value="{{ record.blocks or 0 }}">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">Times Sent Off</label>
-              <input type="number" name="sent_off" class="form-control" value="{{ record.sent_off or 0 }}">
-            </div>
-          </div>
-          {% endif %}
+  {% if record.sport == 'Football' %}
+
+    <!-- Football Statistics -->
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label">Goals <i class="fa-solid fa-futbol"></i></label>
+            <input type="number"
+                   name="goals"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.goals or 0 }}">
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Assists <i class="fa-solid fa-handshake"></i></label>
+            <input type="number"
+                   name="assists"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.assists or 0 }}">
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Yellow Cards <i class="fa-solid fa-square" style="color: yellow;"></i></label>
+            <input type="number"
+                   name="yellow_cards"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.yellow_cards or 0 }}">
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Red Cards <i class="fa-solid fa-square" style="color: red;"></i></label>
+            <input type="number"
+                   name="red_cards"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.red_cards or 0 }}">
+        </div>
+    </div>
+
+{% elif record.sport == 'Kickball' %}
+
+    <!-- Kickball Statistics -->
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label">
+                Home Run <i class="fa-solid fa-baseball"></i>
+            </label>
+            <input type="number"
+                   name="home_runs"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.home_runs or 0 }}">
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">
+                Red Card <i class="fa-solid fa-square" style="color: red;"></i>
+            </label>
+            <input type="number"
+                   name="kickball_red_cards"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.kickball_red_cards or 0 }}">
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">
+                Yellow Card <i class="fa-solid fa-square" style="color: yellow;"></i>
+            </label>
+            <input type="number"
+                   name="kickball_yellow_cards"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.kickball_yellow_cards or 0 }}">
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">
+                Cut Base <i class="fa-solid fa-person-running"></i>
+            </label>
+            <input type="number"
+                   name="cut_base"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.cut_base or 0 }}">
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">
+                Foul Played <i class="fa-solid fa-triangle-exclamation"></i>
+            </label>
+            <input type="number"
+                   name="foul_played"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.foul_played or 0 }}">
+        </div>
+    </div>
+
+{% else %}
+
+    <!-- Basketball Statistics -->
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label">Points <i class="fa-solid fa-basketball"></i></label>
+            <input type="number"
+                   name="points"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.points or 0 }}">
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Assists <i class="fa-solid fa-handshake"></i></label>
+            <input type="number"
+                   name="assists"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.assists or 0 }}">
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Blocks <i class="fa-solid fa-shield-alt"></i></label>
+            <input type="number"
+                   name="blocks"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.blocks or 0 }}">
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Sent Off court <i class="fa-solid fa-user-slash"></i></label>
+            <input type="number"
+                   name="sent_off"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.sent_off or 0 }}">
+        </div>
+    </div>
+
+{% endif %}
 
           <div class="mt-4">
             <button type="submit" class="btn btn-primary">Save Changes</button>

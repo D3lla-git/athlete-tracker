@@ -46,6 +46,17 @@ class SportRecord(db.Model):
     blocks = db.Column(db.Integer, default=0)
     sent_off = db.Column(db.Integer, default=0)
 
+    # Kickball fields
+    home_runs = db.Column(db.Integer, default=0)
+    kickball_red_cards = db.Column(db.Integer, default=0)
+    kickball_yellow_cards = db.Column(db.Integer, default=0)
+    cut_base = db.Column(db.Integer, default=0)
+    foul_played = db.Column(db.Integer, default=0)
+
+    # Awards
+    man_of_the_match = db.Column(db.Integer, default=0)
+    mvp = db.Column(db.Integer, default=0)
+
     status = db.Column(db.String(20), default='pending')  # pending / approved / rejected
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
