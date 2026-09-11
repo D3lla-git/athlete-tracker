@@ -28,7 +28,8 @@
 {% if current_user.is_verified %}
   <!-- ==================== SUBMIT FORM ==================== -->
   <div class="card mb-4">
-    <div class="card-header">Submit New Sports Record</div>
+
+    <h5><div class="card-header">Submit New Sports Record</div></h5>
     <div class="card-body">
       <form method="POST" action="{{ url_for('submit_record') }}">
 
