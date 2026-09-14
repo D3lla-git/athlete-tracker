@@ -1,20 +1,91 @@
 import os
-from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, send_from_directory
+from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, send_from_directory, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 from pymongo import MongoClient
-from models import db, User, SportRecord
+from models import db, User, SportRecord, LoginAttempt
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
 from datetime import datetime
-from flask_migrate import Migrate 
+from flask_migrate import Migrate
 from supabase import create_client
 import uuid
+import base64
+from io import BytesIO
+import pyotp
+import qrcode
+import secrets
+from flask_mail import Mail, Message
+
+
+# ==========================================
+# RECOVERY CODE HELPERS
+# ==========================================
+
+def generate_recovery_codes(count=10):
+    """Generate one-time recovery codes."""
+    codes = []
+
+    for _ in range(count):
+        code = pyotp.random_base32()[:10].upper()
+        formatted_code = f"{code[:5]}-{code[5:]}"
+        codes.append(formatted_code)
+
+    return codes
+
+
+def hash_recovery_codes(codes):
+    """Hash recovery codes before storing them."""
+    return [
+        generate_password_hash(code)
+        for code in codes
+    ]
+
+
+def verify_recovery_code(code, stored_hashes):
+    """Check a recovery code against stored hashes.
+
+    Returns the index of the matching hash, or None.
+    """
+    normalized_code = code.strip().upper()
+
+    for index, stored_hash in enumerate(stored_hashes):
+        if check_password_hash(stored_hash, normalized_code):
+            return index
+
+    return None
 
 
 app = Flask(__name__)
 app.config.from_object(Config)
+mail = Mail(app)
+# ========== BRUTE-FORCE PROTECTION ==========
+MAX_LOGIN_ATTEMPTS = 3
+LOGIN_BLOCK_MINUTES = 10
+MAX_2FA_ATTEMPTS = 3
+TWO_FA_BLOCK_MINUTES = 10
+# Forgot-password rate limiting
+MAX_FORGOT_ATTEMPTS = 5
+FORGOT_BLOCK_MINUTES = 10
+
+MAX_FORGOT_EMAIL_ATTEMPTS = 3
+FORGOT_EMAIL_BLOCK_MINUTES = 60
+# ========== CSRFSECURITY ==========
+csrf = CSRFProtect(app)
+
+# ========== SECURITY HEADERS ==========
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = (
+        'camera=(), microphone=(), geolocation=()'
+    )
+    return response
 # ========== SUPABASE STORAGE ==========
 supabase = create_client(
     os.environ.get("SUPABASE_URL"),
@@ -34,9 +105,126 @@ login_manager.init_app(app)
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# ========== FILE UPLOAD Security HELPERS ==========
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+def valid_file_content(file):
+    """Validate the actual file signature, not just the filename extension."""
+    file.stream.seek(0)
+    header = file.stream.read(16)
+    file.stream.seek(0)
+
+    # PNG
+    if header.startswith(b'\x89PNG\r\n\x1a\n'):
+        return 'png'
+
+    # JPEG
+    if header.startswith(b'\xff\xd8\xff'):
+        return 'jpg'
+
+    # PDF
+    if header.startswith(b'%PDF'):
+        return 'pdf'
+
+    return None
+
+# ========== PASSWORD STRENGTH CHECK ==========
+def is_strong_password(password):
+    """Check whether a password meets the application's security requirements."""
+    if len(password) < 8:
+        return False
+
+    if not any(char.isupper() for char in password):
+        return False
+
+    if not any(char.islower() for char in password):
+        return False
+
+    if not any(char.isdigit() for char in password):
+        return False
+
+    if not any(not char.isalnum() for char in password):
+        return False
+
+    return True
+
+# ========== BRUTE-FORCE PROTECTION HELPERS ==========
+
+# ========== CLIENT IP HELPER ==========
+def get_client_ip():
+    """Get the client's real IP address behind Vercel/proxies."""
+    real_ip = request.headers.get('X-Real-IP')
+
+    if real_ip:
+        return real_ip.strip()
+
+    forwarded_for = request.headers.get('X-Forwarded-For')
+
+    if forwarded_for:
+        return forwarded_for.split(',')[0].strip()
+
+    return request.remote_addr or 'unknown'
+
+def is_rate_limited(identifier, max_attempts, block_minutes):
+    """Return True if this identifier is currently blocked."""
+    attempt = LoginAttempt.query.filter_by(
+        identifier=identifier
+    ).first()
+
+    if not attempt:
+        return False
+
+    if attempt.blocked_until:
+        if datetime.utcnow() < attempt.blocked_until.replace(tzinfo=None):
+            return True
+
+        # Block has expired — reset the counter
+        attempt.failed_attempts = 0
+        attempt.blocked_until = None
+        db.session.commit()
+
+    return False
+
+
+def record_failed_attempt(identifier, max_attempts, block_minutes):
+    """Record a failed attempt and apply a temporary block if needed."""
+    attempt = LoginAttempt.query.filter_by(
+        identifier=identifier
+    ).first()
+
+    if not attempt:
+        attempt = LoginAttempt(
+            identifier=identifier,
+            failed_attempts=0
+        )
+        db.session.add(attempt)
+
+    attempt.failed_attempts += 1
+    attempt.last_attempt = datetime.utcnow()
+
+    if attempt.failed_attempts >= max_attempts:
+        from datetime import timedelta
+
+        attempt.blocked_until = (
+            datetime.utcnow() +
+            timedelta(minutes=block_minutes)
+        )
+
+    db.session.commit()
+
+
+def reset_failed_attempts(identifier):
+    """Clear failed attempts after a successful authentication."""
+    attempt = LoginAttempt.query.filter_by(
+        identifier=identifier
+    ).first()
+
+    if attempt:
+        db.session.delete(attempt)
+        db.session.commit()
+
 def upload_to_supabase(file, bucket, path):
     file.stream.seek(0)
     file_data = file.read()
@@ -50,19 +238,6 @@ def upload_to_supabase(file, bucket, path):
     )
 
     return path
-
-with app.app_context():
-    # db.create_all()
-    if not User.query.filter_by(role='admin').first():
-        admin = User(
-            full_name='Admin Coach',
-            school='System',
-            role='admin',
-            is_verified=True
-        )
-        admin.set_password('admin123')
-        db.session.add(admin)
-        db.session.commit()
 
 @app.route('/')
 def index():
@@ -121,7 +296,17 @@ def register():
         full_name = request.form['full_name'].strip()
         school = request.form['school'].strip()
         gender = request.form.get('gender', '').strip()
+        email = request.form['email'].strip().lower()
         password = request.form['password']
+# ========= PASSWORD STRENGTH CHECK ========== #
+        if not is_strong_password(password):
+            flash(
+                'Password must be at least 8 characters and include '
+                'an Uppercase Letter, lowercase letter, number, '
+                'and special character.',
+                'danger'
+            )
+            return redirect(url_for('register'))
 
         if gender not in ['Male', 'Female']:
             flash('Please select a valid gender.', 'danger')
@@ -142,7 +327,30 @@ def register():
         if not allowed_file(file.filename):
             flash('Only PNG, JPG, JPEG or PDF files are allowed.', 'danger')
             return redirect(url_for('register'))
-        
+
+        actual_file_type = valid_file_content(file)
+
+        if not actual_file_type:
+            flash(
+                'The uploaded file is invalid or does not match its file type.',
+                'danger'
+            )
+            return redirect(url_for('register'))
+
+        extension = file.filename.rsplit('.', 1)[1].lower()
+
+        if extension in ['jpg', 'jpeg'] and actual_file_type != 'jpg':
+            flash('The uploaded image is not a valid JPEG file.', 'danger')
+            return redirect(url_for('register'))
+
+        if extension == 'png' and actual_file_type != 'png':
+            flash('The uploaded image is not a valid PNG file.', 'danger')
+            return redirect(url_for('register'))
+
+        if extension == 'pdf' and actual_file_type != 'pdf':
+            flash('The uploaded document is not a valid PDF file.', 'danger')
+            return redirect(url_for('register'))
+
 #========== SUPABASE UPLOAD ==========
         filename = secure_filename(file.filename)
         storage_path = f"students/{uuid.uuid4().hex}_{filename}"
@@ -162,13 +370,20 @@ def register():
         #filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         #file.save(filepath)
 
+        existing_email = User.query.filter_by(email=email).first()
+
+        if existing_email:
+            flash('An account with this email address already exists.', 'danger')
+            return redirect(url_for('register'))
+
         user = User(
-        full_name=full_name,
-        school=school,
-        gender=gender,
-        id_document=filename,
-        role='student'
-)
+            full_name=full_name,
+            school=school,
+            gender=gender,
+            email=email,
+            id_document=filename,
+            role='student'
+        )
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
@@ -178,30 +393,300 @@ def register():
 
     return render_template('register.html')
 
+#=====Login route=========================
+# ==== forgot password route =========================
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+
+        # Rate-limit by IP address
+        ip_identifier = f"forgot-ip:{get_client_ip()}"
+
+        if is_rate_limited(
+            ip_identifier,
+            MAX_FORGOT_ATTEMPTS,
+            FORGOT_BLOCK_MINUTES
+        ):
+            flash(
+                'Too many password reset requests. '
+                'Please try again later.',
+                'warning'
+            )
+            return redirect(url_for('forgot_password'))
+
+        # Rate-limit by email address
+        email_identifier = f"forgot-email:{email}"
+
+        if is_rate_limited(
+            email_identifier,
+            MAX_FORGOT_EMAIL_ATTEMPTS,
+            FORGOT_EMAIL_BLOCK_MINUTES
+        ):
+            flash(
+                'Too many password reset requests. '
+                'Please try again later.',
+                'warning'
+            )
+            return redirect(url_for('forgot_password'))
+
+        # Count this reset request
+        record_failed_attempt(
+            ip_identifier,
+            MAX_FORGOT_ATTEMPTS,
+            FORGOT_BLOCK_MINUTES
+        )
+
+        record_failed_attempt(
+            email_identifier,
+            MAX_FORGOT_EMAIL_ATTEMPTS,
+            FORGOT_EMAIL_BLOCK_MINUTES
+        )
+
+        # Always show the same message whether the email exists or not.
+        # This prevents account enumeration.
+        user = User.query.filter_by(email=email).first()
+
+        if user:
+            # Generate a secure, unpredictable reset token
+            user.reset_token = secrets.token_urlsafe(48)
+
+            # Token expires after 1 hour
+            from datetime import timedelta
+
+            user.reset_token_expires = (
+                datetime.utcnow() + timedelta(hours=1)
+            )
+
+            db.session.commit()
+
+            # Build the password reset link
+            reset_link = url_for(
+                'reset_password',
+                token=user.reset_token,
+                _external=True
+            )
+
+            # Send the reset email
+            try:
+                msg = Message(
+                    subject='Athlete Tracker - Password Reset',
+                    sender=app.config['MAIL_DEFAULT_SENDER'],
+                    recipients=[user.email]
+                )
+
+                msg.body = (
+                    f'Hello {user.full_name},\n\n'
+                    'We received a request to reset your Athlete Tracker '
+                    'password.\n\n'
+                    'Click the link below to reset your password:\n\n'
+                    f'{reset_link}\n\n'
+                    'This link will expire in 1 hour.\n\n'
+                    'If you did not request a password reset, you can '
+                    'safely ignore this email.\n\n'
+                    'Athlete Tracker'
+                )
+
+                mail.send(msg)
+
+            except Exception as e:
+                # Do not leave a usable reset token behind
+                # if the email could not be sent.
+                user.reset_token = None
+                user.reset_token_expires = None
+                db.session.commit()
+
+                print("PASSWORD RESET EMAIL ERROR:", e)
+
+        flash(
+            'If an account exists for that email address, '
+            'a password reset link has been sent.',
+            'info'
+        )
+
+        return redirect(url_for('forgot_password'))
+
+    return render_template('forgot_password.html')
+
+# ==reset password route=========================
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    # Find the user associated with this reset token
+    user = User.query.filter_by(reset_token=token).first()
+
+    # Reject invalid or expired tokens
+    if not user or not user.reset_token_expires:
+        flash(
+            'This password reset link is invalid or has expired.',
+            'danger'
+        )
+        return redirect(url_for('forgot_password'))
+
+    if datetime.utcnow() > user.reset_token_expires:
+        # Clear the expired token
+        user.reset_token = None
+        user.reset_token_expires = None
+        db.session.commit()
+
+        flash(
+            'This password reset link has expired. '
+            'Please request a new one.',
+            'danger'
+        )
+        return redirect(url_for('forgot_password'))
+
+    if request.method == 'POST':
+        new_password = request.form.get('new_password', '')
+        confirm_password = request.form.get('confirm_password', '')
+
+        # Check password strength
+        if not is_strong_password(new_password):
+            flash(
+                'Password must be at least 10 characters and include '
+                'an uppercase letter, lowercase letter, number, '
+                'and special character.',
+                'danger'
+            )
+            return render_template(
+                'reset_password.html',
+                token=token
+            )
+
+        # Confirm both passwords match
+        if new_password != confirm_password:
+            flash(
+                'Passwords do not match.',
+                'danger'
+            )
+            return render_template(
+                'reset_password.html',
+                token=token
+            )
+
+        # Set the new password
+        user.set_password(new_password)
+
+        # Make the reset token single-use
+        user.reset_token = None
+        user.reset_token_expires = None
+
+        db.session.commit()
+
+        flash(
+            'Your password has been reset successfully. '
+            'Please log in with your new password.',
+            'success'
+        )
+
+        return redirect(url_for('login'))
+
+    return render_template(
+        'reset_password.html',
+        token=token
+    )
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         full_name = request.form['full_name'].strip()
         password = request.form['password']
 
+        # Rate-limit identifiers
+        identifier = f"login:{full_name.lower()}"
+        ip_identifier = f"ip:{get_client_ip()}"
+
+        # Check whether this IP address is temporarily blocked
+        if is_rate_limited(
+            ip_identifier,
+            10,
+            15
+        ):
+            flash(
+                'Too many login attempts from this network. '
+                'Please try again in 15 minutes.',
+                'danger'
+            )
+            return redirect(url_for('login'))
+
+        # Check whether this account is temporarily blocked
+        if is_rate_limited(
+            identifier,
+            MAX_LOGIN_ATTEMPTS,
+            LOGIN_BLOCK_MINUTES
+        ):
+            flash(
+                'Too many failed login attempts. '
+                'Please try again in 15 minutes.',
+                'danger'
+            )
+            return redirect(url_for('login'))
+
         user = User.query.filter_by(full_name=full_name).first()
-        if user and user.check_password(password):
-            if user.role == 'admin' and not user.is_verified:
-                flash('Your coach account is waiting for Super Admin approval.', 'warning')
-                return redirect(url_for('login'))
-            
-            login_user(user)
-            if user.role == 'admin':
-                return redirect(url_for('admin_dashboard'))
-            return redirect(url_for('student_dashboard'))
-        flash('Invalid full name or password.', 'danger')
+
+        # Invalid username or password
+        if not user or not user.check_password(password):
+            # Record the failed attempt against the account
+            record_failed_attempt(
+                identifier,
+                MAX_LOGIN_ATTEMPTS,
+                LOGIN_BLOCK_MINUTES
+            )
+
+            # Also record the failed attempt against the IP address
+            record_failed_attempt(
+                ip_identifier,
+                10,
+                15
+            )
+
+            flash('Invalid full name or password.', 'danger')
+            return redirect(url_for('login'))
+
+        # Password was correct — reset failed login attempts
+        reset_failed_attempts(identifier)
+        reset_failed_attempts(ip_identifier)
+        # Make the authenticated session permanent
+        session.permanent = True
+
+        # Coaches/admins must be verified before continuing
+        if user.role == 'admin' and not user.is_verified:
+            flash(
+                'Your coach account is waiting for Super Admin approval.',
+                'warning'
+            )
+            return redirect(url_for('login'))
+
+        # Coaches/admins must complete 2FA before being logged in
+        if user.role == 'admin':
+
+            # If 2FA has not been enabled yet, require setup first
+            if not user.two_factor_enabled:
+                session['2fa_setup_user_id'] = user.id
+                flash(
+                    'Please set up two-factor authentication before continuing.',
+                    'warning'
+                )
+                return redirect(url_for('setup_2fa'))
+
+            # Store the user temporarily until the 2FA code is verified
+            session['2fa_user_id'] = user.id
+
+            return redirect(url_for('verify_2fa'))
+
+        # Students do not require 2FA
+        login_user(user)
+        return redirect(url_for('student_dashboard'))
+
     return render_template('login.html')
 
-@app.route('/logout')
+#=============logout route=====================
+@app.route('/logout', methods=['POST'])
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for('index'))
+    flash('You have been logged out.', 'success')
+    return redirect(url_for('login'))
+
 from flask import send_from_directory
 
 # ========== SUPABASE STORAGE ROUTES ==========
@@ -236,11 +721,51 @@ def id_document(filename):
         flash('You are not authorized to view ID documents.', 'danger')
         return redirect(url_for('student_dashboard'))
 
+    # Find the student who owns this ID document
+    owner = User.query.filter_by(id_document=filename).first()
+
+    if not owner:
+        flash('ID document not found.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    # Super Admin can view documents from all schools
+    is_super_admin = (
+        current_user.school.strip().casefold() == 'system'
+        or current_user.full_name.strip().casefold() == 'admin coach'
+    )
+
+    # Regular coaches can only view documents belonging to their school
+    if not is_super_admin:
+        if current_user.school.strip().casefold() != owner.school.strip().casefold():
+            flash(
+                'You are not authorized to view this ID document.',
+                'danger'
+            )
+            return redirect(url_for('admin_dashboard'))
+
     try:
         result = supabase.storage.from_('id-documents').create_signed_url(
             filename,
             3600
         )
+
+        if isinstance(result, dict):
+            signed_url = (
+                result.get('signedURL')
+                or result.get('signedUrl')
+                or result.get('signed_url')
+            )
+
+            if signed_url:
+                return redirect(signed_url)
+
+        flash('ID document could not be loaded.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    except Exception as e:
+        print("ID document error:", e)
+        flash('Unable to open the ID document.', 'danger')
+        return redirect(url_for('admin_dashboard'))
 
         if isinstance(result, dict):
             signed_url = (
@@ -272,8 +797,8 @@ def student_dashboard():
     records = SportRecord.query.filter_by(user_id=current_user.id).all()
     current_year = datetime.now().year
 
-    return render_template('student_dashboard.html', 
-                           records=records, 
+    return render_template('student_dashboard.html',
+                           records=records,
                            current_year=current_year)
 
 @app.route('/submit_record', methods=['POST'])
@@ -303,7 +828,7 @@ def submit_record():
     if existing:
         flash(f'You already have a {existing.status} {sport} record for the year {year}.', 'danger')
         return redirect(url_for('student_dashboard'))
-    # ===================================================== # 
+    # ===================================================== #
     # Safe conversion helper
     def safe_int(value):
         try:
@@ -329,7 +854,7 @@ def submit_record():
         record.assists = safe_int(request.form.get('assists'))
         record.yellow_cards = safe_int(request.form.get('yellow_cards'))
         record.red_cards = safe_int(request.form.get('red_cards'))
-     
+
     elif sport == 'Basketball':
         record.points = safe_int(request.form.get('points'))
         record.assists = safe_int(request.form.get('assists'))
@@ -342,7 +867,7 @@ def submit_record():
         record.kickball_yellow_cards = safe_int(request.form.get('kickball_yellow_cards'))
         record.cut_base = safe_int(request.form.get('cut_base'))
         record.foul_played = safe_int(request.form.get('foul_played'))
-        
+
     db.session.add(record)
     db.session.commit()
 
@@ -350,7 +875,7 @@ def submit_record():
     return redirect(url_for('student_dashboard'))
 
 # ========== Delete route ==========#
-@app.route('/delete_record/<int:record_id>')
+@app.route('/delete_record/<int:record_id>', methods=['POST'])
 @login_required
 def delete_record(record_id):
     record = SportRecord.query.get_or_404(record_id)
@@ -370,7 +895,7 @@ def delete_record(record_id):
     return redirect(url_for('student_dashboard'))
 
 # resubmit route============
-@app.route('/resubmit_record/<int:record_id>')
+@app.route('/resubmit_record/<int:record_id>', methods=['POST'])
 @login_required
 def resubmit_record(record_id):
     record = SportRecord.query.get_or_404(record_id)
@@ -496,7 +1021,7 @@ def admin_dashboard():
         pending_coaches=pending_coaches
     )
 
-@app.route('/approve_coach/<int:user_id>')
+@app.route('/approve_coach/<int:user_id>', methods=['POST'])
 @login_required
 def approve_coach(user_id):
     # Only Super Admin can approve coaches
@@ -530,7 +1055,7 @@ def update_profile():
     if new_school:
         current_user.school = new_school
 
-            # Update gender
+    # Update gender
     new_gender = request.form.get('gender', '').strip()
 
     if new_gender in ['Male', 'Female']:
@@ -540,6 +1065,22 @@ def update_profile():
     file = request.files.get('profile_picture')
     if file and file.filename != '':
         if allowed_file(file.filename):
+            actual_file_type = valid_file_content(file)
+
+            if actual_file_type not in ['png', 'jpg']:
+                flash('The uploaded profile picture is not a valid image.', 'danger')
+                return redirect(url_for('profile'))
+
+            extension = file.filename.rsplit('.', 1)[1].lower()
+
+            if extension == 'png' and actual_file_type != 'png':
+                flash('The uploaded image is not a valid PNG file.', 'danger')
+                return redirect(url_for('profile'))
+
+            if extension in ['jpg', 'jpeg'] and actual_file_type != 'jpg':
+                flash('The uploaded image is not a valid JPEG file.', 'danger')
+                return redirect(url_for('profile'))
+
             filename = secure_filename(file.filename)
             storage_path = f"profiles/{current_user.id}_{uuid.uuid4().hex}_{filename}"
 
@@ -562,7 +1103,56 @@ def update_profile():
     flash('Profile updated successfully!', 'success')
     return redirect(url_for('profile'))
 
-@app.route('/verify_user/<int:user_id>')
+@app.route('/change_password', methods=['POST'])
+@login_required
+def change_password():
+    current_password = request.form.get('current_password', '')
+    new_password = request.form.get('new_password', '')
+    confirm_password = request.form.get('confirm_password', '')
+
+    # Verify current password
+    if not current_user.check_password(current_password):
+        flash('Your current password is incorrect.', 'danger')
+        return redirect(url_for('profile'))
+
+    # Check password strength
+    if not is_strong_password(new_password):
+        flash(
+            'New password must be at least 10 characters and include '
+            'an uppercase letter, lowercase letter, number, '
+            'and special character.',
+            'danger'
+        )
+        return redirect(url_for('profile'))
+
+    # Prevent reusing the current password
+    if current_user.check_password(new_password):
+        flash(
+            'Your new password must be different from your current password.',
+            'danger'
+        )
+        return redirect(url_for('profile'))
+
+    # Confirm new password
+    if new_password != confirm_password:
+        flash('New passwords do not match.', 'danger')
+        return redirect(url_for('profile'))
+
+    # Set and save the new password
+    current_user.set_password(new_password)
+    db.session.commit()
+
+    # Force the user to log in again
+    logout_user()
+
+    flash(
+        'Your password has been changed successfully. Please log in again.',
+        'success'
+    )
+
+    return redirect(url_for('login'))
+
+@app.route('/verify_user/<int:user_id>', methods=['POST'])
 @login_required
 def verify_user(user_id):
     if current_user.role != 'admin':
@@ -581,7 +1171,7 @@ def verify_user(user_id):
     return redirect(url_for('admin_dashboard'))
 
 
-@app.route('/approve_record/<int:record_id>')
+@app.route('/approve_record/<int:record_id>', methods=['POST'])
 @login_required
 def approve_record(record_id):
     if current_user.role != 'admin':
@@ -590,7 +1180,7 @@ def approve_record(record_id):
     record = SportRecord.query.get_or_404(record_id)
 
     # Check if this record belongs to the coach's school/team
-    if current_user.school not in (record.team or ''):
+    if current_user.school.strip().casefold() != (record.team or '').strip().casefold():
         flash('You can only approve records from your own school/team.', 'danger')
         return redirect(url_for('admin_dashboard'))
 
@@ -599,7 +1189,7 @@ def approve_record(record_id):
     flash('Record approved.', 'success')
     return redirect(url_for('admin_dashboard'))
 
-@app.route('/reject_record/<int:record_id>')
+@app.route('/reject_record/<int:record_id>', methods=['POST'])
 @login_required
 def reject_record(record_id):
     if current_user.role != 'admin':
@@ -608,7 +1198,7 @@ def reject_record(record_id):
     record = SportRecord.query.get_or_404(record_id)
 
     # Check if this record belongs to the coach's school/team
-    if current_user.school not in (record.team or ''):
+    if current_user.school.strip().casefold() != (record.team or '').strip().casefold():
         flash('You can only reject records from your own school/team.', 'danger')
         return redirect(url_for('admin_dashboard'))
 
@@ -623,14 +1213,36 @@ def register_coach():
         full_name = request.form['full_name'].strip()
         school = request.form['school'].strip()
         gender = request.form.get('gender', '').strip()
+        email = request.form['email'].strip().lower()
         password = request.form['password']
+        # ======== PASSWORD STRENGTH CHECK ========== #
+        if not is_strong_password(password):
+            flash(
+                'Password must be at least 10 characters and include '
+                'an uppercase letter, lowercase letter, number, '
+                'and special character.',
+                'danger'
+            )
+            return redirect(url_for('register_coach'))
+
         secret_code = request.form['secret_code'].strip()
+
+        existing_email = User.query.filter_by(email=email).first()
+
+        if existing_email:
+            flash('An account with this email address already exists.', 'danger')
+            return redirect(url_for('register_coach'))
 
         if gender not in ['Male', 'Female']:
             flash('Please select a valid gender.', 'danger')
             return redirect(url_for('register_coach'))
+
         # Check secret code
-        if secret_code != app.config.get('COACH_SECRET_CODE', 'ATHLETE-COACH-2025'):
+        expected_code = app.config.get('COACH_SECRET_CODE')
+        if not expected_code:
+            flash('Coach registration is temporarily unavailable.', 'danger')
+            return redirect(url_for('register_coach'))
+        if secret_code != expected_code:
             flash('Invalid Coach Secret Code.', 'danger')
             return redirect(url_for('register_coach'))
 
@@ -644,6 +1256,7 @@ def register_coach():
             full_name=full_name,
             school=school,
             gender=gender,
+            email=email,
             role='admin',
             is_verified=False          # Pending Super Admin approval
         )
@@ -656,6 +1269,261 @@ def register_coach():
 
     return render_template('register_coach.html')
 
+# Two-Factor Authentication (2FA) Recovery Codes Route
+@app.route('/admin/2fa/recovery-codes', methods=['GET', 'POST'])
+@login_required
+def recovery_codes():
+    # Only admins/coaches can access recovery codes
+    if current_user.role != 'admin':
+        flash('You are not authorized to access this page.', 'danger')
+        return redirect(url_for('student_dashboard'))
+
+    # 2FA must already be enabled
+    if not current_user.two_factor_enabled:
+        flash('Please enable two-factor authentication first.', 'warning')
+        return redirect(url_for('setup_2fa'))
+
+    if request.method == 'POST':
+        codes = generate_recovery_codes()
+
+        # Hash every code before storing it
+        hashed_codes = hash_recovery_codes(codes)
+
+        # Store hashes as JSON text
+        import json
+        current_user.two_factor_recovery_codes = json.dumps(hashed_codes)
+        db.session.commit()
+
+        # Show the plaintext codes only in this response
+        return render_template(
+            'recovery_codes.html',
+            codes=codes,
+            generated=True
+        )
+
+    return render_template(
+        'recovery_codes.html',
+        codes=None,
+        generated=False
+    )
+# ========== Two-Factor Authentication (2FA) Routes ==========
+@app.route('/2fa', methods=['GET', 'POST'])
+def verify_2fa():
+    user_id = session.get('2fa_user_id')
+
+    if not user_id:
+        flash('Your 2FA session has expired. Please log in again.', 'warning')
+        return redirect(url_for('login'))
+
+    user = User.query.get(user_id)
+
+    if not user or user.role != 'admin' or not user.two_factor_enabled:
+        session.pop('2fa_user_id', None)
+        flash('Unable to verify two-factor authentication.', 'danger')
+        return redirect(url_for('login'))
+
+    # Rate-limit 2FA attempts for this account
+    identifier = f"2fa:{user.id}"
+
+    if is_rate_limited(
+        identifier,
+        MAX_2FA_ATTEMPTS,
+        TWO_FA_BLOCK_MINUTES
+    ):
+        flash(
+            'Too many failed two-factor authentication attempts. '
+            'Please try again in 15 minutes.',
+            'danger'
+        )
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip()
+        recovery_code = request.form.get('recovery_code', '').strip()
+
+        # Authenticator app code
+        if code:
+            if not code.isdigit() or len(code) != 6:
+                record_failed_attempt(
+                    identifier,
+                    MAX_2FA_ATTEMPTS,
+                    TWO_FA_BLOCK_MINUTES
+                )
+
+                flash(
+                    'Please enter the 6-digit code from your authenticator app.',
+                    'danger'
+                )
+                return render_template('verify_2fa.html')
+
+            totp = pyotp.TOTP(user.two_factor_secret)
+
+            if totp.verify(code, valid_window=1):
+                reset_failed_attempts(identifier)
+                session.pop('2fa_user_id', None)
+                login_user(user)
+
+                return redirect(url_for('admin_dashboard'))
+
+            record_failed_attempt(
+                identifier,
+                MAX_2FA_ATTEMPTS,
+                TWO_FA_BLOCK_MINUTES
+            )
+
+            flash(
+                'Invalid authenticator code. Please try again.',
+                'danger'
+            )
+
+        # Recovery code
+        elif recovery_code:
+            import json
+
+            stored_codes = []
+
+            if user.two_factor_recovery_codes:
+                try:
+                    stored_codes = json.loads(
+                        user.two_factor_recovery_codes
+                    )
+                except (json.JSONDecodeError, TypeError):
+                    stored_codes = []
+
+            matching_index = verify_recovery_code(
+                recovery_code,
+                stored_codes
+            )
+
+            if matching_index is not None:
+                stored_codes.pop(matching_index)
+
+                user.two_factor_recovery_codes = json.dumps(
+                    stored_codes
+                )
+
+                db.session.commit()
+
+                reset_failed_attempts(identifier)
+                session.pop('2fa_user_id', None)
+                login_user(user)
+
+                flash(
+                    'Recovery code accepted. Remember that recovery codes '
+                    'can only be used once.',
+                    'success'
+                )
+
+                return redirect(url_for('admin_dashboard'))
+
+            record_failed_attempt(
+                identifier,
+                MAX_2FA_ATTEMPTS,
+                TWO_FA_BLOCK_MINUTES
+            )
+
+            flash(
+                'Invalid or already-used recovery code.',
+                'danger'
+            )
+
+        else:
+            record_failed_attempt(
+                identifier,
+                MAX_2FA_ATTEMPTS,
+                TWO_FA_BLOCK_MINUTES
+            )
+
+            flash(
+                'Please enter an authenticator code or recovery code.',
+                'danger'
+            )
+
+    return render_template('verify_2fa.html')
+
+ # 2FA Setup Route
+@app.route('/admin/2fa/setup', methods=['GET', 'POST'])
+def setup_2fa():
+    # Allow either an already logged-in admin
+    # or an admin who has just authenticated with their password.
+    setup_user_id = session.get('2fa_setup_user_id')
+
+    if current_user.is_authenticated and current_user.role == 'admin':
+        user = current_user
+
+    elif setup_user_id:
+        user = User.query.get(setup_user_id)
+
+        if not user or user.role != 'admin':
+            session.pop('2fa_setup_user_id', None)
+            flash('Unable to set up two-factor authentication.', 'danger')
+            return redirect(url_for('login'))
+
+    else:
+        flash('Please log in before setting up two-factor authentication.', 'warning')
+        return redirect(url_for('login'))
+
+    # Generate a secret if the account does not have one yet
+    if not user.two_factor_secret:
+        user.two_factor_secret = pyotp.random_base32()
+        db.session.commit()
+
+    totp = pyotp.TOTP(user.two_factor_secret)
+
+    # Create the authenticator-app setup URI
+    provisioning_uri = totp.provisioning_uri(
+        name=user.full_name,
+        issuer_name='Athlete Tracker'
+    )
+
+    # Generate QR code
+    qr_image = qrcode.make(provisioning_uri)
+    buffer = BytesIO()
+    qr_image.save(buffer, format='PNG')
+    qr_code = base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip()
+
+        if not code.isdigit() or len(code) != 6:
+            flash(
+                'Please enter the 6-digit code from your authenticator app.',
+                'danger'
+            )
+
+            return render_template(
+                'setup_2fa.html',
+                qr_code=qr_code,
+                secret=user.two_factor_secret
+            )
+
+        if totp.verify(code, valid_window=1):
+            user.two_factor_enabled = True
+            db.session.commit()
+
+            # If this was a first-time setup during login,
+            # complete the login now.
+            if session.get('2fa_setup_user_id'):
+                session.pop('2fa_setup_user_id', None)
+                login_user(user)
+
+            flash(
+                'Two-factor authentication has been enabled successfully.',
+                'success'
+            )
+
+            return redirect(url_for('admin_dashboard'))
+
+        flash(
+            'Invalid authenticator code. Please try again.',
+            'danger'
+        )
+
+    return render_template(
+        'setup_2fa.html',
+        qr_code=qr_code,
+        secret=user.two_factor_secret
+    )
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)

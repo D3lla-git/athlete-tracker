@@ -144,7 +144,7 @@
   background-color: darkgreen !important;
   color: #ffffff !important;
 }
-/* Custom button styles 
+/* Custom button styles
 .btn-custom-search {
   background-color: green;
   border: 2px solid black;
@@ -203,10 +203,10 @@
   color: white;
   transition: all 0.3s ease;
 }
- 
+
 .btn-coach-hover:hover {
   background-color: darkgreen;
-  border-color: black !important; 
+  border-color: black !important;
   color: white;
 }
 @media (min-width: 992px) {
@@ -222,7 +222,7 @@
 </style>
 </head>
 
-<body class="bg-light"> 
+<body class="bg-light">
   <!-- ========== NAVBAR ========== -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container">
@@ -230,7 +230,7 @@
       <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">Athlete Tracker <i class="fa-solid fa-person-running"></i></a>
 
       <!-- Hamburger button (visible only on mobile) -->
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" 
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar"
               aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
@@ -253,16 +253,36 @@
               <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('student_dashboard') }}"style="color: white;">My Records <i class="fa-solid fa-book"></i></a>
               </li>
+
             {% endif %}
+{% if current_user.is_authenticated and current_user.role == 'admin' %}
+    <a class="nav-link" href="{{ url_for('setup_2fa') }}">
+        <i class="fa-solid fa-shield-halved"></i>
+        2FA Security
+    </a>
+{% endif %}
+
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('logout') }}"style="color: white;">Logout <i class="fa-solid fa-right-from-bracket"></i></a>
+ <form method="POST"
+      action="{{ url_for('logout') }}"
+      style="display:inline; margin:0; padding:0;">
+
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <button type="submit"
+            class="nav-link border-0 bg-transparent p-0"
+            style="cursor:pointer;">
+        Logout <i class="fa-solid fa-right-from-bracket"></i>
+    </button>
+
+</form>
             </li>
           {% else %}
             <li class="nav-item">
               <a class="nav-link" href="{{ url_for('login') }}"style="color: white;">Login <i class="bi bi-box-arrow-in-right"></i></a>
             </li>
             <li class="nav-item dropdown">
-  <a class="nav-link dropdown-toggle" href="#" id="registerDropdown" role="button" 
+  <a class="nav-link dropdown-toggle" href="#" id="registerDropdown" role="button"
      data-bs-toggle="dropdown" aria-expanded="false" style="color: white;">
     Register <i class="bi bi-person-plus"></i>
   </a>

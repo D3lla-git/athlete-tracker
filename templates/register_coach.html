@@ -10,6 +10,7 @@
       </div>
       <div class="card-body">
         <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="mb-3">
             <label class="form-label">Coach Name  <i class="fa-solid fa-user-tie"></i></i></label>
             <input type="text" name="full_name" placeholder="Example: 'Coach John'" class="form-control" required>
@@ -30,6 +31,22 @@
     <option value="Male">Male ♂</option>
     <option value="Female">Female ♀</option>
   </select>
+</div>
+
+<div class="mb-3">
+    <label for="email" class="form-label">
+        Email Address
+    </label>
+
+    <input
+        type="email"
+        class="form-control"
+        id="email"
+        name="email"
+        placeholder="Ex: john.brown@gmail.com"
+        required
+        autocomplete="email"
+    >
 </div>
 
          <div class="mb-3">

@@ -7,6 +7,7 @@
       <div class="card-header"><h4>Student/Athlete Registration <i class="fa-solid fa-futbol"></i><i class="fa-solid fa-basketball-ball" style="color: orangered;"></i></h4></div> 
       <div class="card-body">
         <form method="POST" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="mb-3">
             <label>Full Name <i class="fa-solid fa-user"></i></label>
             <input type="text" name="full_name" placeholder="Example: John Brown" class="form-control" required>
@@ -25,6 +26,21 @@
     <option value="Male">Male ♂</option>
     <option value="Female">Female ♀</option>
   </select>
+</div>
+
+<div class="mb-3">
+    <label for="email" class="form-label">
+        Email Address <i class="fa-solid fa-envelope"></i>
+    </label>
+    <input
+        type="email"
+        class="form-control"
+        id="email"
+        name="email"
+        placeholder="Ex: john.brown@gmail.com"
+        required
+        autocomplete="email"
+    >
 </div>
           <div class="mb-3">
   <label class="form-label">Password <i class="fa-solid fa-key"></i></label>

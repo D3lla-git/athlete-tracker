@@ -25,11 +25,18 @@
             <td>{{ coach.full_name }}</td>
             <td>{{ coach.school }}</td>
             <td>
-              <a href="{{ url_for('approve_coach', user_id=coach.id) }}" 
-                 class="btn btn-success btn-sm"
-                 onclick="return confirm('Approve this coach?')">
-                Approve Coach
-              </a>
+             <form method="POST"
+      action="{{ url_for('approve_coach', user_id=coach.id) }}"
+      style="display:inline;"
+      onsubmit="return confirm('Approve this coach?')">
+
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <button type="submit" class="btn btn-success btn-sm">
+    Approve Coach
+  </button>
+
+</form>
             </td>
           </tr>
           {% endfor %}
@@ -52,9 +59,17 @@
           View ID / Passport
         </a>
       </div>
-      <a href="{{ url_for('verify_user', user_id=u.id) }}" class="btn btn-success btn-sm">
-        Verify Student
-      </a>
+     <form method="POST"
+      action="{{ url_for('verify_user', user_id=u.id) }}"
+      style="display:inline;">
+
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <button type="submit" class="btn btn-success btn-sm">
+    Verify Student
+  </button>
+
+</form>
     </div>
   </div>
   {% endfor %}
@@ -139,14 +154,29 @@
 
             <!-- Action Buttons -->
             <div class="d-flex justify-content-center gap-2 mt-4">
-              <a href="{{ url_for('approve_record', record_id=r.id) }}" 
-                 class="btn btn-success btn-sm px-4">
-                Approve
-              </a>
-              <a href="{{ url_for('reject_record', record_id=r.id) }}" 
-                 class="btn btn-outline-danger btn-sm px-4">
-                Reject
-              </a>
+          <form method="POST"
+      action="{{ url_for('approve_record', record_id=r.id) }}"
+      onsubmit="return confirm('Approve this record?')">
+
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <button type="submit" class="btn btn-success btn-sm px-4">
+    Approve
+  </button>
+
+</form>
+
+<form method="POST"
+      action="{{ url_for('reject_record', record_id=r.id) }}"
+      onsubmit="return confirm('Reject this record?')">
+
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <button type="submit" class="btn btn-outline-danger btn-sm px-4">
+    Reject
+  </button>
+
+</form>
             </div>
 
           </div>
@@ -262,16 +292,33 @@
           <td>
             <div class="d-flex gap-2">
 
-              <a href="{{ url_for('approve_record', record_id=r.id) }}"
-                 class="btn btn-success btn-sm">
-                <i class="fa-solid fa-check"></i>
-                Approve
-              </a>
-              <a href="{{ url_for('reject_record', record_id=r.id) }}"
-                 class="btn btn-outline-danger btn-sm">
-                <i class="fa-solid fa-xmark"></i>
-                Reject
-              </a>
+         <form method="POST"
+      action="{{ url_for('approve_record', record_id=r.id) }}"
+      style="display:inline;"
+      onsubmit="return confirm('Approve this record?')">
+
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <button type="submit" class="btn btn-success btn-sm">
+    <i class="fa-solid fa-check"></i>
+    Approve
+  </button>
+
+</form>
+
+<form method="POST"
+      action="{{ url_for('reject_record', record_id=r.id) }}"
+      style="display:inline;"
+      onsubmit="return confirm('Reject this record?')">
+
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <button type="submit" class="btn btn-outline-danger btn-sm">
+    <i class="fa-solid fa-xmark"></i>
+    Reject
+  </button>
+
+</form>
             </div>
           </td>
 

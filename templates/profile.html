@@ -16,6 +16,7 @@
 
       <div class="card-body">
         <form method="POST" action="{{ url_for('update_profile') }}" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="row align-items-center">
 
             <!-- Profile Picture -->
@@ -56,7 +57,7 @@
 </div>
 
               <div class="mb-3">
-                <label class="form-label">School</label>
+                <label class="form-label">Team Name</label>
                 <input type="text" name="school" class="form-control" value="{{ current_user.school }}">
               </div>
 <div class="mb-3">
@@ -91,6 +92,147 @@
 
           </div>
         </form>
+<!-- Change Password -->
+<div class="mt-4">
+    <button type="button"
+            class="btn btn-outline-primary"
+            onclick="toggleChangePassword()">
+        <i class="fa-solid fa-key"></i>
+        Change Password
+    </button>
+</div>
+
+<div id="changePasswordSection" class="card mt-3" style="display: none;">
+    <div class="card-body">
+        <h5 class="card-title">
+            <i class="fa-solid fa-lock"></i>
+            Change Password
+        </h5>
+
+        <form method="POST" action="{{ url_for('change_password') }}">
+
+            <input type="hidden"
+                   name="csrf_token"
+                   value="{{ csrf_token() }}">
+
+<div class="mb-3">
+    <label for="current_password" class="form-label">
+        Current Password <i class="fa-solid fa-key"></i>
+    </label>
+
+    <div class="input-group">
+        <input type="password"
+               class="form-control"
+               id="current_password"
+               name="current_password"
+               required>
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                onclick="togglePasswordVisibility('current_password', 'currentPasswordIcon')"
+                title="Show password">
+            <i class="fa-solid fa-eye"
+               id="currentPasswordIcon"></i>
+        </button>
+    </div>
+</div>
+
+           <div class="mb-3">
+    <label for="new_password" class="form-label">
+        New Password <i class="fa-solid fa-key"></i>
+    </label>
+
+    <div class="input-group">
+        <input type="password"
+               class="form-control"
+               id="new_password"
+               name="new_password"
+               minlength="8"
+               required>
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                onclick="togglePasswordVisibility('new_password', 'newPasswordIcon')"
+                title="Show password">
+            <i class="fa-solid fa-eye"
+               id="newPasswordIcon"></i>
+        </button>
+    </div>
+
+    <small class="text-muted">
+        At least 8 characters, including uppercase,
+        lowercase, number, and special character.
+    </small>
+</div>
+
+<div class="mb-3">
+    <label for="confirm_password" class="form-label">
+        Confirm New Password <i class="fa-solid fa-key"></i>
+    </label>
+
+    <div class="input-group">
+        <input type="password"
+               class="form-control"
+               id="confirm_password"
+               name="confirm_password"
+               minlength="8"
+               required>
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                onclick="togglePasswordVisibility('confirm_password', 'confirmPasswordIcon')"
+                title="Show password">
+            <i class="fa-solid fa-eye"
+               id="confirmPasswordIcon"></i>
+        </button>
+    </div>
+</div>
+  </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fa-solid fa-key"></i>
+                Update Password
+            </button>
+
+            <button type="button"
+                    class="btn btn-secondary ms-2"
+                    onclick="toggleChangePassword()">
+                Cancel
+            </button>
+
+        </form>
+    </div>
+</div>
+
+<script>
+function toggleChangePassword() {
+    const section = document.getElementById('changePasswordSection');
+
+    if (section.style.display === 'none') {
+        section.style.display = 'block';
+    } else {
+        section.style.display = 'none';
+    }
+}
+</script>
+<!--==== Script for toggling password visibility ====-->
+<script>
+function togglePasswordVisibility(inputId, iconId) {
+    const passwordInput = document.getElementById(inputId);
+    const eyeIcon = document.getElementById(iconId);
+
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+
+        eyeIcon.classList.remove('fa-eye');
+        eyeIcon.classList.add('fa-eye-slash');
+    } else {
+        passwordInput.type = 'password';
+
+        eyeIcon.classList.remove('fa-eye-slash');
+        eyeIcon.classList.add('fa-eye');
+    }
+}
+</script>
       </div>
     </div>
   </div>

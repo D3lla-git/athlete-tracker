@@ -40,6 +40,7 @@
     <h5><div class="card-header">Submit New Sports Record</div></h5>
     <div class="card-body">
       <form method="POST" action="{{ url_for('submit_record') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <div class="row g-3">
     <div class="col-md-3">
@@ -355,20 +356,39 @@
       <span class="badge bg-warning text-dark">Pending</span>
     {% endif %}
 
-    {% if r.status == 'rejected' %}
-      <a href="{{ url_for('delete_record', record_id=r.id) }}" 
-         class="btn btn-outline-danger btn-sm py-0 px-2"
-         style="font-size: 0.75rem;"
-         onclick="return confirm('Delete this rejected record?')">
-        Delete
-      </a>
-      <a href="{{ url_for('resubmit_record', record_id=r.id) }}" 
-         class="btn btn-warning btn-sm py-0 px-2"
-         style="font-size: 0.75rem;"
-         onclick="return confirm('Resubmit this record?')">
-        Resubmit
-      </a>
-    {% endif %}
+{% if r.status == 'rejected' %}
+
+  <form method="POST"
+        action="{{ url_for('delete_record', record_id=r.id) }}"
+        style="display:inline;"
+        onsubmit="return confirm('Delete this rejected record?')">
+
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <button type="submit"
+            class="btn btn-outline-danger btn-sm py-0 px-2"
+            style="font-size: 0.75rem;">
+      Delete
+    </button>
+
+  </form>
+
+  <form method="POST"
+        action="{{ url_for('resubmit_record', record_id=r.id) }}"
+        style="display:inline;"
+        onsubmit="return confirm('Resubmit this record?')">
+
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <button type="submit"
+            class="btn btn-warning btn-sm py-0 px-2"
+            style="font-size: 0.75rem;">
+      Resubmit
+    </button>
+
+  </form>
+
+{% endif %}
 
     {% if r.year|string == current_year|string %}
       <a href="{{ url_for('edit_record', record_id=r.id) }}" 
@@ -515,18 +535,36 @@
   {% endif %}
 
   {% if r.status == 'rejected' %}
-    <a href="{{ url_for('delete_record', record_id=r.id) }}" 
-       class="btn btn-outline-danger btn-sm px-3"
-       onclick="return confirm('Delete this rejected record?')">
-      Delete
-    </a>
-    <a href="{{ url_for('resubmit_record', record_id=r.id) }}" 
-       class="btn btn-warning btn-sm px-3"
-       onclick="return confirm('Resubmit this record?')">
-      Resubmit
-    </a>
-  {% endif %}
 
+  <form method="POST"
+        action="{{ url_for('delete_record', record_id=r.id) }}"
+        style="display:inline;"
+        onsubmit="return confirm('Delete this rejected record?')">
+
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <button type="submit"
+            class="btn btn-outline-danger btn-sm px-3">
+      Delete
+    </button>
+
+  </form>
+
+  <form method="POST"
+        action="{{ url_for('resubmit_record', record_id=r.id) }}"
+        style="display:inline;"
+        onsubmit="return confirm('Resubmit this record?')">
+
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <button type="submit"
+            class="btn btn-warning btn-sm px-3">
+      Resubmit
+    </button>
+
+  </form>
+
+{% endif %}
   {% if r.year|string == current_year|string %}
     <a href="{{ url_for('edit_record', record_id=r.id) }}" 
        class="btn btn-primary btn-sm px-3">

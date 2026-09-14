@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container mt-4" style="max-width: 650px;">
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+
+            <div class="text-center mb-4">
+                <i class="fa-solid fa-key fa-3x"></i>
+
+                <h3 class="mt-3">
+                    2FA Recovery Codes
+                </h3>
+            </div>
+
+            {% if generated %}
+
+                <div class="alert alert-warning">
+                    <strong>Important:</strong>
+                    Save these recovery codes somewhere safe.
+                    Each code can be used only once.
+                    These codes will not be shown again after you leave this page.
+                </div>
+
+                <p class="text-muted">
+                    If you lose access to your authenticator app, you can use
+                    one of these codes to sign in.
+                </p>
+
+                <div class="border rounded p-3 mb-4 bg-light">
+
+                    {% for code in codes %}
+                        <div class="text-center mb-2">
+                            <code style="font-size: 1.1rem;">
+                                {{ code }}
+                            </code>
+                        </div>
+                    {% endfor %}
+
+                </div>
+
+                <div class="d-grid gap-2">
+
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        onclick="window.print()">
+                        <i class="fa-solid fa-print"></i>
+                        Print Recovery Codes
+                    </button>
+
+                    <a
+                        href="{{ url_for('admin_dashboard') }}"
+                        class="btn btn-primary">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        Return to Dashboard
+                    </a>
+
+                </div>
+
+            {% else %}
+
+                <div class="alert alert-warning">
+                    <strong>Warning:</strong>
+                    Generating new recovery codes will invalidate
+                    any previous recovery codes.
+                </div>
+
+                <p>
+                    You will receive a new set of 10 one-time recovery codes.
+                    Store them somewhere secure before leaving the page.
+                </p>
+
+                <form method="POST">
+
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="{{ csrf_token() }}"
+                    >
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary w-100">
+                        <i class="fa-solid fa-key"></i>
+                        Generate Recovery Codes
+                    </button>
+
+                </form>
+
+                <div class="text-center mt-3">
+                    <a
+                        href="{{ url_for('admin_dashboard') }}"
+                        class="text-decoration-none">
+                        Cancel
+                    </a>
+                </div>
+
+            {% endif %}
+
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

@@ -7,6 +7,7 @@
       <div class="card-header"><h4>Login</h4></div>
       <div class="card-body">
         <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="mb-3">
             <label>Full Name <i class="fa-solid fa-user"></i></label>
             <input type="text" name="full_name" placeholder="Example: John Brown" class="form-control" required>
@@ -42,6 +43,11 @@
   });
 </script>
           <button type="submit" class="btn btn-success w-100">Login</button>
+          <div class="text-center mt-3">
+    <a href="{{ url_for('forgot_password') }}">
+        Forgot Password?
+    </a>
+</div>
         </form>
       </div>
     </div>

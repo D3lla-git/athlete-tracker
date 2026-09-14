@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="container py-4">
-  <h2 class="mb-4">Search Student-Athletes</h2>
+  <h2 class="mb-4">Search Athletes <i class="fa-solid fa-futbol"></i><i class="fa-solid fa-basketball" style="color: orangered;"></i><i class="fa-solid fa-baseball"></i></h2>
 
   <!-- Search Form -->
   <form method="GET" action="{{ url_for('search') }}" class="row g-3 mb-4">
@@ -21,7 +21,7 @@
     </div>
 
     <div class="col-md-4">
-      <input type="text" name="school" value="{{ school }}" class="form-control form-control-lg" placeholder="School Name (optional)">
+      <input type="text" name="school" value="{{ school }}" class="form-control form-control-lg" placeholder="Team Name (optional)">
     </div>
 
     <div class="col-md-3">

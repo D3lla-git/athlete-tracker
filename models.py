@@ -10,6 +10,18 @@ class User(UserMixin, db.Model):
     full_name = db.Column(db.String(150), nullable=False)
     school = db.Column(db.String(150), nullable=False)
     gender = db.Column(db.String(10), nullable=True)
+    email = db.Column(db.String(255), nullable=True, unique=True)
+
+        # Password reset security fields
+    reset_token = db.Column(db.String(128), nullable=True, unique=True)
+    reset_token_expires = db.Column(db.DateTime, nullable=True)
+
+    # Two-factor authentication security fields
+    two_factor_secret = db.Column(db.String(32), nullable=True)
+    two_factor_enabled = db.Column(db.Boolean, default=False, nullable=False)
+    # 2f recovery code security field
+    two_factor_recovery_codes = db.Column(db.Text, nullable=True)
+
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), default='student')  # student or admin
     id_document = db.Column(db.String(255), nullable=True)      # from registration
@@ -62,3 +74,17 @@ class SportRecord(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship('User', backref='records')
+
+
+class LoginAttempt(db.Model):
+    __tablename__ = 'login_attempt'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    identifier = db.Column(db.String(255), nullable=False, unique=True)
+    failed_attempts = db.Column(db.Integer, nullable=False, default=0)
+    blocked_until = db.Column(db.DateTime(timezone=True), nullable=True)
+    last_attempt = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow
+    )
