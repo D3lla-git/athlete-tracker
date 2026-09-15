@@ -5,7 +5,7 @@ from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from pymongo import MongoClient
-from models import db, User, SportRecord, LoginAttempt
+from models import db, User, SportRecord, LoginAttempt, Registration
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
@@ -150,6 +150,54 @@ def is_strong_password(password):
 
     return True
 
+# ========== CATEGORY PERMISSION HELPERS ==========
+
+VALID_COMPETITIONS = {
+    'County Meet',
+    'Club League',
+    'University League',
+    'Community/Area League',
+    'High School'
+}
+
+
+def athlete_can_submit_competition(category, competition):
+    """Check whether an athlete category allows a competition."""
+    if competition not in VALID_COMPETITIONS:
+        return False
+
+    if category == 'All Athlete':
+        return True
+
+    category_map = {
+        'County Meet Athlete': 'County Meet',
+        'Club League Athlete': 'Club League',
+        'University Athlete': 'University League',
+        'Community/Area League Athlete': 'Community/Area League',
+        'High School Athlete': 'High School'
+    }
+
+    return category_map.get(category) == competition
+
+
+def coach_can_manage_competition(category, competition):
+    """Check whether a coach category allows a competition."""
+    if competition not in VALID_COMPETITIONS:
+        return False
+
+    if category == 'All Coach':
+        return True
+
+    category_map = {
+        'County Meet Coach': 'County Meet',
+        'Club League Coach': 'Club League',
+        'University Coach': 'University League',
+        'Community/Area League Coach': 'Community/Area League',
+        'High School Coach': 'High School'
+    }
+
+    return category_map.get(category) == competition
+
 # ========== BRUTE-FORCE PROTECTION HELPERS ==========
 
 # ========== CLIENT IP HELPER ==========
@@ -252,7 +300,7 @@ def suggest_names():
 
     # Only names that START with the typed letters
     students = User.query.filter(
-        User.role == 'student',
+        User.role == 'Athlete',
         User.is_verified == True,
         User.full_name.ilike(f'{q}%')          # ← starts with
     ).order_by(User.full_name).limit(8).all()
@@ -267,7 +315,7 @@ def search():
     results = []
 
     if name or school:
-        query = User.query.filter_by(role='student', is_verified=True)
+        query = User.query.filter_by(role='Athlete', is_verified=True)
 
         if name:
             # This allows searching by first, middle, or last name
@@ -291,14 +339,40 @@ def search():
     return render_template('search.html', results=results, name=name, school=school)
 # ========== AUTH ROUTES ==========
 @app.route('/register', methods=['GET', 'POST'])
-def register():
+@app.route('/register/<registration_category>', methods=['GET', 'POST'])
+def register(registration_category=None):
+
+    category_map = {
+        'all-athlete': 'All Athlete',
+        'county-meet': 'County Meet Athlete',
+        'club-league': 'Club League Athlete',
+        'university': 'University Athlete',
+        'community-league': 'Community/Area League Athlete',
+        'high-school': 'High School Athlete'
+    }
+
+    # Determine selected registration category
+    if registration_category:
+        if registration_category not in category_map:
+            flash('Invalid athlete registration category.', 'danger')
+            return redirect(url_for('register'))
+
+        selected_category = category_map[registration_category]
+    else:
+        selected_category = 'All Athlete'
+
     if request.method == 'POST':
+
         full_name = request.form['full_name'].strip()
         school = request.form['school'].strip()
         gender = request.form.get('gender', '').strip()
         email = request.form['email'].strip().lower()
         password = request.form['password']
-# ========= PASSWORD STRENGTH CHECK ========== #
+
+        # ==========================================================
+        # PASSWORD STRENGTH
+        # ==========================================================
+
         if not is_strong_password(password):
             flash(
                 'Password must be at least 8 characters and include '
@@ -306,92 +380,368 @@ def register():
                 'and special character.',
                 'danger'
             )
-            return redirect(url_for('register'))
+            return redirect(
+                url_for(
+                    'register',
+                    registration_category=registration_category
+                )
+            )
+
+        # ==========================================================
+        # GENDER VALIDATION
+        # ==========================================================
 
         if gender not in ['Male', 'Female']:
             flash('Please select a valid gender.', 'danger')
-            return redirect(url_for('register'))
+            return redirect(
+                url_for(
+                    'register',
+                    registration_category=registration_category
+                )
+            )
 
-        # Check duplicate
-        existing = User.query.filter_by(full_name=full_name, school=school).first()
+        # ==========================================================
+        # FIND EXISTING ACCOUNT BY EMAIL
+        # ==========================================================
+
+        existing = User.query.filter_by(email=email).first()
+
+        # ==========================================================
+        # EXISTING ACCOUNT VALIDATION
+        # ==========================================================
+
         if existing:
-            flash('A student with this name and school already exists.', 'danger')
-            return redirect(url_for('register'))
 
-        # Handle file upload
-        file = request.files.get('id_document')
-        if not file or file.filename == '':
-            flash('Student ID or Passport is required.', 'danger')
-            return redirect(url_for('register'))
+            # Only student accounts can use athlete registration
+            if existing.role != 'Athlete':
+                flash(
+                    'This email address is already registered to another account.',
+                    'danger'
+                )
+                return redirect(
+                    url_for(
+                        'register',
+                        registration_category=registration_category
+                    )
+                )
 
-        if not allowed_file(file.filename):
-            flash('Only PNG, JPG, JPEG or PDF files are allowed.', 'danger')
-            return redirect(url_for('register'))
+            # Name and school must match the existing account
+            if (
+                existing.full_name.strip().lower() != full_name.lower()
+                or existing.school.strip().lower() != school.lower()
+            ):
+                flash(
+                    'The name and school must match your existing account.',
+                    'danger'
+                )
+                return redirect(
+                    url_for(
+                        'register',
+                        registration_category=registration_category
+                    )
+                )
 
-        actual_file_type = valid_file_content(file)
+            # Existing account password must be confirmed
+            if not existing.check_password(password):
+                flash(
+                    'The password does not match your existing account.',
+                    'danger'
+                )
+                return redirect(
+                    url_for(
+                        'register',
+                        registration_category=registration_category
+                    )
+                )
 
-        if not actual_file_type:
+            # ======================================================
+            # EXISTING USER MUST BE REGISTERED AS ALL ATHLETE
+            # BEFORE ADDING ANOTHER CATEGORY
+            # ======================================================
+
+            current_year = datetime.utcnow().year
+
+            all_athlete_registration = Registration.query.filter_by(
+                user_id=existing.id,
+                registration_type='athlete',
+                category='All Athlete',
+                registration_year=current_year,
+                status='active'
+            ).first()
+
+            if not all_athlete_registration:
+
+                flash(
+                    'Your account is not registered as All Athlete. '
+                    'Please go to My Profile and update your registration '
+                    'category to All Athlete before registering for another category.',
+                    'danger'
+                )
+
+                return redirect(
+                    url_for(
+                        'register',
+                        registration_category=registration_category
+                    )
+                )
+
+            user = existing
+
+        else:
+
+            # ======================================================
+            # NEW USER — PREVENT DUPLICATE NAME + SCHOOL
+            # ======================================================
+
+            duplicate_name_school = User.query.filter_by(
+                full_name=full_name,
+                school=school
+            ).first()
+
+            if duplicate_name_school:
+                flash(
+                    'A student with this name and school already exists.',
+                    'danger'
+                )
+                return redirect(
+                    url_for(
+                        'register',
+                        registration_category=registration_category
+                    )
+                )
+
+            user = None
+
+        # ==========================================================
+        # ID DOCUMENT HANDLING
+        #
+        # RULE C:
+        # - Existing + verified ID = reuse existing ID
+        # - Existing + unverified ID = require new ID upload
+        # - New user = require ID upload
+        # ==========================================================
+
+        filename = None
+
+        if existing and existing.is_verified:
+
+            # Existing verified ID is reused.
+            filename = existing.id_document
+
+        else:
+
+            # New user or existing unverified user must provide ID.
+            file = request.files.get('id_document')
+
+            if not file or file.filename == '':
+                flash(
+                    'Student ID or Passport is required.',
+                    'danger'
+                )
+                return redirect(
+                    url_for(
+                        'register',
+                        registration_category=registration_category
+                    )
+                )
+
+            if not allowed_file(file.filename):
+                flash(
+                    'Only PNG, JPG, JPEG or PDF files are allowed.',
+                    'danger'
+                )
+                return redirect(
+                    url_for(
+                        'register',
+                        registration_category=registration_category
+                    )
+                )
+
+            actual_file_type = valid_file_content(file)
+
+            if not actual_file_type:
+                flash(
+                    'The uploaded file is invalid or does not match its file type.',
+                    'danger'
+                )
+                return redirect(
+                    url_for(
+                        'register',
+                        registration_category=registration_category
+                    )
+                )
+
+            extension = file.filename.rsplit('.', 1)[1].lower()
+
+            if extension in ['jpg', 'jpeg'] and actual_file_type != 'jpg':
+                flash(
+                    'The uploaded image is not a valid JPEG file.',
+                    'danger'
+                )
+                return redirect(
+                    url_for(
+                        'register',
+                        registration_category=registration_category
+                    )
+                )
+
+            if extension == 'png' and actual_file_type != 'png':
+                flash(
+                    'The uploaded image is not a valid PNG file.',
+                    'danger'
+                )
+                return redirect(
+                    url_for(
+                        'register',
+                        registration_category=registration_category
+                    )
+                )
+
+            if extension == 'pdf' and actual_file_type != 'pdf':
+                flash(
+                    'The uploaded document is not a valid PDF file.',
+                    'danger'
+                )
+                return redirect(
+                    url_for(
+                        'register',
+                        registration_category=registration_category
+                    )
+                )
+
+            # ======================================================
+            # SUPABASE ID UPLOAD
+            # ======================================================
+
+            filename = secure_filename(file.filename)
+
+            storage_path = (
+                f"students/{uuid.uuid4().hex}_{filename}"
+            )
+
+            try:
+                upload_to_supabase(
+                    file,
+                    "id-documents",
+                    storage_path
+                )
+
+            except Exception as e:
+                print(
+                    "Supabase ID document upload error:",
+                    e
+                )
+
+                flash(
+                    'There was a problem uploading your ID document. '
+                    'Please try again.',
+                    'danger'
+                )
+
+                return redirect(
+                    url_for(
+                        'register',
+                        registration_category=registration_category
+                    )
+                )
+
+        # ==========================================================
+        # CREATE NEW USER
+        # ==========================================================
+
+        if not existing:
+
+            user = User(
+                full_name=full_name,
+                school=school,
+                gender=gender,
+                email=email,
+                id_document=storage_path,
+                role='Athlete',
+                athlete_category=selected_category
+            )
+
+            user.set_password(password)
+            db.session.add(user)
+            db.session.flush()
+
+        else:
+
+            # Existing unverified user uploaded a new ID.
+            # Keep the account's existing password/name/school.
+            if not existing.is_verified and filename:
+                existing.id_document = storage_path
+
+        # ==========================================================
+        # CHECK FOR DUPLICATE CATEGORY REGISTRATION
+        # ==========================================================
+
+        current_year = datetime.utcnow().year
+
+        existing_registration = Registration.query.filter_by(
+            user_id=user.id,
+            registration_type='athlete',
+            category=selected_category,
+            registration_year=current_year
+        ).first()
+
+        if existing_registration:
+
             flash(
-                'The uploaded file is invalid or does not match its file type.',
+                'You are already registered for this athlete category '
+                'for this year.',
                 'danger'
             )
-            return redirect(url_for('register'))
 
-        extension = file.filename.rsplit('.', 1)[1].lower()
-
-        if extension in ['jpg', 'jpeg'] and actual_file_type != 'jpg':
-            flash('The uploaded image is not a valid JPEG file.', 'danger')
-            return redirect(url_for('register'))
-
-        if extension == 'png' and actual_file_type != 'png':
-            flash('The uploaded image is not a valid PNG file.', 'danger')
-            return redirect(url_for('register'))
-
-        if extension == 'pdf' and actual_file_type != 'pdf':
-            flash('The uploaded document is not a valid PDF file.', 'danger')
-            return redirect(url_for('register'))
-
-#========== SUPABASE UPLOAD ==========
-        filename = secure_filename(file.filename)
-        storage_path = f"students/{uuid.uuid4().hex}_{filename}"
-
-        try:
-            upload_to_supabase(
-                file,
-                "id-documents",
-                storage_path
+            return redirect(
+                url_for(
+                    'register',
+                    registration_category=registration_category
+                )
             )
-        except Exception as e:
-            print("Supabase ID document upload error:", e)
-            flash('There was a problem uploading your ID document. Please try again.', 'danger')
-            return redirect(url_for('register'))
 
-        #filename = secure_filename(f"{full_name}_{school}_{file.filename}")
-        #filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        #file.save(filepath)
+        # ==========================================================
+        # CREATE REGISTRATION
+        # ==========================================================
 
-        existing_email = User.query.filter_by(email=email).first()
-
-        if existing_email:
-            flash('An account with this email address already exists.', 'danger')
-            return redirect(url_for('register'))
-
-        user = User(
-            full_name=full_name,
-            school=school,
-            gender=gender,
-            email=email,
-            id_document=filename,
-            role='student'
+        registration = Registration(
+            user_id=user.id,
+            registration_type='athlete',
+            category=selected_category,
+            registration_year=current_year,
+            fee_amount=0,
+            payment_status='unpaid',
+            status='active'
         )
-        user.set_password(password)
-        db.session.add(user)
+
+        db.session.add(registration)
+
         db.session.commit()
 
-        flash('Registration successful! Wait for admin verification of your ID.', 'success')
+        # ==========================================================
+        # SUCCESS MESSAGE
+        # ==========================================================
+
+        if existing:
+            flash(
+                f'You have successfully registered for '
+                f'{selected_category}.',
+                'success'
+            )
+        else:
+            flash(
+                'Registration successful! Wait for admin verification '
+                'of your ID.',
+                'success'
+            )
+
         return redirect(url_for('login'))
 
-    return render_template('register.html')
+    return render_template(
+        'register.html',
+        registration_category=registration_category,
+        selected_category=selected_category
+    )
 
 #=====Login route=========================
 # ==== forgot password route =========================
@@ -649,7 +999,7 @@ def login():
         session.permanent = True
 
         # Coaches/admins must be verified before continuing
-        if user.role == 'admin' and not user.is_verified:
+        if user.role == 'Coach' and not user.is_verified:
             flash(
                 'Your coach account is waiting for Super Admin approval.',
                 'warning'
@@ -657,7 +1007,7 @@ def login():
             return redirect(url_for('login'))
 
         # Coaches/admins must complete 2FA before being logged in
-        if user.role == 'admin':
+        if user.role in ('Coach', 'System'):
 
             # If 2FA has not been enabled yet, require setup first
             if not user.two_factor_enabled:
@@ -717,7 +1067,7 @@ def profile_picture(filename):
 @login_required
 def id_document(filename):
     # Only coaches/admins can view student ID documents
-    if current_user.role != 'admin':
+    if current_user.role not in ('Coach', 'System'):
         flash('You are not authorized to view ID documents.', 'danger')
         return redirect(url_for('student_dashboard'))
 
@@ -729,10 +1079,7 @@ def id_document(filename):
         return redirect(url_for('admin_dashboard'))
 
     # Super Admin can view documents from all schools
-    is_super_admin = (
-        current_user.school.strip().casefold() == 'system'
-        or current_user.full_name.strip().casefold() == 'admin coach'
-    )
+    is_super_admin = current_user.role == 'System'
 
     # Regular coaches can only view documents belonging to their school
     if not is_super_admin:
@@ -791,20 +1138,38 @@ from datetime import datetime
 @app.route('/student')
 @login_required
 def student_dashboard():
-    if current_user.role != 'student':
+    if current_user.role != 'Athlete':
         return redirect(url_for('admin_dashboard'))
 
-    records = SportRecord.query.filter_by(user_id=current_user.id).all()
+    records = SportRecord.query.filter_by(
+        user_id=current_user.id
+    ).all()
+
     current_year = datetime.now().year
 
-    return render_template('student_dashboard.html',
-                           records=records,
-                           current_year=current_year)
+    athlete_registrations = Registration.query.filter_by(
+        user_id=current_user.id,
+        registration_type='athlete',
+        registration_year=current_year,
+        status='active'
+    ).all()
+
+    registered_categories = [
+        registration.category
+        for registration in athlete_registrations
+    ]
+
+    return render_template(
+        'student_dashboard.html',
+        records=records,
+        current_year=current_year,
+        registered_categories=registered_categories
+    )
 
 @app.route('/submit_record', methods=['POST'])
 @login_required
 def submit_record():
-    if current_user.role != 'student' or not current_user.is_verified:
+    if current_user.role != 'Athlete' or not current_user.is_verified:
         flash('You are not allowed to submit records.', 'danger')
         return redirect(url_for('student_dashboard'))
 
@@ -815,6 +1180,37 @@ def submit_record():
     trophies = request.form.getlist('trophy')
     trophy_value = ", ".join(trophies) if trophies else None
     team = request.form.get('team')
+    competition_category = request.form.get('competition_category', '').strip()
+    
+    # ===== CATEGORY PERMISSION CHECK =====
+    current_year = datetime.now().year
+
+    athlete_registrations = Registration.query.filter_by(
+        user_id=current_user.id,
+        registration_type='athlete',
+        registration_year=current_year,
+        status='active'
+    ).all()
+
+    registered_categories = [
+        registration.category
+        for registration in athlete_registrations
+    ]
+
+    allowed_to_submit = any(
+        athlete_can_submit_competition(
+            category,
+            competition_category
+        )
+        for category in registered_categories
+    )
+
+    if not allowed_to_submit:
+        flash(
+            'You are not allowed to submit a record for this competition category.',
+            'danger'
+        )
+        return redirect(url_for('student_dashboard'))
 
     # ===== PREVENT DUPLICATE: Same Sport + Same Year =====
     # Only block if there is already an approved or pending record
@@ -822,13 +1218,19 @@ def submit_record():
         SportRecord.user_id == current_user.id,
         SportRecord.sport == sport,
         SportRecord.year == year,
+        SportRecord.competition_category == competition_category,
         SportRecord.status.in_(['approved', 'pending'])
     ).first()
 
     if existing:
-        flash(f'You already have a {existing.status} {sport} record for the year {year}.', 'danger')
-        return redirect(url_for('student_dashboard'))
+        flash(
+    f'You already have a {existing.status} {sport} record '
+    f'for {existing.competition_category} in the year {year}.',
+    'danger'
+)
     # ===================================================== #
+        return redirect(url_for('student_dashboard'))
+
     # Safe conversion helper
     def safe_int(value):
         try:
@@ -837,17 +1239,18 @@ def submit_record():
             return 0
 
     record = SportRecord(
-        user_id=current_user.id,
-        sport=sport,
-        year=year,
-        position=position,
-        games_played=safe_int(games_played),
-        trophy=trophy_value,
-        team=team,
-        man_of_the_match=safe_int(request.form.get('man_of_the_match')),
-        mvp=safe_int(request.form.get('mvp')),
-        status='pending'
-    )
+    user_id=current_user.id,
+    sport=sport,
+    year=year,
+    position=position,
+    games_played=safe_int(games_played),
+    trophy=trophy_value,
+    team=team,
+    competition_category=competition_category,
+    man_of_the_match=safe_int(request.form.get('man_of_the_match')),
+    mvp=safe_int(request.form.get('mvp')),
+    status='pending'
+)
 
     if sport == 'Football':
         record.goals = safe_int(request.form.get('goals'))
@@ -936,6 +1339,24 @@ def edit_record(record_id):
         record.position = request.form.get('position')
         record.games_played = int(request.form.get('games_played') or 0)
         record.team = request.form.get('team')
+        competition_category = request.form.get(
+            'competition_category',
+            ''
+        ).strip()
+        record.competition_category = competition_category
+        # ===== CATEGORY PERMISSION CHECK =====
+        if not athlete_can_submit_competition(
+            current_user.athlete_category,
+            competition_category
+        ):
+            flash(
+                'You are not allowed to use this competition category.',
+                'danger'
+            )
+            return redirect(url_for('student_dashboard'))
+
+        record.competition_category = competition_category
+    
         record.man_of_the_match = int(request.form.get('man_of_the_match') or 0)
         record.mvp = int(request.form.get('mvp') or 0)
 
@@ -973,21 +1394,47 @@ def edit_record(record_id):
 @app.route('/admin')
 @login_required
 def admin_dashboard():
-    if current_user.role != 'admin':
+    if current_user.role not in ('Coach', 'System'):
         return redirect(url_for('student_dashboard'))
 
     # Students pending verification
-    pending_users = User.query.filter_by(
-        role='student',
-        is_verified=False,
-        school=current_user.school
-    ).all()
+    if current_user.role == 'System':
+        pending_users = User.query.filter_by(
+            role='Athlete',
+            is_verified=False
+        ).all()
+    else:
+        pending_users = User.query.filter_by(
+            role='Athlete',
+            is_verified=False,
+            school=current_user.school
+        ).all()
 
-    # Records pending approval — based on the Team field
-    pending_records = SportRecord.query.join(User).filter(
-        SportRecord.status.in_(['pending', 'rejected']),
-        SportRecord.team.ilike(f'%{current_user.school}%')
+    # Records pending approval
+    all_pending_records = SportRecord.query.join(User).filter(
+        SportRecord.status.in_(['pending', 'rejected'])
     ).order_by(SportRecord.status.desc()).all()
+
+    # System sees every pending record. Coaches are restricted by exact team/school
+    # matching and their coach competition category.
+    if current_user.role == 'System':
+        pending_records = all_pending_records
+    else:
+        pending_records = [
+            record
+            for record in all_pending_records
+            if current_user.school.strip().casefold()
+            == (record.team or '').strip().casefold()
+        ]
+
+        pending_records = [
+            record
+            for record in pending_records
+            if coach_can_manage_competition(
+                current_user.coach_category,
+                record.competition_category
+            )
+        ]
 
     # TEMPORARY DEBUG
     print("========== COACH DASHBOARD DEBUG ==========")
@@ -1008,9 +1455,9 @@ def admin_dashboard():
 
     # Pending Coaches (only Super Admin)
     pending_coaches = []
-    if current_user.school == 'System' or current_user.full_name == 'Admin Coach':
+    if current_user.role == 'System':
         pending_coaches = User.query.filter_by(
-            role='admin',
+            role='Coach',
             is_verified=False
         ).all()
 
@@ -1025,15 +1472,13 @@ def admin_dashboard():
 @login_required
 def approve_coach(user_id):
     # Only Super Admin can approve coaches
-    if current_user.role != 'admin' or current_user.school != 'System':
-        # Fallback: also allow by name if needed
-        if current_user.full_name != 'Admin Coach':
-            flash('Only Super Admin can approve coaches.', 'danger')
-            return redirect(url_for('admin_dashboard'))
+    if current_user.role != 'System':
+        flash('Only Super Admin can approve coaches.', 'danger')
+        return redirect(url_for('admin_dashboard'))
 
     coach = User.query.get_or_404(user_id)
 
-    if coach.role != 'admin':
+    if coach.role != 'Coach':
         flash('Invalid request.', 'danger')
         return redirect(url_for('admin_dashboard'))
 
@@ -1045,23 +1490,184 @@ def approve_coach(user_id):
 @app.route('/profile')
 @login_required
 def profile():
+    current_year = datetime.utcnow().year
+
+    if current_user.role == 'Athlete':
+        current_registration = Registration.query.filter_by(
+            user_id=current_user.id,
+            registration_type='athlete',
+            registration_year=current_year,
+            status='active'
+        ).order_by(
+            Registration.id.asc()
+        ).first()
+
+        if current_registration:
+            if not current_user.athlete_category:
+                current_user.athlete_category = (
+                    current_registration.category
+                )
+                db.session.commit()
+
+    elif current_user.role == 'Coach':
+        current_registration = Registration.query.filter_by(
+            user_id=current_user.id,
+            registration_type='coach',
+            registration_year=current_year,
+            status='active'
+        ).order_by(
+            Registration.id.asc()
+        ).first()
+
+        if current_registration:
+            if not current_user.coach_category:
+                current_user.coach_category = (
+                    current_registration.category
+                )
+                db.session.commit()
+
     return render_template('profile.html')
 
 @app.route('/update_profile', methods=['POST'])
 @login_required
 def update_profile():
-    # Update school
+    # Update school/team
     new_school = request.form.get('school', '').strip()
     if new_school:
         current_user.school = new_school
 
     # Update gender
     new_gender = request.form.get('gender', '').strip()
-
     if new_gender in ['Male', 'Female']:
         current_user.gender = new_gender
 
-    # Handle profile picture upload
+    # ==========================================================
+    # UPDATE ATHLETE CATEGORY
+    # ==========================================================
+    if current_user.role == 'Athlete':
+        new_athlete_category = request.form.get('athlete_category', '').strip()
+
+        valid_athlete_categories = {
+            'All Athlete',
+            'County Meet Athlete',
+            'Club League Athlete',
+            'University Athlete',
+            'Community/Area League Athlete',
+            'High School Athlete'
+        }
+
+        if new_athlete_category:
+            if new_athlete_category not in valid_athlete_categories:
+                flash('Invalid athlete registration category.', 'danger')
+                return redirect(url_for('profile'))
+
+            current_year = datetime.utcnow().year
+            active_athlete_registrations = Registration.query.filter_by(
+                user_id=current_user.id,
+                registration_type='athlete',
+                registration_year=current_year,
+                status='active'
+            ).all()
+
+            selected_active = next(
+                (r for r in active_athlete_registrations
+                 if r.category == new_athlete_category),
+                None
+            )
+
+            # Keep exactly one current-year athlete category active.
+            for registration in active_athlete_registrations:
+                if registration is not selected_active:
+                    registration.status = 'inactive'
+
+            if not selected_active:
+                existing_registration = Registration.query.filter_by(
+                    user_id=current_user.id,
+                    registration_type='athlete',
+                    category=new_athlete_category,
+                    registration_year=current_year
+                ).first()
+
+                if existing_registration:
+                    existing_registration.status = 'active'
+                else:
+                    db.session.add(Registration(
+                        user_id=current_user.id,
+                        registration_type='athlete',
+                        category=new_athlete_category,
+                        registration_year=current_year,
+                        fee_amount=0,
+                        payment_status='unpaid',
+                        status='active'
+                    ))
+
+            current_user.athlete_category = new_athlete_category
+
+    # ==========================================================
+    # UPDATE COACH CATEGORY
+    # ==========================================================
+    if current_user.role == 'Coach':
+        new_coach_category = request.form.get('coach_category', '').strip()
+
+        valid_coach_categories = {
+            'All Coach',
+            'County Meet Coach',
+            'Club League Coach',
+            'University Coach',
+            'Community/Area League Coach',
+            'High School Coach'
+        }
+
+        if new_coach_category:
+            if new_coach_category not in valid_coach_categories:
+                flash('Invalid coach registration category.', 'danger')
+                return redirect(url_for('profile'))
+
+            current_year = datetime.utcnow().year
+            active_coach_registrations = Registration.query.filter_by(
+                user_id=current_user.id,
+                registration_type='coach',
+                registration_year=current_year,
+                status='active'
+            ).all()
+
+            selected_active = next(
+                (r for r in active_coach_registrations
+                 if r.category == new_coach_category),
+                None
+            )
+
+            # Keep exactly one current-year coach category active.
+            for registration in active_coach_registrations:
+                if registration is not selected_active:
+                    registration.status = 'inactive'
+
+            if not selected_active:
+                existing_registration = Registration.query.filter_by(
+                    user_id=current_user.id,
+                    registration_type='coach',
+                    category=new_coach_category,
+                    registration_year=current_year
+                ).first()
+
+                if existing_registration:
+                    existing_registration.status = 'active'
+                else:
+                    db.session.add(Registration(
+                        user_id=current_user.id,
+                        registration_type='coach',
+                        category=new_coach_category,
+                        registration_year=current_year,
+                        fee_amount=0,
+                        payment_status='unpaid',
+                        status='active'
+                    ))
+
+            current_user.coach_category = new_coach_category
+
+    # ==========================================================
+    # HANDLE PROFILE PICTURE UPLOAD
+    # ==========================================================
     file = request.files.get('profile_picture')
     if file and file.filename != '':
         if allowed_file(file.filename):
@@ -1082,17 +1688,21 @@ def update_profile():
                 return redirect(url_for('profile'))
 
             filename = secure_filename(file.filename)
+            old_profile_picture_path = current_user.profile_picture
             storage_path = f"profiles/{current_user.id}_{uuid.uuid4().hex}_{filename}"
 
             try:
-                upload_to_supabase(
-                    file,
-                    "profile-pictures",
-                    storage_path
-                )
+                upload_to_supabase(file, 'profile-pictures', storage_path)
                 current_user.profile_picture = storage_path
+
+                if old_profile_picture_path:
+                    try:
+                        supabase.storage.from_('profile-pictures').remove([old_profile_picture_path])
+                    except Exception as e:
+                        print('Old profile picture deletion error:', e)
+
             except Exception as e:
-                print("Supabase profile picture upload error:", e)
+                print('Supabase profile picture upload error:', e)
                 flash('There was a problem uploading your profile picture. Please try again.', 'danger')
                 return redirect(url_for('profile'))
         else:
@@ -1152,17 +1762,91 @@ def change_password():
 
     return redirect(url_for('login'))
 
+
+# ==========================================================
+# PERMANENT ACCOUNT DELETION
+# ==========================================================
+
+@app.route('/delete_account', methods=['POST'])
+@login_required
+def delete_account():
+    current_password = request.form.get('current_password', '')
+
+    if not current_user.check_password(current_password):
+        flash('Your password is incorrect. Your account was not deleted.', 'danger')
+        return redirect(url_for('profile'))
+
+    if request.form.get('confirm_delete') != 'yes':
+        flash(
+            'Please confirm that you understand the account deletion is permanent.',
+            'danger'
+        )
+        return redirect(url_for('profile'))
+
+    profile_picture_path = current_user.profile_picture
+    id_document_path = current_user.id_document
+    user_id = current_user.id
+
+    # Remove associated Storage objects before deleting database data.
+    # If Storage reports an error, keep the account intact.
+    try:
+        if profile_picture_path:
+            supabase.storage.from_('profile-pictures').remove([profile_picture_path])
+
+        if id_document_path:
+            supabase.storage.from_('id-documents').remove([id_document_path])
+
+    except Exception as e:
+        print('ACCOUNT STORAGE DELETION ERROR:', e)
+        flash(
+            'We could not remove your profile files. Your account was not deleted.',
+            'danger'
+        )
+        return redirect(url_for('profile'))
+
+    try:
+        SportRecord.query.filter_by(
+            user_id=user_id
+        ).delete(synchronize_session=False)
+
+        Registration.query.filter_by(
+            user_id=user_id
+        ).delete(synchronize_session=False)
+
+        user = User.query.get(user_id)
+        if user:
+            db.session.delete(user)
+
+        db.session.commit()
+
+        logout_user()
+        flash(
+            'Your account and all associated data have been permanently deleted.',
+            'success'
+        )
+        return redirect(url_for('login'))
+
+    except Exception as e:
+        db.session.rollback()
+        print('ACCOUNT DATABASE DELETION ERROR:', e)
+        flash(
+            'Your files were removed, but we could not delete the account data. '
+            'Please contact an administrator before trying again.',
+            'danger'
+        )
+        return redirect(url_for('profile'))
+
 @app.route('/verify_user/<int:user_id>', methods=['POST'])
 @login_required
 def verify_user(user_id):
-    if current_user.role != 'admin':
+    if current_user.role not in ('Coach', 'System'):
         return redirect(url_for('index'))
 
     user = User.query.get_or_404(user_id)
 
     # Security check
-    if user.school != current_user.school:
-        flash('You can only verify students from your own school.', 'danger')
+    if current_user.role != 'System' and user.school != current_user.school:
+        flash('You can only verify athletes from your own school.', 'danger')
         return redirect(url_for('admin_dashboard'))
 
     user.is_verified = True
@@ -1174,15 +1858,26 @@ def verify_user(user_id):
 @app.route('/approve_record/<int:record_id>', methods=['POST'])
 @login_required
 def approve_record(record_id):
-    if current_user.role != 'admin':
+    if current_user.role not in ('Coach', 'System'):
         return redirect(url_for('index'))
 
     record = SportRecord.query.get_or_404(record_id)
 
-    # Check if this record belongs to the coach's school/team
-    if current_user.school.strip().casefold() != (record.team or '').strip().casefold():
-        flash('You can only approve records from your own school/team.', 'danger')
-        return redirect(url_for('admin_dashboard'))
+    # System can manage every record; Coaches are restricted to their school/team and category.
+    if current_user.role != 'System':
+        if current_user.school.strip().casefold() != (record.team or '').strip().casefold():
+            flash('You can only manage records from your own school/team.', 'danger')
+            return redirect(url_for('admin_dashboard'))
+
+        if not coach_can_manage_competition(
+            current_user.coach_category,
+            record.competition_category
+        ):
+            flash(
+                'You are not authorized to manage records from this competition category.',
+                'danger'
+            )
+            return redirect(url_for('admin_dashboard'))
 
     record.status = 'approved'
     db.session.commit()
@@ -1192,15 +1887,26 @@ def approve_record(record_id):
 @app.route('/reject_record/<int:record_id>', methods=['POST'])
 @login_required
 def reject_record(record_id):
-    if current_user.role != 'admin':
+    if current_user.role not in ('Coach', 'System'):
         return redirect(url_for('index'))
 
     record = SportRecord.query.get_or_404(record_id)
 
-    # Check if this record belongs to the coach's school/team
-    if current_user.school.strip().casefold() != (record.team or '').strip().casefold():
-        flash('You can only reject records from your own school/team.', 'danger')
-        return redirect(url_for('admin_dashboard'))
+    # System can manage every record; Coaches are restricted to their school/team and category.
+    if current_user.role != 'System':
+        if current_user.school.strip().casefold() != (record.team or '').strip().casefold():
+            flash('You can only manage records from your own school/team.', 'danger')
+            return redirect(url_for('admin_dashboard'))
+
+        if not coach_can_manage_competition(
+            current_user.coach_category,
+            record.competition_category
+        ):
+            flash(
+                'You are not authorized to manage records from this competition category.',
+                'danger'
+            )
+            return redirect(url_for('admin_dashboard'))
 
     record.status = 'rejected'
     db.session.commit()
@@ -1208,73 +1914,139 @@ def reject_record(record_id):
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/register-coach', methods=['GET', 'POST'])
-def register_coach():
+@app.route('/register-coach/<registration_category>', methods=['GET', 'POST'])
+def register_coach(registration_category=None):
+    coach_category_map = {
+        'all-coach': 'All Coach',
+        'county-meet': 'County Meet Coach',
+        'club-league': 'Club League Coach',
+        'university': 'University Coach',
+        'community-league': 'Community/Area League Coach',
+        'high-school': 'High School Coach'
+    }
+
+    if registration_category:
+        if registration_category not in coach_category_map:
+            flash('Invalid coach registration category.', 'danger')
+            return redirect(url_for('register_coach'))
+        selected_category = coach_category_map[registration_category]
+    else:
+        selected_category = 'All Coach'
+
     if request.method == 'POST':
         full_name = request.form['full_name'].strip()
         school = request.form['school'].strip()
         gender = request.form.get('gender', '').strip()
         email = request.form['email'].strip().lower()
         password = request.form['password']
+
         # ======== PASSWORD STRENGTH CHECK ========== #
         if not is_strong_password(password):
             flash(
-                'Password must be at least 10 characters and include '
+                'Password must be at least 8 characters and include '
                 'an uppercase letter, lowercase letter, number, '
                 'and special character.',
                 'danger'
             )
-            return redirect(url_for('register_coach'))
+            return redirect(url_for(
+                'register_coach',
+                registration_category=registration_category
+            ))
 
         secret_code = request.form['secret_code'].strip()
 
+        # Email must be unique.
         existing_email = User.query.filter_by(email=email).first()
-
         if existing_email:
             flash('An account with this email address already exists.', 'danger')
-            return redirect(url_for('register_coach'))
+            return redirect(url_for(
+                'register_coach',
+                registration_category=registration_category
+            ))
 
         if gender not in ['Male', 'Female']:
             flash('Please select a valid gender.', 'danger')
-            return redirect(url_for('register_coach'))
+            return redirect(url_for(
+                'register_coach',
+                registration_category=registration_category
+            ))
 
         # Check secret code
         expected_code = app.config.get('COACH_SECRET_CODE')
         if not expected_code:
             flash('Coach registration is temporarily unavailable.', 'danger')
-            return redirect(url_for('register_coach'))
+            return redirect(url_for(
+                'register_coach',
+                registration_category=registration_category
+            ))
+
         if secret_code != expected_code:
             flash('Invalid Coach Secret Code.', 'danger')
-            return redirect(url_for('register_coach'))
+            return redirect(url_for(
+                'register_coach',
+                registration_category=registration_category
+            ))
 
-        # Check duplicate
-        existing = User.query.filter_by(full_name=full_name, school=school, role='admin').first()
+        # Check duplicate coach name + school/team.
+        existing = User.query.filter_by(
+            full_name=full_name,
+            school=school,
+            role='Coach'
+        ).first()
+
         if existing:
             flash('A coach with this name and school already exists.', 'danger')
-            return redirect(url_for('register_coach'))
+            return redirect(url_for(
+                'register_coach',
+                registration_category=registration_category
+            ))
 
         coach = User(
             full_name=full_name,
             school=school,
             gender=gender,
             email=email,
-            role='admin',
+            role='Coach',
+            coach_category=selected_category,
             is_verified=False          # Pending Super Admin approval
         )
         coach.set_password(password)
         db.session.add(coach)
+        db.session.flush()
+
+        # Save the selected coach category for the current registration year.
+        current_year = datetime.utcnow().year
+        registration = Registration(
+            user_id=coach.id,
+            registration_type='coach',
+            category=selected_category,
+            registration_year=current_year,
+            fee_amount=0,
+            payment_status='unpaid',
+            status='active'
+        )
+        db.session.add(registration)
         db.session.commit()
 
-        flash('Coach account created! Waiting for Super Admin approval.', 'success')
+        flash(
+            f'Coach account created as {selected_category}! '
+            'Waiting for Super Admin approval.',
+            'success'
+        )
         return redirect(url_for('login'))
 
-    return render_template('register_coach.html')
+    return render_template(
+        'register_coach.html',
+        registration_category=registration_category,
+        selected_category=selected_category
+    )
 
 # Two-Factor Authentication (2FA) Recovery Codes Route
 @app.route('/admin/2fa/recovery-codes', methods=['GET', 'POST'])
 @login_required
 def recovery_codes():
     # Only admins/coaches can access recovery codes
-    if current_user.role != 'admin':
+    if current_user.role not in ('Coach', 'System'):
         flash('You are not authorized to access this page.', 'danger')
         return redirect(url_for('student_dashboard'))
 
@@ -1317,7 +2089,7 @@ def verify_2fa():
 
     user = User.query.get(user_id)
 
-    if not user or user.role != 'admin' or not user.two_factor_enabled:
+    if not user or user.role not in ('Coach', 'System') or not user.two_factor_enabled:
         session.pop('2fa_user_id', None)
         flash('Unable to verify two-factor authentication.', 'danger')
         return redirect(url_for('login'))
@@ -1448,13 +2220,13 @@ def setup_2fa():
     # or an admin who has just authenticated with their password.
     setup_user_id = session.get('2fa_setup_user_id')
 
-    if current_user.is_authenticated and current_user.role == 'admin':
+    if current_user.is_authenticated and current_user.role in ('Coach', 'System'):
         user = current_user
 
     elif setup_user_id:
         user = User.query.get(setup_user_id)
 
-        if not user or user.role != 'admin':
+        if not user or user.role not in ('Coach', 'System'):
             session.pop('2fa_setup_user_id', None)
             flash('Unable to set up two-factor authentication.', 'danger')
             return redirect(url_for('login'))

@@ -9,6 +9,9 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     full_name = db.Column(db.String(150), nullable=False)
     school = db.Column(db.String(150), nullable=False)
+    # Athlete / Coach category permissions
+    athlete_category = db.Column(db.String(50), nullable=True)
+    coach_category = db.Column(db.String(50), nullable=True)
     gender = db.Column(db.String(10), nullable=True)
     email = db.Column(db.String(255), nullable=True, unique=True)
 
@@ -23,7 +26,7 @@ class User(UserMixin, db.Model):
     two_factor_recovery_codes = db.Column(db.Text, nullable=True)
 
     password_hash = db.Column(db.String(256), nullable=False)
-    role = db.Column(db.String(20), default='student')  # student or admin
+    role = db.Column(db.String(20), default='Athlete')  # Athlete, Coach, or System
     id_document = db.Column(db.String(255), nullable=True)      # from registration
     profile_picture = db.Column(db.String(255), nullable=True)  # optional update
     is_verified = db.Column(db.Boolean, default=False)
@@ -47,6 +50,12 @@ class SportRecord(db.Model):
     trophy = db.Column(db.String(100), nullable=True)
     team = db.Column(db.String(100), nullable=True)
     school = db.Column(db.String(150), nullable=True)
+    # Competition category
+    competition_category = db.Column(
+    db.String(50),
+    nullable=False,
+    default='County Meet'
+)
 
     # Football fields
     goals = db.Column(db.Integer, default=0)
@@ -87,4 +96,52 @@ class LoginAttempt(db.Model):
         db.DateTime(timezone=True),
         nullable=False,
         default=datetime.utcnow
+    )
+
+class Registration(db.Model):
+    __tablename__ = 'registration'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    user_id = db.Column(db.BigInteger, nullable=False)
+
+    registration_type = db.Column(db.String(20), nullable=False)
+    category = db.Column(db.String(50), nullable=False)
+    registration_year = db.Column(db.Integer, nullable=False)
+
+    fee_amount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    payment_status = db.Column(
+        db.String(20),
+        nullable=False,
+        default='unpaid'
+    )
+    payment_reference = db.Column(db.String(100), nullable=True)
+    paid_at = db.Column(db.DateTime, nullable=True)
+
+    status = db.Column(
+        db.String(20),
+        nullable=False,
+        default='active'
+    )
+
+    expires_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow
+    )
+
+    user = db.relationship(
+        'User',
+        primaryjoin='Registration.user_id == User.id',
+        foreign_keys=[user_id],
+        viewonly=True
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'user_id',
+            'registration_type',
+            'category',
+            'registration_year',
+            name='unique_user_registration_year'
+        ),
     )

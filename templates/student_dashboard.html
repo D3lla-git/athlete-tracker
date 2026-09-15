@@ -24,7 +24,10 @@
   {% endif %}
 </h2>
     <p class="text-muted mb-1">{{ current_user.school }} <i class="fa-solid fa-school"></i></p>
-    
+<div class="alert alert-info mb-3">
+    <strong><i class="fa-solid fa-layer-group"></i> Athlete Category:</strong>
+    {{ current_user.athlete_category or 'Not specified' }}
+</div>
     {% if current_user.is_verified %}
       <span class="badge bg-success">Verified Student</span>
     {% else %}
@@ -52,9 +55,53 @@
         <option value="Kickball">Kickball</option>
       </select>
     </div>
+<!-- Competition Category -->
+<div class="col-md-3">
+  <label class="form-label">
+    Competition Category
+    <i class="fa-solid fa-layer-group"></i>
+  </label>
+
+  <select name="competition_category" class="form-select" required>
+
+    <option value="">-- Select Competition --</option>
+
+    {% if 'All Athlete' in registered_categories %}
+      <option value="County Meet">County Meet</option>
+      <option value="Club League">Club League</option>
+      <option value="University League">University League</option>
+      <option value="Community/Area League">Community/Area League</option>
+      <option value="High School League">High School League</option>
+
+    {% else %}
+
+      {% if 'County Meet Athlete' in registered_categories %}
+        <option value="County Meet">County Meet</option>
+      {% endif %}
+
+      {% if 'Club League Athlete' in registered_categories %}
+        <option value="Club League">Club League</option>
+      {% endif %}
+
+      {% if 'University Athlete' in registered_categories %}
+        <option value="University League">University League</option>
+      {% endif %}
+
+      {% if 'Community/Area League Athlete' in registered_categories %}
+        <option value="Community/Area League">Community/Area League</option>
+      {% endif %}
+
+      {% if 'High School Athlete' in registered_categories %}
+        <option value="High School League">High School League</option>
+      {% endif %}
+
+    {% endif %}
+
+  </select>
+</div>
 
 <div class="col-md-3">
-  <label class="form-label">Team / School Played For <i class="fa-solid fa-users"></i></label>
+  <label class="form-label">Team Played For <i class="fa-solid fa-users"></i></label>
   <input type="text" name="team" class="form-control" 
          placeholder="e.g. SOS International School / LPRC Oilers" required>
 </div>

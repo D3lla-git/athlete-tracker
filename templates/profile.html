@@ -82,6 +82,42 @@
                 <input type="text" class="form-control" value="{{ current_user.role|title }}" disabled>
               </div>
 
+              {% if current_user.role == 'Athlete' %}
+              <div class="mb-3">
+                <label class="form-label">Athlete Registration Category</label>
+                <select name="athlete_category" class="form-select" required>
+                  {% for category in [
+                    'All Athlete',
+                    'County Meet Athlete',
+                    'Club League Athlete',
+                    'University Athlete',
+                    'Community/Area League Athlete',
+                    'High School Athlete'
+                  ] %}
+                    <option value="{{ category }}" {% if current_user.athlete_category == category %}selected{% endif %}>{{ category }}</option>
+                  {% endfor %}
+                </select>
+                <small class="text-muted">This controls future competition eligibility. Previous approved records remain unchanged.</small>
+              </div>
+              {% elif current_user.role == 'Coach' %}
+              <div class="mb-3">
+                <label class="form-label">Coach Registration Category</label>
+                <select name="coach_category" class="form-select" required>
+                  {% for category in [
+                    'All Coach',
+                    'County Meet Coach',
+                    'Club League Coach',
+                    'University Coach',
+                    'Community/Area League Coach',
+                    'High School Coach'
+                  ] %}
+                    <option value="{{ category }}" {% if current_user.coach_category == category %}selected{% endif %}>{{ category }}</option>
+                  {% endfor %}
+                </select>
+                <small class="text-muted">This controls which competition categories you can manage in the future.</small>
+              </div>
+              {% endif %}
+
               <div class="mb-3">
                 <label class="form-label">Upload / Change Profile Picture</label>
                 <input type="file" name="profile_picture" class="form-control" accept=".png,.jpg,.jpeg">
@@ -237,4 +273,37 @@ function togglePasswordVisibility(inputId, iconId) {
     </div>
   </div>
 </div>
+<!-- Danger Zone -->
+<div class="card border-danger mt-5">
+  <div class="card-header bg-danger text-white"><i class="fa-solid fa-triangle-exclamation"></i> Danger Zone</div>
+  <div class="card-body">
+    <h5 class="text-danger">Permanently Delete My Account</h5>
+    <p class="text-muted">This action permanently removes your account, sports records, registrations, profile picture, and ID document. This action cannot be undone.</p>
+    <form method="POST" action="{{ url_for('delete_account') }}" onsubmit="return confirmAccountDeletion();">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="mb-3">
+        <label for="delete_password" class="form-label">Confirm Your Password <i class="fa-solid fa-key"></i></label>
+        <input type="password" class="form-control" id="delete_password" name="current_password" required>
+      </div>
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="confirm_delete" name="confirm_delete" value="yes" required>
+        <label class="form-check-label text-danger" for="confirm_delete">I understand that my account and all associated data will be permanently deleted.</label>
+      </div>
+      <button type="submit" class="btn btn-danger"><i class="fa-solid fa-trash"></i> Permanently Delete My Account</button>
+    </form>
+  </div>
+</div>
+
+<script>
+function confirmAccountDeletion() {
+    return confirm(
+        "WARNING: This will permanently delete your account, " +
+        "all sports records, registrations, profile picture, " +
+        "and ID document.\n\n" +
+        "This action cannot be undone.\n\n" +
+        "Are you absolutely sure?"
+    );
+}
+</script>
+
 {% endblock %}

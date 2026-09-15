@@ -9,6 +9,23 @@
         <h4 class="mb-0">Register as Coach / Admin <i class="fa-solid fa-user-tie"></i></h4>
       </div>
       <div class="card-body">
+          <div class="mb-3">
+            <div class="dropdown">
+              <button class="btn btn-outline-primary dropdown-toggle w-100 category-dropdown-btn" type="button"
+        data-bs-toggle="dropdown" aria-expanded="false">
+  {{ selected_category or 'All Coach' }} — Choose Coach Category
+</button>
+              <ul class="dropdown-menu w-100">
+                <li><a class="dropdown-item" href="{{ url_for('register_coach', registration_category='all-coach') }}">All Coach</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('register_coach', registration_category='county-meet') }}">County Meet Coach</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('register_coach', registration_category='club-league') }}">Club League Coach</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('register_coach', registration_category='university') }}">University Coach</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('register_coach', registration_category='community-league') }}">Community/Area League Coach</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('register_coach', registration_category='high-school') }}">High School Coach</a></li>
+              </ul>
+            </div>
+          </div>
+
         <form method="POST">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="mb-3">
@@ -94,4 +111,19 @@
     </div>
   </div>
 </div>
+<style>
+  .category-dropdown-btn {
+    white-space: normal;
+    overflow-wrap: break-word;
+    text-align: center;
+  }
+
+  @media (max-width: 576px) {
+    .category-dropdown-btn {
+      font-size: 0.9rem;
+      line-height: 1.3;
+      padding: 0.65rem 2.5rem 0.65rem 0.75rem;
+    }
+  }
+</style>
 {% endblock %}
