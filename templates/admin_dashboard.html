@@ -22,21 +22,14 @@
         <tbody>
           {% for coach in pending_coaches %}
           <tr>
-            <td>{{ coach.full_name }}</td>
+            <td><a href="{% if current_user.id == coach.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=coach.id) }}{% endif %}" class="text-decoration-none"><strong>{{ coach.full_name }}</strong></a></td>
             <td>{{ coach.school }}</td>
             <td>
-             <form method="POST"
-      action="{{ url_for('approve_coach', user_id=coach.id) }}"
-      style="display:inline;"
-      onsubmit="return confirm('Approve this coach?')">
-
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-  <button type="submit" class="btn btn-success btn-sm">
-    Approve Coach
-  </button>
-
-</form>
+              <a href="{{ url_for('approve_coach', user_id=coach.id) }}" 
+                 class="btn btn-success btn-sm"
+                 onclick="return confirm('Approve this coach?')">
+                Approve Coach
+              </a>
             </td>
           </tr>
           {% endfor %}
@@ -53,28 +46,20 @@
   <div class="card mb-3">
     <div class="card-body d-flex justify-content-between align-items-center">
       <div>
-        <strong>{{ u.full_name }}</strong> — {{ u.school }}
+        <a href="{% if current_user.id == u.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=u.id) }}{% endif %}" class="text-decoration-none"><strong>{{ u.full_name }}</strong></a> — {{ u.school }}
         <br>
         <a href="{{ url_for('id_document', filename=u.id_document) }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
           View ID / Passport
         </a>
       </div>
-     <form method="POST"
-      action="{{ url_for('verify_user', user_id=u.id) }}"
-      style="display:inline;">
-
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-  <button type="submit" class="btn btn-success btn-sm">
-    Verify Student
-  </button>
-
-</form>
+      <a href="{{ url_for('verify_user', user_id=u.id) }}" class="btn btn-success btn-sm">
+        Verify Athlete
+      </a>
     </div>
   </div>
   {% endfor %}
 {% else %}
-  <p class="text-muted">No students waiting for verification.</p>
+  <p class="text-muted">No Athletes waiting for verification.</p>
 {% endif %}
 
 <!-- ==================== MOBILE VIEW - PENDING RECORDS SLIDER ==================== -->
@@ -101,13 +86,15 @@
 </div>
 
             <div class="text-center mb-3">
-              <strong>{{ r.user.full_name }}</strong><br>
-              <small class="text-muted">{{ r.team or r.user.school }} <i class="fa-solid fa-school"></i></small>
+              <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}" class="text-decoration-none"><strong>{{ r.user.full_name }}</strong></a><br>
+              <small class="text-muted">{{ r.team or r.user.school }} <i class="fa-solid fa-school"></i></small><br>
+              <small class="text-muted">vs. {{ r.team_played_against or '-' }} <i class="fa-solid fa-shield-halved"></i></small>
             </div>
 
             <!-- Stats Grid -->
             <div class="card-grid">
               <div><strong>Year <i class="fa-solid fa-calendar" style="color: green;"></i>:</strong> {{ r.year }}</div>
+              <div><strong>Played Against <i class="fa-solid fa-shield-halved"></i>:</strong> {{ r.team_played_against or '-' }}</div>
               <div><strong>Position <i class="fa-solid fa-shirt"></i>:</strong> {{ r.position or '-' }}</div>
               <div><strong>Games <i class="fa-solid fa-person-running"></i>:</strong> {{ r.games_played }}</div>
               <div>
@@ -154,29 +141,14 @@
 
             <!-- Action Buttons -->
             <div class="d-flex justify-content-center gap-2 mt-4">
-          <form method="POST"
-      action="{{ url_for('approve_record', record_id=r.id) }}"
-      onsubmit="return confirm('Approve this record?')">
-
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-  <button type="submit" class="btn btn-success btn-sm px-4">
-    Approve
-  </button>
-
-</form>
-
-<form method="POST"
-      action="{{ url_for('reject_record', record_id=r.id) }}"
-      onsubmit="return confirm('Reject this record?')">
-
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-  <button type="submit" class="btn btn-outline-danger btn-sm px-4">
-    Reject
-  </button>
-
-</form>
+              <a href="{{ url_for('approve_record', record_id=r.id) }}" 
+                 class="btn btn-success btn-sm px-4">
+                Approve
+              </a>
+              <a href="{{ url_for('reject_record', record_id=r.id) }}" 
+                 class="btn btn-outline-danger btn-sm px-4">
+                Reject
+              </a>
             </div>
 
           </div>
@@ -234,7 +206,8 @@
             {% endif %}
           {% endfor %}
 
-          <th>Team <i class="fa-solid fa-users"></i></th>
+          <th>Team Played For <i class="fa-solid fa-users"></i></th>
+         <th>Team Played Against <i class="fa-solid fa-shield-halved"></i></th>
          <th>Stats <i class="fa-solid fa-chart-line"></i></th>
         <th>Status <i class="bi bi-check2-circle"></i></th>
         </tr>
@@ -248,7 +221,7 @@
 
           <!-- Student -->
           <td>
-            <strong>{{ r.user.full_name }}</strong>
+            <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}" class="text-decoration-none"><strong>{{ r.user.full_name }}</strong></a>
           </td>
           <!-- Sport -->
           <td>
@@ -264,15 +237,14 @@
           <td>{{ r.position or '-' }}</td>
           <!-- Games -->
           <td>{{ r.games_played }}</td>
-         <!-- MOTM/QOTM -->
-<td>
-  {{ r.man_of_the_match or 0 }}
-</td>
-<td>{{ r.mvp or 0 }}</td>
+            <!-- MOTM/MVP -->
+          <td>{{ r.man_of_the_match or 0 }}</td>
+          <td>{{ r.mvp or 0 }}</td>
           <!-- Trophies -->
           <td>{{ r.trophy or 'None' }}</td>
           <!-- Team -->
           <td>{{ r.team or r.user.school }}</td>
+          <td>{{ r.team_played_against or '-' }}</td>
           <!-- Status -->
           <td>{% if r.status == 'pending' %}
               <span class="badge bg-warning text-dark">
@@ -292,33 +264,16 @@
           <td>
             <div class="d-flex gap-2">
 
-         <form method="POST"
-      action="{{ url_for('approve_record', record_id=r.id) }}"
-      style="display:inline;"
-      onsubmit="return confirm('Approve this record?')">
-
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-  <button type="submit" class="btn btn-success btn-sm">
-    <i class="fa-solid fa-check"></i>
-    Approve
-  </button>
-
-</form>
-
-<form method="POST"
-      action="{{ url_for('reject_record', record_id=r.id) }}"
-      style="display:inline;"
-      onsubmit="return confirm('Reject this record?')">
-
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-  <button type="submit" class="btn btn-outline-danger btn-sm">
-    <i class="fa-solid fa-xmark"></i>
-    Reject
-  </button>
-
-</form>
+              <a href="{{ url_for('approve_record', record_id=r.id) }}"
+                 class="btn btn-success btn-sm">
+                <i class="fa-solid fa-check"></i>
+                Approve
+              </a>
+              <a href="{{ url_for('reject_record', record_id=r.id) }}"
+                 class="btn btn-outline-danger btn-sm">
+                <i class="fa-solid fa-xmark"></i>
+                Reject
+              </a>
             </div>
           </td>
 

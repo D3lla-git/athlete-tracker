@@ -311,32 +311,28 @@ def suggest_names():
 def search():
     name = request.args.get('name', '').strip()
     school = request.args.get('school', '').strip()
+    team_played_against = request.args.get('team_played_against', '').strip()
 
     results = []
 
-    if name or school:
+    if name or school or team_played_against:
         query = User.query.filter_by(role='Athlete', is_verified=True)
-
         if name:
-            # This allows searching by first, middle, or last name
             query = query.filter(User.full_name.ilike(f'%{name}%'))
         if school:
             query = query.filter(User.school.ilike(f'%{school}%'))
 
         students = query.order_by(User.full_name).all()
-
         for student in students:
-            approved_records = SportRecord.query.filter_by(
-                user_id=student.id,
-                status='approved'
-            ).all()
+            records_query = SportRecord.query.filter_by(user_id=student.id, status='approved')
+            if team_played_against:
+                records_query = records_query.filter(SportRecord.team_played_against.ilike(f'%{team_played_against}%'))
+            approved_records = records_query.all()
+            if team_played_against and not approved_records:
+                continue
+            results.append({'student': student, 'records': approved_records})
 
-            results.append({
-                'student': student,
-                'records': approved_records
-            })
-
-    return render_template('search.html', results=results, name=name, school=school)
+    return render_template('search.html', results=results, name=name, school=school, team_played_against=team_played_against)
 # ========== AUTH ROUTES ==========
 @app.route('/register', methods=['GET', 'POST'])
 @app.route('/register/<registration_category>', methods=['GET', 'POST'])
@@ -1179,7 +1175,8 @@ def submit_record():
     games_played = request.form.get('games_played') or 0
     trophies = request.form.getlist('trophy')
     trophy_value = ", ".join(trophies) if trophies else None
-    team = request.form.get('team')
+    team = request.form.get('team', '').strip()
+    team_played_against = request.form.get('team_played_against', '').strip()
     competition_category = request.form.get('competition_category', '').strip()
     
     # ===== CATEGORY PERMISSION CHECK =====
@@ -1246,6 +1243,7 @@ def submit_record():
     games_played=safe_int(games_played),
     trophy=trophy_value,
     team=team,
+    team_played_against=team_played_against,
     competition_category=competition_category,
     man_of_the_match=safe_int(request.form.get('man_of_the_match')),
     mvp=safe_int(request.form.get('mvp')),
@@ -1338,7 +1336,8 @@ def edit_record(record_id):
     if request.method == 'POST':
         record.position = request.form.get('position')
         record.games_played = int(request.form.get('games_played') or 0)
-        record.team = request.form.get('team')
+        record.team = request.form.get('team', '').strip()
+        record.team_played_against = request.form.get('team_played_against', '').strip()
         competition_category = request.form.get(
             'competition_category',
             ''
@@ -1527,6 +1526,37 @@ def profile():
                 db.session.commit()
 
     return render_template('profile.html')
+
+#========Read-only user profile route=========
+@app.route('/user/<int:user_id>')
+def user_profile(user_id):
+    user = User.query.get_or_404(user_id)
+
+    # If the account owner is logged in and viewing their own profile,
+    # send them to their normal editable My Profile page.
+    if current_user.is_authenticated and user.id == current_user.id:
+        return redirect(url_for('profile'))
+
+    current_year = datetime.utcnow().year
+    current_category = None
+    registration_type = None
+    if user.role == 'Athlete':
+        registration_type = 'athlete'
+    elif user.role == 'Coach':
+        registration_type = 'coach'
+
+    if registration_type:
+        current_registration = Registration.query.filter_by(
+            user_id=user.id, registration_type=registration_type,
+            registration_year=current_year, status='active'
+        ).order_by(Registration.id.asc()).first()
+        if current_registration:
+            current_category = current_registration.category
+    elif user.role == 'System':
+        current_category = 'System'
+
+    return render_template('user_profile.html', user=user, current_category=current_category)
+
 
 @app.route('/update_profile', methods=['POST'])
 @login_required

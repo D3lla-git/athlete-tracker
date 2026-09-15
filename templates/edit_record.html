@@ -53,7 +53,12 @@
 
 <div class="mb-4">
   <label class="form-label">Team Played For <i class="fa-solid fa-users"></i></label>
-  <input type="text" name="team" class="form-control" value="{{ record.team or '' }}" placeholder="e.g. LPRC Oilers / St. John High School">
+  <input type="text" name="team" class="form-control" value="{{ record.team or '' }}" placeholder="e.g. LPRC Oilers / St. John High School" required>
+</div>
+
+<div class="mb-4">
+  <label class="form-label">Team Played Against <i class="fa-solid fa-shield-halved"></i></label>
+  <input type="text" name="team_played_against" class="form-control" value="{{ record.team_played_against or '' }}" placeholder="e.g. St. Mary Catholic School" required>
 </div>
 
     <div class="row">

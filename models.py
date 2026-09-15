@@ -49,6 +49,7 @@ class SportRecord(db.Model):
     games_played = db.Column(db.Integer, default=0)
     trophy = db.Column(db.String(100), nullable=True)
     team = db.Column(db.String(100), nullable=True)
+    team_played_against = db.Column(db.String(100), nullable=True)
     school = db.Column(db.String(150), nullable=True)
     # Competition category
     competition_category = db.Column(

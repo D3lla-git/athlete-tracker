@@ -245,7 +245,7 @@
   <a class="nav-link" href="{{ url_for('profile') }}"style="color: white;">My Profile <i class="bi bi-person-circle"></i></a>
 </li>
           {% if current_user.is_authenticated %}
-            {% if current_user.role == 'admin' %}
+            {% if current_user.role in ('Coach', 'System') %}
               <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('admin_dashboard') }}"style="color: white;">Admin <i class="fa-solid fa-user-shield"></i></a>
               </li>
@@ -255,7 +255,7 @@
               </li>
 
             {% endif %}
-{% if current_user.is_authenticated and current_user.role == 'admin' %}
+{% if current_user.is_authenticated and current_user.role in ('Coach', 'System') %}
     <a class="nav-link" href="{{ url_for('setup_2fa') }}">
         <i class="fa-solid fa-shield-halved"></i>
         2FA Security

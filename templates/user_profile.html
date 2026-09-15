@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ user.full_name }} Profile{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-md-7 col-lg-5"><div class="card shadow">
+<div class="card-header text-center"><h4 class="mb-0">{{ user.full_name }}</h4><small class="text-muted">User Profile</small></div>
+<div class="card-body text-center">
+<div class="mb-4">{% if user.profile_picture %}<img src="{{ url_for('profile_picture', filename=user.profile_picture) }}" class="rounded-circle shadow" style="width:170px;height:170px;object-fit:cover;border:3px solid #dee2e6;" alt="Profile Picture">{% else %}<div class="rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center shadow" style="width:170px;height:170px;font-size:4rem;font-weight:600;">{{ user.full_name[0] | upper }}</div>{% endif %}</div>
+<div class="text-start">
+<div class="mb-3"><label class="form-label fw-bold">Current Team Name</label><div class="form-control bg-light">{{ user.school }}</div></div>
+<div class="mb-3"><label class="form-label fw-bold">Role</label><div class="form-control bg-light">{{ user.role }}</div></div>
+<div class="mb-3"><label class="form-label fw-bold">Current Competition Category</label><div class="form-control bg-light">{{ current_category or 'Not registered for a current competition category' }}</div></div>
+<div class="mb-3"><label class="form-label fw-bold">Gender</label><div class="form-control bg-light">{% if user.gender == 'Male' %}Male <i class="fa-solid fa-mars"></i>{% elif user.gender == 'Female' %}Female <i class="fa-solid fa-venus"></i>{% else %}Not provided{% endif %}</div></div>
+</div>
+<div class="alert alert-secondary mt-4 mb-0"><i class="fa-solid fa-lock"></i> This profile is read-only. Only the account owner can edit their own profile.</div>
+</div></div></div></div>
+{% endblock %}

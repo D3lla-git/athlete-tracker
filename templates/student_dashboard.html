@@ -14,22 +14,11 @@
 
   <!-- Name and Info -->
   <div>
-  <h2 class="mb-1">
-  {{ current_user.full_name }}
-
-  {% if current_user.gender == 'Male' %}
-    <i class="fa-solid fa-mars" title="Male" style="color: #0d6efd;"></i>
-  {% elif current_user.gender == 'Female' %}
-    <i class="fa-solid fa-venus" title="Female" style="color: #d63384;"></i>
-  {% endif %}
-</h2>
+    <h2 class="mb-1">{{ current_user.full_name }}</h2>
     <p class="text-muted mb-1">{{ current_user.school }} <i class="fa-solid fa-school"></i></p>
-<div class="alert alert-info mb-3">
-    <strong><i class="fa-solid fa-layer-group"></i> Athlete Category:</strong>
-    {{ current_user.athlete_category or 'Not specified' }}
-</div>
+    
     {% if current_user.is_verified %}
-      <span class="badge bg-success">Verified Student</span>
+      <span class="badge bg-success">Verified Athlete</span>
     {% else %}
       <span class="badge bg-warning text-dark">ID Pending Verification</span>
     {% endif %}
@@ -43,7 +32,6 @@
     <h5><div class="card-header">Submit New Sports Record</div></h5>
     <div class="card-body">
       <form method="POST" action="{{ url_for('submit_record') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <div class="row g-3">
     <div class="col-md-3">
@@ -55,55 +43,17 @@
         <option value="Kickball">Kickball</option>
       </select>
     </div>
-<!-- Competition Category -->
+
 <div class="col-md-3">
-  <label class="form-label">
-    Competition Category
-    <i class="fa-solid fa-layer-group"></i>
-  </label>
-
-  <select name="competition_category" class="form-select" required>
-
-    <option value="">-- Select Competition --</option>
-
-    {% if 'All Athlete' in registered_categories %}
-      <option value="County Meet">County Meet</option>
-      <option value="Club League">Club League</option>
-      <option value="University League">University League</option>
-      <option value="Community/Area League">Community/Area League</option>
-      <option value="High School League">High School League</option>
-
-    {% else %}
-
-      {% if 'County Meet Athlete' in registered_categories %}
-        <option value="County Meet">County Meet</option>
-      {% endif %}
-
-      {% if 'Club League Athlete' in registered_categories %}
-        <option value="Club League">Club League</option>
-      {% endif %}
-
-      {% if 'University Athlete' in registered_categories %}
-        <option value="University League">University League</option>
-      {% endif %}
-
-      {% if 'Community/Area League Athlete' in registered_categories %}
-        <option value="Community/Area League">Community/Area League</option>
-      {% endif %}
-
-      {% if 'High School Athlete' in registered_categories %}
-        <option value="High School League">High School League</option>
-      {% endif %}
-
-    {% endif %}
-
-  </select>
+  <label class="form-label">Team / School Played For <i class="fa-solid fa-users"></i></label>
+  <input type="text" name="team" class="form-control" 
+         placeholder="e.g. SOS International School / LPRC Oilers" required>
 </div>
 
 <div class="col-md-3">
-  <label class="form-label">Team Played For <i class="fa-solid fa-users"></i></label>
-  <input type="text" name="team" class="form-control" 
-         placeholder="e.g. SOS International School / LPRC Oilers" required>
+  <label class="form-label">Team Played Against <i class="fa-solid fa-shield-halved"></i></label>
+  <input type="text" name="team_played_against" class="form-control"
+         placeholder="e.g. LPRC Oilers / St. John High School" required>
 </div>
 
     <div class="col-md-2">
@@ -345,7 +295,8 @@
     <thead class="table-dark">
       <tr>
        <th><i class="fa-solid fa-futbol"></i>Sport<i class="fa-solid fa-basketball" style="color: orangered;"></i></th>
-        <th>Team <i class="fa-solid fa-users"></i></th>
+        <th>Team Played For <i class="fa-solid fa-users"></i></th>
+        <th>Team Played Against <i class="fa-solid fa-shield-halved"></i></th>
         <th>Year <i class="fa-solid fa-calendar" style="color: lightgreen;"></i></th>
         <th>Position <i class="fa-solid fa-shirt"></i></th>
         <th>Games Played <i class="fa-solid fa-person-running"></i></th>
@@ -361,6 +312,7 @@
       <tr>
         <td>{{ r.sport }}</td>
         <td>{{ r.team or '-' }}</td>
+        <td>{{ r.team_played_against or '-' }}</td>
         <td>{{ r.year }}</td>
         <td>{{ r.position or '-' }}</td>
         <td>{{ r.games_played }}</td>
@@ -403,39 +355,20 @@
       <span class="badge bg-warning text-dark">Pending</span>
     {% endif %}
 
-{% if r.status == 'rejected' %}
-
-  <form method="POST"
-        action="{{ url_for('delete_record', record_id=r.id) }}"
-        style="display:inline;"
-        onsubmit="return confirm('Delete this rejected record?')">
-
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    <button type="submit"
-            class="btn btn-outline-danger btn-sm py-0 px-2"
-            style="font-size: 0.75rem;">
-      Delete
-    </button>
-
-  </form>
-
-  <form method="POST"
-        action="{{ url_for('resubmit_record', record_id=r.id) }}"
-        style="display:inline;"
-        onsubmit="return confirm('Resubmit this record?')">
-
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    <button type="submit"
-            class="btn btn-warning btn-sm py-0 px-2"
-            style="font-size: 0.75rem;">
-      Resubmit
-    </button>
-
-  </form>
-
-{% endif %}
+    {% if r.status == 'rejected' %}
+      <a href="{{ url_for('delete_record', record_id=r.id) }}" 
+         class="btn btn-outline-danger btn-sm py-0 px-2"
+         style="font-size: 0.75rem;"
+         onclick="return confirm('Delete this rejected record?')">
+        Delete
+      </a>
+      <a href="{{ url_for('resubmit_record', record_id=r.id) }}" 
+         class="btn btn-warning btn-sm py-0 px-2"
+         style="font-size: 0.75rem;"
+         onclick="return confirm('Resubmit this record?')">
+        Resubmit
+      </a>
+    {% endif %}
 
     {% if r.year|string == current_year|string %}
       <a href="{{ url_for('edit_record', record_id=r.id) }}" 
@@ -449,7 +382,7 @@
       </tr>
       {% else %}
       <tr>
-      <td colspan="10" class="text-center">No records submitted yet.</td>
+      <td colspan="11" class="text-center">No records submitted yet.</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -479,7 +412,8 @@
 
           <!-- Stats Grid -->
           <div class="card-grid">
-            <div><strong>Team <i class="fa-solid fa-users"></i> :</strong> {{ r.team or '-' }}</div>
+            <div><strong>Team Played For <i class="fa-solid fa-users"></i> :</strong> {{ r.team or '-' }}</div>
+            <div><strong>Team Played Against <i class="fa-solid fa-shield-halved"></i> :</strong> {{ r.team_played_against or '-' }}</div>
             <div><strong>Year <i class="fa-solid fa-calendar" style="color: green;"></i> :</strong> {{ r.year }}</div>
 
             {% if r.sport == 'Football' %}
@@ -582,36 +516,18 @@
   {% endif %}
 
   {% if r.status == 'rejected' %}
-
-  <form method="POST"
-        action="{{ url_for('delete_record', record_id=r.id) }}"
-        style="display:inline;"
-        onsubmit="return confirm('Delete this rejected record?')">
-
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    <button type="submit"
-            class="btn btn-outline-danger btn-sm px-3">
+    <a href="{{ url_for('delete_record', record_id=r.id) }}" 
+       class="btn btn-outline-danger btn-sm px-3"
+       onclick="return confirm('Delete this rejected record?')">
       Delete
-    </button>
-
-  </form>
-
-  <form method="POST"
-        action="{{ url_for('resubmit_record', record_id=r.id) }}"
-        style="display:inline;"
-        onsubmit="return confirm('Resubmit this record?')">
-
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    <button type="submit"
-            class="btn btn-warning btn-sm px-3">
+    </a>
+    <a href="{{ url_for('resubmit_record', record_id=r.id) }}" 
+       class="btn btn-warning btn-sm px-3"
+       onclick="return confirm('Resubmit this record?')">
       Resubmit
-    </button>
+    </a>
+  {% endif %}
 
-  </form>
-
-{% endif %}
   {% if r.year|string == current_year|string %}
     <a href="{{ url_for('edit_record', record_id=r.id) }}" 
        class="btn btn-primary btn-sm px-3">
