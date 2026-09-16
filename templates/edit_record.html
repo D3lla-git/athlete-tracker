@@ -57,8 +57,53 @@
 </div>
 
 <div class="mb-4">
-  <label class="form-label">Team Played Against <i class="fa-solid fa-shield-halved"></i></label>
+  <label class="form-label">Opponet <i class="fa-solid fa-shield-halved"></i></label>
   <input type="text" name="team_played_against" class="form-control" value="{{ record.team_played_against or '' }}" placeholder="e.g. St. Mary Catholic School" required>
+</div>
+
+<div class="mb-4">
+  <label class="form-label">
+    Competition <i class="fa-solid fa-trophy"></i>
+  </label>
+
+  <select name="competition_category" class="form-select" required>
+    <option value="">-- Select Competition --</option>
+
+    {% if 'All Athlete' in registered_categories or 'County Meet Athlete' in registered_categories %}
+      <option value="County Meet"
+        {% if record.competition_category == 'County Meet' %}selected{% endif %}>
+        County Meet
+      </option>
+    {% endif %}
+
+    {% if 'All Athlete' in registered_categories or 'Club League Athlete' in registered_categories %}
+      <option value="Club League"
+        {% if record.competition_category == 'Club League' %}selected{% endif %}>
+        Club League
+      </option>
+    {% endif %}
+
+    {% if 'All Athlete' in registered_categories or 'University Athlete' in registered_categories %}
+      <option value="University League"
+        {% if record.competition_category == 'University League' %}selected{% endif %}>
+        University League
+      </option>
+    {% endif %}
+
+    {% if 'All Athlete' in registered_categories or 'Community/Area League Athlete' in registered_categories %}
+      <option value="Community/Area League"
+        {% if record.competition_category == 'Community/Area League' %}selected{% endif %}>
+        Community/Area League
+      </option>
+    {% endif %}
+
+    {% if 'All Athlete' in registered_categories or 'High School Athlete' in registered_categories %}
+      <option value="High School"
+        {% if record.competition_category == 'High School' %}selected{% endif %}>
+        High School
+      </option>
+    {% endif %}
+  </select>
 </div>
 
     <div class="row">

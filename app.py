@@ -61,6 +61,13 @@ def verify_recovery_code(code, stored_hashes):
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# ========== DATABASE CONNECTION POOL ==========
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 1800,
+}
+
 mail = Mail(app)
 # ========== BRUTE-FORCE PROTECTION ==========
 MAX_LOGIN_ATTEMPTS = 3
@@ -1328,6 +1335,17 @@ def edit_record(record_id):
 
     current_year = str(datetime.now().year)
 
+    athlete_registrations = Registration.query.filter_by(
+        user_id=current_user.id,
+        registration_type='athlete',
+        registration_year=int(current_year),
+        status='active'
+    ).all()
+    registered_categories = [
+        registration.category
+        for registration in athlete_registrations
+    ]
+
     # Only allow editing for the current year
     if str(record.year) != current_year:
         flash(f'You can only edit records for the {current_year} season.', 'danger')
@@ -1388,7 +1406,11 @@ def edit_record(record_id):
         flash('Record updated successfully and sent for coach approval.', 'success')
         return redirect(url_for('student_dashboard'))
 
-    return render_template('edit_record.html', record=record)
+    return render_template(
+    'edit_record.html',
+    record=record,
+    registered_categories=registered_categories
+)
 
 @app.route('/admin')
 @login_required

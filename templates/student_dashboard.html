@@ -32,6 +32,7 @@
     <h5><div class="card-header">Submit New Sports Record</div></h5>
     <div class="card-body">
       <form method="POST" action="{{ url_for('submit_record') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <div class="row g-3">
     <div class="col-md-3">
@@ -45,15 +46,45 @@
     </div>
 
 <div class="col-md-3">
-  <label class="form-label">Team / School Played For <i class="fa-solid fa-users"></i></label>
+  <label class="form-label">Team <i class="fa-solid fa-users"></i></label>
   <input type="text" name="team" class="form-control" 
          placeholder="e.g. SOS International School / LPRC Oilers" required>
 </div>
 
 <div class="col-md-3">
-  <label class="form-label">Team Played Against <i class="fa-solid fa-shield-halved"></i></label>
+  <label class="form-label">Opponent <i class="fa-solid fa-shield-halved" style="color: red;"></i></label>
   <input type="text" name="team_played_against" class="form-control"
          placeholder="e.g. LPRC Oilers / St. John High School" required>
+</div>
+
+<div class="col-md-3">
+  <label class="form-label">
+    Competition <i class="fa-solid fa-trophy"></i>
+  </label>
+
+  <select name="competition_category" class="form-select" required>
+    <option value="">-- Select Competition --</option>
+
+    {% if 'All Athlete' in registered_categories or 'County Meet Athlete' in registered_categories %}
+      <option value="County Meet">County Meet</option>
+    {% endif %}
+
+    {% if 'All Athlete' in registered_categories or 'Club League Athlete' in registered_categories %}
+      <option value="Club League">Club League</option>
+    {% endif %}
+
+    {% if 'All Athlete' in registered_categories or 'University Athlete' in registered_categories %}
+      <option value="University League">University League</option>
+    {% endif %}
+
+    {% if 'All Athlete' in registered_categories or 'Community/Area League Athlete' in registered_categories %}
+      <option value="Community/Area League">Community/Area League</option>
+    {% endif %}
+
+    {% if 'All Athlete' in registered_categories or 'High School Athlete' in registered_categories %}
+      <option value="High School">High School League</option>
+    {% endif %}
+  </select>
 </div>
 
     <div class="col-md-2">
@@ -295,8 +326,8 @@
     <thead class="table-dark">
       <tr>
        <th><i class="fa-solid fa-futbol"></i>Sport<i class="fa-solid fa-basketball" style="color: orangered;"></i></th>
-        <th>Team Played For <i class="fa-solid fa-users"></i></th>
-        <th>Team Played Against <i class="fa-solid fa-shield-halved"></i></th>
+        <th>Team <i class="fa-solid fa-users"></i></th>
+        <th>Opponent <i class="fa-solid fa-shield-halved" style="color: red;"></i></th>
         <th>Year <i class="fa-solid fa-calendar" style="color: lightgreen;"></i></th>
         <th>Position <i class="fa-solid fa-shirt"></i></th>
         <th>Games Played <i class="fa-solid fa-person-running"></i></th>
@@ -412,8 +443,8 @@
 
           <!-- Stats Grid -->
           <div class="card-grid">
-            <div><strong>Team Played For <i class="fa-solid fa-users"></i> :</strong> {{ r.team or '-' }}</div>
-            <div><strong>Team Played Against <i class="fa-solid fa-shield-halved"></i> :</strong> {{ r.team_played_against or '-' }}</div>
+            <div><strong>Team <i class="fa-solid fa-users"></i> :</strong> {{ r.team or '-' }}</div>
+            <div><strong>Opponent <i class="fa-solid fa-shield-halved" style="color: red;"></i> :</strong> {{ r.team_played_against or '-' }}</div>
             <div><strong>Year <i class="fa-solid fa-calendar" style="color: green;"></i> :</strong> {{ r.year }}</div>
 
             {% if r.sport == 'Football' %}

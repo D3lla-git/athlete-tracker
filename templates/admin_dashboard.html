@@ -88,13 +88,15 @@
             <div class="text-center mb-3">
               <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}" class="text-decoration-none"><strong>{{ r.user.full_name }}</strong></a><br>
               <small class="text-muted">{{ r.team or r.user.school }} <i class="fa-solid fa-school"></i></small><br>
-              <small class="text-muted">vs. {{ r.team_played_against or '-' }} <i class="fa-solid fa-shield-halved"></i></small>
+              <small class="text-muted">vs. {{ r.team_played_against or '-' }} <i class="fa-solid fa-shield-halved"></i></small><br>
+              
             </div>
 
             <!-- Stats Grid -->
             <div class="card-grid">
               <div><strong>Year <i class="fa-solid fa-calendar" style="color: green;"></i>:</strong> {{ r.year }}</div>
-              <div><strong>Played Against <i class="fa-solid fa-shield-halved"></i>:</strong> {{ r.team_played_against or '-' }}</div>
+              <div><strong>Opponent <i class="fa-solid fa-shield-halved"></i>:</strong> {{ r.team_played_against or '-' }}</div>
+              <div><strong>Competition <i class="fa-solid fa-trophy"></i>:</strong> {{ r.competition_category or '-' }}</div>
               <div><strong>Position <i class="fa-solid fa-shirt"></i>:</strong> {{ r.position or '-' }}</div>
               <div><strong>Games <i class="fa-solid fa-person-running"></i>:</strong> {{ r.games_played }}</div>
               <div>
@@ -140,15 +142,19 @@
             </div>
 
             <!-- Action Buttons -->
-            <div class="d-flex justify-content-center gap-2 mt-4">
-              <a href="{{ url_for('approve_record', record_id=r.id) }}" 
-                 class="btn btn-success btn-sm px-4">
-                Approve
-              </a>
-              <a href="{{ url_for('reject_record', record_id=r.id) }}" 
-                 class="btn btn-outline-danger btn-sm px-4">
-                Reject
-              </a>
+            <form method="POST" action="{{ url_for('approve_record', record_id=r.id) }}" style="display:inline;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-success">
+        <i class="fa-solid fa-check"></i> Approve
+    </button>
+</form>
+              <form method="POST" action="{{ url_for('reject_record', record_id=r.id) }}" style="display:inline;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-danger"
+            onclick="return confirm('Are you sure you want to reject this record?');">
+        <i class="fa-solid fa-xmark"></i> Reject
+    </button>
+</form>
             </div>
 
           </div>
@@ -175,270 +181,168 @@
   {% endif %}
 </div>
 
+
+<style>
+  /* Keep the desktop pending-record table comfortably inside the page width. */
+  .admin-pending-table-wrap {
+    width: 96%;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .admin-pending-table-wrap .table {
+    width: 100%;
+    margin-bottom: 0;
+  }
+</style>
 <!-- ==================== DESKTOP VIEW - PENDING RECORDS ==================== -->
 <div class="d-none d-md-block">
-  <h4 class="mt-4 mb-3">Pending Sports Records</h4>
+  <h4 class="mt-4 mb-3">Pending Sports Records <i class="fa-solid fa-hourglass-half"></i></h4>
 
   {% if pending_records %}
-
   <div class="table-responsive">
-    <table class="table table-bordered table-hover align-middle">
-
+    <div class="admin-pending-table-wrap">
+      <table class="table table-bordered table-hover align-middle">
       <thead class="table-dark">
         <tr>
           <th>Student <i class="fa-solid fa-user"></i></th>
-          <th>Sport <i class="fa-solid fa-futbol"></i></th>
-          <th>Year <i class="fa-solid fa-calendar" style="color: green;"></i></th>
+          <th><i class="fa-solid fa-futbol"></i> Sport <i class="fa-solid fa-basketball" style="color: orangered;"></i></th>
+          <th>Team <i class="fa-solid fa-users"></i></th>
+          <th>Opponet <i class="fa-solid fa-shield-halved"></i></th>
+          <th>Year <i class="fa-solid fa-calendar" style="color: lightgreen;"></i></th>
           <th>Position <i class="fa-solid fa-shirt"></i></th>
           <th>Games <i class="fa-solid fa-person-running"></i></th>
           <th>MOTM/QOTM <i class="fa-solid fa-trophy" style="color: silver;"></i></th>
           <th>MVP <i class="fa-solid fa-star" style="color: goldenrod"></i></th>
-          <th>Trophies <i class="fa-solid fa-trophy" style="color: goldenrod;"></i></th>
-          <!-- Sport-specific columns -->
-          {% set has_football = false %}
-          {% set has_basketball = false %}
-
-          {% for r in pending_records %}
-            {% if r.sport == 'Football' %}
-              {% set has_football = true %}
-            {% elif r.sport == 'Basketball' %}
-              {% set has_basketball = true %}
-            {% endif %}
-          {% endfor %}
-
-          <th>Team Played For <i class="fa-solid fa-users"></i></th>
-         <th>Team Played Against <i class="fa-solid fa-shield-halved"></i></th>
-         <th>Stats <i class="fa-solid fa-chart-line"></i></th>
-        <th>Status <i class="bi bi-check2-circle"></i></th>
+          <th>Trophy <i class="fa-solid fa-trophy" style="color: goldenrod;"></i></th>
+          <th>Competition <i class="fa-solid fa-medal"></i></th>
+          <th>Stats <i class="fa-solid fa-chart-line"></i></th>
+          <th>Status <i class="bi bi-check2-circle"></i></th>
         </tr>
       </thead>
 
       <tbody>
-
         {% for r in pending_records %}
-
         <tr>
-
           <!-- Student -->
           <td>
-            <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}" class="text-decoration-none"><strong>{{ r.user.full_name }}</strong></a>
+            <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}"
+               class="text-decoration-none">
+              <strong>{{ r.user.full_name }}</strong>
+            </a>
           </td>
+
           <!-- Sport -->
           <td>
             {% if r.sport == 'Football' %}
-              <strong>{{ r.sport | upper }}</strong>
+              <strong>Football <i class="fa-solid fa-futbol"></i></strong>
+            {% elif r.sport == 'Kickball' %}
+              <strong>Kickball <i class="fa-solid fa-baseball"></i></strong>
             {% else %}
-              <strong>{{ r.sport | upper }}</strong>
+              <strong>Basketball <i class="fa-solid fa-basketball" style="color: orangered;"></i></strong>
             {% endif %}
           </td>
+
+          <!-- Team -->
+          <td>{{ r.team or r.user.school or '-' }}</td>
+
+          <!-- Team Played Against -->
+          <td>{{ r.team_played_against or '-' }}</td>
+
           <!-- Year -->
           <td>{{ r.year }}</td>
+
           <!-- Position -->
           <td>{{ r.position or '-' }}</td>
-          <!-- Games -->
-          <td>{{ r.games_played }}</td>
-            <!-- MOTM/MVP -->
+
+          <!-- Games Played -->
+          <td>{{ r.games_played or 0 }}</td>
+
+          <!-- MOTM/QOTM -->
           <td>{{ r.man_of_the_match or 0 }}</td>
+
+          <!-- MVP -->
           <td>{{ r.mvp or 0 }}</td>
-          <!-- Trophies -->
-          <td>{{ r.trophy or 'None' }}</td>
-          <!-- Team -->
-          <td>{{ r.team or r.user.school }}</td>
-          <td>{{ r.team_played_against or '-' }}</td>
-          <!-- Status -->
-          <td>{% if r.status == 'pending' %}
-              <span class="badge bg-warning text-dark">
-                Pending
-              </span>
-            {% elif r.status == 'rejected' %}
-              <span class="badge bg-danger">
-                Rejected
-              </span>
+
+          <!-- Trophy -->
+          <td>{{ r.trophy or '-' }}</td>
+
+          <!-- Competition -->
+          <td>
+            <span class="badge bg-info text-dark">
+              {{ r.competition_category or '-' }}
+            </span>
+          </td>
+
+          <!-- Stats -->
+          <td>
+            {% if r.sport == 'Football' %}
+              <div><strong>Goals <i class="fa-solid fa-futbol"></i>:</strong> {{ r.goals or 0 }}</div>
+              <div><strong>Assists <i class="fa-solid fa-handshake"></i>:</strong> {{ r.assists or 0 }}</div>
+              <div><strong>Yellow Cards <i class="fa-solid fa-circle" style="color: gold;"></i>:</strong> {{ r.yellow_cards or 0 }}</div>
+              <div><strong>Red Cards <i class="fa-solid fa-circle" style="color: red;"></i>:</strong> {{ r.red_cards or 0 }}</div>
+            {% elif r.sport == 'Kickball' %}
+              <div><strong>Home Runs <i class="fa-solid fa-baseball"></i>:</strong> {{ r.home_runs or 0 }}</div>
+              <div><strong>Red Cards <i class="fa-solid fa-circle" style="color: red;"></i>:</strong> {{ r.kickball_red_cards or 0 }}</div>
+              <div><strong>Yellow Cards <i class="fa-solid fa-circle" style="color: gold;"></i>:</strong> {{ r.kickball_yellow_cards or 0 }}</div>
+              <div><strong>Cut Base <i class="fa-solid fa-baseball"></i>:</strong> {{ r.cut_base or 0 }}</div>
+              <div><strong>Foul Played <i class="fa-solid fa-exclamation-triangle"></i>:</strong> {{ r.foul_played or 0 }}</div>
             {% else %}
-              <span class="badge bg-secondary">
-                {{ r.status | title }}
-              </span>
+              <div><strong>Points <i class="fa-solid fa-basketball"></i>:</strong> {{ r.points or 0 }}</div>
+              <div><strong>Assists <i class="fa-solid fa-handshake"></i>:</strong> {{ r.assists or 0 }}</div>
+              <div><strong>Blocks <i class="fa-solid fa-hand"></i>:</strong> {{ r.blocks or 0 }}</div>
+              <div><strong>Sent Off Court <i class="fa-solid fa-user-slash"></i>:</strong> {{ r.sent_off or 0 }}</div>
             {% endif %}
           </td>
-          <!-- Action -->
+
+          <!-- Status + Actions -->
           <td>
-            <div class="d-flex gap-2">
+            <div class="d-flex flex-column gap-2 align-items-start">
+              {% if r.status == 'approved' %}
+                <span class="badge bg-success">Approved</span>
+              {% elif r.status == 'rejected' %}
+                <span class="badge bg-danger">Rejected</span>
+              {% else %}
+                <span class="badge bg-warning text-dark">Pending</span>
+              {% endif %}
 
-              <a href="{{ url_for('approve_record', record_id=r.id) }}"
-                 class="btn btn-success btn-sm">
-                <i class="fa-solid fa-check"></i>
-                Approve
-              </a>
-              <a href="{{ url_for('reject_record', record_id=r.id) }}"
-                 class="btn btn-outline-danger btn-sm">
-                <i class="fa-solid fa-xmark"></i>
-                Reject
-              </a>
+              {% if r.status == 'pending' %}
+                <div class="d-flex gap-1 flex-wrap">
+                  <form method="POST"
+                        action="{{ url_for('approve_record', record_id=r.id) }}"
+                        style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-success btn-sm py-0 px-2">
+                      <i class="fa-solid fa-check"></i> Approve
+                    </button>
+                  </form>
+
+                  <form method="POST"
+                        action="{{ url_for('reject_record', record_id=r.id) }}"
+                        style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit"
+                            class="btn btn-outline-danger btn-sm py-0 px-2"
+                            onclick="return confirm('Are you sure you want to reject this record?');">
+                      <i class="fa-solid fa-xmark"></i> Reject
+                    </button>
+                  </form>
+                </div>
+              {% endif %}
             </div>
-          </td>
-
-        </tr>
-        <!-- ================= FOOTBALL DETAILS ================= -->
-        {% if r.sport == 'Football' %}
-
-        <tr class="table-light">
-          <td colspan="10">
-
-            <div class="d-flex flex-wrap gap-4 small">
-
-              <span>
-                <strong>
-                  Goals
-                  <i class="fa-solid fa-futbol"></i>:
-                </strong>
-                {{ r.goals }}
-              </span>
-
-              <span>
-                <strong>
-                  Assists
-                  <i class="fa-solid fa-handshake-angle"></i>:
-                </strong>
-                {{ r.assists }}
-              </span>
-
-              <span>
-                <strong>
-                  Yellow Cards
-                  <i class="fa-solid fa-circle"
-                     style="color: gold;"></i>:
-                </strong>
-                {{ r.yellow_cards }}
-              </span>
-
-              <span>
-                <strong>
-                  Red Cards
-                  <i class="fa-solid fa-circle"
-                     style="color: red;"></i>:
-                </strong>
-                {{ r.red_cards }}
-              </span>
-
-            </div>
-
           </td>
         </tr>
-
-        <!-- ================= BASKETBALL DETAILS ================= -->
-        {% elif r.sport == 'Basketball' %}
-
-        <tr class="table-light">
-          <td colspan="10">
-
-            <div class="d-flex flex-wrap gap-4 small">
-
-              <span>
-                <strong>
-                  Points
-                  <i class="fa-solid fa-basketball"
-                     style="color:orangered;"></i>:
-                </strong>
-                {{ r.points }}
-              </span>
-
-              <span>
-                <strong>
-                  Assists
-                  <i class="fa-solid fa-handshake-angle"></i>:
-                </strong>
-                {{ r.assists }}
-              </span>
-
-              <span>
-                <strong>
-                  Blocks
-                  <i class="fa-solid fa-shield-alt"></i>:
-                </strong>
-                {{ r.blocks }}
-              </span>
-
-              <span>
-                <strong>
-                  Sent Off
-                  <i class="fa-solid fa-user-times"></i>:
-                </strong>
-                {{ r.sent_off }}
-              </span>
-
-            </div>
-
-          </td>
-            </tr>
-
-        <!-- ================= KICKBALL DETAILS ================= -->
-        {% elif r.sport == 'Kickball' %}
-
-        <tr class="table-light">
-          <td colspan="10">
-
-            <div class="d-flex flex-wrap gap-4 small">
-
-              <span>
-                <strong>
-                  Home Runs
-                  <i class="fa-solid fa-baseball"></i>:
-                </strong>
-                {{ r.home_runs }}
-              </span>
-
-              <span>
-                <strong>
-                  Red Cards
-                  <i class="fa-solid fa-square" style="color: red;"></i>:
-                </strong>
-                {{ r.kickball_red_cards }}
-              </span>
-
-              <span>
-                <strong>
-                  Yellow Cards
-                  <i class="fa-solid fa-square" style="color: gold;"></i>:
-                </strong>
-                {{ r.kickball_yellow_cards }}
-              </span>
-
-              <span>
-                <strong>
-                  Cut Base
-                  <i class="fa-solid fa-person-running"></i>:
-                </strong>
-                {{ r.cut_base }}
-              </span>
-
-              <span>
-                <strong>
-                  Foul Played
-                  <i class="fa-solid fa-ban"></i>:
-                </strong>
-                {{ r.foul_played }}
-              </span>
-
-            </div>
-
-          </td>
+        {% else %}
+        <tr>
+          <td colspan="13" class="text-center">No records waiting for approval.</td>
         </tr>
-
-        {% endif %}
-
         {% endfor %}
-
       </tbody>
-
-    </table>
+      </table>
+    </div>
   </div>
-
   {% else %}
-
-    <p class="text-muted text-center">
-      No records waiting for approval.
-    </p>
-
+    <p class="text-muted text-center">No records waiting for approval.</p>
   {% endif %}
 </div>
 
