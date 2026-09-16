@@ -127,15 +127,21 @@
                       {{ r.sport | upper }} <i class="fa-solid fa-basketball" style="color:orangered;"></i>
                     {% endif %}
                   </div>
+                   <div class="text-center mb-3">
+              <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}" class="text-decoration-none"><strong>{{ r.user.full_name }}</strong></a><br>
+              <small class="text-muted">{{ r.team or r.user.school }} <i class="fa-solid fa-school"></i></small><br>
+              <small class="text-muted">vs. {{ r.team_played_against or '-' }} <i class="fa-solid fa-shield-halved"></i></small><br>
+              
+            </div>
 
                   <div class="card-grid">
                     <div><strong>Year <i class="fa-solid fa-calendar" style="color: green;"></i> :</strong> {{ r.year }}</div>
-                    <div><strong>Team Played For <i class="fa-solid fa-users"></i> :</strong> {{ r.team or item.student.school }}</div>
-                     <div><strong>Team Played Against <i class="fa-solid fa-shield-halved"></i> :</strong> {{ r.team_played_against or '-' }}</div>
+                    <div><strong>Team <i class="fa-solid fa-users"></i> :</strong> {{ r.team or item.student.school }}</div>
+                     <div><strong>Opponent <i class="fa-solid fa-shield-halved"></i> :</strong> {{ r.team_played_against or '-' }}</div>
                     {% if r.sport == 'Football' %}
                       <div><strong>Goals <i class="fa-solid fa-futbol"></i> :</strong> {{ r.goals or 'None' }}</div>
                     {% else %}
-                      <div><strong>Points  <i class="fa-solid fa-basketball" style="color:orangered;"></i> :</strong> {{ r.points or 0 }}</div>
+                      <div><strong>Points <i class="fa-solid fa-basketball" style="color:orangered;"></i> :</strong> {{ r.points or 0 }}</div>
                     {% endif %}
 
                     <div><strong>Position <i class="fa-solid fa-shirt"></i> :</strong> {{ r.position or '-' }}</div>
