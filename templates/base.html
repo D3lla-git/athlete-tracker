@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
   <title>{% block title %}Athlete Tracker{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -219,6 +220,147 @@
   touch-action: pan-y;
 }
 }
+
+/* ===== DARK MODE RECORD CARDS ===== */
+html[data-theme="dark"] .record-card {
+  background: #212529 !important;
+  color: #ffffff !important;
+  border-color: #495057 !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme="dark"] .record-card .card-sport,
+html[data-theme="dark"] .record-card .card-grid,
+html[data-theme="dark"] .record-card strong,
+html[data-theme="dark"] .record-card div,
+html[data-theme="dark"] .record-card small,
+html[data-theme="dark"] .record-card span,
+html[data-theme="dark"] .record-card a {
+  color: #ffffff !important;
+}
+
+/* ===== Light / Dark Theme ===== */
+:root {
+  color-scheme: light dark;
+  --page-bg: #f8f9fa;
+  --page-text: #212529;
+  --surface-bg: #ffffff;
+  --surface-text: #212529;
+  --surface-border: #dee2e6;
+  --muted-text: #6c757d;
+  --input-bg: #ffffff;
+  --input-text: #212529;
+  --input-border: #ced4da;
+  --table-bg: #ffffff;
+  --table-text: #212529;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --page-bg: #121212;
+  --page-text: #f1f3f5;
+  --surface-bg: #1e1e1e;
+  --surface-text: #f1f3f5;
+  --surface-border: #3a3a3a;
+  --muted-text: #adb5bd;
+  --input-bg: #262626;
+  --input-text: #f1f3f5;
+  --input-border: #555555;
+  --table-bg: #1e1e1e;
+  --table-text: #f1f3f5;
+}
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] .bg-light {
+  background-color: var(--page-bg) !important;
+  color: var(--page-text) !important;
+}
+
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .modal-content,
+html[data-theme="dark"] .dropdown-menu,
+html[data-theme="dark"] .list-group-item {
+  background-color: var(--surface-bg);
+  color: var(--surface-text);
+  border-color: var(--surface-border);
+}
+
+html[data-theme="dark"] .text-muted {
+  color: var(--muted-text) !important;
+}
+
+html[data-theme="dark"] .form-control,
+html[data-theme="dark"] .form-select,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] input {
+  background-color: var(--input-bg);
+  color: var(--input-text);
+  border-color: var(--input-border);
+}
+
+html[data-theme="dark"] .form-control::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: #868e96;
+}
+
+html[data-theme="dark"] .form-check-label,
+html[data-theme="dark"] label,
+html[data-theme="dark"] .form-label {
+  color: var(--page-text);
+}
+
+html[data-theme="dark"] .table {
+  --bs-table-bg: var(--table-bg);
+  --bs-table-color: var(--table-text);
+  --bs-table-border-color: var(--surface-border);
+}
+
+html[data-theme="dark"] .table-light {
+  --bs-table-bg: #2a2a2a;
+  --bs-table-color: #f1f3f5;
+}
+
+html[data-theme="dark"] .alert {
+  border-color: var(--surface-border);
+}
+
+html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item) {
+  color: #8ab4f8;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 42px;
+  height: 38px;
+  padding: 6px 10px !important;
+  border: 1px solid rgba(255,255,255,0.25) !important;
+  border-radius: 20px !important;
+  color: #fff !important;
+  background: rgba(255,255,255,0.08) !important;
+}
+
+.theme-toggle:hover {
+  background: rgba(255,255,255,0.18) !important;
+}
+
+.theme-toggle .theme-label {
+  font-size: 0.82rem;
+}
+
+@media (max-width: 991.98px) {
+  .theme-toggle {
+    margin-top: 6px;
+    width: fit-content;
+  }
+}
+
 </style>
 </head>
 
@@ -238,14 +380,27 @@
       <!-- Collapsible menu -->
       <div class="collapse navbar-collapse" id="mainNavbar">
         <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+
+          <li class="nav-item">
+            <button type="button"
+                    id="themeToggle"
+                    class="nav-link theme-toggle border-0"
+                    aria-label="Switch color theme"
+                    title="Switch color theme">
+              <i id="themeIcon" class="fa-solid fa-moon"></i>
+              <span id="themeLabel" class="theme-label d-none d-lg-inline">Dark</span>
+            </button>
+          </li>
+          
           <li class="nav-item">
   <a class="nav-link" href="{{ url_for('search') }}"style="color: white;">Search <i class="bi bi-search"></i></a>
 </li>
+
 <li class="nav-item">
   <a class="nav-link" href="{{ url_for('profile') }}"style="color: white;">My Profile <i class="bi bi-person-circle"></i></a>
 </li>
           {% if current_user.is_authenticated %}
-            {% if current_user.role in ('Coach', 'System') %}
+            {% if current_user.role == 'admin' %}
               <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('admin_dashboard') }}"style="color: white;">Admin <i class="fa-solid fa-user-shield"></i></a>
               </li>
@@ -255,7 +410,7 @@
               </li>
 
             {% endif %}
-{% if current_user.is_authenticated and current_user.role in ('Coach', 'System') %}
+{% if current_user.is_authenticated and current_user.role == 'admin' %}
     <a class="nav-link" href="{{ url_for('setup_2fa') }}">
         <i class="fa-solid fa-shield-halved"></i>
         2FA Security
@@ -289,12 +444,12 @@
   <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="registerDropdown">
     <li>
       <a class="dropdown-item" href="{{ url_for('register') }}">
-        Register as Athlete <i class="fa-solid fa-person-running"></i>
+        Register as Athlete
       </a>
     </li>
     <li>
       <a class="dropdown-item" href="{{ url_for('register_coach') }}">
-        Register as Coach <i class="fa-solid fa-user-tie"></i>
+        Register as Coach
       </a>
     </li>
   </ul>
@@ -369,5 +524,55 @@
     });
   </script>
  <center><p>&copy; 2026 Athlete Tracker 🇱🇷. All rights reserved.<i class="fa-regular fa-registered"></i></p></center>
+
+
+  <!-- ===== Light / Dark Theme Toggle ===== -->
+  <script>
+    (function () {
+      const storageKey = 'athleteTrackerTheme';
+      const root = document.documentElement;
+      const toggle = document.getElementById('themeToggle');
+      const icon = document.getElementById('themeIcon');
+      const label = document.getElementById('themeLabel');
+
+      function getInitialTheme() {
+        try {
+          const saved = localStorage.getItem(storageKey);
+          if (saved === 'light' || saved === 'dark') return saved;
+        } catch (e) {}
+
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light';
+      }
+
+      function applyTheme(theme) {
+        root.setAttribute('data-theme', theme);
+
+        if (!icon || !label || !toggle) return;
+
+        const isDark = theme === 'dark';
+        icon.className = isDark
+          ? 'fa-solid fa-sun'
+          : 'fa-solid fa-moon';
+        label.textContent = isDark ? 'Light' : 'Dark';
+        toggle.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+        toggle.setAttribute('title', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+      }
+
+      applyTheme(getInitialTheme());
+
+      if (toggle) {
+        toggle.addEventListener('click', function () {
+          const nextTheme = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+          applyTheme(nextTheme);
+          try {
+            localStorage.setItem(storageKey, nextTheme);
+          } catch (e) {}
+        });
+      }
+    })();
+  </script>
+
 </body>
 </html>
