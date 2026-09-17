@@ -135,9 +135,9 @@
             </div>
 
                   <div class="card-grid">
-                    <div><strong>Year <i class="fa-solid fa-calendar" style="color: green;"></i> :</strong> {{ r.year }}</div>
                     <div><strong>Team <i class="fa-solid fa-users"></i> :</strong> {{ r.team or item.student.school }}</div>
-                     <div><strong>Opponent <i class="fa-solid fa-shield-halved"></i> :</strong> {{ r.team_played_against or '-' }}</div>
+                    <div><strong>Opponent <i class="fa-solid fa-shield-halved"></i> :</strong> {{ r.team_played_against or '-' }}</div>
+                    <div><strong>Year <i class="fa-solid fa-calendar" style="color: green;"></i> :</strong> {{ r.year }}</div>
                     {% if r.sport == 'Football' %}
                       <div><strong>Goals <i class="fa-solid fa-futbol"></i> :</strong> {{ r.goals or 'None' }}</div>
                     {% else %}
