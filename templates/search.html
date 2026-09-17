@@ -4,39 +4,312 @@
 {% block content %}
 <div class="container py-4">
   <h2 class="mb-4">Search Athletes <i class="fa-solid fa-person-running"></i><i class="fa-solid fa-futbol"></i><i class="fa-solid fa-basketball" style="color: orangered;"></i><i class="fa-solid fa-baseball"></i></h2>
+  <!-- ===================== SEARCH / FILTER FORM ===================== -->
+<div class="d-flex justify-content-between align-items-center mb-3">
 
-  <!-- Search Form -->
-  <form method="GET" action="{{ url_for('search') }}" class="row g-3 mb-4">
-    <div class="col-md-5 position-relative">
-      <input type="text" 
-             name="name" 
-             id="nameInput" 
-             value="{{ name }}" 
-             class="form-control form-control-lg" 
-             placeholder="Athlete Full Name" 
-             autocomplete="off">
-      <div id="nameSuggestions" class="list-group position-absolute w-100 shadow-sm" 
-           style="z-index: 1050; display: none; max-height: 250px; overflow-y: auto;">
+  <button
+      class="btn btn-outline-success rounded-5"
+      type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#advancedSearchFilters"
+      aria-expanded="true"
+      aria-controls="advancedSearchFilters">
+    Filters <i class="fa-solid fa-sliders"></i>
+  </button>
+</div>
+
+<form method="GET"
+      action="{{ url_for('search') }}"
+      class="mb-4">
+
+  <!-- ================= BASIC SEARCH ================= -->
+
+  <div class="row g-3">
+
+    <!-- Athlete Name -->
+    <div class="col-md-4 position-relative">
+      <label class="form-label fw-bold">
+        Athlete Name
+        <i class="fa-solid fa-user"></i>
+      </label>
+
+      <input
+          type="text"
+          name="name"
+          id="nameInput"
+          value="{{ name }}"
+          class="form-control form-control-lg"
+          placeholder="Enter athlete name"
+          autocomplete="off">
+
+      <div
+          id="nameSuggestions"
+          class="list-group position-absolute w-100 shadow-sm"
+          style="z-index: 1050; display:none; max-height:250px; overflow-y:auto;">
       </div>
     </div>
 
-    <div class="col-md-3">
-      <input type="text" name="school" value="{{ school }}" class="form-control form-control-lg" placeholder="Team Name(Optional)">
+    <!-- Team Name -->
+    <div class="col-md-4">
+      <label class="form-label fw-bold">
+        Team Name
+        <i class="fa-solid fa-users"></i>
+      </label>
+
+      <input
+          type="text"
+          name="school"
+          value="{{ school }}"
+          class="form-control form-control-lg"
+          placeholder="Enter team name">
     </div>
 
-    <div class="col-md-3">
-      <input type="text" name="team_played_against" value="{{ team_played_against }}" class="form-control form-control-lg" placeholder="Opponent Team">
+    <!-- Opponent Team -->
+    <div class="col-md-4">
+      <label class="form-label fw-bold">
+        Opponent Team
+        <i class="fa-solid fa-shield-halved" style="color: red;"></i>
+      </label>
+
+      <input
+          type="text"
+          name="team_played_against"
+          value="{{ team_played_against }}"
+          class="form-control form-control-lg"
+          placeholder="Enter opponent team">
     </div>
 
-    <div class="col-md-1">
-      <button type="submit"  class="btn btn-success btn-lg rounded-5"
-   style="border: 2px solid black; color: white;">Search <i class="fa-solid fa-magnifying-glass"></i></button>
-</a>
+  </div>
+
+  <!-- ================= ADVANCED FILTERS ================= -->
+
+  <div class="collapse show mt-3" id="advancedSearchFilters">
+
+    <div class="card shadow-sm">
+      <div class="card-body">
+
+        <div class="row g-3">
+
+  <!-- Year -->
+  <div class="col-md-4">
+    <label class="form-label fw-bold">
+      Year
+      <i class="fa-solid fa-calendar" style="color: darkgreen;"></i>
+    </label>
+
+    <select name="year" class="form-select form-select-lg">
+      <option value="">All Years</option>
+
+      {% for y in available_years %}
+        <option value="{{ y }}"
+                {% if year == y|string %}selected{% endif %}>
+          {{ y }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+
+
+  <!-- Sport -->
+  <div class="col-md-4">
+    <label class="form-label fw-bold">
+      Sport
+      <i class="fa-solid fa-futbol"></i><i class="fa-solid fa-basketball" style="color: orangered;"></i><i class="fa-solid fa-baseball"></i>
+    </label>
+
+    <select
+        name="sport"
+        id="sportFilter"
+        class="form-select form-select-lg">
+
+      <option value="">
+        All Sports
+      </option>
+
+      <option value="Football"
+              {% if sport == 'Football' %}selected{% endif %}>
+        Football
+      </option>
+
+      <option value="Basketball"
+              {% if sport == 'Basketball' %}selected{% endif %}>
+        Basketball
+      </option>
+
+      <option value="Kickball"
+              {% if sport == 'Kickball' %}selected{% endif %}>
+        Kickball
+      </option>
+
+    </select>
+  </div>
+
+
+  <!-- Rank By -->
+  <div class="col-md-4">
+    <label class="form-label fw-bold">
+      Rank By
+      <i class="fa-solid fa-ranking-star"></i>
+    </label>
+
+    <select
+        name="sort_by"
+        id="sortByFilter"
+        class="form-select form-select-lg">
+
+      <option value="">Default Search Order</option>
+
+      <!-- Football -->
+      <optgroup label="Football" data-sport-group="Football">
+
+        <option value="highest_goals">
+          Highest Goals
+        </option>
+
+        <option value="highest_assists">
+          Highest Assists
+        </option>
+
+        <option value="highest_games">
+          Highest Games Played
+        </option>
+
+        <option value="highest_trophies">
+          Highest Trophy Won
+        </option>
+
+        <option value="highest_yellow_cards">
+          Highest Yellow Cards
+        </option>
+
+        <option value="highest_red_cards">
+          Highest Red Cards
+        </option>
+
+        <option value="highest_motm">
+          Highest MOTM / QOTM
+        </option>
+
+        <option value="highest_mvp">
+          Highest MVP
+        </option>
+
+      </optgroup>
+
+
+      <!-- Basketball -->
+      <optgroup label="Basketball" data-sport-group="Basketball">
+
+        <option value="highest_points">
+          Highest Points
+        </option>
+
+        <option value="highest_assists">
+          Highest Assists
+        </option>
+
+        <option value="highest_games">
+          Highest Games Played
+        </option>
+
+        <option value="highest_trophies">
+          Highest Trophy Won
+        </option>
+
+        <option value="highest_blocks">
+          Highest Blocks
+        </option>
+
+        <option value="highest_sent_off">
+          Highest Times Sent Off
+        </option>
+
+        <option value="highest_motm">
+          Highest MOTM / QOTM
+        </option>
+
+        <option value="highest_mvp">
+          Highest MVP
+        </option>
+
+      </optgroup>
+
+
+      <!-- Kickball -->
+      <optgroup label="Kickball" data-sport-group="Kickball">
+
+        <option value="highest_home_runs">
+          Highest Home Runs
+        </option>
+
+        <option value="highest_games">
+          Highest Games Played
+        </option>
+
+        <option value="highest_trophies">
+          Highest Trophy Won
+        </option>
+
+        <option value="highest_red_cards">
+          Highest Red Cards
+        </option>
+
+        <option value="highest_yellow_cards">
+          Highest Yellow Cards
+        </option>
+
+        <option value="highest_cut_base">
+          Highest Cut Base
+        </option>
+
+        <option value="highest_foul_played">
+          Highest Foul Played
+        </option>
+
+        <option value="highest_motm">
+          Highest MOTM / QOTM
+        </option>
+
+        <option value="highest_mvp">
+          Highest MVP
+        </option>
+
+      </optgroup>
+
+    </select>
+  </div>
+
+</div>
+        <!-- ================= BUTTONS ================= -->
+
+        <div class="mt-4 d-flex gap-2 flex-wrap">
+
+          <button
+              type="submit"
+              class="btn btn-success btn-lg rounded-5"
+              style="border:2px solid black; color:white;">
+            Search
+            <i class="fa-solid fa-magnifying-glass"></i>
+          </button>
+
+          <a
+              href="{{ url_for('search') }}"
+              class="btn btn-outline-secondary btn-lg rounded-5">
+            Clear Filters
+            <i class="fa-solid fa-rotate-left"></i>
+          </a>
+
+        </div>
+
+      </div>
     </div>
-  </form>
+
+  </div>
+
+</form>
 
   <!-- ===================== RESULTS ===================== -->
-  {% if name or school %}
+  {% if name or school or team_played_against or year or sport or sort_by %}
     {% if results %}
 
       <!-- DESKTOP TABLE -->
@@ -244,5 +517,89 @@ if (nameInput) {
     }
   });
 }
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    const sportFilter = document.getElementById('sportFilter');
+    const sortByFilter = document.getElementById('sortByFilter');
+
+    if (!sportFilter || !sortByFilter) {
+        return;
+    }
+
+    // Save all original ranking groups
+    const rankingGroups = Array.from(
+        sortByFilter.querySelectorAll('optgroup')
+    ).map(function (group) {
+        return group.cloneNode(true);
+    });
+
+    // Current ranking value from the server
+    const currentSort = "{{ sort_by }}";
+
+    function updateRankOptions(resetValue = false) {
+
+        const selectedSport = sportFilter.value;
+
+        // Remove everything
+        sortByFilter.innerHTML = '';
+
+        // Always keep default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Default Search Order';
+
+        sortByFilter.appendChild(defaultOption);
+
+        // No sport selected
+        if (!selectedSport) {
+            return;
+        }
+
+        // Add only the selected sport group
+        rankingGroups.forEach(function (group) {
+
+            const groupSport =
+                group.getAttribute('data-sport-group');
+
+            if (groupSport === selectedSport) {
+
+                sortByFilter.appendChild(
+                    group.cloneNode(true)
+                );
+
+            }
+        });
+
+        // Restore previous ranking when page loads
+        if (!resetValue && currentSort) {
+
+            const matchingOption =
+                sortByFilter.querySelector(
+                    `option[value="${currentSort}"]`
+                );
+
+            if (matchingOption) {
+                sortByFilter.value = currentSort;
+            }
+        }
+
+    }
+
+
+    // When user changes Sport
+    sportFilter.addEventListener('change', function () {
+
+        // Changing sport should reset the ranking
+        updateRankOptions(true);
+
+    });
+
+
+    // Run once when page loads
+    updateRankOptions(false);
+
+});
 </script>
 {% endblock %}

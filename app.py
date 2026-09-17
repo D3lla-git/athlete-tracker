@@ -19,6 +19,7 @@ import pyotp
 import qrcode
 import secrets
 from flask_mail import Mail, Message
+from sqlalchemy import or_
 
 
 # ==========================================
@@ -319,27 +320,264 @@ def search():
     name = request.args.get('name', '').strip()
     school = request.args.get('school', '').strip()
     team_played_against = request.args.get('team_played_against', '').strip()
+    year = request.args.get('year', '').strip()
+    sport = request.args.get('sport', '').strip()
+    sort_by = request.args.get('sort_by', '').strip()
 
-    results = []
+    # ==========================================================
+    # AVAILABLE YEARS
+    # ==========================================================
+    available_years = [
+        row[0]
+        for row in (
+            db.session.query(SportRecord.year)
+            .filter(SportRecord.status == 'approved')
+            .distinct()
+            .order_by(SportRecord.year.desc())
+            .all()
+        )
+    ]
 
-    if name or school or team_played_against:
-        query = User.query.filter_by(role='Athlete', is_verified=True)
-        if name:
-            query = query.filter(User.full_name.ilike(f'%{name}%'))
-        if school:
-            query = query.filter(User.school.ilike(f'%{school}%'))
+    # ==========================================================
+    # BASE QUERY
+    # ONLY VERIFIED ATHLETES + APPROVED RECORDS
+    # ==========================================================
+    query = (
+        SportRecord.query
+        .join(User)
+        .filter(
+            User.role == 'Athlete',
+            User.is_verified == True,
+            SportRecord.status == 'approved'
+        )
+    )
 
-        students = query.order_by(User.full_name).all()
-        for student in students:
-            records_query = SportRecord.query.filter_by(user_id=student.id, status='approved')
-            if team_played_against:
-                records_query = records_query.filter(SportRecord.team_played_against.ilike(f'%{team_played_against}%'))
-            approved_records = records_query.all()
-            if team_played_against and not approved_records:
-                continue
-            results.append({'student': student, 'records': approved_records})
+    # ==========================================================
+    # ATHLETE NAME
+    # ==========================================================
+    if name:
+        query = query.filter(
+            User.full_name.ilike(f'%{name}%')
+        )
 
-    return render_template('search.html', results=results, name=name, school=school, team_played_against=team_played_against)
+    # ==========================================================
+    # TEAM NAME
+    # Search both record.team and athlete school
+    # ==========================================================
+    if school:
+        query = query.filter(
+            or_(
+                SportRecord.team.ilike(f'%{school}%'),
+                User.school.ilike(f'%{school}%')
+            )
+        )
+
+    # ==========================================================
+    # OPPONENT TEAM
+    # ==========================================================
+    if team_played_against:
+        query = query.filter(
+            SportRecord.team_played_against.ilike(
+                f'%{team_played_against}%'
+            )
+        )
+
+    # ==========================================================
+    # YEAR
+    # ==========================================================
+    if year:
+        try:
+            query = query.filter(
+                SportRecord.year == int(year)
+            )
+        except ValueError:
+            pass
+
+    # ==========================================================
+    # SPORT
+    # ==========================================================
+    valid_sports = {
+        'Football',
+        'Basketball',
+        'Kickball'
+    }
+
+    if sport in valid_sports:
+        query = query.filter(
+            SportRecord.sport == sport
+        )
+    else:
+        sport = ''
+
+    records = query.all()
+
+    # ==========================================================
+    # METRICS
+    # ==========================================================
+
+    def trophy_count(record):
+        trophy = (record.trophy or '').strip()
+
+        if not trophy or trophy.lower() == 'none':
+            return 0
+
+        return len([
+            item for item in trophy.split(',')
+            if item.strip()
+            and item.strip().lower() != 'none'
+        ])
+
+    def games_metric(record):
+        return record.games_played or 0
+
+    def motm_metric(record):
+        return record.man_of_the_match or 0
+
+    def mvp_metric(record):
+        return record.mvp or 0
+
+    # ==========================================================
+    # SPORT-SPECIFIC METRICS
+    # ==========================================================
+
+    def football_goals(record):
+        return record.goals or 0
+
+    def football_assists(record):
+        return record.assists or 0
+
+    def football_yellow_cards(record):
+        return record.yellow_cards or 0
+
+    def football_red_cards(record):
+        return record.red_cards or 0
+
+    def basketball_points(record):
+        return record.points or 0
+
+    def basketball_assists(record):
+        return record.assists or 0
+
+    def basketball_blocks(record):
+        return record.blocks or 0
+
+    def basketball_sent_off(record):
+        return record.sent_off or 0
+
+    def kickball_home_runs(record):
+        return record.home_runs or 0
+
+    def kickball_red_cards(record):
+        return record.kickball_red_cards or 0
+
+    def kickball_yellow_cards(record):
+        return record.kickball_yellow_cards or 0
+
+    def kickball_cut_base(record):
+        return record.cut_base or 0
+
+    def kickball_foul_played(record):
+        return record.foul_played or 0
+
+    # ==========================================================
+    # ONLY ALLOW VALID RANKING FOR THE SELECTED SPORT
+    # ==========================================================
+
+    ranking_functions = {}
+
+    if sport == 'Football':
+
+        ranking_functions = {
+            'highest_goals': football_goals,
+            'highest_assists': football_assists,
+            'highest_games': games_metric,
+            'highest_trophies': trophy_count,
+            'highest_yellow_cards': football_yellow_cards,
+            'highest_red_cards': football_red_cards,
+            'highest_motm': motm_metric,
+            'highest_mvp': mvp_metric
+        }
+
+    elif sport == 'Basketball':
+
+        ranking_functions = {
+            'highest_points': basketball_points,
+            'highest_assists': basketball_assists,
+            'highest_games': games_metric,
+            'highest_trophies': trophy_count,
+            'highest_blocks': basketball_blocks,
+            'highest_sent_off': basketball_sent_off,
+            'highest_motm': motm_metric,
+            'highest_mvp': mvp_metric
+        }
+
+    elif sport == 'Kickball':
+
+        ranking_functions = {
+            'highest_home_runs': kickball_home_runs,
+            'highest_games': games_metric,
+            'highest_trophies': trophy_count,
+            'highest_red_cards': kickball_red_cards,
+            'highest_yellow_cards': kickball_yellow_cards,
+            'highest_cut_base': kickball_cut_base,
+            'highest_foul_played': kickball_foul_played,
+            'highest_motm': motm_metric,
+            'highest_mvp': mvp_metric
+        }
+
+    # ==========================================================
+    # APPLY RANKING
+    # ==========================================================
+
+    if sort_by in ranking_functions:
+
+        records.sort(
+            key=ranking_functions[sort_by],
+            reverse=True
+        )
+
+    else:
+
+        records.sort(
+            key=lambda r: (
+                (r.user.full_name or '').lower(),
+                -(r.year or 0),
+                (r.sport or '').lower()
+            )
+        )
+
+    # ==========================================================
+    # GROUP BY ATHLETE
+    # ==========================================================
+
+    grouped_results = {}
+
+    for record in records:
+
+        student = record.user
+
+        if student.id not in grouped_results:
+
+            grouped_results[student.id] = {
+                'student': student,
+                'records': []
+            }
+
+        grouped_results[student.id]['records'].append(record)
+
+    results = list(grouped_results.values())
+
+    return render_template(
+        'search.html',
+        results=results,
+        name=name,
+        school=school,
+        team_played_against=team_played_against,
+        year=year,
+        sport=sport,
+        sort_by=sort_by,
+        available_years=available_years
+    )
 # ========== AUTH ROUTES ==========
 @app.route('/register', methods=['GET', 'POST'])
 @app.route('/register/<registration_category>', methods=['GET', 'POST'])
