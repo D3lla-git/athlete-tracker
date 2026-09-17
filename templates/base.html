@@ -220,7 +220,16 @@
   touch-action: pan-y;
 }
 }
+/* ===== DARK MODE MOBILE NAVBAR BRAND ===== */
+@media (max-width: 991.98px) {
+  html[data-theme="dark"] .navbar-brand {
+    color: #ffffff !important;
+  }
 
+  html[data-theme="dark"] .navbar-brand i {
+    color: #ffffff !important;
+  }
+}
 /* ===== DARK MODE RECORD CARDS ===== */
 html[data-theme="dark"] .record-card {
   background: #212529 !important;
@@ -238,6 +247,7 @@ html[data-theme="dark"] .record-card span,
 html[data-theme="dark"] .record-card a {
   color: #ffffff !important;
 }
+
 /* ===== DARK MODE DROPDOWN TEXT ===== */
 html[data-theme="dark"] .dropdown-menu {
   background-color: #1e1e1e !important;
@@ -386,26 +396,30 @@ html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item) {
       <!-- Brand -->
       <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">Athlete Tracker <i class="fa-solid fa-person-running"></i></a>
 
-      <!-- Hamburger button (visible only on mobile) -->
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar"
-              aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
+      <!-- Dark / Light Mode button -->
+<button type="button"
+        id="themeToggle"
+        class="theme-toggle border-0 me-2"
+        aria-label="Switch color theme"
+        title="Switch color theme">
+    <i id="themeIcon" class="fa-solid fa-moon"></i>
+    <span id="themeLabel" class="theme-label d-none d-lg-inline">Dark</span>
+</button>
+
+<!-- Hamburger -->
+<button class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#mainNavbar"
+        aria-controls="mainNavbar"
+        aria-expanded="false"
+        aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+</button>
 
       <!-- Collapsible menu -->
       <div class="collapse navbar-collapse" id="mainNavbar">
         <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-
-          <li class="nav-item">
-            <button type="button"
-                    id="themeToggle"
-                    class="nav-link theme-toggle border-0"
-                    aria-label="Switch color theme"
-                    title="Switch color theme">
-              <i id="themeIcon" class="fa-solid fa-moon"></i>
-              <span id="themeLabel" class="theme-label d-none d-lg-inline">Dark</span>
-            </button>
-          </li>
           
           <li class="nav-item">
   <a class="nav-link" href="{{ url_for('search') }}"style="color: white;">Search <i class="bi bi-search"></i></a>

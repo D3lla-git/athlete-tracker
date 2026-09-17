@@ -11,7 +11,7 @@
       <div class="card-body">
           <div class="mb-3">
             <div class="dropdown">
-              <button class="btn btn-outline-primary dropdown-toggle w-100 category-dropdown-btn" type="button"
+              <button class="btn btn-outline-success dropdown-toggle w-100 category-dropdown-btn" type="button"
         data-bs-toggle="dropdown" aria-expanded="false">
   {{ selected_category or 'All Coach' }} — Choose Coach Category
 </button>
@@ -99,13 +99,18 @@
 
           <div class="mb-3">
             <label class="form-label">Coach Secret Code</label>
+            <div class="input-group">
             <input type="text" name="secret_code" class="form-control" placeholder="Enter secret code" required>
+            <button type="button" class="btn btn-outline-secondary" id="togglePassword">
+      <i class="fa-solid fa-eye" id="eyeIcon"></i>
+    </button>
+    </div>
           </div>
 <div class="mb-3">
             <label>ID or Passport (PNG/JPG/PDF)</label>
             <input type="file" name="id_document" class="form-control" accept=".png,.jpg,.jpeg,.pdf" required>
           </div>
-          <button type="submit" class="btn btn-primary w-100">Create Coach Account</button>
+          <button type="submit" class="btn btn-success w-100">Create Coach Account</button>
         </form>
       </div>
     </div>
