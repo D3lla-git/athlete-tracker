@@ -25,11 +25,22 @@
             <td><a href="{% if current_user.id == coach.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=coach.id) }}{% endif %}" class="text-decoration-none"><strong>{{ coach.full_name }}</strong></a></td>
             <td>{{ coach.school }}</td>
             <td>
-              <a href="{{ url_for('approve_coach', user_id=coach.id) }}" 
-                 class="btn btn-success btn-sm"
-                 onclick="return confirm('Approve this coach?')">
-                Approve Coach
-              </a>
+              <form method="POST"
+      action="{{ url_for('approve_coach', user_id=coach.id) }}"
+      style="display:inline;">
+
+    <input type="hidden"
+           name="csrf_token"
+           value="{{ csrf_token() }}">
+
+    <button type="submit"
+            class="btn btn-success btn-sm"
+            onclick="return confirm('Approve this coach?')">
+        <i class="fa-solid fa-check"></i>
+        Approve Coach
+    </button>
+
+</form>
             </td>
           </tr>
           {% endfor %}
@@ -52,9 +63,45 @@
           View ID / Passport
         </a>
       </div>
-      <a href="{{ url_for('verify_user', user_id=u.id) }}" class="btn btn-success btn-sm">
-        Verify Athlete
-      </a>
+            <div class="d-flex gap-2 flex-wrap">
+
+        <!-- Verify Athlete -->
+        <form method="POST"
+              action="{{ url_for('verify_user', user_id=u.id) }}"
+              style="display:inline;">
+
+          <input type="hidden"
+                 name="csrf_token"
+                 value="{{ csrf_token() }}">
+
+          <button type="submit"
+                  class="btn btn-success btn-sm"
+                  onclick="return confirm('Verify this athlete?')">
+            <i class="fa-solid fa-check"></i>
+            Verify Athlete
+          </button>
+
+        </form>
+
+        <!-- Reject Athlete -->
+        <form method="POST"
+              action="{{ url_for('reject_user', user_id=u.id) }}"
+              style="display:inline;">
+
+          <input type="hidden"
+                 name="csrf_token"
+                 value="{{ csrf_token() }}">
+
+          <button type="submit"
+                  class="btn btn-outline-danger btn-sm"
+                  onclick="return confirm('Reject this athlete registration? This will remove the pending account.')">
+            <i class="fa-solid fa-xmark"></i>
+            Reject
+          </button>
+
+        </form>
+
+      </div>
     </div>
   </div>
   {% endfor %}
@@ -184,25 +231,39 @@
 
 <style>
   /* Keep the desktop pending-record table comfortably inside the page width. */
-  .admin-pending-table-wrap {
-    width: 96%;
-    max-width: 1400px;
-    margin: 0 auto;
-  }
+ .admin-pending-table-heading {
+  width: 96%;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+}
 
-  .admin-pending-table-wrap .table {
-    width: 100%;
-    margin-bottom: 0;
-  }
+.admin-pending-table-wrap {
+  width: 96%;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.admin-pending-table-wrap .table {
+  width: 100%;
+  margin-bottom: 0;
+}
 </style>
 <!-- ==================== DESKTOP VIEW - PENDING RECORDS ==================== -->
 <div class="d-none d-md-block">
-  <h4 class="mt-4 mb-3">Pending Sports Records <i class="fa-solid fa-hourglass-half"></i></h4>
+
+  <div class="admin-pending-table-heading">
+    <h4 class="mt-4 mb-3">
+      Pending Sports Records
+      <i class="fa-solid fa-hourglass-half"></i>
+    </h4>
+  </div>
 
   {% if pending_records %}
-  <div class="table-responsive">
-    <div class="admin-pending-table-wrap">
-      <table class="table table-bordered table-hover align-middle">
+
+  <div class="table-responsive admin-pending-table-wrap">
+    <table class="table table-bordered table-hover align-middle">
       <thead class="table-dark">
         <tr>
           <th>Student <i class="fa-solid fa-user"></i></th>
@@ -306,27 +367,45 @@
                 <span class="badge bg-warning text-dark">Pending</span>
               {% endif %}
 
-              {% if r.status == 'pending' %}
-                <div class="d-flex gap-1 flex-wrap">
+                            {% if r.status == 'pending' %}
+                <div class="d-flex gap-2 flex-wrap">
+
+                  <!-- Approve Sports Record -->
                   <form method="POST"
                         action="{{ url_for('approve_record', record_id=r.id) }}"
                         style="display:inline;">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-success btn-sm py-0 px-2">
-                      <i class="fa-solid fa-check"></i> Approve
+
+                    <input type="hidden"
+                           name="csrf_token"
+                           value="{{ csrf_token() }}">
+
+                    <button type="submit"
+                            class="btn btn-success btn-sm"
+                            onclick="return confirm('Approve this sports record?')">
+                      <i class="fa-solid fa-check"></i>
+                      Approve
                     </button>
+
                   </form>
 
+                  <!-- Reject Sports Record -->
                   <form method="POST"
                         action="{{ url_for('reject_record', record_id=r.id) }}"
                         style="display:inline;">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <input type="hidden"
+                           name="csrf_token"
+                           value="{{ csrf_token() }}">
+
                     <button type="submit"
-                            class="btn btn-outline-danger btn-sm py-0 px-2"
-                            onclick="return confirm('Are you sure you want to reject this record?');">
-                      <i class="fa-solid fa-xmark"></i> Reject
+                            class="btn btn-outline-danger btn-sm"
+                            onclick="return confirm('Reject this sports record?')">
+                      <i class="fa-solid fa-xmark"></i>
+                      Reject
                     </button>
+
                   </form>
+
                 </div>
               {% endif %}
             </div>
@@ -339,7 +418,6 @@
         {% endfor %}
       </tbody>
       </table>
-    </div>
   </div>
   {% else %}
     <p class="text-muted text-center">No records waiting for approval.</p>

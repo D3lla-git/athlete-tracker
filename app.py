@@ -2182,10 +2182,15 @@ def reject_record(record_id):
 
     record = SportRecord.query.get_or_404(record_id)
 
-    # System can manage every record; Coaches are restricted to their school/team and category.
+    # System can manage every record.
+    # Coaches can only manage records from their own school/team
+    # and their authorized competition category.
     if current_user.role != 'System':
         if current_user.school.strip().casefold() != (record.team or '').strip().casefold():
-            flash('You can only manage records from your own school/team.', 'danger')
+            flash(
+                'You can only manage records from your own school/team.',
+                'danger'
+            )
             return redirect(url_for('admin_dashboard'))
 
         if not coach_can_manage_competition(
@@ -2200,7 +2205,75 @@ def reject_record(record_id):
 
     record.status = 'rejected'
     db.session.commit()
+
     flash('Record rejected.', 'info')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/reject_user/<int:user_id>', methods=['POST'])
+@login_required
+def reject_user(user_id):
+
+    # Only Coaches and System can reject athletes
+    if current_user.role not in ('Coach', 'System'):
+        return redirect(url_for('index'))
+
+    user = User.query.get_or_404(user_id)
+
+    # Only Athlete accounts can be rejected here
+    if user.role != 'Athlete':
+        flash('Invalid athlete account.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    # Regular Coaches can only reject athletes
+    # from their own school/team.
+    if current_user.role == 'Coach':
+        if current_user.school.strip().casefold() != user.school.strip().casefold():
+            flash(
+                'You can only reject athletes from your own school/team.',
+                'danger'
+            )
+            return redirect(url_for('admin_dashboard'))
+
+    # Already verified athletes cannot be rejected from the
+    # pending-registration section.
+    if user.is_verified:
+        flash(
+            'This athlete is already verified and cannot be rejected.',
+            'warning'
+        )
+        return redirect(url_for('admin_dashboard'))
+
+    try:
+        # Delete the athlete's sports records first.
+        SportRecord.query.filter_by(
+            user_id=user.id
+        ).delete(synchronize_session=False)
+
+        # Delete the athlete's registrations before deleting the User.
+        Registration.query.filter_by(
+            user_id=user.id
+        ).delete(synchronize_session=False)
+
+        # Delete the athlete account.
+        db.session.delete(user)
+
+        db.session.commit()
+
+        flash(
+            f'Athlete {user.full_name} has been rejected and removed.',
+            'info'
+        )
+
+    except Exception as e:
+        db.session.rollback()
+
+        print('REJECT ATHLETE ERROR:', e)
+
+        flash(
+            'The athlete could not be rejected. Please try again.',
+            'danger'
+        )
+
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/register-coach', methods=['GET', 'POST'])
