@@ -13,9 +13,84 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="row g-3">
             <div class="col-md-6">
-              <label class="form-label">Position</label>
-              <input type="text" name="position" class="form-control" value="{{ record.position }}" required>
-            </div>
+  <label class="form-label">
+    Position Played
+    <i class="fa-solid fa-shirt"></i>
+  </label>
+
+  <select
+      name="position"
+      id="editPositionSelect"
+      class="form-select"
+      required>
+
+    <option value="">-- Select Position --</option>
+
+    {% if record.sport == 'Football' %}
+
+      {% for position in [
+        'GK',
+        'CB',
+        'LB',
+        'LWB',
+        'RWB',
+        'RB',
+        'DM',
+        'CM',
+        'AM',
+        'LW',
+        'RW',
+        'SS',
+        'CF'
+      ] %}
+        <option
+            value="{{ position }}"
+            {% if record.position == position %}selected{% endif %}>
+          {{ position }}
+        </option>
+      {% endfor %}
+
+    {% elif record.sport == 'Basketball' %}
+
+      {% for position in [
+        'Point Guard',
+        'Shooting guard',
+        'small forward',
+        'power forward',
+        'center'
+      ] %}
+        <option
+            value="{{ position }}"
+            {% if record.position == position %}selected{% endif %}>
+          {{ position }}
+        </option>
+      {% endfor %}
+
+    {% elif record.sport == 'Kickball' %}
+
+      {% for position in [
+        'Pitcher',
+        'Catcher',
+        '1st baseman',
+        '2nd baseman',
+        '3rd baseman',
+        'Shortstop',
+        'Left fielder',
+        'Right fielder',
+        'center fielder',
+        'short fielder/Rover'
+      ] %}
+        <option
+            value="{{ position }}"
+            {% if record.position == position %}selected{% endif %}>
+          {{ position }}
+        </option>
+      {% endfor %}
+
+    {% endif %}
+
+  </select>
+</div>
             <div class="col-md-6">
               <label class="form-label">Games Played</label>
               <input type="number" name="games_played" class="form-control" value="{{ record.games_played }}" min="0">
@@ -60,49 +135,70 @@
   <label class="form-label">Opponet <i class="fa-solid fa-shield-halved"></i></label>
   <input type="text" name="team_played_against" class="form-control" value="{{ record.team_played_against or '' }}" placeholder="e.g. St. Mary Catholic School" required>
 </div>
-
 <div class="mb-4">
   <label class="form-label">
-    Competition <i class="fa-solid fa-trophy"></i>
+    Competition Category
+    <i class="fa-solid fa-medal"></i>
   </label>
 
-  <select name="competition_category" class="form-select" required>
+  <select
+      name="competition_category"
+      id="editCompetitionCategory"
+      class="form-select"
+      required>
+
     <option value="">-- Select Competition --</option>
 
-    {% if 'All Athlete' in registered_categories or 'County Meet Athlete' in registered_categories %}
-      <option value="County Meet"
-        {% if record.competition_category == 'County Meet' %}selected{% endif %}>
-        County Meet
-      </option>
-    {% endif %}
+    <option value="County Meet"
+      {% if record.competition_category == 'County Meet' %}selected{% endif %}>
+      County Meet
+    </option>
 
-    {% if 'All Athlete' in registered_categories or 'Club League Athlete' in registered_categories %}
-      <option value="Club League"
-        {% if record.competition_category == 'Club League' %}selected{% endif %}>
-        Club League
-      </option>
-    {% endif %}
+    <option value="Club League"
+      {% if record.competition_category == 'Club League' %}selected{% endif %}>
+      Club League
+    </option>
 
-    {% if 'All Athlete' in registered_categories or 'University Athlete' in registered_categories %}
-      <option value="University League"
-        {% if record.competition_category == 'University League' %}selected{% endif %}>
-        University League
-      </option>
-    {% endif %}
+    <option value="University League"
+      {% if record.competition_category == 'University League' %}selected{% endif %}>
+      University League
+    </option>
 
-    {% if 'All Athlete' in registered_categories or 'Community/Area League Athlete' in registered_categories %}
-      <option value="Community/Area League"
-        {% if record.competition_category == 'Community/Area League' %}selected{% endif %}>
-        Community/Area League
-      </option>
-    {% endif %}
+    <option value="Community/Area League"
+      {% if record.competition_category == 'Community/Area League' %}selected{% endif %}>
+      Community/Area League
+    </option>
 
-    {% if 'All Athlete' in registered_categories or 'High School Athlete' in registered_categories %}
-      <option value="High School"
-        {% if record.competition_category == 'High School' %}selected{% endif %}>
-        High School
-      </option>
-    {% endif %}
+    <option value="High School"
+      {% if record.competition_category == 'High School' %}selected{% endif %}>
+      High School
+    </option>
+
+    <option value="Lonestar - Male Team"
+      {% if record.competition_category == 'Lonestar - Male Team' %}selected{% endif %}>
+      Lonestar - Male Team
+    </option>
+
+    <option value="Lonestar - Female Team"
+      {% if record.competition_category == 'Lonestar - Female Team' %}selected{% endif %}>
+      Lonestar - Female Team
+    </option>
+
+    <option value="Liberia U15-21 - U15"
+      {% if record.competition_category == 'Liberia U15-21 - U15' %}selected{% endif %}>
+      Liberia U15-21 - U15
+    </option>
+
+    <option value="Liberia U15-21 - U17"
+      {% if record.competition_category == 'Liberia U15-21 - U17' %}selected{% endif %}>
+      Liberia U15-21 - U17
+    </option>
+
+    <option value="Liberia U15-21 - U21"
+      {% if record.competition_category == 'Liberia U15-21 - U21' %}selected{% endif %}>
+      Liberia U15-21 - U21
+    </option>
+
   </select>
 </div>
 

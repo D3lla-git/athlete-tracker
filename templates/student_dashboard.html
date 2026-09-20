@@ -57,35 +57,71 @@
          placeholder="e.g. LPRC Oilers / St. John High School" required>
 </div>
 
-<div class="col-md-3">
+<div class="col-md-4">
   <label class="form-label">
-    Competition <i class="fa-solid fa-trophy"></i>
+    Competition Category
+    <i class="fa-solid fa-medal"></i>
   </label>
 
-  <select name="competition_category" class="form-select" required>
+  <select
+      name="competition_category"
+      id="competitionCategorySelect"
+      class="form-select"
+      required>
+
     <option value="">-- Select Competition --</option>
 
-    {% if 'All Athlete' in registered_categories or 'County Meet Athlete' in registered_categories %}
-      <option value="County Meet">County Meet</option>
-    {% endif %}
+    <option value="County Meet">County Meet</option>
+    <option value="Club League">Club League</option>
+    <option value="University League">University League</option>
+    <option value="Community/Area League">Community/Area League</option>
+    <option value="High School">High School</option>
+    <option value="Lonestar">Lonestar</option>
+    <option value="Liberia U15-21">Liberia U15-21</option>
 
-    {% if 'All Athlete' in registered_categories or 'Club League Athlete' in registered_categories %}
-      <option value="Club League">Club League</option>
-    {% endif %}
-
-    {% if 'All Athlete' in registered_categories or 'University Athlete' in registered_categories %}
-      <option value="University League">University League</option>
-    {% endif %}
-
-    {% if 'All Athlete' in registered_categories or 'Community/Area League Athlete' in registered_categories %}
-      <option value="Community/Area League">Community/Area League</option>
-    {% endif %}
-
-    {% if 'All Athlete' in registered_categories or 'High School Athlete' in registered_categories %}
-      <option value="High School">High School League</option>
-    {% endif %}
   </select>
 </div>
+
+<!-- Lonestar Options -->
+<div class="col-md-4" id="lonestarOptions" style="display: none;">
+  <label class="form-label">
+    Lonestar Team
+    <i class="fa-solid fa-users"></i>
+  </label>
+
+  <select
+      id="lonestarSelect"
+      class="form-select">
+
+    <option value="">-- Select --</option>
+    <option value="Male Team">Male Team</option>
+    <option value="Female Team">Female Team</option>
+
+  </select>
+</div>
+
+<!-- Liberia U15-21 Options -->
+<div class="col-md-4" id="liberiaU15Options" style="display: none;">
+  <label class="form-label">
+    Liberia U15-21
+    <i class="fa-solid fa-people-group"></i>
+  </label>
+
+  <select
+      id="liberiaU15Select"
+      class="form-select">
+
+    <option value="">-- Select --</option>
+    <option value="U15">U15</option>
+    <option value="U17">U17</option>
+    <option value="U21">U21</option>
+
+  </select>
+</div>
+<input
+    type="hidden"
+    name="competition_category"
+    id="finalCompetitionCategory">
 
     <div class="col-md-2">
       <label class="form-label">Year / Season <i class="fa-regular fa-calendar" style="color: green;"></i></label>
@@ -93,9 +129,20 @@
     </div>
 
     <div class="col-md-3">
-      <label class="form-label">Position Played <i class="fa-solid fa-shirt"></i></label>
-      <input type="text" name="position" class="form-control" placeholder="e.g. Striker / Point Guard" required>
-    </div>
+  <label class="form-label">
+    Position Played
+    <i class="fa-solid fa-shirt"></i>
+  </label>
+
+  <select
+      name="position"
+      id="positionSelect"
+      class="form-select"
+      required
+      disabled>
+    <option value="">-- Select Sport First --</option>
+  </select>
+</div>
 
     <div class="col-md-2">
       <label class="form-label">Games Played <i class="fa-solid fa-person-running"></i> <i class="fa-solid fa-trophy"></i></label>
@@ -285,28 +332,183 @@
 
 <script>
   const sportSelect = document.getElementById('sportSelect');
+  const positionSelect = document.getElementById('positionSelect');
+
   const footballFields = document.getElementById('footballFields');
   const basketballFields = document.getElementById('basketballFields');
   const kickballFields = document.getElementById('kickball-stats');
   const motmLabel = document.getElementById('motm-label');
 
+  const positions = {
+    Football: [
+      'GK',
+      'CB',
+      'LB',
+      'LWB',
+      'RWB',
+      'RB',
+      'DM',
+      'CM',
+      'AM',
+      'LW',
+      'RW',
+      'SS',
+      'CF'
+    ],
+
+    Basketball: [
+      'Point Guard',
+      'Shooting guard',
+      'small forward',
+      'power forward',
+      'center'
+    ],
+
+    Kickball: [
+      'Pitcher',
+      'Catcher',
+      '1st baseman',
+      '2nd baseman',
+      '3rd baseman',
+      'Shortstop',
+      'Left fielder',
+      'Right fielder',
+      'center fielder',
+      'short fielder/Rover'
+    ]
+  };
+
   sportSelect.addEventListener('change', function () {
+
     footballFields.style.display = 'none';
     basketballFields.style.display = 'none';
     kickballFields.style.display = 'none';
 
-    // Default label
-    motmLabel.innerHTML = 'Man of the Match <i class="fa-solid fa-trophy"></i>';
+    // Reset Position dropdown
+    positionSelect.innerHTML = '';
+
+    if (!this.value || !positions[this.value]) {
+
+      positionSelect.disabled = true;
+
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = '-- Select Sport First --';
+
+      positionSelect.appendChild(option);
+
+    } else {
+
+      positionSelect.disabled = false;
+
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = '-- Select Position --';
+      positionSelect.appendChild(placeholder);
+
+      positions[this.value].forEach(function (position) {
+
+        const option = document.createElement('option');
+        option.value = position;
+        option.textContent = position;
+
+        positionSelect.appendChild(option);
+      });
+    }
+
+    // Default MOTM label
+    motmLabel.innerHTML =
+      'Man of the Match <i class="fa-solid fa-trophy"></i>';
 
     if (this.value === 'Football') {
+
       footballFields.style.display = 'flex';
+
     } else if (this.value === 'Basketball') {
+
       basketballFields.style.display = 'flex';
+
     } else if (this.value === 'Kickball') {
+
       kickballFields.style.display = 'flex';
 
       // Kickball uses QOTM
-      motmLabel.innerHTML = 'QOTM <i class="fa-solid fa-trophy"></i>';
+      motmLabel.innerHTML =
+        'QOTM <i class="fa-solid fa-trophy"></i>';
+    }
+  });
+</script>
+
+<script>
+  const competitionCategorySelect =
+      document.getElementById('competitionCategorySelect');
+
+  const lonestarOptions =
+      document.getElementById('lonestarOptions');
+
+  const liberiaU15Options =
+      document.getElementById('liberiaU15Options');
+
+  const lonestarSelect =
+      document.getElementById('lonestarSelect');
+
+  const liberiaU15Select =
+      document.getElementById('liberiaU15Select');
+
+  const finalCompetitionCategory =
+      document.getElementById('finalCompetitionCategory');
+
+
+  competitionCategorySelect.addEventListener('change', function () {
+
+    lonestarOptions.style.display = 'none';
+    liberiaU15Options.style.display = 'none';
+
+    lonestarSelect.required = false;
+    liberiaU15Select.required = false;
+
+    lonestarSelect.value = '';
+    liberiaU15Select.value = '';
+
+    if (this.value === 'Lonestar') {
+
+      lonestarOptions.style.display = 'block';
+      lonestarSelect.required = true;
+
+      finalCompetitionCategory.value = '';
+
+    } else if (this.value === 'Liberia U15-21') {
+
+      liberiaU15Options.style.display = 'block';
+      liberiaU15Select.required = true;
+
+      finalCompetitionCategory.value = '';
+
+    } else {
+
+      finalCompetitionCategory.value = this.value;
+    }
+  });
+
+
+  lonestarSelect.addEventListener('change', function () {
+
+    if (this.value) {
+      finalCompetitionCategory.value =
+          'Lonestar - ' + this.value;
+    } else {
+      finalCompetitionCategory.value = '';
+    }
+  });
+
+
+  liberiaU15Select.addEventListener('change', function () {
+
+    if (this.value) {
+      finalCompetitionCategory.value =
+          'Liberia U15-21 - ' + this.value;
+    } else {
+      finalCompetitionCategory.value = '';
     }
   });
 </script>

@@ -165,9 +165,57 @@ VALID_COMPETITIONS = {
     'Club League',
     'University League',
     'Community/Area League',
-    'High School'
-}
+    'High School',
 
+    # Additional competition categories
+    'Lonestar - Male Team',
+    'Lonestar - Female Team',
+    'Liberia U15-21 - U15',
+    'Liberia U15-21 - U17',
+    'Liberia U15-21 - U21'
+}
+# ==========================================================
+# SPORT-SPECIFIC POSITIONS
+# ==========================================================
+
+VALID_POSITIONS = {
+    'Football': {
+        'GK',
+        'CB',
+        'LB',
+        'LWB',
+        'RWB',
+        'RB',
+        'DM',
+        'CM',
+        'AM',
+        'LW',
+        'RW',
+        'SS',
+        'CF'
+    },
+
+    'Basketball': {
+        'Point Guard',
+        'Shooting guard',
+        'small forward',
+        'power forward',
+        'center'
+    },
+
+    'Kickball': {
+        'Pitcher',
+        'Catcher',
+        '1st baseman',
+        '2nd baseman',
+        '3rd baseman',
+        'Shortstop',
+        'Left fielder',
+        'Right fielder',
+        'center fielder',
+        'short fielder/Rover'
+    }
+}
 
 def athlete_can_submit_competition(category, competition):
     """Check whether an athlete category allows a competition."""
@@ -1416,13 +1464,42 @@ def submit_record():
 
     sport = request.form.get('sport')
     year = request.form.get('year')
-    position = request.form.get('position')
+    position = request.form.get('position', '').strip()
     games_played = request.form.get('games_played') or 0
     trophies = request.form.getlist('trophy')
     trophy_value = ", ".join(trophies) if trophies else None
     team = request.form.get('team', '').strip()
     team_played_against = request.form.get('team_played_against', '').strip()
     competition_category = request.form.get('competition_category', '').strip()
+    if not competition_category:
+        flash(
+            'Please select a competition category.',
+            'danger'
+        )
+        return redirect(url_for('student_dashboard'))
+
+    if competition_category not in VALID_COMPETITIONS:
+        flash(
+            'Invalid competition category selected.',
+            'danger'
+        )
+        return redirect(url_for('student_dashboard'))
+
+    # ===== POSITION VALIDATION =====
+    if sport not in VALID_POSITIONS:
+        flash('Please select a valid sport.', 'danger')
+        return redirect(url_for('student_dashboard'))
+
+    if not position:
+        flash('Please select a position.', 'danger')
+        return redirect(url_for('student_dashboard'))
+
+    if position not in VALID_POSITIONS[sport]:
+        flash(
+            f'Invalid position selected for {sport}.',
+            'danger'
+        )
+        return redirect(url_for('student_dashboard'))
     
     # ===== CATEGORY PERMISSION CHECK =====
     current_year = datetime.now().year
@@ -1590,8 +1667,37 @@ def edit_record(record_id):
         return redirect(url_for('student_dashboard'))
 
     if request.method == 'POST':
-        record.position = request.form.get('position')
-        record.games_played = int(request.form.get('games_played') or 0)
+        position = request.form.get('position', '').strip()
+
+        # ===== POSITION VALIDATION =====
+        if not position:
+            flash('Please select a position.', 'danger')
+            return redirect(url_for(
+                'edit_record',
+                record_id=record.id
+            ))
+
+        if record.sport not in VALID_POSITIONS:
+            flash('Invalid sport for this record.', 'danger')
+            return redirect(url_for(
+                'edit_record',
+                record_id=record.id
+            ))
+
+        if position not in VALID_POSITIONS[record.sport]:
+            flash(
+                f'Invalid position selected for {record.sport}.',
+                'danger'
+            )
+            return redirect(url_for(
+                'edit_record',
+                record_id=record.id
+            ))
+
+        record.position = position
+        record.games_played = int(
+            request.form.get('games_played') or 0
+        )
         record.team = request.form.get('team', '').strip()
         record.team_played_against = request.form.get('team_played_against', '').strip()
         competition_category = request.form.get(
