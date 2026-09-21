@@ -59,13 +59,12 @@
 
 <div class="col-md-4">
   <label class="form-label">
-    Competition Category
+    Competition
     <i class="fa-solid fa-medal"></i>
   </label>
 
   <select
-      name="competition_category"
-      id="competitionCategorySelect"
+      id="competitionTypeSelect"
       class="form-select"
       required>
 
@@ -75,49 +74,81 @@
     <option value="Club League">Club League</option>
     <option value="University League">University League</option>
     <option value="Community/Area League">Community/Area League</option>
-    <option value="High School">High School</option>
-    <option value="Lonestar">Lonestar</option>
-    <option value="Liberia U15-21">Liberia U15-21</option>
+    <option value="High School">High School Competition</option>
+    <option value="AFCON">AFCON</option>
+    <option value="WAFU">WAFU</option>
+    <option value="World Cup">World Cup</option>
 
   </select>
 </div>
 
-<!-- Lonestar Options -->
-<div class="col-md-4" id="lonestarOptions" style="display: none;">
+<!-- AFCON -->
+<div class="col-md-4" id="afconOptions" style="display: none;">
   <label class="form-label">
-    Lonestar Team
-    <i class="fa-solid fa-users"></i>
+    AFCON Team
+    <i class="fa-solid fa-flag"></i>
   </label>
 
   <select
-      id="lonestarSelect"
+      id="afconSelect"
       class="form-select">
 
     <option value="">-- Select --</option>
-    <option value="Male Team">Male Team</option>
-    <option value="Female Team">Female Team</option>
+    <option value="Lonestar Men's Team">
+      Lonestar Men's Team
+    </option>
 
   </select>
 </div>
 
-<!-- Liberia U15-21 Options -->
-<div class="col-md-4" id="liberiaU15Options" style="display: none;">
+<!-- WAFU -->
+<div class="col-md-4" id="wafuOptions" style="display: none;">
   <label class="form-label">
-    Liberia U15-21
+    WAFU Category
     <i class="fa-solid fa-people-group"></i>
   </label>
 
   <select
-      id="liberiaU15Select"
+      id="wafuSelect"
       class="form-select">
 
     <option value="">-- Select --</option>
-    <option value="U15">U15</option>
-    <option value="U17">U17</option>
-    <option value="U21">U21</option>
+
+    <option value="Male-U15">Male-U15</option>
+    <option value="Female-U15">Female-U15</option>
+
+    <option value="Male-U17">Male-U17</option>
+    <option value="Female-U17">Female-U17</option>
+
+    <option value="Male-U20">Male-U20</option>
+    <option value="Female-U20">Female-U20</option>
+
+    <option value="Male-U23">Male-U23</option>
+    <option value="Female-U23">Female-U23</option>
 
   </select>
 </div>
+
+<!-- WORLD CUP -->
+<div class="col-md-4" id="worldCupOptions" style="display: none;">
+  <label class="form-label">
+    World Cup Team
+    <i class="fa-solid fa-earth-americas"></i>
+  </label>
+
+  <select
+      id="worldCupSelect"
+      class="form-select">
+
+    <option value="">-- Select --</option>
+    <option value="Lonestar Men's Team">
+      Lonestar Men's Team
+    </option>
+
+  </select>
+</div>
+
+<!-- Final value sent to Flask -->
 <input
     type="hidden"
     name="competition_category"
@@ -238,48 +269,129 @@
   </div>
 </div>
 
-<div class="col-12 mt-3">
-  <label class="form-label fw-bold">
-    Trophies Won 
-    <i class="fa-solid fa-trophy" style="color: silver;"></i>
-    <i class="fa-solid fa-medal"></i>
-    <i class="fa-solid fa-trophy" style="color: goldenrod;"></i>
-  </label>
+    <label class="form-label fw-bold">
+  Trophies Won
+  <i class="fa-solid fa-trophy" style="color: silver;"></i>
+  <i class="fa-solid fa-medal"></i>
+  <i class="fa-solid fa-trophy" style="color: goldenrod;"></i>
+</label>
 
-  <div class="row">
-    <div class="col-md-4">
-      <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="trophy" value="University Championship" id="trophy1">
-        <label class="form-check-label" for="trophy1">University Championship</label>
-      </div>
-      <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="trophy" value="Classes League" id="trophy2">
-        <label class="form-check-label" for="trophy2">Classes League</label>
-      </div>
+<div class="row">
+
+  <!-- Column 1 -->
+  <div class="col-md-4">
+
+    <div class="form-check">
+      <input class="form-check-input"
+             type="checkbox"
+             name="trophy"
+             value="University Championship"
+             id="trophy1">
+      <label class="form-check-label" for="trophy1">
+        University Championship
+      </label>
     </div>
 
-    <div class="col-md-4">
-      <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="trophy" value="County Meet" id="trophy3">
-        <label class="form-check-label" for="trophy3">County Meet</label>
-      </div>
-      <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="trophy" value="Club Trophy" id="trophy4">
-        <label class="form-check-label" for="trophy4">Club Trophy</label>
-      </div>
+    <div class="form-check">
+      <input class="form-check-input"
+             type="checkbox"
+             name="trophy"
+             value="Classes League"
+             id="trophy2">
+      <label class="form-check-label" for="trophy2">
+        Classes League
+      </label>
     </div>
 
-    <div class="col-md-4">
-      <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="trophy" value="Community Trophy" id="trophy5">
-        <label class="form-check-label" for="trophy5">Community Trophy</label>
-      </div>
-      <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="trophy" value="None" id="trophy6">
-        <label class="form-check-label" for="trophy6">None</label>
-      </div>
+    <div class="form-check">
+      <input class="form-check-input"
+             type="checkbox"
+             name="trophy"
+             value="County Meet"
+             id="trophy3">
+      <label class="form-check-label" for="trophy3">
+        County Meet
+      </label>
     </div>
+
   </div>
+
+  <!-- Column 2 -->
+  <div class="col-md-4">
+
+    <div class="form-check">
+      <input class="form-check-input"
+             type="checkbox"
+             name="trophy"
+             value="Club Trophy"
+             id="trophy4">
+      <label class="form-check-label" for="trophy4">
+        Club Trophy
+      </label>
+    </div>
+
+    <div class="form-check">
+      <input class="form-check-input"
+             type="checkbox"
+             name="trophy"
+             value="Community Trophy"
+             id="trophy5">
+      <label class="form-check-label" for="trophy5">
+        Community Trophy
+      </label>
+    </div>
+
+    <div class="form-check">
+      <input class="form-check-input"
+             type="checkbox"
+             name="trophy"
+             value="AFCON"
+             id="trophy6">
+      <label class="form-check-label" for="trophy6">
+        AFCON
+      </label>
+    </div>
+
+  </div>
+
+  <!-- Column 3 -->
+  <div class="col-md-4">
+
+    <div class="form-check">
+      <input class="form-check-input"
+             type="checkbox"
+             name="trophy"
+             value="WAFU"
+             id="trophy7">
+      <label class="form-check-label" for="trophy7">
+        WAFU
+      </label>
+    </div>
+
+    <div class="form-check">
+      <input class="form-check-input"
+             type="checkbox"
+             name="trophy"
+             value="World Cup"
+             id="trophy8">
+      <label class="form-check-label" for="trophy8">
+        World Cup
+      </label>
+    </div>
+
+    <div class="form-check">
+      <input class="form-check-input"
+             type="checkbox"
+             name="trophy"
+             value="None"
+             id="trophy9">
+      <label class="form-check-label" for="trophy9">
+        None
+      </label>
+    </div>
+
+  </div>
+
 </div>
   </div>
 
@@ -440,73 +552,103 @@
 </script>
 
 <script>
-  const competitionCategorySelect =
-      document.getElementById('competitionCategorySelect');
+  const competitionTypeSelect =
+      document.getElementById('competitionTypeSelect');
 
-  const lonestarOptions =
-      document.getElementById('lonestarOptions');
+  const afconOptions =
+      document.getElementById('afconOptions');
 
-  const liberiaU15Options =
-      document.getElementById('liberiaU15Options');
+  const wafuOptions =
+      document.getElementById('wafuOptions');
 
-  const lonestarSelect =
-      document.getElementById('lonestarSelect');
+  const worldCupOptions =
+      document.getElementById('worldCupOptions');
 
-  const liberiaU15Select =
-      document.getElementById('liberiaU15Select');
+  const afconSelect =
+      document.getElementById('afconSelect');
+
+  const wafuSelect =
+      document.getElementById('wafuSelect');
+
+  const worldCupSelect =
+      document.getElementById('worldCupSelect');
 
   const finalCompetitionCategory =
       document.getElementById('finalCompetitionCategory');
 
 
-  competitionCategorySelect.addEventListener('change', function () {
+  function resetCompetitionOptions() {
 
-    lonestarOptions.style.display = 'none';
-    liberiaU15Options.style.display = 'none';
+    afconOptions.style.display = 'none';
+    wafuOptions.style.display = 'none';
+    worldCupOptions.style.display = 'none';
 
-    lonestarSelect.required = false;
-    liberiaU15Select.required = false;
+    afconSelect.required = false;
+    wafuSelect.required = false;
+    worldCupSelect.required = false;
 
-    lonestarSelect.value = '';
-    liberiaU15Select.value = '';
+    afconSelect.value = '';
+    wafuSelect.value = '';
+    worldCupSelect.value = '';
 
-    if (this.value === 'Lonestar') {
+    finalCompetitionCategory.value = '';
+  }
 
-      lonestarOptions.style.display = 'block';
-      lonestarSelect.required = true;
 
-      finalCompetitionCategory.value = '';
+  competitionTypeSelect.addEventListener('change', function () {
 
-    } else if (this.value === 'Liberia U15-21') {
+    resetCompetitionOptions();
 
-      liberiaU15Options.style.display = 'block';
-      liberiaU15Select.required = true;
+    if (this.value === 'AFCON') {
 
-      finalCompetitionCategory.value = '';
+      afconOptions.style.display = 'block';
+      afconSelect.required = true;
+
+    } else if (this.value === 'WAFU') {
+
+      wafuOptions.style.display = 'block';
+      wafuSelect.required = true;
+
+    } else if (this.value === 'World Cup') {
+
+      worldCupOptions.style.display = 'block';
+      worldCupSelect.required = true;
 
     } else {
 
+      // Existing competitions
       finalCompetitionCategory.value = this.value;
     }
   });
 
 
-  lonestarSelect.addEventListener('change', function () {
+  afconSelect.addEventListener('change', function () {
 
     if (this.value) {
       finalCompetitionCategory.value =
-          'Lonestar - ' + this.value;
+          'AFCON - ' + this.value;
     } else {
       finalCompetitionCategory.value = '';
     }
   });
 
 
-  liberiaU15Select.addEventListener('change', function () {
+  wafuSelect.addEventListener('change', function () {
 
     if (this.value) {
       finalCompetitionCategory.value =
-          'Liberia U15-21 - ' + this.value;
+          'WAFU - ' + this.value;
+    } else {
+      finalCompetitionCategory.value = '';
+    }
+  });
+
+
+  worldCupSelect.addEventListener('change', function () {
+
+    if (this.value) {
+      finalCompetitionCategory.value =
+          'World Cup - ' + this.value;
     } else {
       finalCompetitionCategory.value = '';
     }
@@ -515,7 +657,7 @@
 
 {% else %}
   <div class="alert alert-warning">
-    Your Student ID is still pending verification. You cannot submit records yet.
+    Your Athlete ID is still pending verification. You cannot submit records yet.
   </div>
 {% endif %}
 

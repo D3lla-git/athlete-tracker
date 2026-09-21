@@ -168,11 +168,21 @@ VALID_COMPETITIONS = {
     'High School',
 
     # Additional competition categories
-    'Lonestar - Male Team',
-    'Lonestar - Female Team',
-    'Liberia U15-21 - U15',
-    'Liberia U15-21 - U17',
-    'Liberia U15-21 - U21'
+        # AFCON
+    "AFCON - Lonestar Men's Team",
+
+    # WAFU
+    'WAFU - Male-U15',
+    'WAFU - Female-U15',
+    'WAFU - Male-U17',
+    'WAFU - Female-U17',
+    'WAFU - Male-U20',
+    'WAFU - Female-U20',
+    'WAFU - Male-U23',
+    'WAFU - Female-U23',
+
+    # World Cup
+    "World Cup - Lonestar Men's Team"
 }
 # ==========================================================
 # SPORT-SPECIFIC POSITIONS
@@ -1473,7 +1483,7 @@ def submit_record():
     competition_category = request.form.get('competition_category', '').strip()
     if not competition_category:
         flash(
-            'Please select a competition category.',
+            'Please select a competition.',
             'danger'
         )
         return redirect(url_for('student_dashboard'))

@@ -388,6 +388,170 @@ html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item) {
   }
 }
 
+/* ================================
+   ATHLETE TRACKER FOOTER
+================================ */
+
+.athlete-footer {
+  margin-top: 60px;
+  background: #111111;
+  color: #ffffff;
+  border-top: 4px solid darkgreen;
+}
+
+.athlete-footer-container {
+  width: 96%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 45px 0 20px;
+}
+
+.athlete-footer-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr;
+  gap: 35px;
+}
+
+.athlete-footer-section h5 {
+  color: #ffffff;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.athlete-footer-section h5 i {
+  margin-right: 7px;
+}
+
+.athlete-footer-section p {
+  color: #d6d6d6;
+  font-size: 0.94rem;
+  line-height: 1.7;
+  margin-bottom: 8px;
+}
+
+.athlete-footer-section a {
+  display: block;
+  color: #d6d6d6;
+  text-decoration: none;
+  margin-bottom: 9px;
+  transition: all 0.2s ease;
+}
+
+.athlete-footer-section a:hover {
+  color: #ffffff;
+  transform: translateX(3px);
+}
+
+.athlete-footer-brand {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.athlete-footer-brand i {
+  margin-right: 6px;
+}
+
+.athlete-footer-social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.athlete-footer-social a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin: 0;
+  border: 1px solid #555555;
+  border-radius: 50%;
+  color: #ffffff;
+  transition: all 0.25s ease;
+}
+
+.athlete-footer-social a:hover {
+  background: darkgreen;
+  border-color: darkgreen;
+  color: #ffffff;
+  transform: translateY(-3px);
+}
+
+.athlete-footer-divider {
+  border: 0;
+  border-top: 1px solid #444444;
+  margin: 35px 0 18px;
+}
+
+.athlete-footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.athlete-footer-bottom p {
+  margin: 0;
+  color: #bdbdbd;
+  font-size: 0.9rem;
+}
+
+.athlete-footer-bottom-links {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.athlete-footer-bottom-links a {
+  display: inline-block;
+  margin: 0;
+  color: #bdbdbd;
+  font-size: 0.9rem;
+}
+
+.athlete-footer-bottom-links a:hover {
+  color: #ffffff;
+}
+
+/* ===== LIGHT MODE FOOTER ===== */
+
+html[data-theme="light"] .athlete-footer {
+  background: #212529;
+  color: #ffffff;
+}
+
+/* ===== MOBILE FOOTER ===== */
+
+@media (max-width: 991px) {
+  .athlete-footer-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+  }
+}
+
+@media (max-width: 575px) {
+  .athlete-footer-container {
+    width: 92%;
+    padding: 35px 0 18px;
+  }
+
+  .athlete-footer-grid {
+    grid-template-columns: 1fr;
+    gap: 25px;
+  }
+
+  .athlete-footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .athlete-footer-bottom-links {
+    gap: 12px;
+  }
+}
 </style>
 </head>
 
@@ -554,7 +718,246 @@ html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item) {
 
     });
   </script>
- <center><p>&copy; 2026 Athlete Tracker 🇱🇷. All rights reserved.<i class="fa-regular fa-registered"></i></p></center>
+<!-- ================================
+     ATHLETE TRACKER FOOTER
+================================= -->
+<footer class="athlete-footer">
+
+  <div class="athlete-footer-container">
+
+    <div class="athlete-footer-grid">
+
+      <!-- ABOUT THE APP -->
+      <div class="athlete-footer-section">
+        <div class="athlete-footer-brand">
+          D.A.R.T (D3ll Athlete Records Tracker) <i class="fa-solid fa-person-running"></i>
+        </div>
+
+        <p>
+          D.A.R.T is a sports record management platform
+          designed to help athletes, coaches, teams and administrators
+          manage and showcase sports performance records.
+        </p>
+
+        <p>
+          Track performance, competitions, achievements, statistics
+          and athlete profiles in one centralized platform.
+        </p>
+      </div>
+
+
+      <!-- DEVELOPER -->
+      <div class="athlete-footer-section">
+        <h5>
+          <i class="fa-solid fa-code"></i>
+          Developer
+        </h5>
+
+        <p>
+          Developed by:<br>
+          <strong>Mandella L. Wleh-Sam</strong>
+        </p>
+
+        <p>
+          Software Developer<br>
+          Information Technology<br>
+          Cybersecurity Enthusiast<br>
+          Web &amp; Systems Development
+        </p>
+
+        <a href="#about-developer">
+          The Developer <i class="fa-solid fa-user"></i>
+        </a>
+
+        <!--<a href="#developer-portfolio">
+          <i class="fa-solid fa-briefcase"></i>
+          Portfolio
+        </a>-->
+      </div>
+
+
+      <!-- CONTACT -->
+      <div class="athlete-footer-section">
+        <h5>
+          <i class="fa-solid fa-address-book"></i>
+          Contact
+        </h5>
+
+        <a href="mailto:athletetrackerlr@gmail.com">
+          athletetrackerlr@gmail.com
+        </a>
+
+        <a href="tel:+231775684913">
+          <i class="fa-solid fa-phone"></i>
+          +231 77 568 4913 
+        </a>
+        <a href="tel:+231887247243">
+          <i class="fa-solid fa-phone"></i>
+          +231 88 724 7243
+        </a>
+
+        <a href="#contact">
+          <i class="fa-solid fa-paper-plane"></i>
+          Contact Us
+        </a>
+      </div>
+
+
+      <!-- ADDRESS -->
+      <div class="athlete-footer-section">
+        <h5>
+          <i class="fa-solid fa-location-dot"></i>
+          Address
+        </h5>
+        <p>
+          <strong>D.A.R.T<br>(D3ll Athlete Records Tracker)</strong>
+        </p>
+        <p>
+          Monrovia, Liberia
+        </p>
+        <a
+          href="https://maps.google.com/"
+          target="_blank"
+          rel="noopener noreferrer">
+          <i class="fa-solid fa-map-location-dot"></i>
+          View on Map
+        </a>
+      </div>
+
+
+      <!-- LEGAL -->
+      <div class="athlete-footer-section">
+        <h5>
+          <i class="fa-solid fa-scale-balanced"></i>
+          Legal
+        </h5>
+
+        <a href="/privacy">
+          <i class="fa-solid fa-shield-halved"></i>
+          Privacy Policy
+        </a>
+
+        <a href="/terms">
+          <i class="fa-solid fa-file-contract"></i>
+          Terms of Use
+        </a>
+
+        <a href="/cookies">
+          <i class="fa-solid fa-cookie-bite"></i>
+          Cookie Policy
+        </a>
+
+        <a href="/legal">
+          <i class="fa-solid fa-gavel"></i>
+          Legal Information
+        </a>
+      </div>
+
+    </div>
+
+
+    <!-- SOCIAL MEDIA -->
+    <div class="athlete-footer-section mt-4">
+
+      <h5>
+        <i class="fa-solid fa-share-nodes"></i>
+        Follow Athlete Tracker
+      </h5>
+
+      <div class="athlete-footer-social">
+
+        <!-- Facebook -->
+        <a
+          href="https://facebook.com/YOUR-PAGE"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Facebook">
+          <i class="fa-brands fa-facebook-f"></i>
+        </a>
+
+        <!-- Instagram -->
+        <a
+          href="https://instagram.com/YOUR-ACCOUNT"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Instagram">
+          <i class="fa-brands fa-instagram"></i>
+        </a>
+
+        <!-- X / Twitter -->
+        <a
+          href="https://x.com/YOUR-ACCOUNT"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="X">
+          <i class="fa-brands fa-x-twitter"></i>
+        </a>
+
+        <!-- LinkedIn -->
+        <a
+          href="https://linkedin.com/in/YOUR-ACCOUNT"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="LinkedIn">
+          <i class="fa-brands fa-linkedin-in"></i>
+        </a>
+
+        <!-- YouTube -->
+        <a
+          href="https://youtube.com/@YOUR-CHANNEL"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="YouTube">
+          <i class="fa-brands fa-youtube"></i>
+        </a>
+
+        <!-- TikTok -->
+        <a
+          href="https://tiktok.com/@YOUR-ACCOUNT"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="TikTok">
+          <i class="fa-brands fa-tiktok"></i>
+        </a>
+
+        <!-- WhatsApp -->
+        <a
+          href="https://wa.me/YOUR-NUMBER"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="WhatsApp">
+          <i class="fa-brands fa-whatsapp"></i>
+        </a>
+
+      </div>
+
+    </div>
+
+
+    <hr class="athlete-footer-divider">
+
+
+    <!-- FOOTER BOTTOM -->
+    <div class="athlete-footer-bottom">
+
+      <p>
+        &copy; 2026 Athlete Tracker 🇱🇷.
+        All rights reserved.
+        <i class="fa-regular fa-registered"></i>
+      </p>
+
+      <div class="athlete-footer-bottom-links">
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/legal">Legal</a>
+      </div>
+
+    </div>
+
+  </div>
+
+</footer>
+
 
 
   <!-- ===== Light / Dark Theme Toggle ===== -->

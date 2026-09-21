@@ -171,72 +171,196 @@
 
     <option value="High School"
       {% if record.competition_category == 'High School' %}selected{% endif %}>
-      High School
+      High School Competition
     </option>
 
-    <option value="Lonestar - Male Team"
-      {% if record.competition_category == 'Lonestar - Male Team' %}selected{% endif %}>
-      Lonestar - Male Team
-    </option>
+   <option value="AFCON - Lonestar Men's Team"
+  {% if record.competition_category == "AFCON - Lonestar Men's Team" %}selected{% endif %}>
+  AFCON: Lonestar Men's Team
+</option>
 
-    <option value="Lonestar - Female Team"
-      {% if record.competition_category == 'Lonestar - Female Team' %}selected{% endif %}>
-      Lonestar - Female Team
-    </option>
+<option value="WAFU - Male-U15"
+  {% if record.competition_category == 'WAFU - Male-U15' %}selected{% endif %}>
+  WAFU: Male-U15
+</option>
 
-    <option value="Liberia U15-21 - U15"
-      {% if record.competition_category == 'Liberia U15-21 - U15' %}selected{% endif %}>
-      Liberia U15-21 - U15
-    </option>
+<option value="WAFU - Female-U15"
+  {% if record.competition_category == 'WAFU - Female-U15' %}selected{% endif %}>
+  WAFU: Female-U15
+</option>
 
-    <option value="Liberia U15-21 - U17"
-      {% if record.competition_category == 'Liberia U15-21 - U17' %}selected{% endif %}>
-      Liberia U15-21 - U17
-    </option>
+<option value="WAFU - Male-U17"
+  {% if record.competition_category == 'WAFU - Male-U17' %}selected{% endif %}>
+  WAFU: Male-U17
+</option>
 
-    <option value="Liberia U15-21 - U21"
-      {% if record.competition_category == 'Liberia U15-21 - U21' %}selected{% endif %}>
-      Liberia U15-21 - U21
-    </option>
+<option value="WAFU - Female-U17"
+  {% if record.competition_category == 'WAFU - Female-U17' %}selected{% endif %}>
+  WAFU: Female-U17
+</option>
 
+<option value="WAFU - Male-U20"
+  {% if record.competition_category == 'WAFU - Male-U20' %}selected{% endif %}>
+  WAFU: Male-U20
+</option>
+
+<option value="WAFU - Female-U20"
+  {% if record.competition_category == 'WAFU - Female-U20' %}selected{% endif %}>
+  WAFU: Female-U20
+</option>
+
+<option value="WAFU - Male-U23"
+  {% if record.competition_category == 'WAFU - Male-U23' %}selected{% endif %}>
+  WAFU: Male-U23
+</option>
+
+<option value="WAFU - Female-U23"
+  {% if record.competition_category == 'WAFU - Female-U23' %}selected{% endif %}>
+  WAFU: Female-U23
+</option>
+
+<option value="World Cup - Lonestar Men's Team"
+  {% if record.competition_category == "World Cup - Lonestar Men's Team" %}selected{% endif %}>
+  World Cup: Lonestar Men's Team
+</option>
   </select>
 </div>
 
-    <div class="row">
-                  <label class="form-label">Trophy Won <i class="fa-solid fa-trophy"></i></label>
+   <div class="mb-4">
+  <label class="form-label fw-bold">
+    Trophies Won
+    <i class="fa-solid fa-trophy" style="color: silver;"></i>
+    <i class="fa-solid fa-medal"></i>
+    <i class="fa-solid fa-trophy" style="color: goldenrod;"></i>
+  </label>
+
+  <div class="row">
+
+    <!-- Column 1 -->
     <div class="col-md-4">
+
       <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="trophy" value="University Championship" id="trophy1">
-        <label class="form-check-label" for="trophy1">University Championship</label>
+        <input class="form-check-input"
+               type="checkbox"
+               name="trophy"
+               value="University Championship"
+               id="trophy1"
+               {% if 'University Championship' in (record.trophy or '').split(', ') %}checked{% endif %}>
+        <label class="form-check-label" for="trophy1">
+          University Championship
+        </label>
       </div>
+
       <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="trophy" value="Classes League" id="trophy2">
-        <label class="form-check-label" for="trophy2">Classes League</label>
+        <input class="form-check-input"
+               type="checkbox"
+               name="trophy"
+               value="Classes League"
+               id="trophy2"
+               {% if 'Classes League' in (record.trophy or '').split(', ') %}checked{% endif %}>
+        <label class="form-check-label" for="trophy2">
+          Classes League
+        </label>
       </div>
+
+      <div class="form-check">
+        <input class="form-check-input"
+               type="checkbox"
+               name="trophy"
+               value="County Meet"
+               id="trophy3"
+               {% if 'County Meet' in (record.trophy or '').split(', ') %}checked{% endif %}>
+        <label class="form-check-label" for="trophy3">
+          County Meet
+        </label>
+      </div>
+
     </div>
 
+    <!-- Column 2 -->
     <div class="col-md-4">
+
       <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="trophy" value="County Meet" id="trophy3">
-        <label class="form-check-label" for="trophy3">County Meet</label>
+        <input class="form-check-input"
+               type="checkbox"
+               name="trophy"
+               value="Club Trophy"
+               id="trophy4"
+               {% if 'Club Trophy' in (record.trophy or '').split(', ') %}checked{% endif %}>
+        <label class="form-check-label" for="trophy4">
+          Club Trophy
+        </label>
       </div>
+
       <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="trophy" value="Club Trophy" id="trophy4">
-        <label class="form-check-label" for="trophy4">Club Trophy</label>
+        <input class="form-check-input"
+               type="checkbox"
+               name="trophy"
+               value="Community Trophy"
+               id="trophy5"
+               {% if 'Community Trophy' in (record.trophy or '').split(', ') %}checked{% endif %}>
+        <label class="form-check-label" for="trophy5">
+          Community Trophy
+        </label>
       </div>
+
+      <div class="form-check">
+        <input class="form-check-input"
+               type="checkbox"
+               name="trophy"
+               value="AFCON"
+               id="trophy6"
+               {% if 'AFCON' in (record.trophy or '').split(', ') %}checked{% endif %}>
+        <label class="form-check-label" for="trophy6">
+          AFCON
+        </label>
+      </div>
+
     </div>
 
+    <!-- Column 3 -->
     <div class="col-md-4">
+
       <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="trophy" value="Community Trophy" id="trophy5">
-        <label class="form-check-label" for="trophy5">Community Trophy</label>
+        <input class="form-check-input"
+               type="checkbox"
+               name="trophy"
+               value="WAFU"
+               id="trophy7"
+               {% if 'WAFU' in (record.trophy or '').split(', ') %}checked{% endif %}>
+        <label class="form-check-label" for="trophy7">
+          WAFU
+        </label>
       </div>
+
       <div class="form-check">
-        <input class="form-check-input" type="checkbox" name="trophy" value="None" id="trophy6">
-        <label class="form-check-label" for="trophy6">None</label>
+        <input class="form-check-input"
+               type="checkbox"
+               name="trophy"
+               value="World Cup"
+               id="trophy8"
+               {% if 'World Cup' in (record.trophy or '').split(', ') %}checked{% endif %}>
+        <label class="form-check-label" for="trophy8">
+          World Cup
+        </label>
       </div>
+
+      <div class="form-check">
+        <input class="form-check-input"
+               type="checkbox"
+               name="trophy"
+               value="None"
+               id="trophy9"
+               {% if 'None' in (record.trophy or '').split(', ') %}checked{% endif %}>
+        <label class="form-check-label" for="trophy9">
+          None
+        </label>
+      </div>
+
     </div>
+
   </div>
+</div>
           </div>
 
   {% if record.sport == 'Football' %}
