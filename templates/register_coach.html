@@ -11,7 +11,7 @@
       <div class="card-body">
           <div class="mb-3">
             <div class="dropdown">
-              <button class="btn btn-outline-success dropdown-toggle w-100 category-dropdown-btn" type="button"
+              <button class="btn dropdown-toggle w-100 category-dropdown-btn" type="button"
         data-bs-toggle="dropdown" aria-expanded="false">
   {{ selected_category or 'All Coach' }} — Choose Coach Category
 </button>
@@ -110,13 +110,32 @@
             <label>ID or Passport (PNG/JPG/PDF)</label>
             <input type="file" name="id_document" class="form-control" accept=".png,.jpg,.jpeg,.pdf" required>
           </div>
-          <button type="submit" class="btn btn-success w-100">Create Coach Account</button>
+          <button type="submit" class="btn w-100">Create Coach Account</button> 
         </form>
       </div>
     </div>
   </div>
 </div>
-<style>
+
+    <!----CSS--------><!----CSS-------->
+  <!----CSS--------><!----CSS-------->
+      <style>
+        .btn{ 
+          background:
+        radial-gradient(
+            circle at 85% 30%,
+            rgba(57,185,114,0.30),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #071208,
+            #0d2413 55%,
+            #061008
+        );
+        color: white;
+        }
+
   .category-dropdown-btn {
     white-space: normal;
     overflow-wrap: break-word;

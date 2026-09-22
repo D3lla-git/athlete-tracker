@@ -441,7 +441,37 @@
     <button type="submit" class="btn btn-success">Submit Record</button>
   </div>
 </form>
-
+<!---------CSS-Stylings----------------->
+<style>
+  .mt-3 button {
+background:
+        radial-gradient(
+            circle at 85% 30%,
+            rgba(57,185,114,0.30),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #071208,
+            #0d2413 55%,
+            #061008
+        );
+}
+  .d-flex .badge {
+background:
+        radial-gradient(
+            circle at 85% 30%,
+            rgba(57,185,114,0.30),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #071208,
+            #0d2413 55%,
+            #061008
+        );
+}
+</style>
 <script>
   const sportSelect = document.getElementById('sportSelect');
   const positionSelect = document.getElementById('positionSelect');
@@ -723,7 +753,7 @@
 <td>
   <div class="d-flex align-items-center gap-1 flex-wrap">
     {% if r.status == 'approved' %}
-      <span class="badge bg-success">Approved</span>
+      <span class="badge">Approved</span>
     {% elif r.status == 'rejected' %}
       <span class="badge bg-danger">Rejected</span>
     {% else %}

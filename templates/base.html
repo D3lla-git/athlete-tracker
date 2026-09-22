@@ -142,7 +142,18 @@
 }
 
 .navbar-nav .nav-link:hover {
-  background-color: darkgreen !important;
+    background:
+        radial-gradient(
+            circle at 85% 30%,
+            rgba(57,185,114,0.30),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #071208,
+            #0d2413 55%,
+            #061008
+        ) !important;
   color: #ffffff !important;
 }
 /* Custom button styles
@@ -557,6 +568,13 @@ html[data-theme="light"] .athlete-footer {
   z-index: 1030;
   width: 100%;
 }
+.dart-logo {
+    height: 42px;
+    width: auto;
+    max-width: 180px;
+    object-fit: contain;
+    display: block;
+}
 </style>
 </head>
 
@@ -565,7 +583,13 @@ html[data-theme="light"] .athlete-footer {
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
     <div class="container">
       <!-- Brand -->
-      <a class="navbar-brand fw-bold" href="{{ url_for('index') }}"><span style="color: darkgreen;">D</span>.A.R.T <i class="fa-solid fa-person-running"></i></a>
+ <a class="navbar-brand fw-bold d-flex align-items-center"
+   href="{{ url_for('index') }}">
+
+    <img src="{{ url_for('static', filename='images/dartlogo.jpg') }}"
+         alt="D.A.R.T Logo"
+         class="dart-logo">
+</a>
 
       <!-- Dark / Light Mode button -->
 <button type="button"
@@ -735,11 +759,11 @@ html[data-theme="light"] .athlete-footer {
       <!-- ABOUT THE APP -->
       <div class="athlete-footer-section">
         <div class="athlete-footer-brand">
-          D.A.R.T (D3ll Athlete Records Tracker) <i class="fa-solid fa-person-running"></i>
+          <span style="color: darkgreen;">D</span>.A.R.T (D3ll Athlete Records Tracker) <i class="fa-solid fa-person-running"></i>
         </div>
 
         <p>
-          D.A.R.T. (Dell Athlete Record Tracker) is Liberia’s first digital sports CV network built to showcase talent with integrity.
+          <span style="color: darkgreen;">D</span>.A.R.T. (Dell Athlete Record Tracker) is Liberia’s first digital sports CV network built to showcase talent with integrity.
           We bridge the gap between grassroots athletics and global scouting by replacing unverified stats with an official, cloud-connected pipeline for football, basketball, and kickball.
         </p>
 
@@ -814,7 +838,7 @@ html[data-theme="light"] .athlete-footer {
           Address
         </h5>
         <p>
-          <strong>D.A.R.T<br>(D3ll Athlete Records Tracker)</strong>
+          <strong><span style="color: darkgreen;">D</span>.A.R.T<br>(D3ll Athlete Records Tracker)</strong>
         </p>
         <p>
           Monrovia, Liberia
@@ -865,7 +889,7 @@ html[data-theme="light"] .athlete-footer {
 
       <h5>
         <i class="fa-solid fa-share-nodes"></i>
-        Follow Athlete Tracker
+        Follow <span style="color: darkgreen;">D</span>.A.R.T on Social Media
       </h5>
 
       <div class="athlete-footer-social">
@@ -945,7 +969,7 @@ html[data-theme="light"] .athlete-footer {
     <div class="athlete-footer-bottom">
 
       <p>
-        &copy; 2026 Athlete Tracker 🇱🇷.
+        &copy; 2026 D.A.R.T 🇱🇷.
         All rights reserved.
         <i class="fa-regular fa-registered"></i>
       </p>

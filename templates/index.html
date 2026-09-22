@@ -1,29 +1,1512 @@
 {% extends "base.html" %}
 {% block title %}Home - Athlete Tracker{% endblock %}
 {% block content %}
-<div class="text-center py-5">
-  <h1 class="display-5 fw-bold">D<span style="color: darkgreen;">3</span>ll<br></h1><h3>Athlete Records Tracker</h3>
-  
-    <p class="lead"><strong><span style="color: darkgreen;">D</span></strong>.A.R.T is a Database.<br>
-                    <strong><span style="color: darkgreen;">D</span></strong>.A.R.T is a Record Tracker.<br>
-                    <strong><span style="color: darkgreen;">D</span></strong>.A.R.T is a Sport(s) CV Builder.<br>
-                    <strong><span style="color: darkgreen;">D</span></strong>.A.R.T is Art.
-    </p>
- <div class="mt-4 d-flex flex-column flex-sm-row justify-content-center gap-3">
+<!-- ==========================================================
+     D.A.R.T. ACTION BAR-html
+========================================================== -->
 
-<div class="mt-4 d-flex flex-column flex-sm-row justify-content-center gap-3">
-<a href="{{ url_for('search') }}" 
-   class="btn btn-lg rounded-5 btn-search-hover">
-  Search Athletes <i class="fa-solid fa-magnifying-glass"></i>
-</a> 
+<section class="dart-action-section">
 
-<a href="{{ url_for('register') }}" 
-   class="btn btn-lg rounded-5 btn-register-hover">
-  <i class="fa-solid fa-user-plus"></i> Register as Athlete <i class="fa-solid fa-running"></i>
-</a>
-<a href="{{ url_for('register_coach') }}" class="btn btn-lg rounded-5 btn-coach-hover">
-  Register as Coach/Admin <i class="fa-solid fa-chalkboard-teacher"></i>
-</a>
-</div>
-</div>
+    <div class="dart-action-container">
+
+        <a href="{{ url_for('search') }}"
+           class="dart-action-btn dart-action-search">
+
+            <span class="dart-action-icon">
+                <i class="fa-solid fa-magnifying-glass"></i>
+            </span>
+
+            <span class="dart-action-text">
+                <strong>Search Athletes</strong>
+                <small>Explore verified athlete records</small>
+            </span>
+
+            <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
+
+        </a>
+
+
+        <a href="{{ url_for('register') }}"
+           class="dart-action-btn dart-action-athlete">
+
+            <span class="dart-action-icon">
+                <i class="fa-solid fa-person-running"></i>
+            </span>
+
+            <span class="dart-action-text">
+                <strong>Register as Athlete</strong>
+                <small>Create your sports CV/profile</small>
+            </span>
+
+            <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
+
+        </a>
+
+
+        <a href="{{ url_for('register_coach') }}"
+           class="dart-action-btn dart-action-coach">
+
+            <span class="dart-action-icon">
+                <i class="fa-solid fa-user-shield"></i>
+            </span>
+
+            <span class="dart-action-text">
+                <strong>Register as Coach/Admin</strong>
+                <small>Manage athletes &amp; records</small>
+            </span>
+
+            <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
+
+        </a>
+
+    </div>
+</section>
+   <!--D.A.R.T. Hero Section-->   <!--D.A.R.T. Hero Section--> 
+<section class="dart-card-carousel-section">
+
+    <div id="dartHero"
+         class="carousel slide"
+         data-bs-ride="carousel"
+         data-bs-interval="5000"
+         data-bs-touch="true">
+
+        <div class="carousel-inner">
+
+
+            <!-- ==================================================
+                 CARD 1
+            ================================================== -->
+            <div class="carousel-item active">
+
+                <div class="dart-card dart-card-green">
+
+                    <div class="dart-card-content">
+
+                        <span class="dart-card-eyebrow">
+                            <i class="fa-solid fa-circle-dot"></i>
+                            DIGITAL SPORTS RECORDS
+                        </span>
+
+                        <div class="dart-card-logo">
+                            D<span>3</span>ll
+                        </div>
+
+                        <h1>
+                            Athlete
+                            <span>Records Tracker</span>
+                        </h1>
+
+                        <p class="dart-card-tagline">
+                            Your game. Your numbers. Your story.
+                        </p>
+
+                        <p class="dart-card-description">
+                            A digital home for athlete performance,
+                            sporting history, achievements and records.
+                        </p>
+
+                        <div class="dart-card-tags">
+
+                            <span>
+                                <i class="fa-solid fa-database"></i>
+                                Database
+                            </span>
+
+                            <span>
+                                <i class="fa-solid fa-chart-line"></i>
+                                Performance
+                            </span>
+
+                            <span>
+                                <i class="fa-solid fa-trophy"></i>
+                                Achievements
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="dart-card-visual">
+
+                        <div class="dart-card-orb orb-one"></div>
+                        <div class="dart-card-orb orb-two"></div>
+
+                        <div class="dart-card-emblem">
+                            <i class="fa-solid fa-person-running"></i>
+                        </div>
+
+                        <div class="dart-card-floating floating-top">
+                            <i class="fa-solid fa-futbol"></i>
+                            Football
+                        </div>
+
+                        <div class="dart-card-floating floating-right">
+                            <i class="fa-solid fa-basketball"></i>
+                            Basketball
+                        </div>
+
+                        <div class="dart-card-floating floating-bottom">
+                            <i class="fa-solid fa-baseball"></i>
+                            Kickball
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- ==================================================
+                 CARD 2
+            ================================================== -->
+            <div class="carousel-item">
+
+                <div class="dart-card dart-card-blue">
+
+                    <div class="dart-card-content">
+
+                        <span class="dart-card-eyebrow">
+                            <i class="fa-solid fa-chart-line"></i>
+                            PERFORMANCE TRACKING
+                        </span>
+
+                        <div class="dart-card-number">
+                            02
+                        </div>
+
+                        <h1>
+                            Every
+                            <span>Performance Counts.</span>
+                        </h1>
+
+                        <p class="dart-card-tagline">
+                            Numbers tell the story behind the game.
+                        </p>
+
+                        <p class="dart-card-description">
+                            Track goals, assists, games, positions,
+                            MVPs, trophies and other performance
+                            statistics.
+                        </p>
+
+                        <div class="dart-card-stat-row">
+
+                            <div>
+                                <strong>GOALS</strong>
+                                <small>Scoring</small>
+                            </div>
+
+                            <div>
+                                <strong>ASSISTS</strong>
+                                <small>Contribution</small>
+                            </div>
+
+                            <div>
+                                <strong>MVP</strong>
+                                <small>Recognition</small>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="dart-card-visual">
+
+                        <div class="dart-stat-dashboard">
+
+                            <div class="dart-dashboard-top">
+                                <span>PLAYER PERFORMANCE</span>
+                                <i class="fa-solid fa-chart-simple"></i>
+                            </div>
+
+                            <div class="dart-score">
+                                87<span>%</span>
+                            </div>
+
+                            <small class="dart-score-caption">
+                                PERFORMANCE PROFILE
+                            </small>
+
+                            <div class="dart-metric">
+                                <span>Goals</span>
+                                <div>
+                                    <i style="width:86%;"></i>
+                                </div>
+                            </div>
+
+                            <div class="dart-metric">
+                                <span>Assists</span>
+                                <div>
+                                    <i style="width:70%;"></i>
+                                </div>
+                            </div>
+
+                            <div class="dart-metric">
+                                <span>Games</span>
+                                <div>
+                                    <i style="width:94%;"></i>
+                                </div>
+                            </div>
+
+                            <div class="dart-metric">
+                                <span>MVP</span>
+                                <div>
+                                    <i style="width:58%;"></i>
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- ==================================================
+                 CARD 3
+            ================================================== -->
+            <div class="carousel-item">
+
+                <div class="dart-card dart-card-purple">
+
+                    <div class="dart-card-content">
+
+                        <span class="dart-card-eyebrow">
+                            <i class="fa-solid fa-id-card"></i>
+                            DIGITAL SPORTS CV
+                        </span>
+
+                        <div class="dart-card-number">
+                            03
+                        </div>
+
+                        <h1>
+                            Your Sporting
+                            <span>Journey In One Place.</span>
+                        </h1>
+
+                        <p class="dart-card-tagline">
+                            From your first game to the biggest stage.
+                        </p>
+
+                        <p class="dart-card-description">
+                            Build a structured digital sports profile
+                            showing where you played, what you achieved
+                            and how you performed.
+                        </p>
+
+                        <div class="dart-card-tags">
+
+                            <span>
+                                <i class="fa-solid fa-users"></i>
+                                Teams
+                            </span>
+
+                            <span>
+                                <i class="fa-solid fa-calendar"></i>
+                                Seasons
+                            </span>
+
+                            <span>
+                                <i class="fa-solid fa-medal"></i>
+                                Trophies
+                            </span>
+
+                            <span>
+                                <i class="fa-solid fa-ranking-star"></i>
+                                Competitions
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="dart-card-visual">
+
+                        <div class="dart-profile-stack">
+
+                            <div class="dart-profile-back">
+                                <span>2024</span>
+                            </div>
+
+                            <div class="dart-profile-middle">
+                                <span>2025</span>
+                            </div>
+
+                            <div class="dart-profile-front">
+
+                                <div class="dart-profile-icon">
+                                    <i class="fa-solid fa-person-running"></i>
+                                </div>
+
+                                <strong>
+                                    SPORTING PROFILE
+                                </strong>
+
+                                <small>
+                                    Complete performance history
+                                </small>
+
+                                <div class="dart-profile-line"></div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- ==================================================
+                 CARD 4
+            ================================================== -->
+            <div class="carousel-item">
+
+                <div class="dart-card dart-card-gold">
+
+                    <div class="dart-card-content">
+
+                        <span class="dart-card-eyebrow">
+                            <i class="fa-solid fa-star"></i>
+                            YOUR SPORTING IDENTITY
+                        </span>
+
+                        <div class="dart-card-number">
+                            04
+                        </div>
+
+                        <h1>
+                            More Than
+                            <span>Records.</span>
+                        </h1>
+
+                        <p class="dart-card-tagline">
+                            D.A.R.T. turns performance into history.
+                        </p>
+
+                        <p class="dart-card-description">
+                            A database. A record tracker.
+                            A sports CV builder.
+                            A digital representation of your journey.
+                        </p>
+
+                        <div class="dart-final-pills">
+
+                            <span>DATA</span>
+                            <i></i>
+                            <span>RECORDS</span>
+                            <i></i>
+                            <span>JOURNEY</span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="dart-card-visual">
+
+                        <div class="dart-final-mark">
+
+                            <div>
+                                D<span>3</span>ll
+                            </div>
+
+                            <small>
+                                ATHLETE RECORDS TRACKER
+                            </small>
+
+                            <i class="fa-solid fa-person-running"></i>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+        </div>
+
+
+        <!-- NO DOTS -->
+        <!-- NO PREVIOUS BUTTON -->
+        <!-- NO NEXT BUTTON -->
+
+
+        <!-- ==================================================
+             AUTO-SLIDE PROGRESS
+        ================================================== -->
+
+        <div class="dart-carousel-progress">
+            <div class="dart-carousel-progress-bar"></div>
+        </div>
+
+    </div>
+
+</section>
+
+<!--D.A.R.T. ACTION BAR-css-->   <!--D.A.R.T. ACTION BAR-css-->
+<style>
+.dart-action-section {
+    position: relative;
+    width: 100%;
+    padding: 34px 0;
+    background:
+        radial-gradient(
+            circle at 85% 30%,
+            rgba(57,185,114,0.30),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #071208,
+            #0d2413 55%,
+            #061008
+        );
+    border-top: 1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid rgba(25,135,84,0.35);
+    overflow: hidden;
+}
+
+.dart-action-section::before {
+    content: "";
+    position: absolute;
+    width: 500px;
+    height: 180px;
+    left: 50%;
+    top: -100px;
+    transform: translateX(-50%);
+    background: rgba(57,185,114,0.16);
+    filter: blur(70px);
+    pointer-events: none;
+}
+
+.dart-action-container {
+    position: relative;
+    z-index: 2;
+    width: 94%;
+    max-width: 1400px;
+    margin: 0 auto;
+
+    display: grid;
+    grid-template-columns:
+        repeat(3, minmax(0, 1fr));
+
+    gap: 20px;
+}
+
+.dart-action-btn {
+    position: relative;
+
+    display: flex;
+    align-items: center;
+    gap: 14px;
+
+    min-height: 78px;
+    padding: 12px 18px;
+
+    border-radius: 22px;
+
+    text-decoration: none;
+    color: white;
+
+    border: 1px solid rgba(255,255,255,0.14);
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(255,255,255,0.10),
+            rgba(255,255,255,0.035)
+        );
+
+    box-shadow:
+        0 12px 35px rgba(0,0,0,0.28);
+
+    backdrop-filter: blur(12px);
+
+    transition:
+        transform 0.25s ease,
+        box-shadow 0.25s ease,
+        border-color 0.25s ease;
+}
+
+.dart-action-btn:hover {
+    color: white;
+    transform: translateY(-5px);
+    border-color: rgba(255,255,255,0.30);
+
+    box-shadow:
+        0 18px 45px rgba(0,0,0,0.38);
+}
+
+.dart-action-icon {
+    width: 48px;
+    height: 48px;
+
+    flex: 0 0 48px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 15px;
+
+    color: white;
+    font-size: 1.25rem;
+
+    background: rgba(255,255,255,0.10);
+}
+
+.dart-action-search .dart-action-icon {
+    background: rgba(13,110,253,0.22);
+}
+
+.dart-action-athlete .dart-action-icon {
+    background: rgba(25,135,84,0.28);
+}
+
+.dart-action-coach .dart-action-icon {
+    background: goldenrod;
+}
+
+.dart-action-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.dart-action-text strong {
+    display: block;
+    font-size: 1.02rem;
+    font-weight: 800;
+    line-height: 1.2;
+    color: white;
+}
+
+.dart-action-text small {
+    display: block;
+    margin-top: 4px;
+    color: rgba(255,255,255,0.60);
+    font-size: 0.78rem;
+}
+
+.dart-action-arrow {
+    font-size: 0.85rem;
+    opacity: 0.55;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.dart-action-btn:hover .dart-action-arrow {
+    opacity: 1;
+    transform: translateX(4px);
+}
+
+@media (max-width: 991px) {
+
+    .dart-action-container {
+        grid-template-columns: 1fr;
+        gap: 13px;
+    }
+
+    .dart-action-btn {
+        min-height: 72px;
+    }
+}
+
+@media (max-width: 575px) {
+
+    .dart-action-section {
+        padding: 24px 0;
+    }
+
+    .dart-action-container {
+        width: 92%;
+    }
+
+    .dart-action-btn {
+        border-radius: 18px;
+        padding: 11px 14px;
+    }
+
+    .dart-action-icon {
+        width: 43px;
+        height: 43px;
+        flex-basis: 43px;
+        border-radius: 13px;
+        font-size: 1.05rem;
+    }
+
+    .dart-action-text strong {
+        font-size: 0.92rem;
+    }
+
+    .dart-action-text small {
+        font-size: 0.70rem;
+    }
+}
+/* ==========================================================
+   D.A.R.T. ROUNDED CARD HERO
+========================================================== */
+
+.dart-card-carousel-section {
+    width: 100%;
+    padding: 38px 0 45px;
+    background:
+        radial-gradient(
+            circle at 15% 30%,
+            rgba(25,135,84,0.09),
+            transparent 30%
+        ),
+        #050505;
+    overflow: hidden;
+}
+
+.dart-card-carousel-section .carousel-inner {
+    overflow: visible;
+}
+
+.dart-card {
+    width: 94%;
+    max-width: 1450px;
+    min-height: 540px;
+    margin: 0 auto;
+
+    display: grid;
+    grid-template-columns: 1.08fr 0.92fr;
+    align-items: center;
+    gap: 30px;
+
+    padding: 55px 65px;
+
+    border-radius: 34px;
+
+    position: relative;
+    overflow: hidden;
+
+    color: white;
+
+    box-shadow:
+        0 25px 70px rgba(0,0,0,0.40);
+
+    border: 1px solid rgba(255,255,255,0.12);
+}
+
+
+/* ==========================================================
+   CARD COLORS
+========================================================== */
+
+.dart-card-green {
+    background:
+        radial-gradient(
+            circle at 85% 30%,
+            rgba(57,185,114,0.30),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #071208,
+            #0d2413 55%,
+            #061008
+        );
+}
+
+.dart-card-blue {
+    background:
+        radial-gradient(
+            circle at 85% 25%,
+            rgba(13,110,253,0.28),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #07101d,
+            #0b1d35 55%,
+            #060b14
+        );
+}
+
+.dart-card-purple {
+    background:
+        radial-gradient(
+            circle at 80% 25%,
+            rgba(111,66,193,0.30),
+            transparent 32%
+        ),
+        linear-gradient(
+            135deg,
+            #0d0917,
+            #21133b 55%,
+            #090711
+        );
+}
+
+.dart-card-gold {
+    background:
+        radial-gradient(
+            circle at 82% 28%,
+            rgba(255,193,7,0.22),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #151106,
+            #2a200b 55%,
+            #090805
+        );
+}
+
+
+/* ==========================================================
+   CARD CONTENT
+========================================================== */
+
+.dart-card-content {
+    position: relative;
+    z-index: 3;
+}
+
+.dart-card-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+
+    font-size: 0.73rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+
+    color: #75d99b;
+
+    margin-bottom: 18px;
+}
+
+.dart-card-blue .dart-card-eyebrow {
+    color: #76adff;
+}
+
+.dart-card-purple .dart-card-eyebrow {
+    color: #bf9cff;
+}
+
+.dart-card-gold .dart-card-eyebrow {
+    color: #ffd45c;
+}
+
+.dart-card-logo {
+    font-family:
+        "Arial Black",
+        "Trebuchet MS",
+        sans-serif;
+
+    font-size: clamp(4rem, 8vw, 7rem);
+    font-weight: 900;
+
+    letter-spacing: -4px;
+    line-height: 0.85;
+
+    margin-bottom: 15px;
+}
+
+.dart-card-logo span {
+    color: #39b972;
+}
+
+.dart-card-content h1 {
+    margin: 0 0 18px;
+
+    font-family:
+        "Trebuchet MS",
+        Arial,
+        sans-serif;
+
+    font-size: clamp(2.4rem, 5vw, 4.8rem);
+    font-weight: 900;
+
+    line-height: 1.02;
+    letter-spacing: -2px;
+}
+
+.dart-card-content h1 span {
+    display: block;
+    color: #39b972;
+}
+
+.dart-card-blue h1 span {
+    color: #72aaff;
+}
+
+.dart-card-purple h1 span {
+    color: #bb96ff;
+}
+
+.dart-card-gold h1 span {
+    color: #ffd45c;
+}
+
+.dart-card-tagline {
+    margin-bottom: 14px;
+
+    font-family:
+        Georgia,
+        "Times New Roman",
+        serif;
+
+    font-style: italic;
+
+    font-size: clamp(1.15rem, 2vw, 1.55rem);
+
+    color: #e2e8e3;
+}
+
+.dart-card-description {
+    max-width: 680px;
+
+    margin-bottom: 25px;
+
+    color: #c4cec6;
+
+    font-size: 1rem;
+    line-height: 1.8;
+}
+
+
+/* ==========================================================
+   TAGS
+========================================================== */
+
+.dart-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.dart-card-tags span {
+    padding: 9px 13px;
+
+    border-radius: 999px;
+
+    background: rgba(255,255,255,0.075);
+
+    border: 1px solid rgba(255,255,255,0.11);
+
+    font-size: 0.78rem;
+    font-weight: 700;
+
+    color: #dde6df;
+}
+
+.dart-card-tags i {
+    margin-right: 5px;
+    color: #64d58c;
+}
+
+
+/* ==========================================================
+   VISUAL SIDE
+========================================================== */
+
+.dart-card-visual {
+    position: relative;
+
+    min-height: 390px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+
+/* ==========================================================
+   CARD 1 VISUAL
+========================================================== */
+
+.dart-card-orb {
+    position: absolute;
+
+    border-radius: 50%;
+
+    border: 1px solid rgba(57,185,114,0.20);
+}
+
+.orb-one {
+    width: 330px;
+    height: 330px;
+}
+
+.orb-two {
+    width: 440px;
+    height: 210px;
+    transform: rotate(-25deg);
+}
+
+.dart-card-emblem {
+    position: relative;
+    z-index: 3;
+
+    width: 180px;
+    height: 180px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 45px;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(57,185,114,0.27),
+            rgba(57,185,114,0.07)
+        );
+
+    border: 1px solid rgba(255,255,255,0.15);
+
+    box-shadow:
+        0 25px 60px rgba(0,0,0,0.30);
+
+    color: #73d997;
+
+    font-size: 5rem;
+}
+
+.dart-card-floating {
+    position: absolute;
+    z-index: 5;
+
+    padding: 10px 15px;
+
+    border-radius: 999px;
+
+    background: rgba(255,255,255,0.08);
+
+    border: 1px solid rgba(255,255,255,0.12);
+
+    backdrop-filter: blur(10px);
+
+    font-size: 0.78rem;
+    font-weight: 700;
+
+    animation: dartFloating 4s ease-in-out infinite;
+}
+
+.dart-card-floating i {
+    color: #68d88e;
+    margin-right: 6px;
+}
+
+.floating-top {
+    top: 50px;
+    left: 5px;
+}
+
+.floating-right {
+    right: 0;
+    top: 145px;
+    animation-delay: 0.8s;
+}
+
+.floating-bottom {
+    bottom: 55px;
+    left: 45px;
+    animation-delay: 1.4s;
+}
+
+@keyframes dartFloating {
+
+    0%, 100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-9px);
+    }
+
+}
+
+
+/* ==========================================================
+   CARD 2 PERFORMANCE PANEL
+========================================================== */
+
+.dart-stat-dashboard {
+    width: min(390px, 100%);
+
+    padding: 25px;
+
+    border-radius: 27px;
+
+    border: 1px solid rgba(255,255,255,0.13);
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(255,255,255,0.10),
+            rgba(255,255,255,0.035)
+        );
+
+    backdrop-filter: blur(15px);
+
+    box-shadow:
+        0 25px 65px rgba(0,0,0,0.30);
+}
+
+.dart-dashboard-top {
+    display: flex;
+    justify-content: space-between;
+
+    color: #8fa5bd;
+
+    font-size: 0.68rem;
+    letter-spacing: 1.4px;
+    font-weight: 800;
+}
+
+.dart-dashboard-top i {
+    color: #72aaff;
+}
+
+.dart-score {
+    margin-top: 20px;
+
+    font-family: "Arial Black", sans-serif;
+
+    font-size: 5rem;
+    font-weight: 900;
+
+    line-height: 1;
+}
+
+.dart-score span {
+    color: #72aaff;
+    font-size: 1.5rem;
+}
+
+.dart-score-caption {
+    color: #8493a4;
+    letter-spacing: 1.4px;
+    font-size: 0.65rem;
+}
+
+.dart-metric {
+    margin-top: 17px;
+}
+
+.dart-metric > span {
+    display: block;
+    margin-bottom: 5px;
+
+    color: #bec9d4;
+
+    font-size: 0.75rem;
+}
+
+.dart-metric > div {
+    height: 7px;
+
+    border-radius: 999px;
+
+    overflow: hidden;
+
+    background: rgba(255,255,255,0.08);
+}
+
+.dart-metric i {
+    display: block;
+    height: 100%;
+
+    border-radius: inherit;
+
+    background: #4c91ff;
+}
+
+
+/* ==========================================================
+   CARD 2 MINI STATS
+========================================================== */
+
+.dart-card-stat-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.dart-card-stat-row > div {
+    min-width: 120px;
+
+    padding: 11px 14px;
+
+    border-left: 3px solid #4c91ff;
+
+    border-radius: 0 12px 12px 0;
+
+    background: rgba(255,255,255,0.055);
+}
+
+.dart-card-stat-row strong,
+.dart-card-stat-row small {
+    display: block;
+}
+
+.dart-card-stat-row strong {
+    font-size: 0.76rem;
+    letter-spacing: 1px;
+}
+
+.dart-card-stat-row small {
+    margin-top: 3px;
+    color: #8493a4;
+}
+
+
+/* ==========================================================
+   CARD 3 PROFILE
+========================================================== */
+
+.dart-profile-stack {
+    position: relative;
+
+    width: 350px;
+    height: 285px;
+}
+
+.dart-profile-back,
+.dart-profile-middle,
+.dart-profile-front {
+    position: absolute;
+
+    border-radius: 25px;
+
+    border: 1px solid rgba(255,255,255,0.12);
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(255,255,255,0.09),
+            rgba(255,255,255,0.025)
+        );
+
+    backdrop-filter: blur(13px);
+}
+
+.dart-profile-back {
+    width: 260px;
+    height: 160px;
+    left: 10px;
+    top: 0;
+
+    transform: rotate(-8deg);
+
+    opacity: 0.35;
+}
+
+.dart-profile-middle {
+    width: 270px;
+    height: 165px;
+    right: 0;
+    top: 30px;
+
+    transform: rotate(7deg);
+
+    opacity: 0.55;
+}
+
+.dart-profile-back span,
+.dart-profile-middle span {
+    position: absolute;
+
+    right: 20px;
+    bottom: 15px;
+
+    color: rgba(255,255,255,0.35);
+
+    font-family: "Arial Black", sans-serif;
+}
+
+.dart-profile-front {
+    width: 285px;
+    min-height: 190px;
+
+    left: 30px;
+    top: 65px;
+
+    z-index: 4;
+
+    padding: 25px;
+}
+
+.dart-profile-icon {
+    width: 52px;
+    height: 52px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 15px;
+
+    background: rgba(111,66,193,0.23);
+
+    color: #bf9cff;
+
+    font-size: 1.4rem;
+}
+
+.dart-profile-front strong {
+    display: block;
+    margin-top: 16px;
+
+    font-size: 0.92rem;
+}
+
+.dart-profile-front small {
+    display: block;
+    margin-top: 6px;
+
+    color: #9890a9;
+
+    font-size: 0.72rem;
+}
+
+.dart-profile-line {
+    width: 100%;
+    height: 6px;
+
+    margin-top: 17px;
+
+    border-radius: 999px;
+
+    background:
+        linear-gradient(
+            90deg,
+            #8f63d6 0%,
+            #c29bff 75%,
+            rgba(255,255,255,0.08) 75%
+        );
+}
+
+
+/* ==========================================================
+   CARD 4
+========================================================== */
+
+.dart-card-number {
+    position: absolute;
+
+    top: 25px;
+    right: 35px;
+
+    font-family: "Arial Black", sans-serif;
+
+    font-size: 6rem;
+    line-height: 1;
+
+    color: rgba(255,255,255,0.045);
+}
+
+.dart-final-pills {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+
+    gap: 10px;
+
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+
+    color: #d5c38d;
+}
+
+.dart-final-pills > i {
+    width: 20px;
+    height: 1px;
+
+    background: #705d2a;
+}
+
+.dart-final-mark {
+    position: relative;
+    z-index: 3;
+
+    text-align: center;
+}
+
+.dart-final-mark > div {
+    font-family: "Arial Black", sans-serif;
+
+    font-size: 7rem;
+
+    font-weight: 900;
+
+    letter-spacing: -5px;
+
+    line-height: 0.85;
+}
+
+.dart-final-mark > div span {
+    color: #ffd45c;
+}
+
+.dart-final-mark small {
+    display: block;
+
+    margin-top: 17px;
+
+    color: #9f9270;
+
+    letter-spacing: 2px;
+
+    font-size: 0.65rem;
+}
+
+.dart-final-mark > i {
+    display: inline-block;
+
+    margin-top: 20px;
+
+    font-size: 2rem;
+
+    color: #ffd45c;
+}
+
+
+/* ==========================================================
+   PROGRESS LINE — NO DOTS
+========================================================== */
+
+.dart-carousel-progress {
+    width: 94%;
+    max-width: 1450px;
+
+    height: 3px;
+
+    margin: 14px auto 0;
+
+    overflow: hidden;
+
+    border-radius: 999px;
+
+    background: rgba(255,255,255,0.08);
+}
+
+.dart-carousel-progress-bar {
+    height: 100%;
+    width: 0;
+
+    background: #198754;
+
+    animation: dartProgress 5s linear infinite;
+}
+
+@keyframes dartProgress {
+
+    from {
+        width: 0;
+    }
+
+    to {
+        width: 100%;
+    }
+
+}
+
+
+/* ==========================================================
+   MOBILE
+========================================================== */
+
+@media (max-width: 900px) {
+
+    .dart-card-carousel-section {
+        padding: 24px 0 35px;
+    }
+
+    .dart-card {
+        width: 92%;
+        min-height: 680px;
+
+        grid-template-columns: 1fr;
+
+        gap: 10px;
+
+        padding: 40px 25px 55px;
+
+        border-radius: 26px;
+
+        text-align: center;
+    }
+
+    .dart-card-content {
+        max-width: 100%;
+        margin: auto;
+    }
+
+    .dart-card-eyebrow {
+        justify-content: center;
+    }
+
+    .dart-card-description {
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .dart-card-tags {
+        justify-content: center;
+    }
+
+    .dart-card-stat-row {
+        justify-content: center;
+    }
+
+    .dart-card-visual {
+        min-height: 260px;
+    }
+
+    .dart-card-number {
+        display: none;
+    }
+
+    .dart-card-orb {
+        transform: scale(0.70);
+    }
+
+    .dart-floating-top,
+    .dart-floating-right,
+    .dart-floating-bottom {
+        transform: scale(0.9);
+    }
+
+    .floating-top {
+        left: 1%;
+        top: 5px;
+    }
+
+    .floating-right {
+        right: 1%;
+        top: 70px;
+    }
+
+    .floating-bottom {
+        bottom: 8px;
+        left: 8%;
+    }
+
+    .dart-profile-stack {
+        transform: scale(0.82);
+    }
+
+    .dart-final-mark > div {
+        font-size: 5rem;
+    }
+
+}
+</style>
 {% endblock %}

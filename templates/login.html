@@ -42,12 +42,29 @@
     }
   });
 </script>
-          <button type="submit" class="btn btn-success w-100">Login</button>
+          <button type="submit" class="btn w-100"><strong>Login</strong></button>
           <div class="text-center mt-3">
     <a href="{{ url_for('forgot_password') }}">
         Forgot Password?
     </a>
-</div>
+</div> 
+<style>
+    .btn {
+    background:
+        radial-gradient(
+            circle at 85% 30%,
+            rgba(57,185,114,0.30),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #071208,
+            #0d2413 55%,
+            #061008
+        );
+        color: white;
+}
+</style>
         </form>
       </div>
     </div>

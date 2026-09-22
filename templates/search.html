@@ -286,12 +286,29 @@
 
           <button
               type="submit"
-              class="btn btn-success btn-lg rounded-5"
+              class="btn btn-lg rounded-5"
               style="border:2px solid black; color:white;">
             Search
             <i class="fa-solid fa-magnifying-glass"></i>
           </button>
-
+  <!-----CSS-------->  <!-----CSS-------->
+  <!-----CSS-------->  <!-----CSS-------->
+<style>
+  .btn{
+        background:
+        radial-gradient(
+            circle at 85% 30%,
+            rgba(57,185,114,0.30),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #071208,
+            #0d2413 55%,
+            #061008
+        );
+  }
+</style>
           <a
               href="{{ url_for('search') }}"
               class="btn btn-outline-secondary btn-lg rounded-5">
