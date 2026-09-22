@@ -100,8 +100,16 @@ supabase = create_client(
     os.environ.get("SUPABASE_SERVICE_KEY")
 )
 
-app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'uploads')
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# ==========================================================
+# FILE UPLOAD CONFIGURATION
+# ==========================================================
+# Persistent athlete files are stored in Supabase Storage.
+# /tmp is writable for temporary files during a Vercel request.
+app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
+os.makedirs(
+    app.config['UPLOAD_FOLDER'],
+    exist_ok=True
+)
 
 db.init_app(app)
 migrate = Migrate(app, db)
