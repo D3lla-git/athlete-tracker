@@ -97,12 +97,12 @@
                         </h1>
 
                         <p class="dart-card-tagline">
-                            Your game. Your numbers. Your story.
+                            Your game. Your stats. Your sports journey. All in one place.
                         </p>
 
                         <p class="dart-card-description">
-                            A digital home for athlete performance,
-                            sporting history, achievements and records.
+                            D.A.R.T is Liberia’s first digital sports CV network 
+                            built to showcase talent with integrity.
                         </p>
 
                         <div class="dart-card-tags">
@@ -1291,7 +1291,98 @@
             rgba(255,255,255,0.08) 75%
         );
 }
+/* =========================================================
+   CARD 3 - MOBILE RESPONSIVE FIX
+   Desktop remains unchanged
+   ========================================================= */
+@media (max-width: 768px) {
 
+    /* Keep the card itself inside the carousel */
+    .dart-card-purple {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+    /* Stack text and visual vertically on mobile */
+    .dart-card-purple .dart-card-content {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .dart-card-purple .dart-card-visual {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+
+        display: flex;
+        justify-content: center;
+        align-items: center;
+
+        margin-top: 25px;
+    }
+
+    /* Prevent the heading from forcing the card wider */
+    .dart-card-purple h1 {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+
+        font-size: 2rem;
+        line-height: 1.15;
+
+        overflow-wrap: break-word;
+        word-break: normal;
+    }
+
+    .dart-card-purple .dart-card-tagline,
+    .dart-card-purple .dart-card-description {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+
+        overflow-wrap: break-word;
+    }
+
+    /* Make the tags wrap instead of extending to the right */
+    .dart-card-purple .dart-card-tags {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .dart-card-purple .dart-card-tags span {
+        max-width: 100%;
+        box-sizing: border-box;
+        white-space: normal;
+    }
+
+    /* Keep the profile graphic inside the card */
+    .dart-card-purple .dart-profile-stack {
+        width: min(100%, 300px);
+        max-width: 100%;
+        box-sizing: border-box;
+
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .dart-card-purple .dart-profile-back,
+    .dart-card-purple .dart-profile-middle,
+    .dart-card-purple .dart-profile-front {
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+}
 
 /* ==========================================================
    CARD 4
