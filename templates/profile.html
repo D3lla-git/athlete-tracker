@@ -8,7 +8,7 @@
       <div class="card-header d-flex justify-content-between align-items-center">
         <h4 class="mb-0">My Profile</h4>
         {% if current_user.is_verified %}
-          <span class="badge bg-success">Verified</span>
+          <span class="badge bg-success">Verified <i class="fa-solid fa-user-check"></i></span>
         {% else %}
           <span class="badge bg-warning text-dark">Pending</span>
         {% endif %}

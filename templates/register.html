@@ -52,6 +52,83 @@
   </select>
 </div>
 
+<!-- ================= ATHLETE PERSONAL INFORMATION ================= -->
+
+<div class="mb-3">
+  <label for="age" class="form-label">
+    Age <i class="fa-solid fa-cake-candles"></i>
+  </label>
+
+  <input
+      type="number"
+      name="age"
+      id="age"
+      class="form-control"
+      min="0"
+      step="1"
+      placeholder="Example: 18"
+      required>
+</div>
+
+<div class="mb-3">
+  <label for="date_of_birth" class="form-label">
+    Date of Birth <i class="fa-solid fa-calendar-days"></i>
+  </label>
+
+  <input
+      type="date"
+      name="date_of_birth"
+      id="date_of_birth"
+      class="form-control"
+      required>
+</div>
+
+<div class="mb-3">
+  <label for="nationality" class="form-label">
+    Nationality <i class="fa-solid fa-globe"></i>
+  </label>
+
+  <input
+      type="text"
+      name="nationality"
+      id="nationality"
+      class="form-control"
+      placeholder="Example: Liberian"
+      required>
+</div>
+
+<div class="mb-3">
+  <label for="height_cm" class="form-label">
+    Height (cm) <i class="fa-solid fa-ruler-vertical"></i>
+  </label>
+
+  <input
+      type="number"
+      name="height_cm"
+      id="height_cm"
+      class="form-control"
+      min="1"
+      step="0.01"
+      placeholder="Example: 175"
+      required>
+</div>
+
+<div class="mb-3">
+  <label for="weight_kg" class="form-label">
+    Weight (kg) <i class="fa-solid fa-weight-scale"></i>
+  </label>
+
+  <input
+      type="number"
+      name="weight_kg"
+      id="weight_kg"
+      class="form-control"
+      min="1"
+      step="0.01"
+      placeholder="Example: 68"
+      required>
+</div>
+
 <div class="mb-3">
     <label for="email" class="form-label">
         Email Address <i class="fa-solid fa-envelope"></i>
@@ -97,7 +174,7 @@
   });
 </script>
           <div class="mb-3">
-            <label>Student ID or Passport (PNG/JPG/PDF)</label>
+            <label>ID or Passport (PNG/JPG/PDF)</label>
             <input type="file" name="id_document" class="form-control" accept=".png,.jpg,.jpeg,.pdf">
           </div>
           <button type="submit"  class="btn btn-lg rounded-5"

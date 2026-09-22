@@ -673,8 +673,14 @@ def register(registration_category=None):
         full_name = request.form['full_name'].strip()
         school = request.form['school'].strip()
         gender = request.form.get('gender', '').strip()
+        nationality = request.form.get('nationality', '').strip()
         email = request.form['email'].strip().lower()
         password = request.form['password']
+        age_raw = request.form.get('age', '').strip()
+        date_of_birth_raw = request.form.get('date_of_birth', '').strip()
+        nationality = request.form.get('nationality', '').strip()
+        height_cm_raw = request.form.get('height_cm', '').strip()
+        weight_kg_raw = request.form.get('weight_kg', '').strip()
 
         # ==========================================================
         # PASSWORD STRENGTH
@@ -706,7 +712,118 @@ def register(registration_category=None):
                     registration_category=registration_category
                 )
             )
+        if not nationality:
+            flash('Nationality is required.', 'danger')
+        # ==========================================================
+        # ATHLETE PERSONAL INFORMATION VALIDATION
+        # ==========================================================
 
+        try:
+            age = int(age_raw)
+        except (TypeError, ValueError):
+            flash('Please enter a valid age.', 'danger')
+            return redirect(
+                url_for(
+                    'register',
+                    registration_category=registration_category
+                )
+            )
+
+        try:
+            date_of_birth = datetime.strptime(
+                date_of_birth_raw,
+                '%Y-%m-%d'
+            ).date()
+        except (TypeError, ValueError):
+            flash('Please enter a valid Date of Birth.', 'danger')
+            return redirect(
+                url_for(
+                    'register',
+                    registration_category=registration_category
+                )
+            )
+
+        today = datetime.utcnow().date()
+
+        if date_of_birth > today:
+            flash('Date of Birth cannot be in the future.', 'danger')
+            return redirect(
+                url_for(
+                    'register',
+                    registration_category=registration_category
+                )
+            )
+
+        calculated_age = (
+            today.year
+            - date_of_birth.year
+            - (
+                (today.month, today.day)
+                < (date_of_birth.month, date_of_birth.day)
+            )
+        )
+
+        if age != calculated_age:
+            flash(
+                'Age does not match Date of Birth. '
+                'Please enter the correct Age and Date of Birth.',
+                'danger'
+            )
+            return redirect(
+                url_for(
+                    'register',
+                    registration_category=registration_category
+                )
+            )
+
+        if not nationality:
+            flash('Nationality is required.', 'danger')
+            return redirect(
+                url_for(
+                    'register',
+                    registration_category=registration_category
+                )
+            )
+
+        try:
+            height_cm = float(height_cm_raw)
+        except (TypeError, ValueError):
+            flash('Please enter a valid height in centimeters.', 'danger')
+            return redirect(
+                url_for(
+                    'register',
+                    registration_category=registration_category
+                )
+            )
+
+        try:
+            weight_kg = float(weight_kg_raw)
+        except (TypeError, ValueError):
+            flash('Please enter a valid weight in kilograms.', 'danger')
+            return redirect(
+                url_for(
+                    'register',
+                    registration_category=registration_category
+                )
+            )
+
+        if height_cm <= 0:
+            flash('Height must be greater than 0 cm.', 'danger')
+            return redirect(
+                url_for(
+                    'register',
+                    registration_category=registration_category
+                )
+            )
+
+        if weight_kg <= 0:
+            flash('Weight must be greater than 0 kg.', 'danger')
+            return redirect(
+                url_for(
+                    'register',
+                    registration_category=registration_category
+                )
+            )
         # ==========================================================
         # FIND EXISTING ACCOUNT BY EMAIL
         # ==========================================================
@@ -829,6 +946,8 @@ def register(registration_category=None):
         # ==========================================================
 
         filename = None
+
+        
 
         if existing and existing.is_verified:
 
@@ -959,25 +1078,40 @@ def register(registration_category=None):
         if not existing:
 
             user = User(
-                full_name=full_name,
-                school=school,
-                gender=gender,
-                email=email,
-                id_document=storage_path,
-                role='Athlete',
-                athlete_category=selected_category
-            )
+    full_name=full_name,
+    school=school,
+    gender=gender,
+    age=age,
+    date_of_birth=date_of_birth,
+    nationality=nationality,
+    height_cm=height_cm,
+    weight_kg=weight_kg,
+    email=email,
+    id_document=storage_path,
+    role='Athlete',
+    athlete_category=selected_category
+)
 
             user.set_password(password)
             db.session.add(user)
             db.session.flush()
 
-        else:
+        else: 
 
             # Existing unverified user uploaded a new ID.
             # Keep the account's existing password/name/school.
             if not existing.is_verified and filename:
                 existing.id_document = storage_path
+
+        # ==========================================================
+        # UPDATE EXISTING ATHLETE PERSONAL INFORMATION
+        # ==========================================================
+            existing.gender = gender
+            existing.age = age
+            existing.date_of_birth = date_of_birth
+            existing.nationality = nationality
+            existing.height_cm = height_cm
+            existing.weight_kg = weight_kg
 
         # ==========================================================
         # CHECK FOR DUPLICATE CATEGORY REGISTRATION
@@ -1489,6 +1623,11 @@ def submit_record():
     team = request.form.get('team', '').strip()
     team_played_against = request.form.get('team_played_against', '').strip()
     competition_category = request.form.get('competition_category', '').strip()
+    match_minutes_played = request.form.get('match_minutes_played') or 0
+    clean_sheets = request.form.get('clean_sheets') or 0
+    saves = request.form.get('saves') or 0
+    rebound_type = request.form.get('rebound_type','').strip()
+
     if not competition_category:
         flash(
             'Please select a competition.',
@@ -1581,11 +1720,11 @@ def submit_record():
     year=year,
     position=position,
     games_played=safe_int(games_played),
+    man_of_the_match=safe_int(request.form.get('man_of_the_match')),
     trophy=trophy_value,
     team=team,
     team_played_against=team_played_against,
     competition_category=competition_category,
-    man_of_the_match=safe_int(request.form.get('man_of_the_match')),
     mvp=safe_int(request.form.get('mvp')),
     status='pending'
 )
@@ -1595,12 +1734,24 @@ def submit_record():
         record.assists = safe_int(request.form.get('assists'))
         record.yellow_cards = safe_int(request.form.get('yellow_cards'))
         record.red_cards = safe_int(request.form.get('red_cards'))
+        record.clean_sheets = safe_int(request.form.get('clean_sheets'))
+        record.saves = safe_int(request.form.get('saves'))
+        record.rebound_type = None
 
     elif sport == 'Basketball':
         record.points = safe_int(request.form.get('points'))
         record.assists = safe_int(request.form.get('assists'))
         record.blocks = safe_int(request.form.get('blocks'))
         record.sent_off = safe_int(request.form.get('sent_off'))
+        record.rebound_type = (rebound_type
+        if rebound_type in [
+            'Offensive rebound',
+            'Defensive rebound'
+        ]
+        else None
+    )
+
+        record.clean_sheets = 0
 
     elif sport == 'Kickball':
         record.home_runs = safe_int(request.form.get('home_runs'))
@@ -1608,6 +1759,8 @@ def submit_record():
         record.kickball_yellow_cards = safe_int(request.form.get('kickball_yellow_cards'))
         record.cut_base = safe_int(request.form.get('cut_base'))
         record.foul_played = safe_int(request.form.get('foul_played'))
+        record.clean_sheets = 0
+        record.rebound_type = None
 
     db.session.add(record)
     db.session.commit()
@@ -2424,6 +2577,7 @@ def register_coach(registration_category=None):
         full_name = request.form['full_name'].strip()
         school = request.form['school'].strip()
         gender = request.form.get('gender', '').strip()
+        nationality = request.form.get('nationality', '').strip()
         email = request.form['email'].strip().lower()
         password = request.form['password']
 
@@ -2453,6 +2607,13 @@ def register_coach(registration_category=None):
 
         if gender not in ['Male', 'Female']:
             flash('Please select a valid gender.', 'danger')
+            return redirect(url_for(
+                'register_coach',
+                registration_category=registration_category
+            ))
+
+        if not nationality:
+            flash('Nationality is required.', 'danger')
             return redirect(url_for(
                 'register_coach',
                 registration_category=registration_category
@@ -2492,6 +2653,7 @@ def register_coach(registration_category=None):
             full_name=full_name,
             school=school,
             gender=gender,
+            nationality=nationality,
             email=email,
             role='Coach',
             coach_category=selected_category,

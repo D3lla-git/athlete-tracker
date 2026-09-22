@@ -18,7 +18,7 @@
     <p class="text-muted mb-1">{{ current_user.school }} <i class="fa-solid fa-school"></i></p>
     
     {% if current_user.is_verified %}
-      <span class="badge bg-success">Verified Athlete</span>
+      <span class="badge bg-success">Verified Athlete <i class="fa-solid fa-user-check"></i></span>
     {% else %}
       <span class="badge bg-warning text-dark">ID Pending Verification</span>
     {% endif %}
@@ -180,6 +180,22 @@
       <input type="number" name="games_played" class="form-control" min="0" value="0">
     </div>
 
+    <div class="col-md-3">
+  <label class="form-label">
+    Match Minutes Played
+    <i class="fa-solid fa-clock"></i>
+  </label>
+
+  <input
+      type="number"
+      name="match_minutes_played"
+      class="form-control"
+      min="0"
+      step="1"
+      value="0"
+      placeholder="e.g. 90">
+</div>
+
 <div class="row g-3 mt-1">
   <div class="col-md-6">
     <label class="form-label" id="motm-label">
@@ -222,7 +238,7 @@
 
   <div class="col-md-6">
     <label class="form-label">
-      Red Card <i class="fa-solid fa-square"></i>
+      Red Card <i class="fa-solid fa-square" style="color: #FF0000;"></i>
     </label>
     <input type="number"
            name="kickball_red_cards"
@@ -234,7 +250,7 @@
 
   <div class="col-md-6">
     <label class="form-label">
-      Yellow Card <i class="fa-solid fa-square"></i>
+      Yellow Card <i class="fa-solid fa-square" style="color: #FFFF00;"></i>
     </label>
     <input type="number"
            name="kickball_yellow_cards"
@@ -414,6 +430,36 @@
       <input type="number" name="red_cards" class="form-control" min="0" value="0">
     </div>
 
+    <div class="col-md-2">
+  <label class="form-label">
+    Clean Sheets
+    <i class="fa-regular fa-clipboard"></i>
+  </label>
+
+  <input
+      type="number"
+      name="clean_sheets"
+      class="form-control"
+      min="0" 
+      step="1"
+      value="0">
+</div>
+
+<div class="col-md-2">
+  <label class="form-label">
+    Saves
+    <i class="fa-solid fa-hands-bubbles"></i>
+  </label>
+
+  <input
+      type="number"
+      name="saves"
+      class="form-control"
+      min="0"
+      step="1"
+      value="0">
+</div>
+
   </div>
 
   <!-- Basketball Fields -->
@@ -427,9 +473,27 @@
       <input type="number" name="assists" class="form-control" min="0" value="0">
     </div>
     <div class="col-md-2">
-      <label class="form-label">Blocks <i class="fa-regular fa-hand" style="color: black;"></i></label>
+      <label class="form-label">Blocks <i class="fa-regular fa-hand" style="color: burlywood;"></i></label>
       <input type="number" name="blocks" class="form-control" min="0" value="0">
     </div>
+<div class="col-md-4">
+  <label class="form-label">
+    Rebounds
+    <i class="fa-solid fa-basketball" style="color: orangered;"></i>
+  </label>
+
+  <select
+      name="rebound_type"
+      id="reboundType"
+      class="form-select">
+
+    <option value="">-- Select --</option>
+    <option value="Offensive rebound">Offensive rebound</option>
+    <option value="Defensive rebound">Defensive rebound</option>
+
+  </select>
+</div>
+
     <div class="col-md-2">
       <label class="form-label">Sent Off Court <i class="fa-solid fa-x" style="color: red;"></i></label>
       <input type="number" name="sent_off" class="form-control" min="0" value="0">

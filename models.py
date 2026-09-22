@@ -13,6 +13,12 @@ class User(UserMixin, db.Model):
     athlete_category = db.Column(db.String(50), nullable=True)
     coach_category = db.Column(db.String(50), nullable=True)
     gender = db.Column(db.String(10), nullable=True)
+    # Athlete / Coach personal information
+    age = db.Column(db.Integer, nullable=True)
+    date_of_birth = db.Column(db.Date, nullable=True)
+    nationality = db.Column(db.String(100), nullable=True)
+    height_cm = db.Column(db.Numeric(6, 2), nullable=True)
+    weight_kg = db.Column(db.Numeric(6, 2), nullable=True)
     email = db.Column(db.String(255), nullable=True, unique=True)
 
         # Password reset security fields
@@ -63,11 +69,17 @@ class SportRecord(db.Model):
     assists = db.Column(db.Integer, default=0)
     yellow_cards = db.Column(db.Integer, default=0)
     red_cards = db.Column(db.Integer, default=0)
+    clean_sheets = db.Column(db.Integer, default=0)
+    saves = db.Column(db.Integer, default=0)
+
+    # General performance field
+    match_minutes_played = db.Column(db.Integer, default=0)
 
     # Basketball fields
     points = db.Column(db.Integer, default=0)
     blocks = db.Column(db.Integer, default=0)
     sent_off = db.Column(db.Integer, default=0)
+    rebound_type = db.Column(db.String(50), nullable=True)
 
     # Kickball fields
     home_runs = db.Column(db.Integer, default=0)
