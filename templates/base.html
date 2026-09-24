@@ -569,7 +569,7 @@ html[data-theme="light"] .athlete-footer {
   width: 100%;
 }
 .dart-logo {
-    height: 65px;
+    height: 60px;
     width: auto;
     max-width: 180px;
     object-fit: contain;
@@ -623,6 +623,22 @@ html[data-theme="light"] .athlete-footer {
 <li class="nav-item">
   <a class="nav-link" href="{{ url_for('profile') }}"style="color: white;">My Profile <i class="bi bi-person-circle"></i></a>
 </li>
+
+{% if current_user.is_authenticated and current_user.role in ('Athlete', 'Coach', 'Scout') %}
+<li class="nav-item">
+  <a class="nav-link"
+     href="{{ url_for('inbox') }}"
+     style="color: white;">
+    Inbox
+    <i class="fa-solid fa-envelope"></i>
+    {% if unread_message_count > 0 %}
+      <span class="badge bg-danger ms-1">
+        {{ unread_message_count }}
+      </span>
+    {% endif %}
+  </a>
+</li>
+{% endif %}
           {% if current_user.is_authenticated %}
             {% if current_user.role == 'admin' %}
               <li class="nav-item">
@@ -632,7 +648,6 @@ html[data-theme="light"] .athlete-footer {
               <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('student_dashboard') }}"style="color: white;">My Records <i class="fa-solid fa-book"></i></a>
               </li>
-
             {% endif %}
 {% if current_user.is_authenticated and current_user.role == 'admin' %}
     <a class="nav-link" href="{{ url_for('setup_2fa') }}">

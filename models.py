@@ -6,7 +6,7 @@ from datetime import datetime
 db = SQLAlchemy()
 
 class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.BigInteger, primary_key=True)
     full_name = db.Column(db.String(150), nullable=False)
     school = db.Column(db.String(150), nullable=False)
     # Athlete / Coach category permissions
@@ -19,6 +19,7 @@ class User(UserMixin, db.Model):
     nationality = db.Column(db.String(100), nullable=True)
     height_cm = db.Column(db.Numeric(6, 2), nullable=True)
     weight_kg = db.Column(db.Numeric(6, 2), nullable=True)
+    preferred_foot = db.Column(db.String(20), nullable=True)
     email = db.Column(db.String(255), nullable=True, unique=True)
 
         # Password reset security fields
@@ -32,7 +33,7 @@ class User(UserMixin, db.Model):
     two_factor_recovery_codes = db.Column(db.Text, nullable=True)
 
     password_hash = db.Column(db.String(256), nullable=False)
-    role = db.Column(db.String(20), default='Athlete')  # Athlete, Coach, or System
+    role = db.Column(db.String(20), default='Athlete')  # Athlete, Coach, scout or System
     id_document = db.Column(db.String(255), nullable=True)      # from registration
     profile_picture = db.Column(db.String(255), nullable=True)  # optional update
     is_verified = db.Column(db.Boolean, default=False)
@@ -157,4 +158,35 @@ class Registration(db.Model):
             'registration_year',
             name='unique_user_registration_year'
         ),
+    )
+
+class ChatMessage(db.Model):
+    __tablename__ = 'chat_message'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+
+    sender_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False
+    )
+
+    recipient_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False
+    )
+
+    body = db.Column(db.Text, nullable=False)
+
+    is_read = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.func.now()
     )

@@ -95,6 +95,44 @@
               <label class="form-label">Games Played</label>
               <input type="number" name="games_played" class="form-control" value="{{ record.games_played }}" min="0">
             </div>
+
+<div class="col-md-6">
+  <label class="form-label">
+    Games Played
+    <i class="fa-solid fa-person-running"></i>
+  </label>
+  <input type="number"
+         name="games_played"
+         class="form-control"
+         value="{{ record.games_played }}"
+         min="0">
+</div>
+
+<div class="col-md-6">
+  <label class="form-label">
+    Match Minutes Played
+    <i class="fa-solid fa-clock"></i>
+  </label>
+  <input type="number"
+         name="match_minutes_played"
+         class="form-control"
+         value="{{ record.match_minutes_played or 0 }}"
+         min="0">
+</div>
+
+<div class="col-md-6">
+  <label class="form-label">
+    Preferred Foot
+    <i class="fa-solid fa-shoe-prints"></i>
+  </label>
+  <select name="preferred_foot" class="form-select">
+    <option value="">-- Select --</option>
+    <option value="Right" {% if current_user.preferred_foot == 'Right' %}selected{% endif %}>Right</option>
+    <option value="Left" {% if current_user.preferred_foot == 'Left' %}selected{% endif %}>Left</option>
+    <option value="Both" {% if current_user.preferred_foot == 'Both' %}selected{% endif %}>Both</option>
+  </select>
+</div>
+
 <div class="row g-3 mt-1">
   <div class="col-md-6">
    <label class="form-label">
@@ -367,8 +405,11 @@
 
     <!-- Football Statistics -->
     <div class="row g-3">
+
         <div class="col-md-6">
-            <label class="form-label">Goals <i class="fa-solid fa-futbol"></i></label>
+            <label class="form-label">
+                Goals <i class="fa-solid fa-futbol"></i>
+            </label>
             <input type="number"
                    name="goals"
                    class="form-control"
@@ -378,7 +419,9 @@
         </div>
 
         <div class="col-md-6">
-            <label class="form-label">Assists <i class="fa-solid fa-handshake"></i></label>
+            <label class="form-label">
+                Assists <i class="fa-solid fa-handshake"></i>
+            </label>
             <input type="number"
                    name="assists"
                    class="form-control"
@@ -388,7 +431,10 @@
         </div>
 
         <div class="col-md-6">
-            <label class="form-label">Yellow Cards <i class="fa-solid fa-square" style="color: yellow;"></i></label>
+            <label class="form-label">
+                Yellow Cards
+                <i class="fa-solid fa-square" style="color: yellow;"></i>
+            </label>
             <input type="number"
                    name="yellow_cards"
                    class="form-control"
@@ -398,7 +444,10 @@
         </div>
 
         <div class="col-md-6">
-            <label class="form-label">Red Cards <i class="fa-solid fa-square" style="color: red;"></i></label>
+            <label class="form-label">
+                Red Cards
+                <i class="fa-solid fa-square" style="color: red;"></i>
+            </label>
             <input type="number"
                    name="red_cards"
                    class="form-control"
@@ -406,6 +455,39 @@
                    step="1"
                    value="{{ record.red_cards or 0 }}">
         </div>
+
+        <!-- GK-only statistics -->
+        <div id="goalkeeperStats" class="row g-3 mt-1"
+             {% if record.position != 'GK' %}style="display:none;"{% endif %}>
+
+            <div class="col-md-6">
+                <label class="form-label">
+                    Clean Sheets
+                    <i class="fa-solid fa-shield-halved"></i>
+                </label>
+                <input type="number"
+                       name="clean_sheets"
+                       class="form-control"
+                       min="0"
+                       step="1"
+                       value="{{ record.clean_sheets or 0 }}">
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">
+                    Saves
+                    <i class="fa-solid fa-hand"></i>
+                </label>
+                <input type="number"
+                       name="saves"
+                       class="form-control"
+                       min="0"
+                       step="1"
+                       value="{{ record.saves or 0 }}">
+            </div>
+
+        </div>
+
     </div>
 
 {% elif record.sport == 'Kickball' %}
@@ -516,6 +598,24 @@
                    step="1"
                    value="{{ record.sent_off or 0 }}">
         </div>
+        <div class="col-md-6">
+    <label class="form-label">
+        Rebounds
+        <i class="fa-solid fa-basketball"></i>
+    </label>
+
+    <select name="rebound_type" class="form-select">
+        <option value="">-- Select --</option>
+        <option value="Offensive rebound"
+            {% if record.rebound_type == 'Offensive rebound' %}selected{% endif %}>
+            Offensive rebound
+        </option>
+        <option value="Defensive rebound"
+            {% if record.rebound_type == 'Defensive rebound' %}selected{% endif %}>
+            Defensive rebound
+        </option>
+    </select>
+</div>
     </div>
 
 {% endif %}
@@ -529,4 +629,27 @@
     </div>
   </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    const positionSelect = document.getElementById('editPositionSelect');
+    const goalkeeperStats = document.getElementById('goalkeeperStats');
+
+    function updateGoalkeeperStats() {
+        if (!positionSelect || !goalkeeperStats) {
+            return;
+        }
+
+        goalkeeperStats.style.display =
+            positionSelect.value === 'GK' ? 'flex' : 'none';
+    }
+
+    if (positionSelect) {
+        positionSelect.addEventListener('change', updateGoalkeeperStats);
+        updateGoalkeeperStats();
+    }
+
+});
+</script>
+
 {% endblock %}

@@ -81,6 +81,16 @@
 
   </div>
 
+          <!-- ================= BUTTONS ================= -->
+
+        <div class="mt-4 d-flex gap-3 flex-wrap search-action-buttons">
+          <button
+              type="submit"
+              class="btn btn-lg rounded-5 search-submit-btn"
+              style="border:2px solid black; color:white;">
+            Search
+            <i class="fa-solid fa-magnifying-glass"></i>
+          </button>
   <!-- ================= ADVANCED FILTERS ================= -->
 
   <div class="collapse show mt-3" id="advancedSearchFilters">
@@ -280,47 +290,71 @@
   </div>
 
 </div>
-        <!-- ================= BUTTONS ================= -->
-
-        <div class="mt-4 d-flex gap-2 flex-wrap">
-
-          <button
-              type="submit"
-              class="btn btn-lg rounded-5"
-              style="border:2px solid black; color:white;">
-            Search
-            <i class="fa-solid fa-magnifying-glass"></i>
-          </button>
   <!-----CSS-------->  <!-----CSS-------->
   <!-----CSS-------->  <!-----CSS-------->
 <style>
-  .btn{
-        background:
-        radial-gradient(
-            circle at 85% 30%,
-            rgba(57,185,114,0.30),
-            transparent 30%
-        ),
-        linear-gradient(
-            135deg,
-            #071208,
-            #0d2413 55%,
-            #061008
-        );
+  .btn {
+    background:
+      radial-gradient(
+        circle at 85% 30%,
+        rgba(57,185,114,0.30),
+        transparent 30%
+      ),
+      linear-gradient(
+        135deg,
+        #071208,
+        #0d2413 55%,
+        #061008
+      );
+  }
+
+  /* ===== DESKTOP SEARCH BUTTON UX ===== */
+  @media (min-width: 992px) {
+
+    .search-action-buttons {
+      width: 100%;
+      margin-top: 30px !important;
+      padding-top: 6px;
+      align-items: center;
+      gap: 16px !important;
+    }
+
+    .search-action-buttons .search-submit-btn,
+    .search-action-buttons .clear-filter-btn {
+      height: 52px;
+      min-height: 52px;
+      padding: 0 24px !important;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      align-self: center;
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
+    .search-action-buttons .search-submit-btn {
+      min-width: 150px;
+    }
+
+    .search-action-buttons .clear-filter-btn {
+      min-width: 170px;
+      margin-left: 4px;
+    }
   }
 </style>
-          <a
-              href="{{ url_for('search') }}"
-              class="btn btn-outline-secondary btn-lg rounded-5">
-            Clear Filters
-            <i class="fa-solid fa-rotate-left"></i>
-          </a>
+          
 
         </div>
 
       </div>
+      
     </div>
-
+<a
+    href="{{ url_for('search') }}"
+    class="btn btn-outline-secondary btn-lg rounded-5 clear-filter-btn" style="color: aliceblue;">
+            Clear Filters
+            <i class="fa-solid fa-rotate-left"></i>
+          </a>
   </div>
 
 </form>
@@ -337,9 +371,36 @@
               <h5 class="mb-1">
                 <a href="{% if current_user.is_authenticated and current_user.id == item.student.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=item.student.id) }}{% endif %}" class="text-decoration-none">{{ item.student.full_name }} <i class="fa-solid fa-user"></i></a>
               </h5>
-              <p class="text-muted mb-3">
-                {{ item.student.school }} <i class="fa-solid fa-school"></i>
-              </p>
+              <p class="text-muted mb-2">
+  {{ item.student.school }}
+  <i class="fa-solid fa-school"></i>
+</p>
+
+{% if item.student.role == 'Athlete' %}
+  <div class="small text-muted mb-3">
+    <span class="me-3">
+      {{ country_flag(item.student.nationality) }}
+      {{ item.student.nationality or 'Nationality not provided' }}
+    </span>
+
+    <span class="me-3">
+      Age: {{ item.student.age or '-' }}
+    </span>
+
+    <span class="me-3">
+      Height: {{ item.student.height_cm or '-' }} cm
+    </span>
+
+    <span class="me-3">
+      Weight: {{ item.student.weight_kg or '-' }} kg
+    </span>
+
+    <span>
+      Preferred Foot:
+      {{ item.student.preferred_foot or '-' }}
+    </span>
+  </div>
+{% endif %}
 
               {% if item.records %}
                 <div class="table-responsive">
@@ -371,13 +432,30 @@
                             <i class="fa-solid fa-futbol"></i> Goals: {{ r.goals }} |
                             <i class="fa-solid fa-handshake-angle"></i> Assists: {{ r.assists }} |
                             Yellow Card <i class="fa-solid fa-square" style="color:#FFCC00;"></i>: {{ r.yellow_cards }} |
-                            Red Card <i class="fa-solid fa-square" style="color:#FF0000;"></i>: {{ r.red_cards }}
-                          {% else %}
-                            <i class="fa-solid fa-basketball" style="color:orangered;"></i> Points: {{ r.points }} |
-                            <i class="fa-solid fa-handshake-angle"></i> Assists: {{ r.assists }} |
-                            Blocks <i class="fa-solid fa-hand"></i>: {{ r.blocks }} |
-                            <i class="fa-solid fa-ban"></i> Times Sent Off Court: {{ r.sent_off }}
-                          {% endif %}
+                            Red Card <i class="fa-solid fa-square" style="color:#FF0000;"></i>: {{ r.red_cards }} |
+                            Match Minutes<i class="fa-solid fa-clock"></i>: {{ r.match_minutes_played or 0 }}
+                            {% if r.position == 'GK' %} |
+                            Clean Sheets <i class="fa-solid fa-clipboard"></i>: {{ r.clean_sheets or 0 }} |
+                            Saves <i class="fa-solid fa-hands"></i>: {{ r.saves or 0 }}
+                         {% endif %}
+
+                          {% elif r.sport == 'Basketball' %}
+  <i class="fa-solid fa-basketball" style="color:orangered;"></i> Points: {{ r.points }} |
+  <i class="fa-solid fa-handshake-angle"></i> Assists: {{ r.assists }} |
+  Blocks <i class="fa-solid fa-hand"></i>: {{ r.blocks }} |
+  Rebounds <i class="fa-solid fa-basketball" style="color:orangered;"></i>: {{ r.rebound_type or 'None' }} |
+  <i class="fa-solid fa-ban"></i> Times Sent Off Court: {{ r.sent_off }}
+
+{% else %}
+
+  Home Runs <i class="fa-solid fa-baseball"></i>: {{ r.home_runs or 0 }} |
+  Red Cards <i class="fa-solid fa-square" style="color:#FF0000;"></i>: {{ r.kickball_red_cards or 0 }} |
+  Yellow Cards <i class="fa-solid fa-square" style="color:#FFCC00;"></i>: {{ r.kickball_yellow_cards or 0 }} |
+  Cut Base <i class="fa-solid fa-person-running"></i>: {{ r.cut_base or 0 }} |
+  Foul Played <i class="fa-solid fa-triangle-exclamation"></i>: {{ r.foul_played or 0 }} |
+  Match Minutes <i class="fa-solid fa-clock"></i>: {{ r.match_minutes_played or 0 }}
+
+{% endif %}
                         </td>
                       </tr>
                       {% endfor %}
@@ -454,10 +532,35 @@
                       <div>
                         <strong>Red Card <i class="fa-solid fa-square" style="color:#FF0000;"></i> :</strong> {{ r.red_cards or 0 }}
                       </div>
+                      <div>
+  <strong>Match Minutes <i class="fa-solid fa-clock"></i> :</strong>
+  {{ r.match_minutes_played or 0 }}
+</div>
+
+{% if r.position == 'GK' %}
+<div>
+  <strong>Clean Sheets <i class="fa-solid fa-shield-halved"></i> :</strong>
+  {{ r.clean_sheets or 0 }}
+</div>
+
+<div>
+  <strong>Saves <i class="fa-solid fa-hands-bubbles"></i> :</strong>
+  {{ r.saves or 0 }}
+</div>
+{% endif %}
                     {% else %}
                       <div>
                         <strong>Sent Off Court   <i class="fa-solid fa-x" style="color:red;"></i> :</strong> {{ r.sent_off or 0 }}
                       </div>
+                      <div>
+  <strong>Match Minutes <i class="fa-solid fa-clock"></i> :</strong>
+  {{ r.match_minutes_played or 0 }}
+</div>
+
+<div>
+  <strong>Rebounds <i class="fa-solid fa-basketball"></i> :</strong>
+  {{ r.rebound_type or 'None' }}
+</div>
                     {% endif %}
                   </div>
 

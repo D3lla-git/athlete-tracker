@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+
+{% block title %}Inbox | D.A.R.T{% endblock %}
+
+{% block content %}
+
+<style>
+  /* ==========================================================
+     D.A.R.T INBOX
+  ========================================================== */
+
+  .inbox-page {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .inbox-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 24px;
+  }
+
+  .inbox-title {
+    margin: 0;
+    font-weight: 700;
+  }
+
+  .inbox-title i {
+    margin-right: 8px;
+  }
+
+  .inbox-subtitle {
+    color: var(--muted-text);
+    margin: 5px 0 0;
+  }
+
+  .inbox-card {
+    background: var(--surface-bg);
+    color: var(--surface-text);
+    border: 1px solid var(--surface-border);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+  }
+
+  html[data-theme="dark"] .inbox-card {
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.30);
+  }
+
+  .conversation-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid var(--surface-border);
+    transition: background-color 0.2s ease, transform 0.15s ease;
+  }
+
+  .conversation-row:last-child {
+    border-bottom: none;
+  }
+
+  .conversation-row:hover {
+    background-color: rgba(25, 135, 84, 0.08);
+    color: inherit;
+  }
+
+  .conversation-row.unread {
+    background-color: rgba(25, 135, 84, 0.08);
+  }
+
+  .conversation-avatar {
+    width: 54px;
+    height: 54px;
+    min-width: 54px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #198754;
+  }
+
+  .conversation-avatar-placeholder {
+    width: 54px;
+    height: 54px;
+    min-width: 54px;
+    border-radius: 50%;
+    background:
+      radial-gradient(
+        circle at 85% 30%,
+        rgba(57,185,114,0.30),
+        transparent 30%
+      ),
+      linear-gradient(
+        135deg,
+        #071208,
+        #0d2413 55%,
+        #061008
+      );
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+    border: 2px solid #198754;
+  }
+
+  .conversation-main {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .conversation-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .conversation-name {
+    font-weight: 700;
+    font-size: 1rem;
+  }
+
+  .conversation-role {
+    font-size: 0.78rem;
+    color: var(--muted-text);
+    margin-left: 6px;
+  }
+
+  .conversation-time {
+    font-size: 0.78rem;
+    color: var(--muted-text);
+    white-space: nowrap;
+  }
+
+  .conversation-preview {
+    margin-top: 5px;
+    color: var(--muted-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .conversation-row.unread .conversation-preview {
+    color: var(--surface-text);
+    font-weight: 600;
+  }
+
+  .conversation-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 5px;
+  }
+
+  .unread-badge {
+    min-width: 24px;
+    height: 24px;
+    padding: 0 7px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #dc3545;
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .conversation-arrow {
+    color: var(--muted-text);
+    font-size: 1rem;
+  }
+
+  .empty-inbox {
+    padding: 70px 25px;
+    text-align: center;
+  }
+
+  .empty-inbox-icon {
+    font-size: 3.2rem;
+    margin-bottom: 18px;
+    color: #198754;
+  }
+
+  .empty-inbox h4 {
+    font-weight: 700;
+  }
+
+  .empty-inbox p {
+    color: var(--muted-text);
+    max-width: 520px;
+    margin: 8px auto 0;
+  }
+
+  /* ==========================================================
+     MOBILE
+  ========================================================== */
+
+  @media (max-width: 767.98px) {
+
+    .inbox-page {
+      width: 100%;
+    }
+
+    .inbox-header {
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }
+
+    .inbox-title {
+      font-size: 1.35rem;
+    }
+
+    .inbox-subtitle {
+      font-size: 0.85rem;
+    }
+
+    .conversation-row {
+      padding: 15px 14px;
+      gap: 12px;
+    }
+
+    .conversation-avatar,
+    .conversation-avatar-placeholder {
+      width: 48px;
+      height: 48px;
+      min-width: 48px;
+    }
+
+    .conversation-top {
+      align-items: flex-start;
+    }
+
+    .conversation-name {
+      font-size: 0.95rem;
+    }
+
+    .conversation-role {
+      display: block;
+      margin-left: 0;
+      margin-top: 2px;
+    }
+
+    .conversation-time {
+      font-size: 0.72rem;
+    }
+
+    .conversation-preview {
+      font-size: 0.84rem;
+    }
+
+    .conversation-arrow {
+      display: none;
+    }
+
+    .empty-inbox {
+      padding: 55px 20px;
+    }
+  }
+</style>
+
+
+<div class="container py-4 inbox-page">
+
+  <!-- HEADER -->
+  <div class="inbox-header">
+
+    <div>
+      <h2 class="inbox-title">
+        <i class="fa-solid fa-inbox"></i>
+        Inbox
+      </h2>
+
+      <p class="inbox-subtitle">
+        Your conversations and messages
+      </p>
+    </div>
+
+  </div>
+
+
+  <!-- CONVERSATIONS -->
+  <div class="inbox-card">
+
+    {% if conversations %}
+
+      {% for conversation in conversations %}
+
+        {% set other_user = conversation.user %}
+        {% set latest_message = conversation.latest_message %}
+
+        <a
+          href="{{ url_for('conversation', user_id=other_user.id) }}"
+          class="conversation-row {% if conversation.unread_count > 0 %}unread{% endif %}"
+        >
+
+          <!-- PROFILE IMAGE -->
+          {% if other_user.profile_picture %}
+
+            <img
+              src="{{ url_for('profile_picture', filename=other_user.profile_picture) }}"
+              alt="{{ other_user.full_name }}"
+              class="conversation-avatar"
+            >
+
+          {% else %}
+
+            <div class="conversation-avatar-placeholder">
+              {{ other_user.full_name[0] | upper }}
+            </div>
+
+          {% endif %}
+
+
+          <!-- MESSAGE CONTENT -->
+          <div class="conversation-main">
+
+            <div class="conversation-top">
+
+              <div>
+                <span class="conversation-name">
+                  {{ other_user.full_name }}
+                </span>
+
+                <span class="conversation-role">
+                  {{ other_user.role }}
+                </span>
+
+                {% if other_user.nationality %}
+                  <span class="ms-1">
+                    {{ country_flag(other_user.nationality) }}
+                  </span>
+                {% endif %}
+              </div>
+
+              <span class="conversation-time">
+                {{ latest_message.created_at.strftime('%b %d, %Y') }}
+              </span>
+
+            </div>
+
+
+            <div class="conversation-meta">
+
+              <div class="conversation-preview">
+                {% if latest_message.sender_id == current_user.id %}
+                  <strong>You:</strong>
+                {% else %}
+                  <strong>{{ other_user.full_name.split()[0] }}:</strong>
+                {% endif %}
+
+                {{ latest_message.body | truncate(90, True, '...') }}
+              </div>
+
+              {% if conversation.unread_count > 0 %}
+                <span class="unread-badge">
+                  {{ conversation.unread_count }}
+                </span>
+              {% endif %}
+
+            </div>
+
+          </div>
+
+
+          <!-- ARROW -->
+          <div class="conversation-arrow">
+            <i class="fa-solid fa-chevron-right"></i>
+          </div>
+
+        </a>
+
+      {% endfor %}
+
+    {% else %}
+
+      <!-- EMPTY STATE -->
+      <div class="empty-inbox">
+
+        <div class="empty-inbox-icon">
+          <i class="fa-regular fa-envelope-open"></i>
+        </div>
+
+        <h4>Your inbox is empty</h4>
+
+        <p>
+          You don't have any conversations yet.
+          Messages between Scouts, Athletes, and Coaches
+          will appear here.
+        </p>
+
+      </div>
+
+    {% endif %}
+
+  </div>
+
+</div>
+
+{% endblock %}

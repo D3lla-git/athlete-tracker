@@ -77,6 +77,117 @@
     </option>
   </select>
 </div>
+
+{% if current_user.role == 'Athlete' %}
+
+<div class="mb-3">
+  <label class="form-label">
+    Age
+    <i class="fa-solid fa-calendar-days"></i>
+  </label>
+  <input
+      type="number"
+      name="age"
+      class="form-control"
+      min="1"
+      max="120"
+      value="{{ current_user.age or '' }}">
+</div>
+
+<div class="mb-3">
+  <label class="form-label">
+    Date of Birth
+    <i class="fa-solid fa-cake-candles"></i>
+  </label>
+  <input
+      type="date"
+      name="date_of_birth"
+      class="form-control"
+      value="{% if current_user.date_of_birth %}{{ current_user.date_of_birth.strftime('%Y-%m-%d') }}{% endif %}">
+</div>
+
+<div class="mb-3">
+  <label class="form-label">
+    Nationality
+    <i class="fa-solid fa-flag"></i>
+  </label>
+
+  <div class="input-group">
+    <span class="input-group-text">
+      {{ country_flag(current_user.nationality) }}
+    </span>
+
+    <input
+        type="text"
+        name="nationality"
+        class="form-control"
+        value="{{ current_user.nationality or '' }}"
+        placeholder="e.g. Liberian">
+  </div>
+
+  <small class="text-muted">
+    Enter your nationality. The country flag will be shown automatically.
+  </small>
+</div>
+
+<div class="row g-3">
+
+  <div class="col-md-6">
+    <label class="form-label">
+      Height (cm)
+      <i class="fa-solid fa-ruler-vertical"></i>
+    </label>
+    <input
+        type="number"
+        name="height_cm"
+        class="form-control"
+        min="1"
+        step="0.01"
+        value="{{ current_user.height_cm or '' }}"
+        placeholder="e.g. 178">
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">
+      Weight (kg)
+      <i class="fa-solid fa-weight-scale"></i>
+    </label>
+    <input
+        type="number"
+        name="weight_kg"
+        class="form-control"
+        min="1"
+        step="0.01"
+        value="{{ current_user.weight_kg or '' }}"
+        placeholder="e.g. 72">
+  </div>
+
+</div>
+
+<div class="mb-3 mt-3">
+  <label class="form-label">
+    Preferred Foot
+    <i class="fa-solid fa-shoe-prints"></i>
+  </label>
+
+  <select name="preferred_foot" class="form-select">
+    <option value="">-- Select --</option>
+    <option value="Right"
+      {% if current_user.preferred_foot == 'Right' %}selected{% endif %}>
+      Right
+    </option>
+    <option value="Left"
+      {% if current_user.preferred_foot == 'Left' %}selected{% endif %}>
+      Left
+    </option>
+    <option value="Both"
+      {% if current_user.preferred_foot == 'Both' %}selected{% endif %}>
+      Both
+    </option>
+  </select>
+</div>
+
+{% endif %}
               <div class="mb-3">
                 <label class="form-label">Role</label>
                 <input type="text" class="form-control" value="{{ current_user.role|title }}" disabled>

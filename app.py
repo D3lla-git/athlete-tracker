@@ -5,7 +5,7 @@ from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from pymongo import MongoClient
-from models import db, User, SportRecord, LoginAttempt, Registration
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage) 
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
@@ -13,6 +13,7 @@ from datetime import datetime
 from flask_migrate import Migrate
 from supabase import create_client
 import uuid
+import pycountry
 import base64
 from io import BytesIO
 import pyotp
@@ -234,7 +235,15 @@ VALID_POSITIONS = {
         'short fielder/Rover'
     }
 }
+# ==========================================================
+# PREFERRED FOOT
+# ==========================================================
 
+VALID_PREFERRED_FEET = {
+    'Right',
+    'Left',
+    'Both'
+}
 def athlete_can_submit_competition(category, competition):
     """Check whether an athlete category allows a competition."""
     if competition not in VALID_COMPETITIONS:
@@ -360,6 +369,110 @@ def upload_to_supabase(file, bucket, path):
     )
 
     return path
+
+# ==========================================================
+# CHAT PERMISSIONS---Helper
+# ==========================================================
+
+def can_message(sender, recipient):
+    if not sender.is_authenticated:
+        return False
+
+    if sender.id == recipient.id:
+        return False
+
+    # Scout ↔ Athlete
+    if (
+        sender.role == 'Scout'
+        and recipient.role == 'Athlete'
+    ):
+        return True
+
+    if (
+        sender.role == 'Athlete'
+        and recipient.role == 'Scout'
+    ):
+        return True
+
+    # Scout ↔ Coach
+    if (
+        sender.role == 'Scout'
+        and recipient.role == 'Coach'
+    ):
+        return True
+
+    if (
+        sender.role == 'Coach'
+        and recipient.role == 'Scout'
+    ):
+        return True
+
+    return False
+  #=======Common nationalities=========
+def country_flag(nationality):
+    if not nationality:
+        return '🌍'
+
+    nationality = nationality.strip()
+
+    # Common nationality/demonym aliases
+    aliases = {
+        'Liberian': 'LR',
+        'Liberia': 'LR',
+        'American': 'US',
+        'United States': 'US',
+        'British': 'GB',
+        'United Kingdom': 'GB',
+        'Ghanaian': 'GH',
+        'Ghana': 'GH',
+        'Nigerian': 'NG',
+        'Nigeria': 'NG',
+        'Sierra Leonean': 'SL',
+        'Sierra Leone': 'SL',
+        'Ivorian': 'CI',
+        'Ivory Coast': 'CI',
+        'Guinean': 'GN',
+        'Guinea': 'GN',
+        'Senegalese': 'SN',
+        'Senegal': 'SN',
+        'Cameroonian': 'CM',
+        'Cameroon': 'CM',
+        'South African': 'ZA',
+        'South Africa': 'ZA',
+        'Togolese': 'TG',
+        'Togo': 'TG',
+        'Beninese': 'BJ',
+        'Benin': 'BJ',
+        'Burkinabe': 'BF',
+        'Burkina Faso': 'BF',
+        'Ivorian': 'CI',
+        'France': 'FR',
+        'French': 'FR',
+        'Germany': 'DE',
+        'German': 'DE',
+        'Italy': 'IT',
+        'Italian': 'IT',
+        'Canada': 'CA',
+        'Canadian': 'CA'
+    }
+
+    code = aliases.get(nationality)
+
+    if not code:
+        try:
+            code = pycountry.countries.lookup(nationality).alpha_2
+        except LookupError:
+            return '🌍'
+
+    code = code.upper()
+
+    return ''.join(
+        chr(127397 + ord(letter))
+        for letter in code
+    )
+
+
+app.jinja_env.globals['country_flag'] = country_flag
 
 @app.route('/')
 def index():
@@ -713,7 +826,17 @@ def register(registration_category=None):
                 )
             )
         if not nationality:
-            flash('Nationality is required.', 'danger')
+            flash(
+                'Nationality is required.',
+                'danger'
+            )
+            return redirect(
+                url_for(
+                    'register',
+                    registration_category=registration_category
+                )
+            )
+            
         # ==========================================================
         # ATHLETE PERSONAL INFORMATION VALIDATION
         # ==========================================================
@@ -1480,6 +1603,200 @@ def logout():
 
 from flask import send_from_directory
 
+#=========================unread count helper========================
+#=========================unread count helper========================
+@app.context_processor
+def inject_unread_message_count():
+
+    if (
+        current_user.is_authenticated
+        and current_user.role in (
+            'Scout',
+            'Athlete',
+            'Coach'
+        )
+    ):
+
+        unread_count = ChatMessage.query.filter_by(
+            recipient_id=current_user.id,
+            is_read=False
+        ).count()
+
+    else:
+        unread_count = 0
+
+    return {
+        'unread_message_count': unread_count
+    }
+# ==========================================================
+# INBOX / MESSAGING
+# ==========================================================
+
+@app.route('/inbox')
+@login_required
+def inbox():
+
+    # Only Scout, Athlete, and Coach accounts can use messaging.
+    if current_user.role not in ('Scout', 'Athlete', 'Coach'):
+        flash('Messaging is not available for this account.', 'danger')
+        return redirect(url_for('index'))
+
+    messages = ChatMessage.query.filter(
+        or_(
+            ChatMessage.sender_id == current_user.id,
+            ChatMessage.recipient_id == current_user.id
+        )
+    ).order_by(
+        ChatMessage.created_at.desc()
+    ).all()
+
+    threads = {}
+
+    for message in messages:
+
+        if message.sender_id == current_user.id:
+            other_user_id = message.recipient_id
+        else:
+            other_user_id = message.sender_id
+
+        other_user = User.query.get(other_user_id)
+
+        if not other_user:
+            continue
+
+        # Do not display conversations the current account
+        # is not permitted to participate in.
+        if not can_message(current_user, other_user):
+            continue
+
+        if other_user_id not in threads:
+            threads[other_user_id] = {
+                'user': other_user,
+                'latest_message': message,
+                'unread_count': 0
+            }
+
+        # Count unread messages received by the current user.
+        if (
+            message.recipient_id == current_user.id
+            and not message.is_read
+        ):
+            threads[other_user_id]['unread_count'] += 1
+
+    conversations = list(threads.values())
+
+    return render_template(
+        'inbox.html',
+        conversations=conversations
+    )
+# ==========================================================
+# INBOX / MESSAGING/ Convo--back2back
+# ==========================================================
+@app.route(
+    '/conversation/<int:user_id>',
+    methods=['GET', 'POST']
+)
+@login_required
+def conversation(user_id):
+
+    if current_user.role not in (
+        'Scout',
+        'Athlete',
+        'Coach'
+    ):
+        return redirect(url_for('index'))
+
+    recipient = User.query.get_or_404(user_id)
+
+    if not can_message(
+        current_user,
+        recipient
+    ):
+        flash(
+            'You are not allowed to message this user.',
+            'danger'
+        )
+        return redirect(url_for('inbox'))
+
+    if request.method == 'POST':
+
+        body = request.form.get(
+            'body',
+            ''
+        ).strip()
+
+        if not body:
+            flash(
+                'Message cannot be empty.',
+                'danger'
+            )
+            return redirect(
+                url_for(
+                    'conversation',
+                    user_id=recipient.id
+                )
+            )
+
+        message = ChatMessage(
+            sender_id=current_user.id,
+            recipient_id=recipient.id,
+            body=body
+        )
+
+        db.session.add(message)
+        db.session.commit()
+
+        return redirect(
+            url_for(
+                'conversation',
+                user_id=recipient.id
+            )
+        )
+
+    ChatMessage.query.filter_by(
+        sender_id=recipient.id,
+        recipient_id=current_user.id,
+        is_read=False
+    ).update(
+        {
+            ChatMessage.is_read: True
+        },
+        synchronize_session=False
+    )
+
+    db.session.commit()
+
+    messages = ChatMessage.query.filter(
+        or_(
+            (
+                ChatMessage.sender_id
+                == current_user.id
+            )
+            &
+            (
+                ChatMessage.recipient_id
+                == recipient.id
+            ),
+            (
+                ChatMessage.sender_id
+                == recipient.id
+            )
+            &
+            (
+                ChatMessage.recipient_id
+                == current_user.id
+            )
+        )
+    ).order_by(
+        ChatMessage.created_at.asc()
+    ).all()
+
+    return render_template(
+        'conversation.html',
+        recipient=recipient,
+        messages=messages
+    )
+
 # ========== SUPABASE STORAGE ROUTES ==========
 
 @app.route('/profile-picture/<path:filename>')
@@ -1625,8 +1942,18 @@ def submit_record():
     competition_category = request.form.get('competition_category', '').strip()
     match_minutes_played = request.form.get('match_minutes_played') or 0
     clean_sheets = request.form.get('clean_sheets') or 0
-    saves = request.form.get('saves') or 0
+    saves = request.form.get('saves') or 0 
     rebound_type = request.form.get('rebound_type','').strip()
+    preferred_foot = request.form.get(
+            'preferred_foot',
+            ''
+        ).strip()
+
+    if preferred_foot not in ['', 'Right', 'Left', 'Both']:
+        flash('Invalid preferred foot selection.', 'danger')
+        return redirect(url_for('student_dashboard'))
+
+    current_user.preferred_foot = preferred_foot or None
 
     if not competition_category:
         flash(
@@ -1720,6 +2047,7 @@ def submit_record():
     year=year,
     position=position,
     games_played=safe_int(games_played),
+    match_minutes_played=safe_int(match_minutes_played),
     man_of_the_match=safe_int(request.form.get('man_of_the_match')),
     trophy=trophy_value,
     team=team,
@@ -1730,12 +2058,42 @@ def submit_record():
 )
 
     if sport == 'Football':
-        record.goals = safe_int(request.form.get('goals'))
-        record.assists = safe_int(request.form.get('assists'))
-        record.yellow_cards = safe_int(request.form.get('yellow_cards'))
-        record.red_cards = safe_int(request.form.get('red_cards'))
-        record.clean_sheets = safe_int(request.form.get('clean_sheets'))
-        record.saves = safe_int(request.form.get('saves'))
+
+        record.goals = safe_int(
+            request.form.get('goals')
+        )
+
+        record.assists = safe_int(
+            request.form.get('assists')
+        )
+
+        record.yellow_cards = safe_int(
+            request.form.get('yellow_cards')
+        )
+
+        record.red_cards = safe_int(
+            request.form.get('red_cards')
+        )
+
+        # ======================================================
+        # GOALKEEPER-ONLY STATISTICS
+        # ======================================================
+
+        if position == 'GK':
+
+            record.clean_sheets = safe_int(
+                request.form.get('clean_sheets')
+            )
+
+            record.saves = safe_int(
+                request.form.get('saves')
+            )
+
+        else:
+
+            record.clean_sheets = 0
+            record.saves = 0
+
         record.rebound_type = None
 
     elif sport == 'Basketball':
@@ -1869,6 +2227,28 @@ def edit_record(record_id):
         record.games_played = int(
             request.form.get('games_played') or 0
         )
+        record.match_minutes_played = int(
+            request.form.get('match_minutes_played') or 0
+        )
+
+        preferred_foot = request.form.get(
+            'preferred_foot',
+            ''
+        ).strip()
+
+        if preferred_foot not in VALID_PREFERRED_FEET:
+            flash(
+                'Please select a valid preferred foot.',
+                'danger'
+            )
+            return redirect(
+                url_for(
+                    'edit_record',
+                    record_id=record.id
+                )
+            )
+
+        current_user.preferred_foot = preferred_foot
         record.team = request.form.get('team', '').strip()
         record.team_played_against = request.form.get('team_played_against', '').strip()
         competition_category = request.form.get(
@@ -1876,6 +2256,7 @@ def edit_record(record_id):
             ''
         ).strip()
         record.competition_category = competition_category
+
         # ===== CATEGORY PERMISSION CHECK =====
         if not athlete_can_submit_competition(
             current_user.athlete_category,
@@ -1896,10 +2277,39 @@ def edit_record(record_id):
         record.trophy = ", ".join(trophies) if trophies else None
 
         if record.sport == 'Football':
-            record.goals = int(request.form.get('goals') or 0)
-            record.assists = int(request.form.get('assists') or 0)
-            record.yellow_cards = int(request.form.get('yellow_cards') or 0)
-            record.red_cards = int(request.form.get('red_cards') or 0)
+
+            record.goals = int(
+                request.form.get('goals') or 0
+            )
+
+            record.assists = int(
+                request.form.get('assists') or 0
+            )
+
+            record.yellow_cards = int(
+                request.form.get('yellow_cards') or 0
+            )
+
+            record.red_cards = int(
+                request.form.get('red_cards') or 0
+            )
+
+            if position == 'GK':
+
+                record.clean_sheets = int(
+                    request.form.get('clean_sheets') or 0
+                )
+
+                record.saves = int(
+                    request.form.get('saves') or 0
+                )
+
+            else:
+
+                record.clean_sheets = 0
+                record.saves = 0
+
+            record.rebound_type = None
 
         elif record.sport == 'Kickball':
             record.home_runs = int(request.form.get('home_runs') or 0)
@@ -1907,12 +2317,30 @@ def edit_record(record_id):
             record.kickball_yellow_cards = int(request.form.get('kickball_yellow_cards') or 0)
             record.cut_base = int(request.form.get('cut_base') or 0)
             record.foul_played = int(request.form.get('foul_played') or 0)
+            record.clean_sheets = 0
+            record.saves = 0
+            record.rebound_type = None
 
         else:
             record.points = int(request.form.get('points') or 0)
             record.assists = int(request.form.get('assists') or 0)
             record.blocks = int(request.form.get('blocks') or 0)
             record.sent_off = int(request.form.get('sent_off') or 0)
+            rebound_type = request.form.get(
+                'rebound_type',
+                ''
+            ).strip()
+
+            if rebound_type in {
+                'Offensive rebound',
+                'Defensive rebound'
+            }:
+                record.rebound_type = rebound_type
+            else:
+                record.rebound_type = None
+
+            record.clean_sheets = 0
+            record.saves = 0
 
         # Send back to pending after edit
         record.status = 'pending'
@@ -2107,6 +2535,99 @@ def update_profile():
     new_gender = request.form.get('gender', '').strip()
     if new_gender in ['Male', 'Female']:
         current_user.gender = new_gender
+
+    # ==========================================================
+    # UPDATE ATHLETE PERSONAL INFORMATION
+    # ==========================================================
+
+    new_age = request.form.get('age', '').strip()
+    new_dob = request.form.get('date_of_birth', '').strip()
+    new_nationality = request.form.get('nationality', '').strip()
+    new_height = request.form.get('height_cm', '').strip()
+    new_weight = request.form.get('weight_kg', '').strip()
+    new_preferred_foot = request.form.get('preferred_foot', '').strip()
+
+    # ---------- AGE ----------
+    if new_age:
+        try:
+            new_age = int(new_age)
+        except ValueError:
+            flash('Age must be a valid number.', 'danger')
+            return redirect(url_for('profile'))
+
+        if new_age < 1 or new_age > 120:
+            flash('Please enter a valid age.', 'danger')
+            return redirect(url_for('profile'))
+
+        current_user.age = new_age
+    else:
+        current_user.age = None
+
+    # ---------- DATE OF BIRTH ----------
+    if new_dob:
+        try:
+            parsed_dob = datetime.strptime(
+                new_dob,
+                '%Y-%m-%d'
+            ).date()
+        except ValueError:
+            flash('Invalid date of birth.', 'danger')
+            return redirect(url_for('profile'))
+
+        if parsed_dob > datetime.utcnow().date():
+            flash('Date of birth cannot be in the future.', 'danger')
+            return redirect(url_for('profile'))
+
+        current_user.date_of_birth = parsed_dob
+    else:
+        current_user.date_of_birth = None
+
+    # ---------- NATIONALITY ----------
+    if new_nationality:
+        current_user.nationality = new_nationality
+    else:
+        current_user.nationality = None
+
+    # ---------- HEIGHT ----------
+    if new_height:
+        try:
+            height_value = float(new_height)
+        except ValueError:
+            flash('Height must be a valid number.', 'danger')
+            return redirect(url_for('profile'))
+
+        if height_value <= 0:
+            flash('Height must be greater than zero.', 'danger')
+            return redirect(url_for('profile'))
+
+        current_user.height_cm = height_value
+    else:
+        current_user.height_cm = None
+
+    # ---------- WEIGHT ----------
+    if new_weight:
+        try:
+            weight_value = float(new_weight)
+        except ValueError:
+            flash('Weight must be a valid number.', 'danger')
+            return redirect(url_for('profile'))
+
+        if weight_value <= 0:
+            flash('Weight must be greater than zero.', 'danger')
+            return redirect(url_for('profile'))
+
+        current_user.weight_kg = weight_value
+    else:
+        current_user.weight_kg = None
+
+    # ---------- PREFERRED FOOT ----------
+    if new_preferred_foot not in ['', 'Right', 'Left', 'Both']:
+        flash('Invalid preferred foot selection.', 'danger')
+        return redirect(url_for('profile'))
+
+    current_user.preferred_foot = (
+        new_preferred_foot or None
+    )
 
     # ==========================================================
     # UPDATE ATHLETE CATEGORY

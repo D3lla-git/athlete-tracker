@@ -179,7 +179,28 @@
       <label class="form-label">Games Played <i class="fa-solid fa-person-running"></i> <i class="fa-solid fa-trophy"></i></label>
       <input type="number" name="games_played" class="form-control" min="0" value="0">
     </div>
+<div class="col-md-3">
+  <label class="form-label">
+    Preferred Foot
+    <i class="fa-solid fa-shoe-prints"></i>
+  </label>
 
+  <select name="preferred_foot" class="form-select">
+    <option value="">-- Select --</option>
+    <option value="Right"
+      {% if current_user.preferred_foot == 'Right' %}selected{% endif %}>
+      Right
+    </option>
+    <option value="Left"
+      {% if current_user.preferred_foot == 'Left' %}selected{% endif %}>
+      Left
+    </option>
+    <option value="Both"
+      {% if current_user.preferred_foot == 'Both' %}selected{% endif %}>
+      Both
+    </option>
+  </select>
+</div>
     <div class="col-md-3">
   <label class="form-label">
     Match Minutes Played
@@ -430,34 +451,42 @@
       <input type="number" name="red_cards" class="form-control" min="0" value="0">
     </div>
 
-    <div class="col-md-2">
-  <label class="form-label">
-    Clean Sheets
-    <i class="fa-regular fa-clipboard"></i>
-  </label>
+    <div id="goalkeeperStats" class="row g-3 mt-1" style="display: none;">
 
-  <input
-      type="number"
-      name="clean_sheets"
-      class="form-control"
-      min="0" 
-      step="1"
-      value="0">
-</div>
+  <div class="col-md-6">
+    <label class="form-label">
+      Clean Sheets
+      <i class="fa-regular fa-clipboard"></i>
+    </label>
 
-<div class="col-md-2">
-  <label class="form-label">
-    Saves
-    <i class="fa-solid fa-hands-bubbles"></i>
-  </label>
+    <input
+        type="number"
+        name="clean_sheets"
+        id="cleanSheetsInput"
+        class="form-control"
+        min="0"
+        step="1"
+        value="0"
+        disabled>
+  </div>
 
-  <input
-      type="number"
-      name="saves"
-      class="form-control"
-      min="0"
-      step="1"
-      value="0">
+  <div class="col-md-6">
+    <label class="form-label">
+      Saves
+      <i class="fa-solid fa-hands-bubbles"></i>
+    </label>
+
+    <input
+        type="number"
+        name="saves"
+        id="savesInput"
+        class="form-control"
+        min="0"
+        step="1"
+        value="0"
+        disabled>
+  </div>
+
 </div>
 
   </div>
@@ -644,7 +673,46 @@ background:
     }
   });
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
 
+  const positionSelect = document.getElementById('positionSelect');
+  const goalkeeperStats = document.getElementById('goalkeeperStats');
+  const cleanSheetsInput = document.getElementById('cleanSheetsInput');
+  const savesInput = document.getElementById('savesInput');
+
+  function updateGoalkeeperFields() {
+
+    const isGoalkeeper =
+      sportSelect.value === 'Football' &&
+      positionSelect.value === 'GK';
+
+    goalkeeperStats.style.display =
+      isGoalkeeper ? 'flex' : 'none';
+
+    cleanSheetsInput.disabled = !isGoalkeeper;
+    savesInput.disabled = !isGoalkeeper;
+
+    if (!isGoalkeeper) {
+      cleanSheetsInput.value = 0;
+      savesInput.value = 0;
+    }
+  }
+
+  positionSelect.addEventListener(
+    'change',
+    updateGoalkeeperFields
+  );
+
+  sportSelect.addEventListener(
+    'change',
+    updateGoalkeeperFields
+  );
+
+  updateGoalkeeperFields();
+
+});
+</script>
 <script>
   const competitionTypeSelect =
       document.getElementById('competitionTypeSelect');
@@ -795,7 +863,23 @@ background:
     <div><strong>Assists <i class="fa-solid fa-handshake-angle"></i>:</strong> {{ r.assists }}</div>
     <div><strong>Yellow <i class="fa-solid fa-square" style="color: #FFCC00;"></i>:</strong> {{ r.yellow_cards }}</div>
     <div><strong>Red <i class="fa-solid fa-square" style="color: #FF0000;"></i>:</strong> {{ r.red_cards }}</div>
+      <strong>Match Minutes <i class="fa-solid fa-clock"></i>:</strong>
+  {{ r.match_minutes_played or 0 }}
+</div>
 
+{% if r.position == 'GK' %}
+
+<div>
+  <strong>Clean Sheets <i class="fa-solid fa-shield-halved"></i>:</strong>
+  {{ r.clean_sheets or 0 }}
+</div>
+
+<div>
+  <strong>Saves <i class="fa-solid fa-hands-bubbles"></i>:</strong>
+  {{ r.saves or 0 }}
+</div>
+
+{% endif %}   
 {% elif r.sport == 'Kickball' %}
 
     <div><strong>Home Runs <i class="fa-solid fa-baseball"></i>:</strong> {{ r.home_runs }}</div>
@@ -803,6 +887,10 @@ background:
     <div><strong>Yellow Cards <i class="fa-solid fa-square" style="color: #FFCC00;"></i>:</strong> {{ r.kickball_yellow_cards }}</div>
     <div><strong>Cut Base <i class="fa-solid fa-person-running"></i>:</strong> {{ r.cut_base }}</div>
     <div><strong>Foul Played <i class="fa-solid fa-triangle-exclamation"></i>:</strong> {{ r.foul_played }}</div>
+    <div>
+  <strong>Match Minutes <i class="fa-solid fa-clock"></i>:</strong>
+  {{ r.match_minutes_played or 0 }}
+</div>
 
 {% else %}
 
@@ -810,7 +898,15 @@ background:
     <div><strong>Assists <i class="fa-solid fa-handshake-angle"></i>:</strong> {{ r.assists }}</div>
     <div><strong>Blocks <i class="fa-solid fa-shield-alt"></i>:</strong> {{ r.blocks }}</div>
     <div><strong>Sent Off Court <i class="fa-solid fa-user-times"></i>:</strong> {{ r.sent_off }}</div>
+    <div>
+  <strong>Match Minutes <i class="fa-solid fa-clock"></i>:</strong>
+  {{ r.match_minutes_played or 0 }}
+</div>
 
+<div>
+  <strong>Rebounds <i class="fa-solid fa-basketball"></i>:</strong>
+  {{ r.rebound_type or 'None' }}
+</div>
 {% endif %}
         </td>
 
@@ -899,6 +995,13 @@ background:
             <div><strong>Games <i class="fa-solid fa-person-running"></i> :</strong> {{ r.games_played or 0 }}</div>
             <div>
   <strong>
+    Match Minutes
+    <i class="fa-solid fa-clock"></i> :
+  </strong>
+  {{ r.match_minutes_played or 0 }}
+</div>
+            <div>
+  <strong>
     {% if r.sport == 'Kickball' %}
       QOTM
     {% else %}
@@ -914,14 +1017,12 @@ background:
   {{ r.mvp or 0 }}
 </div>
           {% if r.sport == 'Football' %}
-
   <div>
     <strong>Yellow Card <i class="fa-solid fa-square" style="color: #FFCC00;"></i> :</strong>
     {{ r.yellow_cards or 0 }}
   </div>
 
 {% elif r.sport == 'Kickball' %}
-
   <div>
     <strong>Red Cards <i class="fa-solid fa-square" style="color: #FF0000;"></i> :</strong>
     {{ r.kickball_red_cards or 0 }}
@@ -941,14 +1042,32 @@ background:
             </div>
 
        {% if r.sport == 'Football' %}
-
   <div>
     <strong>Red Card <i class="fa-solid fa-square" style="color: #FF0000;"></i> :</strong>
     {{ r.red_cards or 0 }}
   </div>
+  {% if r.position == 'GK' %}
+
+<div>
+  <strong>
+    Clean Sheets
+    <i class="fa-solid fa-shield-halved"></i> :
+  </strong>
+  {{ r.clean_sheets or 0 }}
+</div>
+
+<div>
+  <strong>
+    Saves
+    <i class="fa-solid fa-hands-bubbles"></i> :
+  </strong>
+  {{ r.saves or 0 }}
+</div>
+
+{% endif %}
+
 
 {% elif r.sport == 'Kickball' %}
-
   <div>
     <strong>Yellow Cards <i class="fa-solid fa-square" style="color: #FFCC00;"></i> :</strong>
     {{ r.kickball_yellow_cards or 0 }}
@@ -970,7 +1089,13 @@ background:
     <strong>Sent Off Court <i class="fa-solid fa-x" style="color: red;"></i> :</strong>
     {{ r.sent_off or 0 }}
   </div>
-
+<div>
+  <strong>
+    Rebounds
+    <i class="fa-solid fa-basketball"></i> :
+  </strong>
+  {{ r.rebound_type or 'None' }}
+</div>
 {% endif %}
           </div>
 
