@@ -1,0 +1,961 @@
+{% extends "base.html" %}
+
+{% block title %}New Message | D.A.R.T{% endblock %}
+
+{% block content %}
+
+<style>
+  .new-message-page {
+    max-width: 850px;
+    margin: 0 auto;
+  }
+
+  .new-message-card {
+    background: var(--surface-bg);
+    color: var(--surface-text);
+    border: 1px solid var(--surface-border);
+    border-radius: 20px;
+    overflow: visible;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.10);
+  }
+
+  html[data-theme="dark"] .new-message-card {
+    box-shadow: 0 10px 32px rgba(0,0,0,0.30);
+  }
+
+  .new-message-header {
+    padding: 20px 24px;
+    border-radius: 20px 20px 0 0;
+    background:
+      radial-gradient(
+        circle at 85% 30%,
+        rgba(57,185,114,0.30),
+        transparent 30%
+      ),
+      linear-gradient(
+        135deg,
+        #071208,
+        #0d2413 55%,
+        #061008
+      );
+    color: #fff;
+  }
+
+  .new-message-header h3 {
+    margin: 0;
+    font-weight: 700;
+  }
+
+  .new-message-header p {
+    margin: 5px 0 0;
+    opacity: 0.85;
+  }
+
+  .new-message-body {
+    padding: 24px;
+  }
+
+  .recipient-wrapper {
+    position: relative;
+  }
+
+.recipient-wrapper {
+  position: relative;
+}
+
+.recipient-suggestions {
+  position: absolute;
+  top: calc(100% - 1px);
+  left: 0;
+  right: 0;
+  z-index: 5000;
+
+  display: none;
+
+  max-height: 320px;
+  overflow-y: auto;
+
+  background: var(--surface-bg);
+  color: var(--surface-text);
+
+  border: 1px solid var(--surface-border);
+  border-top: none;
+
+  border-radius: 0 0 14px 14px;
+
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.18);
+}
+
+html[data-theme="dark"] .recipient-suggestions {
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.recipient-suggestion {
+  width: 100%;
+
+  border: none;
+  border-bottom: 1px solid var(--surface-border);
+
+  background: transparent;
+  color: var(--surface-text);
+
+  padding: 12px 15px;
+
+  text-align: left;
+
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    transform 0.05s ease;
+}
+
+.recipient-suggestion:last-child {
+  border-bottom: none;
+}
+
+.recipient-suggestion:hover,
+.recipient-suggestion:focus {
+  background: rgba(25, 135, 84, 0.12);
+  outline: none;
+}
+
+.recipient-suggestion:active {
+  transform: scale(0.99);
+}
+
+.recipient-suggestion-icon {
+  width: 38px;
+  height: 38px;
+
+  flex: 0 0 38px;
+
+  border-radius: 50%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: rgba(25, 135, 84, 0.14);
+
+  color: #198754;
+}
+
+.recipient-suggestion-info {
+  min-width: 0;
+}
+
+.recipient-suggestion-name {
+  display: block;
+
+  font-weight: 700;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recipient-suggestion-meta {
+  display: block;
+
+  margin-top: 2px;
+
+  color: var(--muted-text);
+
+  font-size: 0.78rem;
+}
+
+.recipient-no-results {
+  padding: 14px 15px;
+
+  color: var(--muted-text);
+
+  font-size: 0.9rem;
+
+  text-align: center;
+}
+
+  .selected-recipient-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 8px;
+  }
+
+  .recipient-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(25, 135, 84, 0.12);
+    color: var(--surface-text);
+    border: 1px solid rgba(25, 135, 84, 0.35);
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+  }
+
+  .recipient-chip button {
+    border: none;
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .message-body-textarea {
+    min-height: 180px;
+    resize: vertical;
+  }
+
+  .send-message-button {
+    min-width: 140px;
+    border: 2px solid black !important;
+    color: #fff !important;
+    background:
+      radial-gradient(
+        circle at 85% 30%,
+        rgba(57,185,114,0.30),
+        transparent 30%
+      ),
+      linear-gradient(
+        135deg,
+        #071208,
+        #0d2413 55%,
+        #061008
+      );
+  }
+
+  @media (max-width: 767.98px) {
+    .new-message-page {
+      width: 100%;
+      padding: 0;
+    }
+
+    .new-message-body {
+      padding: 18px;
+    }
+
+    .message-body-textarea {
+      min-height: 150px;
+    }
+
+    .send-message-button {
+      width: 100%;
+    }
+  }
+</style>
+
+
+<div class="container py-4 new-message-page">
+
+  <div class="new-message-card">
+
+    <div class="new-message-header">
+      <h3>
+        <i class="fa-solid fa-pen-to-square"></i>
+        New Message
+      </h3>
+
+      <p>
+        Select registered users to send your message.
+      </p>
+    </div>
+
+
+    <div class="new-message-body">
+
+      <form
+        method="POST"
+        action="{{ url_for('new_message') }}"
+        id="newMessageForm">
+
+        <input
+          type="hidden"
+          name="csrf_token"
+          value="{{ csrf_token() }}">
+
+
+        <!-- ===================================================
+             TO
+        ==================================================== -->
+
+        <div class="mb-4 recipient-wrapper">
+
+          <label
+            for="toName"
+            class="form-label fw-bold">
+
+            To:
+
+            <i class="fa-solid fa-user"></i>
+
+          </label>
+
+          <input
+    type="text"
+    id="toName"
+    name="to_name"
+    class="form-control form-control-lg"
+    placeholder="Enter registered athlete, coach or scout name"
+    autocomplete="off"
+    required
+>
+
+          <input
+            type="hidden"
+            id="toUserId"
+            name="to_user_id">
+
+          <div
+    id="toSuggestions"
+    class="recipient-suggestions"
+    style="display:none;">
+</div>
+    </div>
+
+
+        <!-- ===================================================
+             CC
+        ==================================================== -->
+
+        <div class="mb-4 recipient-wrapper">
+
+          <label
+            for="ccName"
+            class="form-label fw-bold">
+
+            Cc:
+
+            <i class="fa-solid fa-users"></i>
+
+          </label>
+
+          <input
+            type="text"
+            class="form-control form-control-lg"
+            id="ccName"
+            placeholder="Type a registered name to copy..."
+            autocomplete="off">
+
+          <div
+            id="ccSuggestions"
+            class="recipient-suggestions">
+          </div>
+
+          <div
+            id="ccSelected"
+            class="selected-recipient-list">
+          </div>
+
+        </div>
+
+
+        <!-- ===================================================
+             BODY
+        ==================================================== -->
+
+        <div class="mb-4">
+
+          <label
+            for="messageBody"
+            class="form-label fw-bold">
+
+            Message:
+
+            <i class="fa-solid fa-message"></i>
+
+          </label>
+
+          <textarea
+            id="messageBody"
+            name="body"
+            class="form-control form-control-lg message-body-textarea"
+            placeholder="Write your message..."
+            maxlength="5000"
+            required></textarea>
+
+          <div class="text-end mt-1">
+            <small class="text-muted">
+              <span id="characterCount">0</span>/5000
+            </small>
+          </div>
+
+        </div>
+
+
+        <!-- ===================================================
+             ACTIONS
+        ==================================================== -->
+
+        <div class="d-flex gap-2 flex-wrap">
+
+          <button
+            type="submit"
+            class="btn btn-lg rounded-5 send-message-button">
+
+            Send Message
+            <i class="fa-solid fa-paper-plane"></i>
+
+          </button>
+
+          <a
+            href="{{ url_for('inbox') }}"
+            class="btn btn-outline-secondary btn-lg rounded-5">
+
+            Cancel
+            <i class="fa-solid fa-xmark"></i>
+
+          </a>
+
+        </div>
+
+      </form>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+  const form = document.getElementById('newMessageForm');
+
+  const toName = document.getElementById('toName');
+  const toUserId = document.getElementById('toUserId');
+  const toSuggestions = document.getElementById('toSuggestions');
+
+  const ccName = document.getElementById('ccName');
+  const ccSuggestions = document.getElementById('ccSuggestions');
+  const ccSelected = document.getElementById('ccSelected');
+
+  const messageBody = document.getElementById('messageBody');
+  const characterCount = document.getElementById('characterCount');
+
+
+  // ==========================================================
+  // ESCAPE HTML
+  // ==========================================================
+
+  function escapeHtml(value) {
+
+    const div = document.createElement('div');
+
+    div.textContent = value ?? '';
+
+    return div.innerHTML;
+  }
+
+
+  // ==========================================================
+  // GET RECIPIENT SUGGESTIONS
+  // ==========================================================
+
+  async function getRecipientSuggestions(query) {
+
+    query = query.trim();
+
+    if (!query) {
+      return [];
+    }
+
+    try {
+
+      const response = await fetch(
+        `/api/suggest-message-recipients?q=${encodeURIComponent(query)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+
+        console.error(
+          'Recipient search failed:',
+          response.status
+        );
+
+        return [];
+      }
+
+      const data = await response.json();
+
+      return Array.isArray(data) ? data : [];
+
+    } catch (error) {
+
+      console.error(
+        'Recipient suggestion error:',
+        error
+      );
+
+      return [];
+    }
+  }
+
+
+  // ==========================================================
+  // CREATE RECIPIENT SUGGESTION
+  // ==========================================================
+
+  function createRecipientSuggestion(user, callback) {
+
+    const button = document.createElement('button');
+
+    button.type = 'button';
+
+    button.className = 'recipient-suggestion';
+
+    button.innerHTML = `
+      <span class="recipient-suggestion-icon">
+        <i class="fa-solid fa-user"></i>
+      </span>
+
+      <span class="recipient-suggestion-info">
+
+        <span class="recipient-suggestion-name">
+          ${escapeHtml(user.full_name)}
+        </span>
+
+        <span class="recipient-suggestion-meta">
+
+          ${escapeHtml(user.role)}
+
+          ${
+            user.school
+              ? ' · ' + escapeHtml(user.school)
+              : ''
+          }
+
+        </span>
+
+      </span>
+    `;
+
+    button.addEventListener('click', function (event) {
+
+      event.preventDefault();
+
+      callback(user);
+
+    });
+
+    return button;
+  }
+
+
+  // ==========================================================
+  // DISPLAY SUGGESTIONS
+  // ==========================================================
+
+  function showSuggestions(container, users, callback) {
+
+    container.innerHTML = '';
+
+    if (!users.length) {
+
+      container.innerHTML = `
+        <div class="recipient-no-results">
+          No eligible registered users found.
+        </div>
+      `;
+
+      container.style.display = 'block';
+
+      return;
+    }
+
+
+    users.forEach(function (user) {
+
+      const suggestion =
+        createRecipientSuggestion(
+          user,
+          callback
+        );
+
+      container.appendChild(suggestion);
+
+    });
+
+    container.style.display = 'block';
+  }
+
+
+  // ==========================================================
+  // HIDE SUGGESTIONS
+  // ==========================================================
+
+  function hideSuggestions(container) {
+
+    container.style.display = 'none';
+
+    container.innerHTML = '';
+  }
+
+
+  // ==========================================================
+  // TO FIELD
+  // ==========================================================
+
+  let toSearchTimer = null;
+
+  toName.addEventListener('input', function () {
+
+    // Important:
+    // If the user changes the name after selecting somebody,
+    // clear the stored ID.
+    toUserId.value = '';
+
+    const query = this.value.trim();
+
+    clearTimeout(toSearchTimer);
+
+    if (!query) {
+
+      hideSuggestions(toSuggestions);
+
+      return;
+    }
+
+
+    /*
+     * Small debounce so we don't send an API request
+     * for every single keystroke immediately.
+     */
+    toSearchTimer = setTimeout(async function () {
+
+      const users =
+        await getRecipientSuggestions(query);
+
+      /*
+       * Make sure the user has not changed the input
+       * while the request was running.
+       */
+      if (
+        toName.value.trim() !== query
+      ) {
+        return;
+      }
+
+      showSuggestions(
+        toSuggestions,
+        users,
+        function (user) {
+
+          toName.value = user.full_name;
+
+          toUserId.value = user.id;
+
+          hideSuggestions(toSuggestions);
+
+          /*
+           * Move focus to the message box after selection.
+           */
+          messageBody.focus();
+
+        }
+      );
+
+    }, 150);
+
+  });
+
+
+  // ==========================================================
+  // CC FIELD
+  // ==========================================================
+
+  let ccSearchTimer = null;
+
+  ccName.addEventListener('input', function () {
+
+    const query = this.value.trim();
+
+    clearTimeout(ccSearchTimer);
+
+    if (!query) {
+
+      hideSuggestions(ccSuggestions);
+
+      return;
+    }
+
+
+    ccSearchTimer = setTimeout(async function () {
+
+      const users =
+        await getRecipientSuggestions(query);
+
+      if (
+        ccName.value.trim() !== query
+      ) {
+        return;
+      }
+
+      showSuggestions(
+        ccSuggestions,
+        users,
+        function (user) {
+
+          addCcRecipient(user);
+
+          ccName.value = '';
+
+          hideSuggestions(ccSuggestions);
+
+        }
+      );
+
+    }, 150);
+
+  });
+
+
+  // ==========================================================
+  // ADD CC RECIPIENT
+  // ==========================================================
+
+  function addCcRecipient(user) {
+
+    /*
+     * Don't allow the To recipient to also be CC.
+     */
+    if (
+      toUserId.value &&
+      String(toUserId.value) === String(user.id)
+    ) {
+
+      alert(
+        'This user is already the primary recipient.'
+      );
+
+      return;
+    }
+
+
+    /*
+     * Don't add the same CC twice.
+     */
+    const existing =
+      Array.from(
+        document.querySelectorAll(
+          'input[name="cc_user_ids"]'
+        )
+      ).some(function (input) {
+
+        return (
+          String(input.value)
+          === String(user.id)
+        );
+
+      });
+
+
+    if (existing) {
+      return;
+    }
+
+
+    const chip =
+      document.createElement('span');
+
+    chip.className =
+      'recipient-chip';
+
+
+    chip.innerHTML = `
+
+      <span>
+        ${escapeHtml(user.full_name)}
+        <small class="text-muted">
+          (${escapeHtml(user.role)})
+        </small>
+      </span>
+
+      <button
+        type="button"
+        title="Remove"
+        aria-label="Remove ${escapeHtml(user.full_name)}">
+
+        <i class="fa-solid fa-xmark"></i>
+
+      </button>
+
+    `;
+
+
+    const hiddenInput =
+      document.createElement('input');
+
+    hiddenInput.type = 'hidden';
+
+    hiddenInput.name =
+      'cc_user_ids';
+
+    hiddenInput.value =
+      user.id;
+
+
+    chip.appendChild(hiddenInput);
+
+
+    chip
+      .querySelector('button')
+      .addEventListener(
+        'click',
+        function () {
+
+          chip.remove();
+
+        }
+      );
+
+
+    ccSelected.appendChild(chip);
+  }
+
+
+  // ==========================================================
+  // CHARACTER COUNT
+  // ==========================================================
+
+  messageBody.addEventListener(
+    'input',
+    function () {
+
+      characterCount.textContent =
+        this.value.length;
+
+    }
+  );
+
+
+  // ==========================================================
+  // FORM VALIDATION
+  // ==========================================================
+
+  form.addEventListener(
+    'submit',
+    function (event) {
+
+      /*
+       * A name alone is NOT enough.
+       *
+       * The user must select a suggestion so that
+       * toUserId contains the actual database user ID.
+       */
+      if (!toUserId.value) {
+
+        event.preventDefault();
+
+        alert(
+          'Please select the recipient from the list that appears below the To field.'
+        );
+
+        toName.focus();
+
+        return;
+      }
+
+
+      if (!messageBody.value.trim()) {
+
+        event.preventDefault();
+
+        alert(
+          'Please enter a message before sending.'
+        );
+
+        messageBody.focus();
+
+        return;
+      }
+
+    }
+  );
+
+
+  // ==========================================================
+  // CLOSE SUGGESTIONS WHEN CLICKING OUTSIDE
+  // ==========================================================
+
+  document.addEventListener(
+    'click',
+    function (event) {
+
+      if (
+        !toName.contains(event.target) &&
+        !toSuggestions.contains(event.target)
+      ) {
+
+        hideSuggestions(toSuggestions);
+
+      }
+
+
+      if (
+        !ccName.contains(event.target) &&
+        !ccSuggestions.contains(event.target)
+      ) {
+
+        hideSuggestions(ccSuggestions);
+
+      }
+
+    }
+  );
+
+
+  // ==========================================================
+  // KEYBOARD SUPPORT
+  // ==========================================================
+
+  toName.addEventListener(
+    'keydown',
+    function (event) {
+
+      /*
+       * If Enter is pressed while suggestions are visible,
+       * select the first suggestion.
+       */
+      if (event.key !== 'Enter') {
+        return;
+      }
+
+      const firstSuggestion =
+        toSuggestions.querySelector(
+          '.recipient-suggestion'
+        );
+
+      if (
+        toSuggestions.style.display !== 'none' &&
+        firstSuggestion
+      ) {
+
+        event.preventDefault();
+
+        firstSuggestion.click();
+
+      }
+
+    }
+  );
+
+});
+</script>
+
+{% endblock %}

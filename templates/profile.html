@@ -8,12 +8,26 @@
       <div class="card-header d-flex justify-content-between align-items-center">
         <h4 class="mb-0">My Profile</h4>
         {% if current_user.is_verified %}
-          <span class="badge bg-success">Verified <i class="fa-solid fa-user-check"></i></span>
+          <span class="badge">Verified <i class="fa-solid fa-user-check"></i></span>
         {% else %}
           <span class="badge bg-warning text-dark">Pending</span>
         {% endif %}
       </div>
-
+<style>
+  .badge{background:
+        radial-gradient(
+            circle at 85% 30%,
+            rgba(57,185,114,0.30),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #071208,
+            #0d2413 55%,
+            #061008
+        );
+}
+</style>
       <div class="card-body">
         <form method="POST" action="{{ url_for('update_profile') }}" enctype="multipart/form-data">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -43,7 +57,7 @@
             <!-- Form Fields -->
             <div class="col-md-8">
             <div class="mb-3">
-  <label class="form-label">Full Name</label>
+  <label class="form-label">Full Name <i class="fa-solid fa-user"></i></label>
 
   <div class="form-control bg-light">
     {{ current_user.full_name }}
@@ -57,11 +71,11 @@
 </div>
 
               <div class="mb-3">
-                <label class="form-label">Team Name</label>
+                <label class="form-label">Team Name <i class="fa-solid fa-users"></i></label>
                 <input type="text" name="school" class="form-control" value="{{ current_user.school }}">
               </div>
 <div class="mb-3">
-  <label class="form-label">Gender</label>
+  <label class="form-label">Gender <i class="fa-solid fa-person-half-dress"></i></label>
 
   <select name="gender" class="form-select">
     <option value="" {% if not current_user.gender %}selected{% endif %}>
@@ -83,7 +97,7 @@
 <div class="mb-3">
   <label class="form-label">
     Age
-    <i class="fa-solid fa-calendar-days"></i>
+    <i class="fa-solid fa-calendar-days" style="color: darkgreen;"></i>
   </label>
   <input
       type="number"
@@ -189,13 +203,13 @@
 
 {% endif %}
               <div class="mb-3">
-                <label class="form-label">Role</label>
+                <label class="form-label">Role <i class="fa-solid fa-id-badge"></i></label>
                 <input type="text" class="form-control" value="{{ current_user.role|title }}" disabled>
               </div>
 
               {% if current_user.role == 'Athlete' %}
               <div class="mb-3">
-                <label class="form-label">Athlete Registration Category</label>
+                <label class="form-label">Athlete Registration Category <i class="fa-solid fa-person-running"></i></label>
                 <select name="athlete_category" class="form-select" required>
                   {% for category in [
                     'All Athlete',
@@ -212,7 +226,7 @@
               </div>
               {% elif current_user.role == 'Coach' %}
               <div class="mb-3">
-                <label class="form-label">Coach Registration Category</label>
+                <label class="form-label">Coach Registration Category <i class="fa-solid fa-user-tie"></i></label>
                 <select name="coach_category" class="form-select" required>
                   {% for category in [
                     'All Coach',
@@ -230,11 +244,11 @@
               {% endif %}
 
               <div class="mb-3">
-                <label class="form-label">Upload / Change Profile Picture</label>
+                <label class="form-label">Upload / Change Profile Picture <i class="fa-solid fa-id-card-clip"></i></label>
                 <input type="file" name="profile_picture" class="form-control" accept=".png,.jpg,.jpeg">
               </div>
 
-              <button type="submit" class="btn btn-primary">Save Changes</button>
+              <button type="submit" class="btn btn-primary">Save Changes <i class="fa-regular fa-floppy-disk"></i></button>
             </div>
 
           </div>

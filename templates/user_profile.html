@@ -4,19 +4,33 @@
 <div class="row justify-content-center"><div class="col-md-7 col-lg-5"><div class="card shadow">
 <div class="card-header text-center"><h4 class="mb-0">{{ user.full_name }}</h4><small class="text-muted">User Profile</small>
         {% if user.is_verified %}
-          <span class="badge bg-success">Verified</span>
+          <span class="badge">Verified</span>
         {% else %}
           <span class="badge bg-warning text-dark">Pending</span>
         {% endif %}
 </div>
-
+<style>
+  .badge{background:
+        radial-gradient(
+            circle at 85% 30%,
+            rgba(57,185,114,0.30),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #071208,
+            #0d2413 55%,
+            #061008
+        );
+}
+</style>
 <div class="card-body text-center">
 <div class="mb-4">{% if user.profile_picture %}<img src="{{ url_for('profile_picture', filename=user.profile_picture) }}" class="rounded-circle shadow" style="width:170px;height:170px;object-fit:cover;border:3px solid #dee2e6;" alt="Profile Picture">{% else %}<div class="rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center shadow" style="width:170px;height:170px;font-size:4rem;font-weight:600;">{{ user.full_name[0] | upper }}</div>{% endif %}</div>
 <div class="text-start">
 
   <div class="mb-3">
     <label class="form-label fw-bold">
-      Current Team Name
+      Current Team Name <i class="fa-solid fa-people-group"></i>
     </label>
     <div class="form-control bg-light">
       {{ user.school }}
@@ -34,7 +48,7 @@
 
   <div class="mb-3">
     <label class="form-label fw-bold">
-      Current Competition Category
+      Current Competition Category <i class="fa-solid fa-trophy" style="color: gold;"></i>
     </label>
     <div class="form-control bg-light">
       {{ current_category or 'Not registered for a current competition category' }}
@@ -60,8 +74,7 @@
 
   <div class="mb-3">
     <label class="form-label fw-bold">
-      Age
-      <i class="fa-solid fa-calendar-days"></i>
+      Age <i class="fa-solid fa-calendar-days" style="color: darkgreen;"></i>
     </label>
     <div class="form-control bg-light">
       {{ user.age or 'Not provided' }}
@@ -97,7 +110,7 @@
 
     <div class="col-md-6">
       <label class="form-label fw-bold">
-        Height
+        Height <i class="fa-solid fa-ruler-vertical"></i>
       </label>
       <div class="form-control bg-light">
         {% if user.height_cm %}
@@ -110,7 +123,7 @@
 
     <div class="col-md-6">
       <label class="form-label fw-bold">
-        Weight
+        Weight <i class="fa-solid fa-weight-scale"></i>
       </label>
       <div class="form-control bg-light">
         {% if user.weight_kg %}

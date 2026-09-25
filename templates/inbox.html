@@ -271,18 +271,27 @@
   <!-- HEADER -->
   <div class="inbox-header">
 
-    <div>
-      <h2 class="inbox-title">
-        <i class="fa-solid fa-inbox"></i>
-        Inbox
-      </h2>
+  <div>
+    <h2 class="inbox-title">
+      <i class="fa-solid fa-inbox"></i>
+      Inbox
+    </h2>
 
-      <p class="inbox-subtitle">
-        Your conversations and messages
-      </p>
-    </div>
-
+    <p class="inbox-subtitle">
+      Your conversations and messages
+    </p>
   </div>
+
+  <a
+    href="{{ url_for('new_message') }}"
+    class="btn btn-success rounded-5 px-4">
+
+    <i class="fa-solid fa-pen-to-square"></i>
+    New Message
+
+  </a>
+
+</div>
 
 
   <!-- CONVERSATIONS -->

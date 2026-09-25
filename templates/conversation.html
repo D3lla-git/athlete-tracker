@@ -1,0 +1,568 @@
+{% extends "base.html" %}
+
+{% block title %}
+  Conversation with {{ recipient.full_name }} | D.A.R.T
+{% endblock %}
+
+{% block content %}
+
+<style>
+  /* ==========================================================
+     D.A.R.T CONVERSATION
+  ========================================================== */
+
+  .conversation-page {
+    max-width: 950px;
+    margin: 0 auto;
+  }
+
+  .conversation-card {
+    background: var(--surface-bg);
+    color: var(--surface-text);
+    border: 1px solid var(--surface-border);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.10);
+  }
+
+  html[data-theme="dark"] .conversation-card {
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.30);
+  }
+
+  /* ==========================================================
+     HEADER
+  ========================================================== */
+
+  .conversation-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+    background:
+      radial-gradient(
+        circle at 85% 30%,
+        rgba(57,185,114,0.30),
+        transparent 30%
+      ),
+      linear-gradient(
+        135deg,
+        #071208,
+        #0d2413 55%,
+        #061008
+      );
+    color: #ffffff;
+  }
+
+  .conversation-back {
+    color: #ffffff;
+    text-decoration: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background-color 0.2s ease;
+  }
+
+  .conversation-back:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+  }
+
+  .conversation-header-avatar {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.75);
+  }
+
+  .conversation-header-avatar-placeholder {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.14);
+    border: 2px solid rgba(255, 255, 255, 0.75);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+  }
+
+  .conversation-header-info {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .conversation-header-name {
+    font-size: 1.08rem;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .conversation-header-role {
+    font-size: 0.82rem;
+    opacity: 0.85;
+    margin-top: 2px;
+  }
+
+  /* ==========================================================
+     MESSAGE AREA
+  ========================================================== */
+
+  .message-area {
+    height: 58vh;
+    min-height: 420px;
+    max-height: 680px;
+    overflow-y: auto;
+    padding: 24px 20px;
+    background: var(--page-bg);
+    scroll-behavior: smooth;
+  }
+
+  .message-row {
+    display: flex;
+    width: 100%;
+    margin-bottom: 14px;
+  }
+
+  .message-row.sent {
+    justify-content: flex-end;
+  }
+
+  .message-row.received {
+    justify-content: flex-start;
+  }
+
+  .message-bubble {
+    max-width: 72%;
+    padding: 11px 14px 9px;
+    border-radius: 17px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+    word-break: break-word;
+  }
+
+  .message-row.sent .message-bubble {
+    background:
+      radial-gradient(
+        circle at 85% 30%,
+        rgba(57,185,114,0.25),
+        transparent 30%
+      ),
+      linear-gradient(
+        135deg,
+        #071208,
+        #0d2413 55%,
+        #061008
+      );
+    color: #ffffff;
+    border-bottom-right-radius: 5px;
+  }
+
+  .message-row.received .message-bubble {
+    background: var(--surface-bg);
+    color: var(--surface-text);
+    border: 1px solid var(--surface-border);
+    border-bottom-left-radius: 5px;
+  }
+
+  .message-body {
+    white-space: pre-wrap;
+    line-height: 1.45;
+    font-size: 0.95rem;
+  }
+
+  .message-time {
+    display: block;
+    margin-top: 5px;
+    text-align: right;
+    font-size: 0.68rem;
+    opacity: 0.68;
+  }
+
+  .conversation-empty {
+    height: 100%;
+    min-height: 360px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--muted-text);
+  }
+
+  .conversation-empty i {
+    display: block;
+    font-size: 2.8rem;
+    color: #198754;
+    margin-bottom: 14px;
+  }
+
+  /* ==========================================================
+     COMPOSER
+  ========================================================== */
+
+  .message-composer {
+    border-top: 1px solid var(--surface-border);
+    padding: 14px;
+    background: var(--surface-bg);
+  }
+
+  .message-composer form {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+  }
+
+  .message-input {
+    flex: 1;
+    resize: none;
+    min-height: 48px;
+    max-height: 140px;
+    border-radius: 15px;
+  }
+
+  .send-button {
+    min-width: 100px;
+    min-height: 48px;
+    border: 2px solid black !important;
+    color: #ffffff !important;
+    background:
+      radial-gradient(
+        circle at 85% 30%,
+        rgba(57,185,114,0.30),
+        transparent 30%
+      ),
+      linear-gradient(
+        135deg,
+        #071208,
+        #0d2413 55%,
+        #061008
+      );
+    border-radius: 15px;
+  }
+
+  .send-button:hover {
+    filter: brightness(1.12);
+    color: #ffffff !important;
+  }
+
+  /* ==========================================================
+     MOBILE
+  ========================================================== */
+
+  @media (max-width: 767.98px) {
+
+    .conversation-page {
+      width: 100%;
+      padding: 0;
+    }
+
+    .conversation-card {
+      border-radius: 14px;
+    }
+
+    .conversation-header {
+      padding: 13px 12px;
+      gap: 10px;
+    }
+
+    .conversation-header-avatar,
+    .conversation-header-avatar-placeholder {
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+    }
+
+    .conversation-header-name {
+      font-size: 0.98rem;
+    }
+
+    .conversation-header-role {
+      font-size: 0.74rem;
+    }
+
+    .message-area {
+      height: 62vh;
+      min-height: 430px;
+      padding: 18px 12px;
+    }
+
+    .message-bubble {
+      max-width: 84%;
+      padding: 10px 12px 8px;
+    }
+
+    .message-body {
+      font-size: 0.9rem;
+    }
+
+    .message-composer {
+      padding: 10px;
+    }
+
+    .message-composer form {
+      gap: 7px;
+    }
+
+    .message-input {
+      min-height: 45px;
+      font-size: 0.9rem;
+    }
+
+    .send-button {
+      min-width: 78px;
+      min-height: 45px;
+      padding: 8px 10px !important;
+    }
+
+    .send-button .send-label {
+      display: none;
+    }
+  }
+</style>
+
+
+<div class="container py-4 conversation-page">
+
+  <div class="conversation-card">
+
+    <!-- ========================================================
+         CONVERSATION HEADER
+    ========================================================= -->
+
+    <div class="conversation-header">
+
+      <a
+        href="{{ url_for('inbox') }}"
+        class="conversation-back"
+        title="Back to Inbox"
+        aria-label="Back to Inbox">
+        <i class="fa-solid fa-arrow-left"></i>
+      </a>
+
+
+      {% if recipient.profile_picture %}
+
+        <img
+          src="{{ url_for('profile_picture', filename=recipient.profile_picture) }}"
+          alt="{{ recipient.full_name }}"
+          class="conversation-header-avatar">
+
+      {% else %}
+
+        <div class="conversation-header-avatar-placeholder">
+          {{ recipient.full_name[0] | upper }}
+        </div>
+
+      {% endif %}
+
+
+      <div class="conversation-header-info">
+
+        <p class="conversation-header-name">
+          {{ recipient.full_name }}
+
+          {% if recipient.nationality %}
+            <span class="ms-1">
+              {{ country_flag(recipient.nationality) }}
+            </span>
+          {% endif %}
+        </p>
+
+        <div class="conversation-header-role">
+          {{ recipient.role }}
+
+          {% if recipient.school %}
+            · {{ recipient.school }}
+          {% endif %}
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ========================================================
+         MESSAGES
+    ========================================================= -->
+
+    <div
+      class="message-area"
+      id="messageArea">
+
+      {% if messages %}
+
+        {% for message in messages %}
+
+          {% if message.sender_id == current_user.id %}
+
+            <!-- SENT MESSAGE -->
+            <div class="message-row sent">
+
+              <div class="message-bubble">
+
+                <div class="message-body">
+                  {{ message.body }}
+                </div>
+
+                <span class="message-time">
+                  {{ message.created_at.strftime('%b %d, %Y · %I:%M %p') }}
+                </span>
+
+              </div>
+
+            </div>
+
+          {% else %}
+
+            <!-- RECEIVED MESSAGE -->
+            <div class="message-row received">
+
+              <div class="message-bubble">
+
+                <div class="message-body">
+                  {{ message.body }}
+                </div>
+
+                <span class="message-time">
+                  {{ message.created_at.strftime('%b %d, %Y · %I:%M %p') }}
+                </span>
+
+              </div>
+
+            </div>
+
+          {% endif %}
+
+        {% endfor %}
+
+      {% else %}
+
+        <div class="conversation-empty">
+
+          <div>
+
+            <i class="fa-regular fa-comments"></i>
+
+            <h5>No messages yet</h5>
+
+            <p class="mb-0">
+              Start the conversation with {{ recipient.full_name }}.
+            </p>
+
+          </div>
+
+        </div>
+
+      {% endif %}
+
+    </div>
+
+
+    <!-- ========================================================
+         MESSAGE COMPOSER
+    ========================================================= -->
+
+    <div class="message-composer">
+
+      <form
+        method="POST"
+        action="{{ url_for('conversation', user_id=recipient.id) }}">
+
+        <input
+          type="hidden"
+          name="csrf_token"
+          value="{{ csrf_token() }}">
+
+        <textarea
+          name="body"
+          id="messageInput"
+          class="form-control message-input"
+          rows="1"
+          maxlength="5000"
+          placeholder="Write a message..."
+          required></textarea>
+
+        <button
+          type="submit"
+          class="btn send-button">
+
+          <span class="send-label">
+            Send
+          </span>
+
+          <i class="fa-solid fa-paper-plane"></i>
+
+        </button>
+
+      </form>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+
+    const messageArea = document.getElementById('messageArea');
+    const messageInput = document.getElementById('messageInput');
+
+    /* Always open the conversation at the newest message. */
+    if (messageArea) {
+      messageArea.scrollTop = messageArea.scrollHeight;
+    }
+
+    /* Auto-expand the message box while typing. */
+    if (messageInput) {
+
+      messageInput.addEventListener('input', function () {
+
+        this.style.height = 'auto';
+
+        const maxHeight = 140;
+
+        this.style.height = Math.min(
+          this.scrollHeight,
+          maxHeight
+        ) + 'px';
+
+      });
+
+      /*
+       * Enter sends the message.
+       * Shift + Enter creates a new line.
+       */
+      messageInput.addEventListener('keydown', function (event) {
+
+        if (
+          event.key === 'Enter'
+          && !event.shiftKey
+          && !event.isComposing
+        ) {
+
+          event.preventDefault();
+
+          const form = this.closest('form');
+
+          if (form && this.value.trim()) {
+            form.submit();
+          }
+
+        }
+
+      });
+
+    }
+
+  });
+</script>
+
+{% endblock %}

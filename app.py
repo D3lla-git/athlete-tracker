@@ -374,40 +374,43 @@ def upload_to_supabase(file, bucket, path):
 # CHAT PERMISSIONS---Helper
 # ==========================================================
 
+# ==========================================================
+# CHAT PERMISSIONS
+# ==========================================================
+
 def can_message(sender, recipient):
+    """
+    Determine whether two registered users are allowed
+    to exchange messages.
+
+    Allowed:
+        Coach  <-> Athlete
+        Coach  <-> Scout
+        Athlete <-> Scout
+        Athlete <-> Coach
+        Scout  <-> Athlete
+        Scout  <-> Coach
+    """
+
     if not sender.is_authenticated:
         return False
 
+    # Never allow messaging yourself
     if sender.id == recipient.id:
         return False
 
-    # Scout ↔ Athlete
-    if (
-        sender.role == 'Scout'
-        and recipient.role == 'Athlete'
-    ):
-        return True
+    allowed_roles = {'Coach', 'Athlete', 'Scout'}
 
-    if (
-        sender.role == 'Athlete'
-        and recipient.role == 'Scout'
-    ):
-        return True
+    # Both users must be messaging-enabled roles
+    if sender.role not in allowed_roles:
+        return False
 
-    # Scout ↔ Coach
-    if (
-        sender.role == 'Scout'
-        and recipient.role == 'Coach'
-    ):
-        return True
+    if recipient.role not in allowed_roles:
+        return False
 
-    if (
-        sender.role == 'Coach'
-        and recipient.role == 'Scout'
-    ):
-        return True
+    # All three roles can communicate with each other
+    return True
 
-    return False
   #=======Common nationalities=========
 def country_flag(nationality):
     if not nationality:
@@ -494,6 +497,56 @@ def suggest_names():
 
     return jsonify([{'full_name': s.full_name} for s in students])
 
+# ==========================================================
+# MESSAGING RECIPIENT NAME SUGGESTIONS
+# ==========================================================
+
+# ==========================================================
+# MESSAGE RECIPIENT SEARCH
+# ==========================================================
+
+@app.route('/api/suggest-message-recipients')
+@login_required
+def suggest_message_recipients():
+
+    query = request.args.get('q', '').strip()
+
+    if not query:
+        return jsonify([])
+
+    allowed_roles = ['Coach', 'Athlete', 'Scout']
+
+    users = (
+        User.query
+        .filter(
+            User.id != current_user.id,
+            User.role.in_(allowed_roles),
+            User.is_verified == True,
+            User.full_name.ilike(f'%{query}%')
+        )
+        .order_by(User.full_name.asc())
+        .limit(10)
+        .all()
+    )
+
+    results = []
+
+    for user in users:
+
+        # Extra permission check
+        if not can_message(current_user, user):
+            continue
+
+        results.append({
+            'id': user.id,
+            'full_name': user.full_name,
+            'role': user.role,
+            'school': user.school or ''
+        })
+
+    return jsonify(results)
+
+# =================SEARCH ROUTE=========================================
 @app.route('/search')
 def search():
     name = request.args.get('name', '').strip()
@@ -1689,6 +1742,274 @@ def inbox():
         'inbox.html',
         conversations=conversations
     )
+
+# ==========================================================
+# NEW MESSAGE / START CONVERSATION
+# ==========================================================
+@app.route('/new-message', methods=['GET', 'POST'])
+@login_required
+def new_message():
+
+    print("========== NEW MESSAGE DEBUG ==========")
+    print("Sender:", current_user.id, current_user.full_name)
+    print("Sender role:", current_user.role)
+    print("Submitted to_name:", request.form.get('to_name'))
+    print("Submitted to_user_id:", request.form.get('to_user_id'))
+    print("Message:", request.form.get('body'))
+    print("======================================")
+
+    # ==========================================================
+    # ONLY COACH, ATHLETE AND SCOUT CAN USE MESSAGING
+    # ==========================================================
+
+    if current_user.role not in {
+        'Coach',
+        'Athlete',
+        'Scout'
+    }:
+        flash(
+            'You are not allowed to use messaging.',
+            'danger'
+        )
+
+        return redirect(url_for('index'))
+
+
+    # ==========================================================
+    # GET
+    # ==========================================================
+
+    if request.method == 'GET':
+
+        return render_template(
+            'new_message.html'
+        )
+
+
+    # ==========================================================
+    # POST
+    # ==========================================================
+
+    to_user_id = request.form.get(
+        'to_user_id',
+        ''
+    ).strip()
+
+    body = request.form.get(
+        'body',
+        ''
+    ).strip()
+
+
+    # ==========================================================
+    # RECIPIENT MUST BE SELECTED FROM SUGGESTIONS
+    # ==========================================================
+
+    if not to_user_id:
+
+        flash(
+            'Please select a recipient from the suggestion list.',
+            'danger'
+        )
+
+        return redirect(
+            url_for('new_message')
+        )
+
+
+    # ==========================================================
+    # CONVERT USER ID TO INTEGER
+    # ==========================================================
+
+    try:
+
+        to_user_id = int(to_user_id)
+
+    except (TypeError, ValueError):
+
+        flash(
+            'Invalid recipient selected.',
+            'danger'
+        )
+
+        return redirect(
+            url_for('new_message')
+        )
+
+
+    # ==========================================================
+    # FIND RECIPIENT BY ID
+    # ==========================================================
+
+    recipient = User.query.get(
+        to_user_id
+    )
+
+
+    if not recipient:
+
+        flash(
+            'The selected recipient could not be found.',
+            'danger'
+        )
+
+        return redirect(
+            url_for('new_message')
+        )
+
+
+    # ==========================================================
+    # CHECK MESSAGING PERMISSION
+    # ==========================================================
+
+    if not can_message(
+        current_user,
+        recipient
+    ):
+
+        flash(
+            'You are not allowed to message this user.',
+            'danger'
+        )
+
+        return redirect(
+            url_for('new_message')
+        )
+
+
+    # ==========================================================
+    # MESSAGE VALIDATION
+    # ==========================================================
+
+    if not body:
+
+        flash(
+            'Please enter a message.',
+            'danger'
+        )
+
+        return redirect(
+            url_for('new_message')
+        )
+
+
+    if len(body) > 5000:
+
+        flash(
+            'Message cannot exceed 5000 characters.',
+            'danger'
+        )
+
+        return redirect(
+            url_for('new_message')
+        )
+
+
+    # ==========================================================
+    # CREATE MESSAGE
+    # ==========================================================
+
+    message = ChatMessage(
+        sender_id=current_user.id,
+        recipient_id=recipient.id,
+        body=body
+    )
+
+    db.session.add(message)
+
+
+    # ==========================================================
+    # SAVE
+    # ==========================================================
+
+    try:
+
+        db.session.commit()
+
+    except Exception as e:
+
+        db.session.rollback()
+
+        print(
+            'MESSAGE SEND ERROR:',
+            e
+        )
+
+        flash(
+            'There was a problem sending your message.',
+            'danger'
+        )
+
+        return redirect(
+            url_for('new_message')
+        )
+
+
+    # ==========================================================
+    # SUCCESS
+    # ==========================================================
+
+    flash(
+        f'Message sent to {recipient.full_name}.',
+        'success'
+    )
+
+    return redirect(
+        url_for(
+            'conversation',
+            user_id=recipient.id
+        )
+    )
+
+# ==========================================================
+# MESSAGE RECIPIENT SEARCH
+# ==========================================================
+
+@app.route('/api/message-recipients')
+@login_required
+def message_recipients():
+
+    if current_user.role not in ('Scout', 'Athlete', 'Coach'):
+        return jsonify([])
+
+    q = request.args.get('q', '').strip()
+
+    if not q:
+        return jsonify([])
+
+    # Scout can contact Athletes and Coaches.
+    if current_user.role == 'Scout':
+        allowed_roles = ['Athlete', 'Coach']
+
+    # Athletes and Coaches can contact Scouts.
+    else:
+        allowed_roles = ['Scout']
+
+    users = User.query.filter(
+        User.id != current_user.id,
+        User.role.in_(allowed_roles),
+        User.full_name.ilike(f'%{q}%')
+    ).order_by(
+        User.full_name.asc()
+    ).limit(12).all()
+
+    recipients = []
+
+    for user in users:
+
+        if not can_message(current_user, user):
+            continue
+
+        recipients.append({
+            'id': user.id,
+            'full_name': user.full_name,
+            'role': user.role,
+            'school': user.school or '',
+            'nationality': user.nationality or '',
+            'flag': country_flag(user.nationality)
+        })
+
+    return jsonify(recipients)
 # ==========================================================
 # INBOX / MESSAGING/ Convo--back2back
 # ==========================================================
