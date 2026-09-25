@@ -11,9 +11,20 @@
      D.A.R.T CONVERSATION
   ========================================================== */
 
+  html,
+  body {
+    height: 100%;
+  }
+
   .conversation-page {
     max-width: 950px;
+    height: calc(100vh - 80px);
     margin: 0 auto;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
 
   .conversation-card {
@@ -23,6 +34,12 @@
     border-radius: 20px;
     overflow: hidden;
     box-shadow: 0 10px 32px rgba(0, 0, 0, 0.10);
+
+    /* IMPORTANT */
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   html[data-theme="dark"] .conversation-card {
@@ -38,6 +55,7 @@
     align-items: center;
     gap: 14px;
     padding: 16px 20px;
+
     background:
       radial-gradient(
         circle at 85% 30%,
@@ -50,7 +68,11 @@
         #0d2413 55%,
         #061008
       );
+
     color: #ffffff;
+
+    /* IMPORTANT: header never shrinks */
+    flex: 0 0 auto;
   }
 
   .conversation-back {
@@ -111,18 +133,29 @@
     margin-top: 2px;
   }
 
+
   /* ==========================================================
      MESSAGE AREA
+     ONLY THIS SECTION SCROLLS
   ========================================================== */
 
   .message-area {
-    height: 58vh;
-    min-height: 420px;
-    max-height: 680px;
+    flex: 1 1 auto;
+    min-height: 0;
+
     overflow-y: auto;
+    overflow-x: hidden;
+
     padding: 24px 20px;
+
     background: var(--page-bg);
+
     scroll-behavior: smooth;
+
+    /*
+     * Prevent the browser/page from taking over the scroll.
+     */
+    overscroll-behavior: contain;
   }
 
   .message-row {
@@ -160,6 +193,7 @@
         #0d2413 55%,
         #061008
       );
+
     color: #ffffff;
     border-bottom-right-radius: 5px;
   }
@@ -202,35 +236,52 @@
     margin-bottom: 14px;
   }
 
+
   /* ==========================================================
-     COMPOSER
+     MESSAGE COMPOSER
+     ALWAYS REMAINS AT THE BOTTOM
   ========================================================== */
 
   .message-composer {
+    flex: 0 0 auto;
+
     border-top: 1px solid var(--surface-border);
+
     padding: 14px;
+
     background: var(--surface-bg);
+
+    z-index: 20;
   }
 
   .message-composer form {
     display: flex;
     align-items: flex-end;
     gap: 10px;
+    margin: 0;
   }
 
   .message-input {
     flex: 1;
     resize: none;
+
     min-height: 48px;
     max-height: 140px;
+
     border-radius: 15px;
+
+    overflow-y: auto;
   }
 
   .send-button {
+    flex: 0 0 auto;
+
     min-width: 100px;
     min-height: 48px;
+
     border: 2px solid black !important;
     color: #ffffff !important;
+
     background:
       radial-gradient(
         circle at 85% 30%,
@@ -243,6 +294,7 @@
         #0d2413 55%,
         #061008
       );
+
     border-radius: 15px;
   }
 
@@ -250,6 +302,7 @@
     filter: brightness(1.12);
     color: #ffffff !important;
   }
+
 
   /* ==========================================================
      MOBILE
@@ -259,11 +312,20 @@
 
     .conversation-page {
       width: 100%;
+      max-width: none;
+
+      height: calc(100vh - 60px);
+
       padding: 0;
+
+      margin: 0;
     }
 
     .conversation-card {
       border-radius: 14px;
+      border-left: 0;
+      border-right: 0;
+      border-bottom: 0;
     }
 
     .conversation-header {
@@ -286,10 +348,17 @@
       font-size: 0.74rem;
     }
 
+    /*
+     * IMPORTANT:
+     * Do NOT use height: 62vh here.
+     */
     .message-area {
-      height: 62vh;
-      min-height: 430px;
+      flex: 1 1 auto;
+      min-height: 0;
+
       padding: 18px 12px;
+
+      overflow-y: auto;
     }
 
     .message-bubble {
