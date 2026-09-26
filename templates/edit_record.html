@@ -91,46 +91,22 @@
 
   </select>
 </div>
-            <div class="col-md-6">
-              <label class="form-label">Games Played</label>
-              <input type="number" name="games_played" class="form-control" value="{{ record.games_played }}" min="0">
-            </div>
 
 <div class="col-md-6">
-  <label class="form-label">
-    Games Played
-    <i class="fa-solid fa-person-running"></i>
-  </label>
-  <input type="number"
-         name="games_played"
-         class="form-control"
-         value="{{ record.games_played }}"
-         min="0">
-</div>
-
-<div class="col-md-6">
-  <label class="form-label">
-    Match Minutes Played
-    <i class="fa-solid fa-clock"></i>
-  </label>
-  <input type="number"
-         name="match_minutes_played"
-         class="form-control"
-         value="{{ record.match_minutes_played or 0 }}"
-         min="0">
-</div>
-
-<div class="col-md-6">
-  <label class="form-label">
-    Preferred Foot
-    <i class="fa-solid fa-shoe-prints"></i>
-  </label>
-  <select name="preferred_foot" class="form-select">
-    <option value="">-- Select --</option>
-    <option value="Right" {% if current_user.preferred_foot == 'Right' %}selected{% endif %}>Right</option>
-    <option value="Left" {% if current_user.preferred_foot == 'Left' %}selected{% endif %}>Left</option>
-    <option value="Both" {% if current_user.preferred_foot == 'Both' %}selected{% endif %}>Both</option>
-  </select>
+    <label class="form-label">
+        Games Played
+        <i class="fa-solid fa-person-running"></i>
+    </label>
+    <input
+        type="number"
+        name="games_played"
+        id="gamesPlayedInput"
+        class="form-control"
+        value="1"
+        min="0"
+        max="1"
+        step="1"
+        required>
 </div>
 
 <div class="row g-3 mt-1">
@@ -170,234 +146,111 @@
 </div>
 
 <div class="mb-4">
-  <label class="form-label">Opponet <i class="fa-solid fa-shield-halved"></i></label>
+  <label class="form-label">Opponet <i class="fa-solid fa-shield-halved" style="color: red;"></i></label>
   <input type="text" name="team_played_against" class="form-control" value="{{ record.team_played_against or '' }}" placeholder="e.g. St. Mary Catholic School" required>
 </div>
+
 <div class="mb-4">
-  <label class="form-label">
-    Competition Category
-    <i class="fa-solid fa-medal"></i>
-  </label>
+    <label class="form-label">
+        Competition Category
+        <i class="fa-solid fa-medal"></i>
+    </label>
 
-  <select
-      name="competition_category"
-      id="editCompetitionCategory"
-      class="form-select"
-      required>
+    <select
+        name="competition_category"
+        id="editCompetitionCategory"
+        class="form-select"
+        required>
 
-    <option value="">-- Select Competition --</option>
+        <option value="">-- Select Competition --</option>
 
-    <option value="County Meet"
-      {% if record.competition_category == 'County Meet' %}selected{% endif %}>
-      County Meet
-    </option>
+        <option value="High School"
+            {% if record.competition_category == 'High School' %}selected{% endif %}>
+            High School Competition
+        </option>
 
-    <option value="Club League"
-      {% if record.competition_category == 'Club League' %}selected{% endif %}>
-      Club League
-    </option>
+        <option value="County Meet"
+            {% if record.competition_category == 'County Meet' %}selected{% endif %}>
+            County Meet
+        </option>
 
-    <option value="University League"
-      {% if record.competition_category == 'University League' %}selected{% endif %}>
-      University League
-    </option>
+        <option value="Club League"
+            {% if record.competition_category == 'Club League' %}selected{% endif %}>
+            Club League
+        </option>
 
-    <option value="Community/Area League"
-      {% if record.competition_category == 'Community/Area League' %}selected{% endif %}>
-      Community/Area League
-    </option>
+        <option value="University League"
+            {% if record.competition_category == 'University League' %}selected{% endif %}>
+            University League
+        </option>
 
-    <option value="High School"
-      {% if record.competition_category == 'High School' %}selected{% endif %}>
-      High School Competition
-    </option>
+        <option value="Community/Area League"
+            {% if record.competition_category == 'Community/Area League' %}selected{% endif %}>
+            Community/Area League
+        </option>
 
-   <option value="AFCON - Lonestar Men's Team"
-  {% if record.competition_category == "AFCON - Lonestar Men's Team" %}selected{% endif %}>
-  AFCON: Lonestar Men's Team
-</option>
+        <option value="AFCON"
+            {% if record.competition_category == 'AFCON' %}selected{% endif %}>
+            AFCON
+        </option>
 
-<option value="WAFU - Male-U15"
-  {% if record.competition_category == 'WAFU - Male-U15' %}selected{% endif %}>
-  WAFU: Male-U15
-</option>
+        <option value="WAFU"
+            {% if record.competition_category == 'WAFU' %}selected{% endif %}>
+            WAFU
+        </option>
 
-<option value="WAFU - Female-U15"
-  {% if record.competition_category == 'WAFU - Female-U15' %}selected{% endif %}>
-  WAFU: Female-U15
-</option>
+        <option value="World Cup"
+            {% if record.competition_category == 'World Cup' %}selected{% endif %}>
+            World Cup
+        </option>
 
-<option value="WAFU - Male-U17"
-  {% if record.competition_category == 'WAFU - Male-U17' %}selected{% endif %}>
-  WAFU: Male-U17
-</option>
+    </select>
+</div>
 
-<option value="WAFU - Female-U17"
-  {% if record.competition_category == 'WAFU - Female-U17' %}selected{% endif %}>
-  WAFU: Female-U17
-</option>
+<div class="mb-4" id="clubDivisionOptions" style="display: none;">
+    <label class="form-label">
+        Club League Division
+        <i class="fa-solid fa-layer-group"></i>
+    </label>
 
-<option value="WAFU - Male-U20"
-  {% if record.competition_category == 'WAFU - Male-U20' %}selected{% endif %}>
-  WAFU: Male-U20
-</option>
+    <select
+        name="club_division"
+        id="clubDivision"
+        class="form-select">
 
-<option value="WAFU - Female-U20"
-  {% if record.competition_category == 'WAFU - Female-U20' %}selected{% endif %}>
-  WAFU: Female-U20
-</option>
+        <option value="">-- Select Division --</option>
 
-<option value="WAFU - Male-U23"
-  {% if record.competition_category == 'WAFU - Male-U23' %}selected{% endif %}>
-  WAFU: Male-U23
-</option>
+        <option value="1st Division"
+            {% if record.club_division == '1st Division' %}selected{% endif %}>
+            1st Division
+        </option>
 
-<option value="WAFU - Female-U23"
-  {% if record.competition_category == 'WAFU - Female-U23' %}selected{% endif %}>
-  WAFU: Female-U23
-</option>
+        <option value="2nd Division"
+            {% if record.club_division == '2nd Division' %}selected{% endif %}>
+            2nd Division
+        </option>
 
-<option value="World Cup - Lonestar Men's Team"
-  {% if record.competition_category == "World Cup - Lonestar Men's Team" %}selected{% endif %}>
-  World Cup: Lonestar Men's Team
-</option>
-  </select>
+        <option value="3rd Division"
+            {% if record.club_division == '3rd Division' %}selected{% endif %}>
+            3rd Division
+        </option>
+
+    </select>
 </div>
 
    <div class="mb-4">
-  <label class="form-label fw-bold">
-    Trophies Won
-    <i class="fa-solid fa-trophy" style="color: silver;"></i>
-    <i class="fa-solid fa-medal"></i>
-    <i class="fa-solid fa-trophy" style="color: goldenrod;"></i>
-  </label>
+    <label class="form-label fw-bold">
+        Trophy Won
+        <i class="fa-solid fa-trophy" style="color: silver;"></i>
+        <i class="fa-solid fa-medal"></i>
+        <i class="fa-solid fa-trophy" style="color: goldenrod;"></i>
+    </label>
 
-  <div class="row">
+    <div id="trophyOptions" class="row g-2">
 
-    <!-- Column 1 -->
-    <div class="col-md-4">
-
-      <div class="form-check">
-        <input class="form-check-input"
-               type="checkbox"
-               name="trophy"
-               value="University Championship"
-               id="trophy1"
-               {% if 'University Championship' in (record.trophy or '').split(', ') %}checked{% endif %}>
-        <label class="form-check-label" for="trophy1">
-          University Championship
-        </label>
-      </div>
-
-      <div class="form-check">
-        <input class="form-check-input"
-               type="checkbox"
-               name="trophy"
-               value="Classes League"
-               id="trophy2"
-               {% if 'Classes League' in (record.trophy or '').split(', ') %}checked{% endif %}>
-        <label class="form-check-label" for="trophy2">
-          Classes League
-        </label>
-      </div>
-
-      <div class="form-check">
-        <input class="form-check-input"
-               type="checkbox"
-               name="trophy"
-               value="County Meet"
-               id="trophy3"
-               {% if 'County Meet' in (record.trophy or '').split(', ') %}checked{% endif %}>
-        <label class="form-check-label" for="trophy3">
-          County Meet
-        </label>
-      </div>
+        <!-- Trophy checkboxes will be generated by JavaScript -->
 
     </div>
-
-    <!-- Column 2 -->
-    <div class="col-md-4">
-
-      <div class="form-check">
-        <input class="form-check-input"
-               type="checkbox"
-               name="trophy"
-               value="Club Trophy"
-               id="trophy4"
-               {% if 'Club Trophy' in (record.trophy or '').split(', ') %}checked{% endif %}>
-        <label class="form-check-label" for="trophy4">
-          Club Trophy
-        </label>
-      </div>
-
-      <div class="form-check">
-        <input class="form-check-input"
-               type="checkbox"
-               name="trophy"
-               value="Community Trophy"
-               id="trophy5"
-               {% if 'Community Trophy' in (record.trophy or '').split(', ') %}checked{% endif %}>
-        <label class="form-check-label" for="trophy5">
-          Community Trophy
-        </label>
-      </div>
-
-      <div class="form-check">
-        <input class="form-check-input"
-               type="checkbox"
-               name="trophy"
-               value="AFCON"
-               id="trophy6"
-               {% if 'AFCON' in (record.trophy or '').split(', ') %}checked{% endif %}>
-        <label class="form-check-label" for="trophy6">
-          AFCON
-        </label>
-      </div>
-
-    </div>
-
-    <!-- Column 3 -->
-    <div class="col-md-4">
-
-      <div class="form-check">
-        <input class="form-check-input"
-               type="checkbox"
-               name="trophy"
-               value="WAFU"
-               id="trophy7"
-               {% if 'WAFU' in (record.trophy or '').split(', ') %}checked{% endif %}>
-        <label class="form-check-label" for="trophy7">
-          WAFU
-        </label>
-      </div>
-
-      <div class="form-check">
-        <input class="form-check-input"
-               type="checkbox"
-               name="trophy"
-               value="World Cup"
-               id="trophy8"
-               {% if 'World Cup' in (record.trophy or '').split(', ') %}checked{% endif %}>
-        <label class="form-check-label" for="trophy8">
-          World Cup
-        </label>
-      </div>
-
-      <div class="form-check">
-        <input class="form-check-input"
-               type="checkbox"
-               name="trophy"
-               value="None"
-               id="trophy9"
-               {% if 'None' in (record.trophy or '').split(', ') %}checked{% endif %}>
-        <label class="form-check-label" for="trophy9">
-          None
-        </label>
-      </div>
-
-    </div>
-
-  </div>
 </div>
           </div>
 
@@ -632,10 +485,18 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
-    const positionSelect = document.getElementById('editPositionSelect');
-    const goalkeeperStats = document.getElementById('goalkeeperStats');
+    /* =========================================================
+       POSITION / GOALKEEPER STATISTICS
+       ========================================================= */
+
+    const positionSelect =
+        document.getElementById('editPositionSelect');
+
+    const goalkeeperStats =
+        document.getElementById('goalkeeperStats');
 
     function updateGoalkeeperStats() {
+
         if (!positionSelect || !goalkeeperStats) {
             return;
         }
@@ -645,8 +506,334 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (positionSelect) {
-        positionSelect.addEventListener('change', updateGoalkeeperStats);
+        positionSelect.addEventListener(
+            'change',
+            updateGoalkeeperStats
+        );
+
         updateGoalkeeperStats();
+    }
+
+
+    /* =========================================================
+       COMPETITION / TROPHY RULES
+       ========================================================= */
+
+    const competitionSelect =
+        document.getElementById('editCompetitionCategory');
+
+    const trophyOptions =
+        document.getElementById('trophyOptions');
+
+    const clubDivisionOptions =
+        document.getElementById('clubDivisionOptions');
+
+    const clubDivision =
+        document.getElementById('clubDivision');
+
+
+    /*
+     * The trophy that belongs to each competition.
+     */
+    const trophyMap = {
+        'High School': 'Classes League',
+        'County Meet': 'County Meet',
+        'Club League': 'Club Trophy',
+        'University League': 'University Championship',
+        'Community/Area League': 'Community Trophy',
+        'AFCON': 'AFCON',
+        'WAFU': 'WAFU',
+        'World Cup': 'World Cup'
+    };
+
+
+    /*
+     * Basketball-specific trophies.
+     */
+    const basketballTrophies = [
+        'Basketball Africa League (BAL)',
+        'FIBA Africa Zone',
+        'FIBA AfroBasket Championships'
+    ];
+
+
+    /*
+     * Existing trophy value stored in the database.
+     *
+     * Example:
+     * record.trophy = "Classes League"
+     */
+    const existingTrophies =
+        "{{ record.trophy or '' }}".split(',')
+            .map(function (trophy) {
+                return trophy.trim();
+            })
+            .filter(Boolean);
+
+
+    /*
+     * Create the trophy checkbox.
+     */
+    function createTrophyCheckbox(
+        trophy,
+        index,
+        checked
+    ) {
+
+        const wrapper =
+            document.createElement('div');
+
+        wrapper.className = 'col-md-6';
+
+        wrapper.innerHTML = `
+            <div class="form-check">
+                <input
+                    class="form-check-input trophy-checkbox"
+                    type="checkbox"
+                    name="trophy"
+                    value="${trophy}"
+                    id="editTrophy${index}"
+                    ${checked ? 'checked' : ''}>
+
+                <label
+                    class="form-check-label"
+                    for="editTrophy${index}">
+                    ${trophy}
+                </label>
+            </div>
+        `;
+
+        trophyOptions.appendChild(wrapper);
+    }
+
+
+    /*
+     * Update trophy choices based on:
+     *
+     * 1. Competition
+     * 2. Sport
+     */
+    function updateTrophies() {
+
+        if (!competitionSelect || !trophyOptions) {
+            return;
+        }
+
+        const competition =
+            competitionSelect.value;
+
+        trophyOptions.innerHTML = '';
+
+
+        /*
+         * No competition selected.
+         */
+        if (!competition) {
+
+            trophyOptions.innerHTML = `
+                <div class="col-12">
+                    <div class="text-muted">
+                        Please select a competition category first.
+                    </div>
+                </div>
+            `;
+
+            return;
+        }
+
+
+        /*
+         * The main trophy MUST match the competition.
+         */
+        const requiredTrophy =
+            trophyMap[competition];
+
+
+        if (requiredTrophy) {
+
+            createTrophyCheckbox(
+                requiredTrophy,
+                1,
+                existingTrophies.includes(requiredTrophy)
+            );
+        }
+
+
+        /*
+         * Basketball-only trophies.
+         *
+         * These are displayed only when the record
+         * belongs to Basketball.
+         */
+        const isBasketballSport = JSON.parse(
+            '{{ (record.sport == "Basketball") | tojson }}'
+        );
+
+        if (isBasketballSport) {
+
+            basketballTrophies.forEach(function (trophy, index) {
+
+                createTrophyCheckbox(
+                    trophy,
+                    index + 2,
+                    existingTrophies.includes(trophy)
+                );
+
+            });
+
+        }
+
+
+        /*
+         * Prevent selecting more than one trophy.
+         */
+        const checkboxes =
+            document.querySelectorAll(
+                '.trophy-checkbox'
+            );
+
+        checkboxes.forEach(function (checkbox) {
+
+            checkbox.addEventListener(
+                'change',
+                function () {
+
+                    /*
+                     * The competition trophy must remain
+                     * selected when the competition has
+                     * a mapped trophy.
+                     */
+                    if (
+                        requiredTrophy &&
+                        this.value === requiredTrophy &&
+                        !this.checked
+                    ) {
+
+                        this.checked = true;
+
+                        alert(
+                            'The trophy must match the selected competition: '
+                            + requiredTrophy
+                        );
+
+                        return;
+                    }
+
+                    /*
+                     * Only one trophy can be selected
+                     * for a game record.
+                     */
+                    if (this.checked) {
+
+                        checkboxes.forEach(function (other) {
+
+                            if (other !== checkbox) {
+                                other.checked = false;
+                            }
+
+                        });
+                    }
+
+                }
+            );
+
+        });
+    }
+
+
+    /*
+     * Club League Division.
+     */
+    function updateClubDivision() {
+
+        if (
+            !competitionSelect ||
+            !clubDivisionOptions ||
+            !clubDivision
+        ) {
+            return;
+        }
+
+        if (
+            competitionSelect.value ===
+            'Club League'
+        ) {
+
+            clubDivisionOptions.style.display =
+                'block';
+
+            clubDivision.required = true;
+
+        } else {
+
+            clubDivisionOptions.style.display =
+                'none';
+
+            clubDivision.required = false;
+
+            clubDivision.value = '';
+        }
+    }
+
+
+    /*
+     * Competition changed.
+     */
+    if (competitionSelect) {
+
+        competitionSelect.addEventListener(
+            'change',
+            function () {
+
+                updateTrophies();
+                updateClubDivision();
+
+            }
+        );
+
+        /*
+         * Run when page first loads so the
+         * existing record is displayed correctly.
+         */
+        updateTrophies();
+        updateClubDivision();
+    }
+
+
+    /* =========================================================
+       GAME-BY-GAME RULES
+       ========================================================= */
+
+    const gamesPlayedInput =
+        document.getElementById('gamesPlayedInput');
+
+    const motmInput =
+        document.getElementById('motmInput');
+
+
+    if (gamesPlayedInput) {
+
+        gamesPlayedInput.value = '1';
+
+        gamesPlayedInput.addEventListener(
+            'input',
+            function () {
+                this.value = '1';
+            }
+        );
+    }
+
+
+    if (motmInput) {
+
+        motmInput.value = '1';
+
+        motmInput.addEventListener(
+            'input',
+            function () {
+                this.value = '1';
+            }
+        );
     }
 
 });

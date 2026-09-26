@@ -2252,15 +2252,128 @@ def submit_record():
         flash('You are not allowed to submit records.', 'danger')
         return redirect(url_for('student_dashboard'))
 
+    club_division = request.form.get(
+        'club_division',
+        ''
+    ).strip()
+
+    VALID_CLUB_DIVISIONS = {
+        '1st Division',
+        '2nd Division',
+        '3rd Division'
+    }
+
+    competition_category = request.form.get('competition_category', '').strip()
+
+    if competition_category == 'Club League':
+        if club_division not in VALID_CLUB_DIVISIONS:
+            flash(
+                'Please select a valid Club League Division.',
+                'danger'
+            )
+            return redirect(url_for('student_dashboard'))
+    else:
+        club_division = None
+
     sport = request.form.get('sport')
     year = request.form.get('year')
     position = request.form.get('position', '').strip()
     games_played = request.form.get('games_played') or 0
     trophies = request.form.getlist('trophy')
+    man_of_the_match = request.form.get('man_of_the_match')
+
+    try:
+        games_played = int(games_played)
+        man_of_the_match = int(man_of_the_match)
+    except (TypeError, ValueError):
+        flash(
+            'Games Played or MOTM/QOTM(if given) must both be 1 for every game record.',
+            'danger'
+        )
+        return redirect(url_for('student_dashboard'))
+
+    if games_played != 1:
+        flash(
+            'Games Played must be exactly 1 because records are submitted game-by-game.',
+            'danger'
+        )
+        return redirect(url_for('student_dashboard'))
+
+    if man_of_the_match == 2:
+        flash(
+            'MOTM/QOTM must be exactly 1 for every submitted game record.',
+            'danger'
+        )
+        return redirect(url_for('student_dashboard'))
+
+    # ============================================================
+    # COMPETITION CATEGORY ↔ TROPHY VALIDATION
+    # ============================================================
+    allowed_trophies = {
+        'High School': {'Classes League'},
+        'County Meet': {'County Meet'},
+        'Club League': {'Club Trophy'},
+        'University League': {'University Championship'},
+        'Community/Area League': {'Community Trophy'},
+        'AFCON': {'AFCON'},
+        'WAFU': {'WAFU'},
+        'World Cup': {'World Cup'},
+    }
+
+    BASKETBALL_TROPHIES = {
+    'Basketball Africa League (BAL)',
+    'FIBA Africa Zone',
+    'FIBA AfroBasket Championships'
+}
+
+    if sport != 'Basketball':
+        invalid_basketball_trophies = [
+            trophy for trophy in trophies
+            if trophy in BASKETBALL_TROPHIES
+        ]
+
+        if invalid_basketball_trophies:
+            flash(
+                'BAL, FIBA Africa Zone, and FIBA AfroBasket Championships '
+                'are only available for Basketball records.',
+                'danger'
+            )
+            return redirect(url_for('student_dashboard'))
+
+    if competition_category not in allowed_trophies:
+        flash(
+            f'Invalid competition category: {competition_category}.',
+            'danger'
+        )
+        return redirect(url_for('student_dashboard'))
+
+    if not trophies:
+        flash(
+            f'Please select the trophy won for the {competition_category} competition.',
+            'danger'
+        )
+        return redirect(url_for('student_dashboard'))
+
+    invalid_trophies = [
+        trophy for trophy in trophies
+        if trophy not in allowed_trophies[competition_category]
+    ]
+
+    if invalid_trophies:
+        expected_trophy = ', '.join(
+            sorted(allowed_trophies[competition_category])
+        )
+
+        flash(
+            f'Invalid trophy for {competition_category}. '
+            f'The trophy must be: {expected_trophy}.',
+            'danger'
+        )
+        return redirect(url_for('student_dashboard'))
+
     trophy_value = ", ".join(trophies) if trophies else None
     team = request.form.get('team', '').strip()
     team_played_against = request.form.get('team_played_against', '').strip()
-    competition_category = request.form.get('competition_category', '').strip()
     match_minutes_played = request.form.get('match_minutes_played') or 0
     clean_sheets = request.form.get('clean_sheets') or 0
     saves = request.form.get('saves') or 0 
@@ -2338,21 +2451,86 @@ def submit_record():
 
     # ===== PREVENT DUPLICATE: Same Sport + Same Year =====
     # Only block if there is already an approved or pending record
+    # =====================================================
+    # GAME DATE
+    # =====================================================
+
+    game_date_raw = request.form.get('game_date', '').strip()
+
+    if not game_date_raw:
+        flash(
+            'Please enter the date the game was played.',
+            'danger'
+        )
+        return redirect(url_for('student_dashboard'))
+
+    try:
+        game_date = datetime.strptime(
+            game_date_raw,
+            '%Y-%m-%d'
+        ).date()
+
+    except ValueError:
+        flash(
+            'Invalid game date. Please select a valid date.',
+            'danger'
+        )
+        return redirect(url_for('student_dashboard'))
+
+
+    # =====================================================
+    # RECORD YEAR MUST MATCH GAME DATE YEAR
+    # =====================================================
+
+    try:
+        year = int(year)
+    except (TypeError, ValueError):
+        flash(
+            'Invalid record year.',
+            'danger'
+        )
+        return redirect(url_for('student_dashboard'))
+
+    if game_date.year != year:
+        flash(
+            f'The game date belongs to {game_date.year}, '
+            f'but the selected record year is {year}. '
+            f'Please make them match.',
+            'danger'
+        )
+        return redirect(url_for('student_dashboard'))
+
+
+# =====================================================
+# PREVENT DUPLICATE GAME
+# =====================================================
+#
+# Multiple games are allowed.
+#
+# We only block the SAME game when the identifying
+# information is the same.
+#
+# Different game date = different game = allowed.
+# =====================================================
+
     existing = SportRecord.query.filter(
         SportRecord.user_id == current_user.id,
         SportRecord.sport == sport,
         SportRecord.year == year,
+        SportRecord.game_date == game_date,
         SportRecord.competition_category == competition_category,
+        SportRecord.team == team,
         SportRecord.status.in_(['approved', 'pending'])
     ).first()
 
     if existing:
         flash(
-    f'You already have a {existing.status} {sport} record '
-    f'for {existing.competition_category} in the year {year}.',
-    'danger'
-)
-    # ===================================================== #
+            f'You already submitted a {existing.sport} record '
+            f'for {existing.competition_category} against '
+            f'{existing.team or "this team"} on '
+            f'{existing.game_date.strftime("%B %d, %Y")}.',
+            'danger'
+        )
         return redirect(url_for('student_dashboard'))
 
     # Safe conversion helper
@@ -2366,14 +2544,16 @@ def submit_record():
     user_id=current_user.id,
     sport=sport,
     year=year,
+    game_date=game_date,
     position=position,
-    games_played=safe_int(games_played),
+    games_played=1,
     match_minutes_played=safe_int(match_minutes_played),
     man_of_the_match=safe_int(request.form.get('man_of_the_match')),
     trophy=trophy_value,
     team=team,
     team_played_against=team_played_against,
     competition_category=competition_category,
+    club_division=club_division,
     mvp=safe_int(request.form.get('mvp')),
     status='pending'
 )
@@ -2493,73 +2673,56 @@ def resubmit_record(record_id):
 def edit_record(record_id):
     record = SportRecord.query.get_or_404(record_id)
 
-    # Security: only owner can edit
+    # =========================================================
+    # SECURITY: ONLY THE OWNER CAN EDIT
+    # =========================================================
     if record.user_id != current_user.id:
         flash('You can only edit your own records.', 'danger')
         return redirect(url_for('student_dashboard'))
 
     current_year = str(datetime.now().year)
 
+    # =========================================================
+    # ATHLETE REGISTRATION
+    # =========================================================
     athlete_registrations = Registration.query.filter_by(
         user_id=current_user.id,
         registration_type='athlete',
         registration_year=int(current_year),
         status='active'
     ).all()
+
     registered_categories = [
         registration.category
         for registration in athlete_registrations
     ]
 
-    # Only allow editing for the current year
+    # =========================================================
+    # CURRENT-YEAR EDIT RESTRICTION
+    # =========================================================
     if str(record.year) != current_year:
-        flash(f'You can only edit records for the {current_year} season.', 'danger')
+        flash(
+            f'You can only edit records for the {current_year} season.',
+            'danger'
+        )
         return redirect(url_for('student_dashboard'))
 
+    # =========================================================
+    # POST
+    # =========================================================
     if request.method == 'POST':
-        position = request.form.get('position', '').strip()
 
-        # ===== POSITION VALIDATION =====
-        if not position:
-            flash('Please select a position.', 'danger')
-            return redirect(url_for(
-                'edit_record',
-                record_id=record.id
-            ))
-
-        if record.sport not in VALID_POSITIONS:
-            flash('Invalid sport for this record.', 'danger')
-            return redirect(url_for(
-                'edit_record',
-                record_id=record.id
-            ))
-
-        if position not in VALID_POSITIONS[record.sport]:
-            flash(
-                f'Invalid position selected for {record.sport}.',
-                'danger'
-            )
-            return redirect(url_for(
-                'edit_record',
-                record_id=record.id
-            ))
-
-        record.position = position
-        record.games_played = int(
-            request.form.get('games_played') or 0
-        )
-        record.match_minutes_played = int(
-            request.form.get('match_minutes_played') or 0
-        )
-
-        preferred_foot = request.form.get(
-            'preferred_foot',
+        # =====================================================
+        # POSITION
+        # =====================================================
+        position = request.form.get(
+            'position',
             ''
         ).strip()
 
-        if preferred_foot not in VALID_PREFERRED_FEET:
+        if not position:
             flash(
-                'Please select a valid preferred foot.',
+                'Please select a position.',
                 'danger'
             )
             return redirect(
@@ -2569,16 +2732,155 @@ def edit_record(record_id):
                 )
             )
 
-        current_user.preferred_foot = preferred_foot
-        record.team = request.form.get('team', '').strip()
-        record.team_played_against = request.form.get('team_played_against', '').strip()
+        if record.sport not in VALID_POSITIONS:
+            flash(
+                'Invalid sport for this record.',
+                'danger'
+            )
+            return redirect(
+                url_for(
+                    'edit_record',
+                    record_id=record.id
+                )
+            )
+
+        if position not in VALID_POSITIONS[record.sport]:
+            flash(
+                f'Invalid position selected for {record.sport}.',
+                'danger'
+            )
+            return redirect(
+                url_for(
+                    'edit_record',
+                    record_id=record.id
+                )
+            )
+
+        record.position = position
+
+        # =====================================================
+        # GAME-BY-GAME VALUES
+        # =====================================================
+
+        # IMPORTANT:
+        # Do NOT put a comma after int(...).
+        #
+        # Wrong:
+        # games_played = int(...) ,
+        #
+        # That creates a tuple: (1,)
+        #
+        # Correct:
+        # games_played = int(...)
+
+        try:
+            games_played = int(
+                request.form.get('games_played') or 0
+            )
+
+            man_of_the_match = int(
+                request.form.get('man_of_the_match') or 0
+            )
+
+        except (TypeError, ValueError):
+            flash(
+                'Games Played and MOTM/QOTM must both be exactly 1 per game.',
+                'danger'
+            )
+            return redirect(
+                url_for(
+                    'edit_record',
+                    record_id=record.id
+                )
+            )
+
+        # =====================================================
+        # GAMES PLAYED MUST BE EXACTLY 1
+        # =====================================================
+        if games_played != 1:
+            flash(
+                'Games Played must be exactly 1 per game.',
+                'danger'
+            )
+            return redirect(
+                url_for(
+                    'edit_record',
+                    record_id=record.id
+                )
+            )
+
+        # =====================================================
+        # MOTM / QOTM MUST BE EXACTLY 1
+        # =====================================================
+        if man_of_the_match != 1:
+            flash(
+                'MOTM/QOTM must be exactly 1 per game.',
+                'danger'
+            )
+            return redirect(
+                url_for(
+                    'edit_record',
+                    record_id=record.id
+                )
+            )
+
+        # Always save exactly 1.
+        record.games_played = 1
+        record.man_of_the_match = 1
+
+        # =====================================================
+        # OTHER BASIC INFORMATION
+        # =====================================================
+        record.match_minutes_played = int(
+            request.form.get(
+                'match_minutes_played'
+            ) or 0
+        )
+
+        record.team = request.form.get(
+            'team',
+            ''
+        ).strip()
+
+        record.team_played_against = request.form.get(
+            'team_played_against',
+            ''
+        ).strip()
+
+        # =====================================================
+        # COMPETITION CATEGORY
+        # =====================================================
         competition_category = request.form.get(
             'competition_category',
             ''
         ).strip()
-        record.competition_category = competition_category
 
-        # ===== CATEGORY PERMISSION CHECK =====
+        allowed_competitions = {
+            'High School',
+            'County Meet',
+            'Club League',
+            'University League',
+            'Community/Area League',
+            'AFCON',
+            'WAFU',
+            'World Cup'
+        }
+
+        if competition_category not in allowed_competitions:
+            flash(
+                'Invalid competition category selected.',
+                'danger'
+            )
+            return redirect(
+                url_for(
+                    'edit_record',
+                    record_id=record.id
+                )
+            )
+
+        # =====================================================
+        # CATEGORY PERMISSION CHECK
+        # =====================================================
         if not athlete_can_submit_competition(
             current_user.athlete_category,
             competition_category
@@ -2587,15 +2889,178 @@ def edit_record(record_id):
                 'You are not allowed to use this competition category.',
                 'danger'
             )
-            return redirect(url_for('student_dashboard'))
+            return redirect(
+                url_for(
+                    'edit_record',
+                    record_id=record.id
+                )
+            )
 
         record.competition_category = competition_category
-    
-        record.man_of_the_match = int(request.form.get('man_of_the_match') or 0)
-        record.mvp = int(request.form.get('mvp') or 0)
 
-        trophies = request.form.getlist('trophy')
-        record.trophy = ", ".join(trophies) if trophies else None
+        # =====================================================
+        # TROPHIES
+        # =====================================================
+
+        trophies = [
+            trophy.strip()
+            for trophy in request.form.getlist('trophy')
+            if trophy.strip()
+        ]
+
+        # Competition -> required trophy
+        allowed_trophies = {
+            'High School': {'Classes League'},
+            'County Meet': {'County Meet'},
+            'Club League': {'Club Trophy'},
+            'University League': {'University Championship'},
+            'Community/Area League': {'Community Trophy'},
+            'AFCON': {'AFCON'},
+            'WAFU': {'WAFU'},
+            'World Cup': {'World Cup'},
+        }
+
+        # Basketball-only trophies
+        basketball_trophies = {
+            'Basketball Africa League (BAL)',
+            'FIBA Africa Zone',
+            'FIBA AfroBasket Championships'
+        }
+
+        required_trophy = next(
+            iter(
+                allowed_trophies[competition_category]
+            )
+        )
+
+        # =====================================================
+        # TROPHY MUST MATCH COMPETITION
+        # =====================================================
+
+        if required_trophy not in trophies:
+            flash(
+                f'The trophy must match the selected competition. '
+                f'{competition_category} requires: {required_trophy}.',
+                'danger'
+            )
+            return redirect(
+                url_for(
+                    'edit_record',
+                    record_id=record.id
+                )
+            )
+
+        # =====================================================
+        # BASKETBALL TROPHY VALIDATION
+        # =====================================================
+
+        if record.sport != 'Basketball':
+
+            invalid_basketball_trophies = [
+                trophy
+                for trophy in trophies
+                if trophy in basketball_trophies
+            ]
+
+            if invalid_basketball_trophies:
+                flash(
+                    'BAL, FIBA Africa Zone, and FIBA AfroBasket '
+                    'Championships are only available for Basketball records.',
+                    'danger'
+                )
+                return redirect(
+                    url_for(
+                        'edit_record',
+                        record_id=record.id
+                    )
+                )
+
+        # =====================================================
+        # INVALID TROPHY CHECK
+        # =====================================================
+
+        valid_trophies_for_record = (
+            allowed_trophies[competition_category].union(
+                basketball_trophies
+                if record.sport == 'Basketball'
+                else set()
+            )
+        )
+
+        invalid_trophies = [
+            trophy
+            for trophy in trophies
+            if trophy not in valid_trophies_for_record
+        ]
+
+        if invalid_trophies:
+            flash(
+                'One or more selected trophies are not valid '
+                'for this competition.',
+                'danger'
+            )
+            return redirect(
+                url_for(
+                    'edit_record',
+                    record_id=record.id
+                )
+            )
+
+        # =====================================================
+        # SAVE TROPHIES
+        # =====================================================
+
+        record.trophy = (
+            ", ".join(trophies)
+            if trophies
+            else None
+        )
+
+        # =====================================================
+        # CLUB LEAGUE DIVISION
+        # =====================================================
+
+        club_division = request.form.get(
+            'club_division',
+            ''
+        ).strip()
+
+        VALID_CLUB_DIVISIONS = {
+            '1st Division',
+            '2nd Division',
+            '3rd Division'
+        }
+
+        if competition_category == 'Club League':
+
+            if club_division not in VALID_CLUB_DIVISIONS:
+                flash(
+                    'Please select a valid Club League Division.',
+                    'danger'
+                )
+                return redirect(
+                    url_for(
+                        'edit_record',
+                        record_id=record.id
+                    )
+                )
+
+        else:
+            club_division = None
+
+        record.club_division = club_division
+
+        # =====================================================
+        # MVP
+        # =====================================================
+
+        record.mvp = int(
+            request.form.get('mvp') or 0
+        )
+
+        # =====================================================
+        # SPORT-SPECIFIC INFORMATION
+        # =====================================================
 
         if record.sport == 'Football':
 
@@ -2633,20 +3098,56 @@ def edit_record(record_id):
             record.rebound_type = None
 
         elif record.sport == 'Kickball':
-            record.home_runs = int(request.form.get('home_runs') or 0)
-            record.kickball_red_cards = int(request.form.get('kickball_red_cards') or 0)
-            record.kickball_yellow_cards = int(request.form.get('kickball_yellow_cards') or 0)
-            record.cut_base = int(request.form.get('cut_base') or 0)
-            record.foul_played = int(request.form.get('foul_played') or 0)
+
+            record.home_runs = int(
+                request.form.get('home_runs') or 0
+            )
+
+            record.kickball_red_cards = int(
+                request.form.get(
+                    'kickball_red_cards'
+                ) or 0
+            )
+
+            record.kickball_yellow_cards = int(
+                request.form.get(
+                    'kickball_yellow_cards'
+                ) or 0
+            )
+
+            record.cut_base = int(
+                request.form.get('cut_base') or 0
+            )
+
+            record.foul_played = int(
+                request.form.get('foul_played') or 0
+            )
+
             record.clean_sheets = 0
             record.saves = 0
             record.rebound_type = None
 
         else:
-            record.points = int(request.form.get('points') or 0)
-            record.assists = int(request.form.get('assists') or 0)
-            record.blocks = int(request.form.get('blocks') or 0)
-            record.sent_off = int(request.form.get('sent_off') or 0)
+            # =============================================
+            # BASKETBALL
+            # =============================================
+
+            record.points = int(
+                request.form.get('points') or 0
+            )
+
+            record.assists = int(
+                request.form.get('assists') or 0
+            )
+
+            record.blocks = int(
+                request.form.get('blocks') or 0
+            )
+
+            record.sent_off = int(
+                request.form.get('sent_off') or 0
+            )
+
             rebound_type = request.form.get(
                 'rebound_type',
                 ''
@@ -2663,18 +3164,36 @@ def edit_record(record_id):
             record.clean_sheets = 0
             record.saves = 0
 
-        # Send back to pending after edit
+        # =====================================================
+        # EDITED RECORD GOES BACK TO PENDING
+        # =====================================================
+
         record.status = 'pending'
 
+        # =====================================================
+        # SAVE
+        # =====================================================
+
         db.session.commit()
-        flash('Record updated successfully and sent for coach approval.', 'success')
-        return redirect(url_for('student_dashboard'))
+
+        flash(
+            'Record updated successfully and sent for coach approval.',
+            'success'
+        )
+
+        return redirect(
+            url_for('student_dashboard')
+        )
+
+    # =========================================================
+    # GET
+    # =========================================================
 
     return render_template(
-    'edit_record.html',
-    record=record,
-    registered_categories=registered_categories
-)
+        'edit_record.html',
+        record=record,
+        registered_categories=registered_categories
+    )
 
 @app.route('/admin')
 @login_required

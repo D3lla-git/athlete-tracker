@@ -57,29 +57,27 @@
          placeholder="e.g. LPRC Oilers / St. John High School" required>
 </div>
 
-<div class="col-md-4">
-  <label class="form-label">
-    Competition
-    <i class="fa-solid fa-medal"></i>
-  </label>
+<div class="col-md-3">
+    <label for="competition" class="form-label">
+        Competition Category
+    </label>
 
-  <select
-      id="competitionTypeSelect"
-      class="form-select"
-      required>
-
-    <option value="">-- Select Competition --</option>
-
-    <option value="County Meet">County Meet</option>
-    <option value="Club League">Club League</option>
-    <option value="University League">University League</option>
-    <option value="Community/Area League">Community/Area League</option>
-    <option value="High School">High School Competition</option>
-    <option value="AFCON">AFCON</option>
-    <option value="WAFU">WAFU</option>
-    <option value="World Cup">World Cup</option>
-
-  </select>
+    <select
+        name="competition"
+        id="competition"
+        class="form-select"
+        required
+    >
+        <option value="">Select Competition</option>
+        <option value="High School">High School</option>
+        <option value="County Meet">County Meet</option>
+        <option value="Club League">Club League</option>
+        <option value="University League">University League</option>
+        <option value="Community/Area League">Community/Area League</option>
+        <option value="AFCON">AFCON</option>
+        <option value="WAFU">WAFU</option>
+        <option value="World Cup">World Cup</option>
+    </select>
 </div>
 
 <!-- AFCON -->
@@ -154,10 +152,42 @@
     name="competition_category"
     id="finalCompetitionCategory">
 
+<!-- Club League Division -->
+<div class="col-md-3" id="clubDivisionOptions" style="display: none;">
+    <label for="clubDivision" class="form-label">
+        Club League Division
+        <i class="fa-solid fa-layer-group"></i>
+    </label>
+
+    <select
+        name="club_division"
+        id="clubDivision"
+        class="form-select"
+    >
+        <option value="">-- Select Division --</option>
+        <option value="1st Division">1st Division</option>
+        <option value="2nd Division">2nd Division</option>
+        <option value="3rd Division">3rd Division</option>
+    </select>
+</div>
+
     <div class="col-md-2">
       <label class="form-label">Year / Season <i class="fa-regular fa-calendar" style="color: green;"></i></label>
       <input type="number" name="year" class="form-control" placeholder="e.g. 2025" required>
     </div>
+
+<div class="col-md-2">
+    <label for="game_date" class="form-label">
+        Game Date
+    </label>
+
+    <input
+        type="date"
+        name="game_date"
+        id="game_date"
+        class="form-control"
+        required>
+</div>
 
     <div class="col-md-3">
   <label class="form-label">
@@ -177,30 +207,18 @@
 
     <div class="col-md-2">
       <label class="form-label">Games Played <i class="fa-solid fa-person-running"></i> <i class="fa-solid fa-trophy"></i></label>
-      <input type="number" name="games_played" class="form-control" min="0" value="0">
+      <input
+    type="number"
+    name="games_played"
+    id="gamesPlayedInput"
+    class="form-control"
+    min="1"
+    max="1"
+    step="1"
+    value="1"
+    required>
     </div>
-<div class="col-md-3">
-  <label class="form-label">
-    Preferred Foot
-    <i class="fa-solid fa-shoe-prints"></i>
-  </label>
 
-  <select name="preferred_foot" class="form-select">
-    <option value="">-- Select --</option>
-    <option value="Right"
-      {% if current_user.preferred_foot == 'Right' %}selected{% endif %}>
-      Right
-    </option>
-    <option value="Left"
-      {% if current_user.preferred_foot == 'Left' %}selected{% endif %}>
-      Left
-    </option>
-    <option value="Both"
-      {% if current_user.preferred_foot == 'Both' %}selected{% endif %}>
-      Both
-    </option>
-  </select>
-</div>
     <div class="col-md-3">
   <label class="form-label">
     Match Minutes Played
@@ -217,20 +235,22 @@
       placeholder="e.g. 90">
 </div>
 
-<div class="row g-3 mt-1">
-  <div class="col-md-6">
+  <div class="col-md-3">
     <label class="form-label" id="motm-label">
       Man of the Match <i class="fa-solid fa-medal"></i>
     </label>
-    <input type="number"
-           name="man_of_the_match"
-           class="form-control"
-           min="0"
-           step="1"
-           value="0">
+    <input
+    type="number"
+    name="man_of_the_match"
+    id="motmInput"
+    class="form-control"
+    min="0"
+    max="1"
+    step="1"
+    value="1">
   </div>
 
-  <div class="col-md-6">
+  <div class="col-md-3">
     <label class="form-label">
       MVP <i class="fa-solid fa-star"></i>
     </label>
@@ -241,7 +261,7 @@
            step="1"
            value="0">
   </div>
-</div>
+
 
 <!-- Kickball Statistics -->
 <div id="kickball-stats" class="row g-3 mt-1" style="display: none;">
@@ -306,129 +326,22 @@
   </div>
 </div>
 
-    <label class="form-label fw-bold">
-  Trophies Won
+<div class="col-md-3">
+    <label for="trophy" class="form-label">
+        Trophy Won
   <i class="fa-solid fa-trophy" style="color: silver;"></i>
   <i class="fa-solid fa-medal"></i>
   <i class="fa-solid fa-trophy" style="color: goldenrod;"></i>
-</label>
+    </label>
 
-<div class="row">
-
-  <!-- Column 1 -->
-  <div class="col-md-4">
-
-    <div class="form-check">
-      <input class="form-check-input"
-             type="checkbox"
-             name="trophy"
-             value="University Championship"
-             id="trophy1">
-      <label class="form-check-label" for="trophy1">
-        University Championship
-      </label>
-    </div>
-
-    <div class="form-check">
-      <input class="form-check-input"
-             type="checkbox"
-             name="trophy"
-             value="Classes League"
-             id="trophy2">
-      <label class="form-check-label" for="trophy2">
-        Classes League
-      </label>
-    </div>
-
-    <div class="form-check">
-      <input class="form-check-input"
-             type="checkbox"
-             name="trophy"
-             value="County Meet"
-             id="trophy3">
-      <label class="form-check-label" for="trophy3">
-        County Meet
-      </label>
-    </div>
-
-  </div>
-
-  <!-- Column 2 -->
-  <div class="col-md-4">
-
-    <div class="form-check">
-      <input class="form-check-input"
-             type="checkbox"
-             name="trophy"
-             value="Club Trophy"
-             id="trophy4">
-      <label class="form-check-label" for="trophy4">
-        Club Trophy
-      </label>
-    </div>
-
-    <div class="form-check">
-      <input class="form-check-input"
-             type="checkbox"
-             name="trophy"
-             value="Community Trophy"
-             id="trophy5">
-      <label class="form-check-label" for="trophy5">
-        Community Trophy
-      </label>
-    </div>
-
-    <div class="form-check">
-      <input class="form-check-input"
-             type="checkbox"
-             name="trophy"
-             value="AFCON"
-             id="trophy6">
-      <label class="form-check-label" for="trophy6">
-        AFCON
-      </label>
-    </div>
-
-  </div>
-
-  <!-- Column 3 -->
-  <div class="col-md-4">
-
-    <div class="form-check">
-      <input class="form-check-input"
-             type="checkbox"
-             name="trophy"
-             value="WAFU"
-             id="trophy7">
-      <label class="form-check-label" for="trophy7">
-        WAFU
-      </label>
-    </div>
-
-    <div class="form-check">
-      <input class="form-check-input"
-             type="checkbox"
-             name="trophy"
-             value="World Cup"
-             id="trophy8">
-      <label class="form-check-label" for="trophy8">
-        World Cup
-      </label>
-    </div>
-
-    <div class="form-check">
-      <input class="form-check-input"
-             type="checkbox"
-             name="trophy"
-             value="None"
-             id="trophy9">
-      <label class="form-check-label" for="trophy9">
-        None
-      </label>
-    </div>
-
-  </div>
-
+    <select
+        name="trophy"
+        id="trophy"
+        class="form-select"
+        required
+    >
+        <option value="">Select Competition Category First</option>
+    </select>
 </div>
   </div>
 
@@ -673,6 +586,7 @@ background:
     }
   });
 </script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
@@ -713,108 +627,400 @@ document.addEventListener('DOMContentLoaded', function () {
 
 });
 </script>
+
 <script>
-  const competitionTypeSelect =
-      document.getElementById('competitionTypeSelect');
+document.addEventListener('DOMContentLoaded', function () {
 
-  const afconOptions =
-      document.getElementById('afconOptions');
+    const sportSelect =
+        document.getElementById('sportSelect');
 
-  const wafuOptions =
-      document.getElementById('wafuOptions');
+    const competitionSelect =
+        document.getElementById('competition');
 
-  const worldCupOptions =
-      document.getElementById('worldCupOptions');
+    const finalCompetitionCategory =
+        document.getElementById('finalCompetitionCategory');
 
-  const afconSelect =
-      document.getElementById('afconSelect');
+    const trophy =
+        document.getElementById('trophy');
 
-  const wafuSelect =
-      document.getElementById('wafuSelect');
+    const clubDivisionOptions =
+        document.getElementById('clubDivisionOptions');
 
-  const worldCupSelect =
-      document.getElementById('worldCupSelect');
+    const clubDivision =
+        document.getElementById('clubDivision');
 
-  const finalCompetitionCategory =
-      document.getElementById('finalCompetitionCategory');
+    const afconOptions =
+        document.getElementById('afconOptions');
 
+    const wafuOptions =
+        document.getElementById('wafuOptions');
 
-  function resetCompetitionOptions() {
+    const worldCupOptions =
+        document.getElementById('worldCupOptions');
 
-    afconOptions.style.display = 'none';
-    wafuOptions.style.display = 'none';
-    worldCupOptions.style.display = 'none';
+    const afconSelect =
+        document.getElementById('afconSelect');
 
-    afconSelect.required = false;
-    wafuSelect.required = false;
-    worldCupSelect.required = false;
+    const wafuSelect =
+        document.getElementById('wafuSelect');
 
-    afconSelect.value = '';
-    wafuSelect.value = '';
-    worldCupSelect.value = '';
-
-    finalCompetitionCategory.value = '';
-  }
+    const worldCupSelect =
+        document.getElementById('worldCupSelect');
 
 
-  competitionTypeSelect.addEventListener('change', function () {
+    // =====================================================
+    // STANDARD COMPETITION -> TROPHY
+    // =====================================================
 
-    resetCompetitionOptions();
+    const trophyMap = {
+        "High School": "Classes League",
+        "County Meet": "County Meet",
+        "Club League": "Club Trophy",
+        "University League": "University Championship",
+        "Community/Area League": "Community Trophy",
+        "AFCON": "AFCON",
+        "WAFU": "WAFU",
+        "World Cup": "World Cup"
+    };
 
-    if (this.value === 'AFCON') {
 
-      afconOptions.style.display = 'block';
-      afconSelect.required = true;
+    // =====================================================
+    // BASKETBALL-ONLY TROPHIES
+    // =====================================================
 
-    } else if (this.value === 'WAFU') {
+    const basketballTrophies = [
+        "Basketball Africa League (BAL)",
+        "FIBA Africa Zone",
+        "FIBA AfroBasket Championships"
+    ];
 
-      wafuOptions.style.display = 'block';
-      wafuSelect.required = true;
 
-    } else if (this.value === 'World Cup') {
+    // =====================================================
+    // RESET SPECIAL COMPETITION OPTIONS
+    // =====================================================
 
-      worldCupOptions.style.display = 'block';
-      worldCupSelect.required = true;
+    function resetSpecialCompetitionOptions() {
 
-    } else {
+        afconOptions.style.display = 'none';
+        wafuOptions.style.display = 'none';
+        worldCupOptions.style.display = 'none';
 
-      // Existing competitions
-      finalCompetitionCategory.value = this.value;
+        afconSelect.required = false;
+        wafuSelect.required = false;
+        worldCupSelect.required = false;
+
+        afconSelect.value = '';
+        wafuSelect.value = '';
+        worldCupSelect.value = '';
     }
-  });
 
 
-  afconSelect.addEventListener('change', function () {
+    // =====================================================
+    // CLUB DIVISION
+    // =====================================================
 
-    if (this.value) {
-      finalCompetitionCategory.value =
-          'AFCON - ' + this.value;
-    } else {
-      finalCompetitionCategory.value = '';
+    function updateClubDivision(category) {
+
+        if (category === 'Club League') {
+
+            clubDivisionOptions.style.display = 'block';
+            clubDivision.required = true;
+
+        } else {
+
+            clubDivisionOptions.style.display = 'none';
+            clubDivision.required = false;
+            clubDivision.value = '';
+        }
     }
-  });
 
 
-  wafuSelect.addEventListener('change', function () {
+    // =====================================================
+    // TROPHY OPTIONS
+    // =====================================================
 
-    if (this.value) {
-      finalCompetitionCategory.value =
-          'WAFU - ' + this.value;
-    } else {
-      finalCompetitionCategory.value = '';
+    function updateTrophy(category) {
+
+        trophy.innerHTML = '';
+
+        if (!category) {
+
+            const placeholder =
+                document.createElement('option');
+
+            placeholder.value = '';
+            placeholder.textContent =
+                'Select Competition Category First';
+
+            trophy.appendChild(placeholder);
+
+            trophy.required = true;
+
+            return;
+        }
+
+
+        // ---------------------------------------------
+        // Basketball
+        // ---------------------------------------------
+
+        if (sportSelect.value === 'Basketball') {
+
+            const placeholder =
+                document.createElement('option');
+
+            placeholder.value = '';
+            placeholder.textContent =
+                '-- Select Trophy Won --';
+
+            trophy.appendChild(placeholder);
+
+
+            // Standard category trophy
+            const standardTrophy =
+                trophyMap[category];
+
+            if (standardTrophy) {
+
+                const option =
+                    document.createElement('option');
+
+                option.value = standardTrophy;
+                option.textContent = standardTrophy;
+
+                trophy.appendChild(option);
+            }
+
+
+            // Basketball-specific trophies
+            basketballTrophies.forEach(function (basketballTrophy) {
+
+                const option =
+                    document.createElement('option');
+
+                option.value = basketballTrophy;
+                option.textContent = basketballTrophy;
+
+                trophy.appendChild(option);
+            });
+
+            trophy.required = true;
+
+            return;
+        }
+
+
+        // ---------------------------------------------
+        // Non-basketball sports
+        // ---------------------------------------------
+
+        const expectedTrophy =
+            trophyMap[category];
+
+        if (!expectedTrophy) {
+
+            const option =
+                document.createElement('option');
+
+            option.value = '';
+            option.textContent =
+                'Invalid Competition Category';
+
+            trophy.appendChild(option);
+
+            trophy.required = true;
+
+            return;
+        }
+
+
+        const option =
+            document.createElement('option');
+
+        option.value = expectedTrophy;
+        option.textContent = expectedTrophy;
+        option.selected = true;
+
+        trophy.appendChild(option);
+
+        trophy.required = true;
     }
-  });
 
 
-  worldCupSelect.addEventListener('change', function () {
+    // =====================================================
+    // SPORT CHANGE
+    // =====================================================
 
-    if (this.value) {
-      finalCompetitionCategory.value =
-          'World Cup - ' + this.value;
-    } else {
-      finalCompetitionCategory.value = '';
-    }
-  });
+    sportSelect.addEventListener('change', function () {
+
+        // Rebuild trophy options based on sport
+        updateTrophy(
+            competitionSelect.value
+        );
+
+    });
+
+
+    // =====================================================
+    // COMPETITION CHANGE
+    // =====================================================
+
+    competitionSelect.addEventListener('change', function () {
+
+        const category = this.value;
+
+        resetSpecialCompetitionOptions();
+
+        updateClubDivision(category);
+
+
+        // ---------------------------------------------
+        // Regular competitions
+        // ---------------------------------------------
+
+        if (
+            category === 'High School' ||
+            category === 'County Meet' ||
+            category === 'Club League' ||
+            category === 'University League' ||
+            category === 'Community/Area League'
+        ) {
+
+            finalCompetitionCategory.value =
+                category;
+
+            updateTrophy(category);
+
+            return;
+        }
+
+
+        // ---------------------------------------------
+        // AFCON
+        // ---------------------------------------------
+
+        if (category === 'AFCON') {
+
+            afconOptions.style.display = 'block';
+            afconSelect.required = true;
+
+            finalCompetitionCategory.value =
+                'AFCON';
+
+            updateTrophy('AFCON');
+
+            return;
+        }
+
+
+        // ---------------------------------------------
+        // WAFU
+        // ---------------------------------------------
+
+        if (category === 'WAFU') {
+
+            wafuOptions.style.display = 'block';
+            wafuSelect.required = true;
+
+            finalCompetitionCategory.value =
+                'WAFU';
+
+            updateTrophy('WAFU');
+
+            return;
+        }
+
+
+        // ---------------------------------------------
+        // WORLD CUP
+        // ---------------------------------------------
+
+        if (category === 'World Cup') {
+
+            worldCupOptions.style.display = 'block';
+            worldCupSelect.required = true;
+
+            finalCompetitionCategory.value =
+                'World Cup';
+
+            updateTrophy('World Cup');
+
+            return;
+        }
+
+
+        finalCompetitionCategory.value = '';
+
+        updateTrophy('');
+    });
+
+
+    // =====================================================
+    // AFCON
+    // =====================================================
+
+    afconSelect.addEventListener('change', function () {
+
+        if (this.value) {
+
+            finalCompetitionCategory.value =
+                'AFCON';
+
+            updateTrophy('AFCON');
+
+        } else {
+
+            finalCompetitionCategory.value = '';
+        }
+    });
+
+
+    // =====================================================
+    // WAFU
+    // =====================================================
+
+    wafuSelect.addEventListener('change', function () {
+
+        if (this.value) {
+
+            finalCompetitionCategory.value =
+                'WAFU';
+
+            updateTrophy('WAFU');
+
+        } else {
+
+            finalCompetitionCategory.value = '';
+        }
+    });
+
+
+    // =====================================================
+    // WORLD CUP
+    // =====================================================
+
+    worldCupSelect.addEventListener('change', function () {
+
+        if (this.value) {
+
+            finalCompetitionCategory.value =
+                'World Cup';
+
+            updateTrophy('World Cup');
+
+        } else {
+
+            finalCompetitionCategory.value = '';
+        }
+    });
+
+
+    // Initial state
+    resetSpecialCompetitionOptions();
+    updateClubDivision('');
+    updateTrophy('');
+
+});
 </script>
 
 {% else %}
@@ -839,6 +1045,7 @@ document.addEventListener('DOMContentLoaded', function () {
         <th>Games Played <i class="fa-solid fa-person-running"></i></th>
         <th>MOTM/QOTM <i class="fa-solid fa-trophy" style="color: silver;"></i></th>
         <th>MVP <i class="fa-solid fa-star" style="color: goldenrod"></i></th>
+        <th>Club Division<i class="fa-solid fa-layer-group"></i></th>
         <th>Trophy <i class="fa-solid fa-trophy" style="color: goldenrod;"></i></th>
         <th>Stats <i class="fa-solid fa-chart-line"></i></th>
         <th>Status <i class="bi bi-check2-circle"></i></th>
@@ -855,6 +1062,7 @@ document.addEventListener('DOMContentLoaded', function () {
         <td>{{ r.games_played }}</td>
         <td>{{ r.man_of_the_match or 0 }}</td>
         <td>{{ r.mvp or 0 }}</td>
+        <td>{{ r.club_division or '-' }}</td>
         <td>{{ r.trophy or '-' }}</td>
        <td>
          {% if r.sport == 'Football' %}
@@ -917,16 +1125,22 @@ document.addEventListener('DOMContentLoaded', function () {
     {% elif r.status == 'rejected' %}
       <span class="badge bg-danger">Rejected</span>
     {% else %}
-      <span class="badge bg-warning text-dark">Pending</span>
+      <span class="badge bg-warning">Pending</span>
     {% endif %}
 
     {% if r.status == 'rejected' %}
-      <a href="{{ url_for('delete_record', record_id=r.id) }}" 
-         class="btn btn-outline-danger btn-sm py-0 px-2"
-         style="font-size: 0.75rem;"
-         onclick="return confirm('Delete this rejected record?')">
+      <form
+    method="POST"
+    action="{{ url_for('delete_record', record_id=r.id) }}"
+    style="display:inline;"
+    onsubmit="return confirm('Are you sure you want to delete this record?');"
+>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <button type="submit" class="btn btn-danger btn-sm">
         Delete
-      </a>
+    </button>
+</form>
       <a href="{{ url_for('resubmit_record', record_id=r.id) }}" 
          class="btn btn-warning btn-sm py-0 px-2"
          style="font-size: 0.75rem;"
@@ -1041,6 +1255,15 @@ document.addEventListener('DOMContentLoaded', function () {
               <strong>Trophies <i class="fa-solid fa-trophy" style="color: goldenrod;"></i> :</strong> {{ r.trophy or 'None' }}
             </div>
 
+            <div>
+    <strong>
+        Club Division
+        <i class="fa-solid fa-layer-group"></i> :
+    </strong>
+
+    {{ r.club_division or 'None' }}
+</div>
+
        {% if r.sport == 'Football' %}
   <div>
     <strong>Red Card <i class="fa-solid fa-square" style="color: #FF0000;"></i> :</strong>
@@ -1109,18 +1332,28 @@ document.addEventListener('DOMContentLoaded', function () {
     <span class="badge bg-warning text-dark px-3 py-2">Pending</span>
   {% endif %}
 
-  {% if r.status == 'rejected' %}
-    <a href="{{ url_for('delete_record', record_id=r.id) }}" 
-       class="btn btn-outline-danger btn-sm px-3"
-       onclick="return confirm('Delete this rejected record?')">
-      Delete
-    </a>
+ {% if r.status == 'rejected' %}
+
+   <form
+    method="POST"
+    action="{{ url_for('delete_record', record_id=r.id) }}"
+    style="display:inline;"
+    onsubmit="return confirm('Delete this rejected record?')"
+>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <button type="submit" class="btn btn-outline-danger btn-sm px-3">
+        Delete
+    </button>
+</form>
+
     <a href="{{ url_for('resubmit_record', record_id=r.id) }}" 
        class="btn btn-warning btn-sm px-3"
        onclick="return confirm('Resubmit this record?')">
-      Resubmit
+        Resubmit
     </a>
-  {% endif %}
+
+{% endif %}
 
   {% if r.year|string == current_year|string %}
     <a href="{{ url_for('edit_record', record_id=r.id) }}" 

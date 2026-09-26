@@ -1,6 +1,6 @@
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import UserMixin
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask_sqlalchemy import SQLAlchemy  # type: ignore[import-not-found]
+from flask_login import UserMixin  # type: ignore[import-not-found]
+from werkzeug.security import generate_password_hash, check_password_hash  # type: ignore[import-not-found]
 from datetime import datetime
 
 db = SQLAlchemy()
@@ -52,6 +52,10 @@ class SportRecord(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     sport = db.Column(db.String(30), nullable=False)
     year = db.Column(db.Integer, nullable=False)
+    # Date on which the actual game/match was played.
+    # This allows multiple records for the same competition,
+    # sport, team and year.
+    game_date = db.Column(db.Date, nullable=True)
     position = db.Column(db.String(50))
     games_played = db.Column(db.Integer, default=0)
     trophy = db.Column(db.String(100), nullable=True)
@@ -59,11 +63,8 @@ class SportRecord(db.Model):
     team_played_against = db.Column(db.String(100), nullable=True)
     school = db.Column(db.String(150), nullable=True)
     # Competition category
-    competition_category = db.Column(
-    db.String(50),
-    nullable=False,
-    default='County Meet'
-)
+    competition_category = db.Column(db.String(50),nullable=False,default='County Meet')
+    club_division = db.Column(db.String(30),nullable=True)
 
     # Football fields
     goals = db.Column(db.Integer, default=0)
