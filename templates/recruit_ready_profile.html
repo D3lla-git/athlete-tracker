@@ -1,0 +1,463 @@
+{% extends "base.html" %}
+
+{% block title %}
+{{ user.full_name }} | Recruit-Ready Profile
+{% endblock %}
+
+{% block content %}
+
+<div class="container py-4">
+
+  <div class="row justify-content-center">
+<div class="col-lg-9">
+
+  <!-- Header -->
+  <div class="card shadow mb-4">
+
+    <div class="card-body">
+
+      <div class="d-flex flex-column flex-md-row align-items-center gap-4">
+
+        <!-- Profile Picture -->
+        <div>
+
+          {% if user.profile_picture %}
+
+            <img
+              src="{{ url_for('profile_picture', filename=user.profile_picture) }}"
+              class="rounded-circle shadow"
+              style="width:150px;height:150px;object-fit:cover;"
+              alt="{{ user.full_name }}"
+            >
+
+          {% else %}
+
+            <div
+              class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center shadow"
+              style="width:150px;height:150px;font-size:3.5rem;font-weight:600;"
+            >
+              {{ user.full_name[0] | upper }}
+            </div>
+
+          {% endif %}
+
+        </div>
+
+
+        <!-- Athlete Information -->
+        <div class="text-center text-md-start flex-grow-1">
+
+          <div class="mb-2">
+
+            <span class="badge bg-success">
+              <i class="fa-solid fa-star"></i>
+              Recruit-Ready
+            </span>
+
+            {% if user.is_verified %}
+
+              <span class="badge bg-primary">
+                <i class="fa-solid fa-circle-check"></i>
+                Verified
+              </span>
+
+            {% endif %}
+
+          </div>
+
+          <h1 class="h3 mb-2">
+            {{ user.full_name }}
+          </h1>
+
+          {% if current_category %}
+            <div class="text-muted mb-1">
+              <i class="fa-solid fa-trophy"></i>
+              {{ current_category }}
+            </div>
+          {% endif %}
+
+          {% if user.school %}
+            <div class="text-muted">
+              <i class="fa-solid fa-people-group"></i>
+              {{ user.school }}
+            </div>
+          {% endif %}
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- Athlete Information -->
+  <div class="card shadow mb-4">
+
+    <div class="card-header">
+
+      <h5 class="mb-0">
+        <i class="fa-solid fa-user"></i>
+        Athlete Information
+      </h5>
+
+    </div>
+
+    <div class="card-body">
+
+      <div class="row g-3">
+
+        {% if user.gender %}
+          <div class="col-md-4">
+            <strong>Gender</strong>
+            <div>{{ user.gender }}</div>
+          </div>
+        {% endif %}
+
+        {% if user.nationality %}
+          <div class="col-md-4">
+            <strong>Nationality</strong>
+            <div>
+              {{ country_flag(user.nationality) }}
+              {{ user.nationality }}
+            </div>
+          </div>
+        {% endif %}
+
+        {% if user.age %}
+          <div class="col-md-4">
+            <strong>Age</strong>
+            <div>{{ user.age }}</div>
+          </div>
+        {% endif %}
+
+        {% if user.height_cm %}
+          <div class="col-md-4">
+            <strong>Height</strong>
+            <div>{{ user.height_cm }} cm</div>
+          </div>
+        {% endif %}
+
+        {% if user.weight_kg %}
+          <div class="col-md-4">
+            <strong>Weight</strong>
+            <div>{{ user.weight_kg }} kg</div>
+          </div>
+        {% endif %}
+
+        {% if user.preferred_foot %}
+          <div class="col-md-4">
+            <strong>Preferred Foot</strong>
+            <div>{{ user.preferred_foot }}</div>
+          </div>
+        {% endif %}
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- About Athlete -->
+  {% if premium_profile.bio %}
+
+    <div class="card shadow mb-4">
+
+      <div class="card-header">
+
+        <h5 class="mb-0">
+          <i class="fa-solid fa-address-card"></i>
+          About the Athlete
+        </h5>
+
+      </div>
+
+      <div class="card-body">
+
+        <p class="mb-0" style="white-space:pre-line;line-height:1.8;">
+          {{ premium_profile.bio }}
+        </p>
+
+      </div>
+
+    </div>
+
+  {% endif %}
+
+
+  <!-- Recruitment Highlights -->
+  {% if recruitment_highlights %}
+
+    <div class="card shadow mb-4">
+
+      <div class="card-header">
+
+        <h5 class="mb-0">
+          <i class="fa-solid fa-chart-line"></i>
+          Recruitment Highlights
+        </h5>
+
+      </div>
+
+      <div class="card-body">
+
+        {% for highlight in recruitment_highlights %}
+
+          <div class="mb-4">
+
+            <h6 class="fw-bold mb-3">
+              {{ highlight.sport }}
+            </h6>
+
+            <div class="row g-3">
+
+              <div class="col-6 col-md-3">
+                <div class="border rounded p-3 text-center">
+                  <small class="text-muted d-block">
+                    Games
+                  </small>
+                  <strong class="fs-5">
+                    {{ highlight.games }}
+                  </strong>
+                </div>
+              </div>
+
+              {% if highlight.sport|lower == 'football' %}
+
+                <div class="col-6 col-md-3">
+                  <div class="border rounded p-3 text-center">
+                    <small class="text-muted d-block">
+                      Goals
+                    </small>
+                    <strong class="fs-5">
+                      {{ highlight.goals }}
+                    </strong>
+                  </div>
+                </div>
+
+                <div class="col-6 col-md-3">
+                  <div class="border rounded p-3 text-center">
+                    <small class="text-muted d-block">
+                      Assists
+                    </small>
+                    <strong class="fs-5">
+                      {{ highlight.assists }}
+                    </strong>
+                  </div>
+                </div>
+
+                <div class="col-6 col-md-3">
+                  <div class="border rounded p-3 text-center">
+                    <small class="text-muted d-block">
+                      Minutes
+                    </small>
+                    <strong class="fs-5">
+                      {{ highlight.minutes }}
+                    </strong>
+                  </div>
+                </div>
+
+                {% if highlight.man_of_the_match > 0 %}
+                  <div class="col-6 col-md-3">
+                    <div class="border rounded p-3 text-center">
+                      <small class="text-muted d-block">
+                        Man of the Match
+                      </small>
+                      <strong class="fs-5">
+                        {{ highlight.man_of_the_match }}
+                      </strong>
+                    </div>
+                  </div>
+                {% endif %}
+
+                {% if highlight.mvp > 0 %}
+                  <div class="col-6 col-md-3">
+                    <div class="border rounded p-3 text-center">
+                      <small class="text-muted d-block">
+                        MVP
+                      </small>
+                      <strong class="fs-5">
+                        {{ highlight.mvp }}
+                      </strong>
+                    </div>
+                  </div>
+                {% endif %}
+
+              {% elif highlight.sport|lower == 'basketball' %}
+
+                <div class="col-6 col-md-3">
+                  <div class="border rounded p-3 text-center">
+                    <small class="text-muted d-block">
+                      Points
+                    </small>
+                    <strong class="fs-5">
+                      {{ highlight.points }}
+                    </strong>
+                  </div>
+                </div>
+
+                <div class="col-6 col-md-3">
+                  <div class="border rounded p-3 text-center">
+                    <small class="text-muted d-block">
+                      Blocks
+                    </small>
+                    <strong class="fs-5">
+                      {{ highlight.blocks }}
+                    </strong>
+                  </div>
+                </div>
+
+                <div class="col-6 col-md-3">
+                  <div class="border rounded p-3 text-center">
+                    <small class="text-muted d-block">
+                      Minutes
+                    </small>
+                    <strong class="fs-5">
+                      {{ highlight.minutes }}
+                    </strong>
+                  </div>
+                </div>
+
+              {% endif %}
+
+            </div>
+
+          </div>
+
+        {% endfor %}
+
+      </div>
+
+    </div>
+
+  {% endif %}
+
+
+  <!-- Featured Records -->
+  <div class="card shadow mb-4">
+
+    <div class="card-header">
+
+      <h5 class="mb-0">
+        <i class="fa-solid fa-thumbtack"></i>
+        Featured Performance Records
+      </h5>
+
+    </div>
+
+    <div class="card-body">
+
+      {% if pinned_records %}
+
+        {% for pinned in pinned_records %}
+
+          {% set record = pinned.sport_record %}
+
+          <div class="border rounded p-3 mb-3">
+
+            <div class="d-flex justify-content-between">
+
+              <div>
+
+                <h6 class="fw-bold mb-1">
+                  {{ record.sport }}
+                </h6>
+
+                {% if record.team %}
+                  <small class="text-muted">
+                    {{ record.team }}
+                  </small>
+                {% endif %}
+
+              </div>
+
+              <span class="badge bg-success">
+                Featured #{{ pinned.display_order }}
+              </span>
+
+            </div>
+
+            <hr>
+
+            <div class="row g-2 small">
+
+              {% if record.competition_category %}
+                <div class="col-md-6">
+                  <strong>Competition:</strong>
+                  {{ record.competition_category }}
+                </div>
+              {% endif %}
+
+              {% if record.game_date %}
+                <div class="col-md-6">
+                  <strong>Game Date:</strong>
+                  {{ record.game_date.strftime('%B %d, %Y') }}
+                </div>
+              {% endif %}
+
+              {% if record.team_played_against %}
+                <div class="col-md-6">
+                  <strong>Opponent:</strong>
+                  {{ record.team_played_against }}
+                </div>
+              {% endif %}
+
+              {% if record.position %}
+                <div class="col-md-6">
+                  <strong>Position:</strong>
+                  {{ record.position }}
+                </div>
+              {% endif %}
+
+              {% if record.club_division %}
+                <div class="col-md-6">
+                  <strong>Division:</strong>
+                  {{ record.club_division }}
+                </div>
+              {% endif %}
+
+            </div>
+
+          </div>
+
+        {% endfor %}
+
+      {% else %}
+
+        <div class="alert alert-light border mb-0">
+          No featured performance records are currently available.
+        </div>
+
+      {% endif %}
+
+    </div>
+
+  </div>
+
+
+  <!-- Recruiter Notice -->
+  <div class="alert alert-secondary text-center">
+
+    <i class="fa-solid fa-shield-halved"></i>
+
+    This Recruit-Ready profile displays information made publicly
+    available by the athlete.
+
+  </div>
+
+
+  <div class="text-center text-muted small mb-4">
+
+    Powered by D.A.R.T.
+
+  </div>
+
+</div>
+
+  </div>
+
+</div>
+
+{% endblock %}

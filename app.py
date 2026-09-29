@@ -1,11 +1,11 @@
 import os
-from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, send_from_directory, session
+from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, send_from_directory, session, abort
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from pymongo import MongoClient
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage) 
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
@@ -21,6 +21,7 @@ import qrcode
 import secrets
 from flask_mail import Mail, Message
 from sqlalchemy import or_
+from flask import abort
 
 
 # ==========================================
@@ -60,6 +61,185 @@ def verify_recovery_code(code, stored_hashes):
 
     return None
 
+# ============================================================
+# MONETIZATION SECURITY HELPERS
+# ============================================================
+
+from datetime import datetime, timezone
+
+
+def has_entitlement(
+    user_id,
+    entitlement_code
+):
+    """
+    Check whether a user currently has an active entitlement.
+
+    This is a SERVER-SIDE check.
+    Never trust a browser/HTML field to determine entitlement.
+    """
+
+    now = datetime.now(timezone.utc)
+
+    entitlement = Entitlement.query.filter(
+        Entitlement.user_id == user_id,
+        Entitlement.entitlement_code == entitlement_code,
+        Entitlement.status == 'active',
+        db.or_(
+            Entitlement.expires_at.is_(None),
+            Entitlement.expires_at > now
+        ),
+        Entitlement.starts_at <= now
+    ).first()
+
+    return entitlement is not None
+
+
+def get_entitlement(
+    user_id,
+    entitlement_code
+):
+    """
+    Return the active entitlement object, if one exists.
+    """
+
+    now = datetime.now(timezone.utc)
+
+    return Entitlement.query.filter(
+        Entitlement.user_id == user_id,
+        Entitlement.entitlement_code == entitlement_code,
+        Entitlement.status == 'active',
+        db.or_(
+            Entitlement.expires_at.is_(None),
+            Entitlement.expires_at > now
+        ),
+        Entitlement.starts_at <= now
+    ).first()
+
+
+def grant_entitlement(
+    user_id,
+    entitlement_code,
+    source,
+    source_reference=None,
+    expires_at=None
+):
+    """
+    Create or update an entitlement.
+
+    IMPORTANT:
+    This function should only be called by trusted server-side
+    operations after the required authorization/payment/approval
+    checks have succeeded.
+    """
+
+    entitlement = Entitlement.query.filter_by(
+        user_id=user_id,
+        entitlement_code=entitlement_code
+    ).first()
+
+    if entitlement:
+        entitlement.status = 'active'
+        entitlement.source = source
+        entitlement.source_reference = source_reference
+        entitlement.expires_at = expires_at
+
+        if entitlement.starts_at is None:
+            entitlement.starts_at = datetime.now(timezone.utc)
+
+    else:
+        entitlement = Entitlement(
+            user_id=user_id,
+            entitlement_code=entitlement_code,
+            status='active',
+            source=source,
+            source_reference=source_reference,
+            starts_at=datetime.now(timezone.utc),
+            expires_at=expires_at
+        )
+
+        db.session.add(entitlement)
+
+    db.session.flush()
+
+    return entitlement
+
+
+def revoke_entitlement(
+    user_id,
+    entitlement_code
+):
+    """
+    Revoke an existing entitlement.
+    """
+
+    entitlement = Entitlement.query.filter_by(
+        user_id=user_id,
+        entitlement_code=entitlement_code
+    ).first()
+
+    if not entitlement:
+        return False
+
+    entitlement.status = 'revoked'
+
+    db.session.flush()
+
+    return True
+
+
+def create_audit_log(
+    action,
+    actor_user_id=None,
+    target_type=None,
+    target_id=None,
+    details=None
+):
+    """
+    Create a security/business audit event.
+    """
+
+    audit = AuditLog(
+        actor_user_id=actor_user_id,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get(
+            'User-Agent',
+            ''
+        )[:1000],
+        details=details
+    )
+
+    db.session.add(audit)
+
+    return audit
+
+def has_premium_profile_access(user_id):
+    return has_entitlement(
+        user_id,
+        'premium_profile'
+    )
+
+
+def get_or_create_premium_profile(user_id):
+    premium_profile = PremiumProfile.query.filter_by(
+        user_id=user_id
+    ).first()
+
+    if not premium_profile:
+        premium_profile = PremiumProfile(
+            user_id=user_id,
+            bio=None,
+            is_enabled=False,
+            is_public=True
+        )
+
+        db.session.add(premium_profile)
+        db.session.flush()
+
+    return premium_profile
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -545,7 +725,213 @@ def suggest_message_recipients():
         })
 
     return jsonify(results)
+# =================premiumPro5 ROUTE=========================================
+# =================premiumPro5 ROUTE=========================================
+@app.route('/profile/premium', methods=['POST'])
+@login_required
+def update_premium_profile():
+    # Premium access is determined server-side.
+    if not has_premium_profile_access(current_user.id):
+        flash(
+            'Premium Recruit-Ready Profile access is required.',
+            'warning'
+        )
+        return redirect(url_for('profile'))
 
+    # Only athletes can use the athlete premium profile.
+    if current_user.role != 'Athlete':
+        flash(
+            'Premium Recruit-Ready Profiles are currently available to athletes.',
+            'danger'
+        )
+        return redirect(url_for('profile'))
+
+    bio = request.form.get('bio', '').strip()
+
+    if len(bio) > 2000:
+        flash(
+            'Your premium profile biography cannot exceed 2,000 characters.',
+            'danger'
+        )
+        return redirect(url_for('profile'))
+
+    is_public = request.form.get('is_public') == '1'
+
+    premium_profile = get_or_create_premium_profile(
+        current_user.id
+    )
+
+    premium_profile.bio = bio or None
+    premium_profile.is_enabled = True
+    premium_profile.is_public = is_public
+    premium_profile.updated_at = datetime.now(timezone.utc)
+
+    create_audit_log(
+        action='premium_profile_updated',
+        actor_user_id=current_user.id,
+        target_type='PremiumProfile',
+        target_id=premium_profile.id,
+        details={
+            'is_public': is_public
+        }
+    )
+
+    db.session.commit()
+
+    flash(
+        'Premium Recruit-Ready Profile updated successfully.',
+        'success'
+    )
+
+    return redirect(url_for('profile'))
+# =================pinpremiumPro5RECRD ROUTE=========================================
+# =================pinpremiumPro5RECRD ROUTE=========================================
+@app.route(
+    '/profile/premium/pin-record/<int:record_id>',
+    methods=['POST']
+)
+@login_required
+def pin_premium_record(record_id):
+
+    if not has_premium_profile_access(current_user.id):
+        flash(
+            'Premium Recruit-Ready Profile access is required.',
+            'warning'
+        )
+        return redirect(url_for('profile'))
+
+    if current_user.role != 'Athlete':
+        flash(
+            'Only athletes can pin sports records.',
+            'danger'
+        )
+        return redirect(url_for('profile'))
+
+    record = SportRecord.query.get_or_404(record_id)
+
+    # Critical object-level authorization.
+    if record.user_id != current_user.id:
+        flash(
+            'You can only pin your own sports records.',
+            'danger'
+        )
+        return redirect(url_for('profile'))
+
+    # Only approved records can appear as recruiting evidence.
+    if record.status != 'approved':
+        flash(
+            'Only approved sports records can be pinned.',
+            'warning'
+        )
+        return redirect(url_for('profile'))
+
+    existing_pin = PinnedSportRecord.query.filter_by(
+        user_id=current_user.id,
+        sport_record_id=record.id
+    ).first()
+
+    if existing_pin:
+        flash(
+            'This record is already pinned.',
+            'info'
+        )
+        return redirect(url_for('profile'))
+
+    pinned_count = PinnedSportRecord.query.filter_by(
+        user_id=current_user.id
+    ).count()
+
+    if pinned_count >= 3:
+        flash(
+            'You can pin a maximum of 3 records.',
+            'warning'
+        )
+        return redirect(url_for('profile'))
+
+    next_order = pinned_count + 1
+
+    pinned = PinnedSportRecord(
+        user_id=current_user.id,
+        sport_record_id=record.id,
+        display_order=next_order
+    )
+
+    db.session.add(pinned)
+
+    create_audit_log(
+        action='premium_record_pinned',
+        actor_user_id=current_user.id,
+        target_type='SportRecord',
+        target_id=record.id,
+        details={
+            'display_order': next_order
+        }
+    )
+
+    db.session.commit()
+
+    flash(
+        'Record added to your premium profile.',
+        'success'
+    )
+
+    return redirect(url_for('profile'))
+# =================unpin-PP-Record ROUTE=========================================
+@app.route(
+    '/profile/premium/unpin-record/<int:record_id>',
+    methods=['POST']
+)
+@login_required
+def unpin_premium_record(record_id):
+
+    if not has_premium_profile_access(current_user.id):
+        flash(
+            'Premium Recruit-Ready Profile access is required.',
+            'warning'
+        )
+        return redirect(url_for('profile'))
+
+    pinned = PinnedSportRecord.query.filter_by(
+        user_id=current_user.id,
+        sport_record_id=record_id
+    ).first()
+
+    if not pinned:
+        flash(
+            'That record is not currently pinned.',
+            'info'
+        )
+        return redirect(url_for('profile'))
+
+    db.session.delete(pinned)
+
+    create_audit_log(
+        action='premium_record_unpinned',
+        actor_user_id=current_user.id,
+        target_type='SportRecord',
+        target_id=record_id
+    )
+
+    db.session.commit()
+
+    # Re-number remaining pins.
+    remaining = PinnedSportRecord.query.filter_by(
+        user_id=current_user.id
+    ).order_by(
+        PinnedSportRecord.display_order.asc()
+    ).all()
+
+    for index, item in enumerate(remaining, start=1):
+        item.display_order = index
+
+    db.session.commit()
+
+    flash(
+        'Record removed from your premium profile.',
+        'success'
+    )
+
+    return redirect(url_for('profile'))
 # =================SEARCH ROUTE=========================================
 @app.route('/search')
 def search():
@@ -3291,6 +3677,102 @@ def approve_coach(user_id):
     flash(f'Coach {coach.full_name} ({coach.school}) has been approved.', 'success')
     return redirect(url_for('admin_dashboard'))
 
+# ==========================================================
+# RECRUITMENT HIGHLIGHTS
+# Calculates recruiter-facing statistics from pinned records.
+# Only approved records should ever be passed into this helper.
+# ==========================================================
+
+def build_recruitment_highlights(pinned_records):
+    highlights = []
+
+    if not pinned_records:
+        return highlights
+
+    records = [
+        pinned.sport_record
+        for pinned in pinned_records
+        if pinned.sport_record
+        and pinned.sport_record.status == 'approved'
+    ]
+
+    if not records:
+        return highlights
+
+    # Group records by sport so statistics from different sports
+    # are never incorrectly combined.
+    sports = {}
+
+    for record in records:
+        sport_name = (record.sport or 'Other').strip()
+
+        if sport_name not in sports:
+            sports[sport_name] = []
+
+        sports[sport_name].append(record)
+
+    for sport_name, sport_records in sports.items():
+
+        highlight = {
+            'sport': sport_name,
+            'games': sum(
+                (record.games_played or 0)
+                for record in sport_records
+            ),
+            'records': len(sport_records),
+            'minutes': sum(
+                (record.match_minutes_played or 0)
+                for record in sport_records
+            ),
+            'goals': 0,
+            'assists': 0,
+            'points': 0,
+            'blocks': 0,
+            'clean_sheets': 0,
+            'saves': 0,
+            'home_runs': 0,
+            'cut_base': 0,
+            'foul_played': 0,
+            'man_of_the_match': 0,
+            'mvp': 0,
+            'yellow_cards': 0,
+            'red_cards': 0,
+            'trophies': []
+        }
+
+        for record in sport_records:
+
+            highlight['goals'] += record.goals or 0
+            highlight['assists'] += record.assists or 0
+            highlight['points'] += record.points or 0
+            highlight['blocks'] += record.blocks or 0
+            highlight['clean_sheets'] += record.clean_sheets or 0
+            highlight['saves'] += record.saves or 0
+            highlight['home_runs'] += record.home_runs or 0
+            highlight['cut_base'] += record.cut_base or 0
+            highlight['foul_played'] += record.foul_played or 0
+            highlight['man_of_the_match'] += (
+                record.man_of_the_match or 0
+            )
+            highlight['mvp'] += record.mvp or 0
+            highlight['yellow_cards'] += record.yellow_cards or 0
+            highlight['red_cards'] += record.red_cards or 0
+
+            if record.trophy:
+                trophy_name = record.trophy.strip()
+
+                if (
+                    trophy_name
+                    and trophy_name not in highlight['trophies']
+                ):
+                    highlight['trophies'].append(trophy_name)
+
+        highlights.append(highlight)
+
+    return highlights
+
+#============Profile route================================
+#============Profile route================================
 @app.route('/profile')
 @login_required
 def profile():
@@ -3330,7 +3812,47 @@ def profile():
                 )
                 db.session.commit()
 
-    return render_template('profile.html')
+    premium_access = False
+    premium_profile = None
+    pinned_records = []
+    approved_records = []
+    recruitment_highlights = []
+
+    if current_user.role == 'Athlete':
+        premium_access = has_premium_profile_access(
+            current_user.id
+        )
+
+        if premium_access:
+            premium_profile = get_or_create_premium_profile(
+                current_user.id
+            )
+
+            pinned_records = PinnedSportRecord.query.filter_by(
+                user_id=current_user.id
+            ).join(
+                SportRecord,
+                PinnedSportRecord.sport_record_id == SportRecord.id
+            ).filter(
+                SportRecord.status == 'approved'
+            ).order_by(
+                PinnedSportRecord.display_order.asc()
+            ).all()
+            recruitment_highlights = build_recruitment_highlights(
+            pinned_records)
+
+            approved_records = SportRecord.query.filter_by(
+            user_id=current_user.id,status='approved').order_by(SportRecord.game_date.desc(),SportRecord.id.desc()).all()
+
+
+    return render_template(
+    'profile.html',
+    premium_access=premium_access,
+    premium_profile=premium_profile,
+    pinned_records=pinned_records,
+    approved_records=approved_records,
+    recruitment_highlights=recruitment_highlights
+)
 
 #========Read-only user profile route=========
 @app.route('/user/<int:user_id>')
@@ -3343,26 +3865,138 @@ def user_profile(user_id):
         return redirect(url_for('profile'))
 
     current_year = datetime.utcnow().year
+
     current_category = None
     registration_type = None
+
     if user.role == 'Athlete':
         registration_type = 'athlete'
+
     elif user.role == 'Coach':
         registration_type = 'coach'
 
     if registration_type:
         current_registration = Registration.query.filter_by(
-            user_id=user.id, registration_type=registration_type,
-            registration_year=current_year, status='active'
-        ).order_by(Registration.id.asc()).first()
+            user_id=user.id,
+            registration_type=registration_type,
+            registration_year=current_year,
+            status='active'
+        ).order_by(
+            Registration.id.asc()
+        ).first()
+
         if current_registration:
             current_category = current_registration.category
+
     elif user.role == 'System':
         current_category = 'System'
 
-    return render_template('user_profile.html', user=user, current_category=current_category)
+    premium_profile = None
+    pinned_records = []
+    recruitment_highlights = []
 
+    if user.role == 'Athlete':
 
+        if has_premium_profile_access(user.id):
+
+            premium_profile = PremiumProfile.query.filter_by(
+                user_id=user.id,
+                is_enabled=True,
+                is_public=True
+            ).first()
+
+            if premium_profile:
+
+                pinned_records = PinnedSportRecord.query.filter_by(
+                    user_id=user.id
+                ).join(
+                    SportRecord,
+                    PinnedSportRecord.sport_record_id == SportRecord.id
+                ).filter(
+                    SportRecord.status == 'approved'
+                ).order_by(
+                    PinnedSportRecord.display_order.asc()
+                ).all()
+                recruitment_highlights = build_recruitment_highlights(
+                pinned_records)
+    return render_template(
+    'user_profile.html',
+    user=user,
+    current_category=current_category,
+    premium_profile=premium_profile,
+    pinned_records=pinned_records,
+    recruitment_highlights=recruitment_highlights
+)
+# ==========================================================
+
+# PUBLIC RECRUIT-READY ATHLETE PROFILE
+
+# ==========================================================
+
+@app.route('/athlete/<int:user_id>/recruit-ready')
+def recruit_ready_profile(user_id):
+    user = User.query.get_or_404(user_id)
+
+    if user.role != 'Athlete':
+        abort(404)
+
+    if not has_premium_profile_access(user.id):
+        abort(404)
+
+    premium_profile = PremiumProfile.query.filter_by(
+        user_id=user.id,
+        is_enabled=True,
+        is_public=True
+    ).first()
+
+    if not premium_profile:
+        abort(404)
+
+    pinned_records = (
+        PinnedSportRecord.query
+        .filter_by(user_id=user.id)
+        .join(
+            SportRecord,
+            PinnedSportRecord.sport_record_id == SportRecord.id
+        )
+        .filter(
+            SportRecord.status == 'approved'
+        )
+        .order_by(
+            PinnedSportRecord.display_order.asc()
+        )
+        .all()
+    )
+
+    recruitment_highlights = build_recruitment_highlights(
+        pinned_records
+    )
+
+    current_year = datetime.now(timezone.utc).year
+
+    current_registration = Registration.query.filter_by(
+        user_id=user.id,
+        registration_type='athlete',
+        registration_year=current_year,
+        status='active'
+    ).order_by(
+        Registration.id.asc()
+    ).first()
+
+    current_category = None
+
+    if current_registration:
+        current_category = current_registration.category
+
+    return render_template(
+        'recruit_ready_profile.html',
+        user=user,
+        premium_profile=premium_profile,
+        pinned_records=pinned_records,
+        recruitment_highlights=recruitment_highlights,
+        current_category=current_category
+    )
+#=========Update profile route========================================
 @app.route('/update_profile', methods=['POST'])
 @login_required
 def update_profile():
