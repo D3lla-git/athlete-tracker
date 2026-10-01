@@ -932,6 +932,132 @@ def unpin_premium_record(record_id):
     )
 
     return redirect(url_for('profile'))
+#==============Premium Profile route=======================
+#==============Premium Profile route=======================
+@app.route('/profile/premium')
+@login_required
+def premium_plans():
+    premium_access = has_premium_profile_access(current_user.id)
+
+    active_subscription = Subscription.query.filter(
+        Subscription.user_id == current_user.id,
+        Subscription.plan_code == 'premium_profile_monthly',
+        Subscription.status == 'active'
+    ).order_by(
+        Subscription.id.desc()
+    ).first()
+
+    pending_payment = Payment.query.filter(
+        Payment.user_id == current_user.id,
+        Payment.payment_reference.like('DART-PREMIUM-%'),
+        Payment.status == 'pending'
+    ).order_by(
+        Payment.id.desc()
+    ).first()
+
+    return render_template(
+        'premium_plans.html',
+        premium_access=premium_access,
+        active_subscription=active_subscription,
+        pending_payment=pending_payment,
+        uuid=uuid
+    )
+#==============Premium profile checkout route==========================
+@app.route('/profile/premium/checkout', methods=['POST'])
+@login_required
+def start_premium_checkout():
+    if current_user.role != 'Athlete':
+        flash(
+            'Recruit-Ready Premium Profiles are currently available to athletes.',
+            'warning'
+        )
+        return redirect(url_for('premium_plans'))
+
+    if has_premium_profile_access(current_user.id):
+        flash(
+            'Your Recruit-Ready Premium Profile is already active.',
+            'info'
+        )
+        return redirect(url_for('profile'))
+
+    plan_code = 'premium_profile_monthly'
+    amount = 10.00
+    currency = 'USD'
+
+    idempotency_key = request.form.get('idempotency_key', '').strip()
+
+    if not idempotency_key:
+        flash(
+            'Invalid checkout request. Please try again.',
+            'danger'
+        )
+        return redirect(url_for('premium_plans'))
+
+    existing_payment = Payment.query.filter_by(
+        user_id=current_user.id,
+        idempotency_key=idempotency_key
+    ).first()
+
+    if existing_payment:
+        return redirect(
+            url_for(
+                'premium_checkout_pending',
+                payment_reference=existing_payment.payment_reference
+            )
+        )
+
+    payment_reference = (
+        f"DART-PREMIUM-{uuid.uuid4().hex.upper()}"
+    )
+
+    payment = Payment(
+        user_id=current_user.id,
+        provider='pending',
+        provider_payment_id=None,
+        provider_event_id=None,
+        payment_reference=payment_reference,
+        idempotency_key=idempotency_key,
+        amount=amount,
+        currency=currency,
+        status='pending',
+        description='D.A.R.T. Recruit-Ready Premium Profile - Monthly'
+    )
+
+    db.session.add(payment)
+
+    create_audit_log(
+        action='premium_checkout_started',
+        actor_user_id=current_user.id,
+        target_type='Payment',
+        details={
+            'plan_code': plan_code,
+            'amount': amount,
+            'currency': currency,
+            'payment_reference': payment_reference
+        }
+    )
+
+    db.session.commit()
+
+    return redirect(
+        url_for(
+            'premium_checkout_pending',
+            payment_reference=payment_reference
+        )
+    )
+#================Premuim profile pending route===============================
+@app.route('/profile/premium/checkout/pending/<payment_reference>')
+@login_required
+def premium_checkout_pending(payment_reference):
+    payment = Payment.query.filter_by(
+        payment_reference=payment_reference,
+        user_id=current_user.id
+    ).first_or_404()
+
+    return render_template(
+        'premium_checkout_pending.html',
+        payment=payment
+    )
 # =================SEARCH ROUTE=========================================
 @app.route('/search')
 def search():

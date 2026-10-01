@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Checkout | D.A.R.T.{% endblock %}
+
+{% block content %}
+
+<div class="container py-5">
+
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+
+            <div class="card shadow-sm border-0">
+
+                <div class="card-body p-5 text-center">
+
+                    {% if payment.status == 'pending' %}
+
+                        <div class="mb-4">
+                            <i
+                                class="fa-solid fa-credit-card fa-3x text-success"
+                            ></i>
+                        </div>
+
+                        <h2 class="fw-bold">
+                            Secure Checkout
+                        </h2>
+
+                        <p class="text-muted">
+                            Your premium subscription request has been
+                            created successfully.
+                        </p>
+
+                        <div class="alert alert-info text-start">
+                            <strong>Payment reference:</strong><br>
+                            {{ payment.payment_reference }}
+                        </div>
+
+                        <div class="border rounded p-3 mb-4">
+
+                            <div class="d-flex justify-content-between">
+                                <span>Recruit-Ready Premium</span>
+                                <strong>
+                                    {{ payment.amount }}
+                                    {{ payment.currency }}
+                                </strong>
+                            </div>
+
+                            <div class="d-flex justify-content-between mt-2">
+                                <span>Billing</span>
+                                <span>Monthly</span>
+                            </div>
+
+                            <div class="d-flex justify-content-between mt-2">
+                                <span>Status</span>
+                                <span class="badge bg-warning text-dark">
+                                    Pending
+                                </span>
+                            </div>
+
+                        </div>
+
+                        <div class="alert alert-warning text-start">
+
+                            <strong>Payment provider connection pending.</strong>
+
+                            <p class="mb-0 mt-2 small">
+                                D.A.R.T. has securely created your payment
+                                request, but premium access will only be
+                                activated after the payment provider confirms
+                                the payment.
+                            </p>
+
+                        </div>
+
+                        <a
+                            href="{{ url_for('profile') }}"
+                            class="btn btn-success"
+                        >
+                            Return to Profile
+                        </a>
+
+                    {% elif payment.status == 'paid' %}
+
+                        <div class="mb-4">
+                            <i
+                                class="fa-solid fa-circle-check fa-3x text-success"
+                            ></i>
+                        </div>
+
+                        <h2 class="fw-bold">
+                            Payment Confirmed
+                        </h2>
+
+                        <p class="text-muted">
+                            Your Recruit-Ready Premium access has been
+                            activated.
+                        </p>
+
+                        <a
+                            href="{{ url_for('profile') }}"
+                            class="btn btn-success"
+                        >
+                            Open My Premium Profile
+                        </a>
+
+                    {% else %}
+
+                        <div class="mb-4">
+                            <i
+                                class="fa-solid fa-circle-exclamation fa-3x text-danger"
+                            ></i>
+                        </div>
+
+                        <h2 class="fw-bold">
+                            Payment Not Completed
+                        </h2>
+
+                        <p class="text-muted">
+                            This payment is currently marked as:
+                            <strong>{{ payment.status }}</strong>
+                        </p>
+
+                        <a
+                            href="{{ url_for('premium_plans') }}"
+                            class="btn btn-success"
+                        >
+                            Return to Premium Plans
+                        </a>
+
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
