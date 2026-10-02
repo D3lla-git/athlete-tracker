@@ -1369,13 +1369,13 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>
 
     <!-- DOTS at the bottom -->
-    <div class="carousel-indicators position-relative mt-3 mb-2">
+    <div class="carousel-indicators position-relative mt-2 mb-2">
       {% for r in records %}
         <button type="button" 
                 data-bs-target="#recordsCarousel" 
                 data-bs-slide-to="{{ loop.index0 }}"
                 class="{% if loop.first %}active{% endif %}"
-                aria-label="Slide {{ loop.index }}">
+                aria-label="Slide {{ loop.index }}"> 
         </button>
       {% endfor %}
     </div>
