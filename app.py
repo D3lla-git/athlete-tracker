@@ -5,7 +5,7 @@ from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from pymongo import MongoClient
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
@@ -4810,6 +4810,199 @@ def register_coach(registration_category=None):
         registration_category=registration_category,
         selected_category=selected_category
     )
+
+@app.route('/register-scout', methods=['GET', 'POST'])
+def register_scout():
+    if request.method == 'POST':
+        full_name = request.form.get('full_name', '').strip()
+        organization = request.form.get('organization', '').strip()
+        job_title = request.form.get('job_title', '').strip()
+        sports = request.form.get('sports', '').strip()
+        country = request.form.get('country', '').strip()
+        city = request.form.get('city', '').strip()
+        years_experience_raw = request.form.get(
+            'years_experience',
+            ''
+        ).strip()
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        gender = request.form.get('gender', '').strip()
+        nationality = request.form.get('nationality', '').strip()
+
+        # -----------------------------
+        # Required-field validation
+        # -----------------------------
+        if not full_name:
+            flash('Full name is required.', 'danger')
+            return redirect(url_for('register_scout'))
+
+        if not organization:
+            flash('Organization or scouting agency is required.', 'danger')
+            return redirect(url_for('register_scout'))
+
+        if not email:
+            flash('Email address is required.', 'danger')
+            return redirect(url_for('register_scout'))
+
+        if not password:
+            flash('Password is required.', 'danger')
+            return redirect(url_for('register_scout'))
+
+        if password != confirm_password:
+            flash('Passwords do not match.', 'danger')
+            return redirect(url_for('register_scout'))
+
+        # -----------------------------
+        # Length validation
+        # -----------------------------
+        if len(full_name) > 150:
+            flash('Full name is too long.', 'danger')
+            return redirect(url_for('register_scout'))
+
+        if len(organization) > 200:
+            flash('Organization name is too long.', 'danger')
+            return redirect(url_for('register_scout'))
+
+        if len(job_title) > 150:
+            flash('Job title is too long.', 'danger')
+            return redirect(url_for('register_scout'))
+
+        if len(country) > 100:
+            flash('Country name is too long.', 'danger')
+            return redirect(url_for('register_scout'))
+
+        if len(city) > 100:
+            flash('City name is too long.', 'danger')
+            return redirect(url_for('register_scout'))
+
+        # -----------------------------
+        # Password validation
+        # -----------------------------
+        if not is_strong_password(password):
+            flash(
+                'Password must meet the required security requirements.',
+                'danger'
+            )
+            return redirect(url_for('register_scout'))
+
+        # -----------------------------
+        # Email uniqueness
+        # -----------------------------
+        existing_email = User.query.filter_by(
+            email=email
+        ).first()
+
+        if existing_email:
+            flash(
+                'An account with this email address already exists.',
+                'warning'
+            )
+            return redirect(url_for('login'))
+
+        # -----------------------------
+        # Years of experience
+        # -----------------------------
+        years_experience = None
+
+        if years_experience_raw:
+            try:
+                years_experience = int(years_experience_raw)
+            except ValueError:
+                flash(
+                    'Years of experience must be a valid number.',
+                    'danger'
+                )
+                return redirect(url_for('register_scout'))
+
+            if years_experience < 0 or years_experience > 80:
+                flash(
+                    'Years of experience must be between 0 and 80.',
+                    'danger'
+                )
+                return redirect(url_for('register_scout'))
+
+        # -----------------------------
+        # Create Scout account
+        # -----------------------------
+        scout = User(
+            full_name=full_name,
+            school=organization,
+            gender=gender or None,
+            nationality=nationality or None,
+            email=email,
+            role='Scout',
+            is_verified=False
+        )
+
+        scout.set_password(password)
+
+        try:
+            db.session.add(scout)
+            db.session.flush()
+
+            scout_profile = ScoutProfile(
+                user_id=scout.id,
+                organization=organization,
+                job_title=job_title or None,
+                sports=sports or None,
+                country=country or None,
+                city=city or None,
+                years_experience=years_experience,
+                verification_status='pending'
+            )
+
+            registration = Registration(
+                user_id=scout.id,
+                registration_type='scout',
+                category='Scout',
+                registration_year=datetime.utcnow().year,
+                fee_amount=0,
+                payment_status='unpaid',
+                status='active'
+            )
+
+            db.session.add(scout_profile)
+            db.session.add(registration)
+
+            create_audit_log(
+                action='scout_registration_created',
+                actor_user_id=scout.id,
+                target_type='User',
+                target_id=scout.id,
+                details={
+                    'role': 'Scout',
+                    'organization': organization,
+                    'verification_status': 'pending'
+                }
+            )
+
+            db.session.commit()
+
+        except Exception:
+            db.session.rollback()
+
+            app.logger.exception(
+                'Scout registration failed.'
+            )
+
+            flash(
+                'Scout registration could not be completed. '
+                'Please try again.',
+                'danger'
+            )
+
+            return redirect(url_for('register_scout'))
+
+        flash(
+            'Scout account created successfully. '
+            'Your account is pending verification by D.A.R.T. administration.',
+            'success'
+        )
+
+        return redirect(url_for('login'))
+
+    return render_template('register_scout.html')
 
 # Two-Factor Authentication (2FA) Recovery Codes Route
 @app.route('/admin/2fa/recovery-codes', methods=['GET', 'POST'])

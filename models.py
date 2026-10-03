@@ -163,6 +163,88 @@ class Registration(db.Model):
         ),
     )
 
+class ScoutProfile(db.Model):
+    __tablename__ = 'scout_profile'
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True
+    )
+
+    user_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+        unique=True
+    )
+
+    organization = db.Column(
+        db.String(200),
+        nullable=False
+    )
+
+    job_title = db.Column(
+        db.String(150),
+        nullable=True
+    )
+
+    sports = db.Column(
+        db.Text,
+        nullable=True
+    )
+
+    country = db.Column(
+        db.String(100),
+        nullable=True
+    )
+
+    city = db.Column(
+        db.String(100),
+        nullable=True
+    )
+
+    years_experience = db.Column(
+        db.Integer,
+        nullable=True
+    )
+
+    bio = db.Column(
+        db.Text,
+        nullable=True
+    )
+
+    verification_status = db.Column(
+        db.String(30),
+        nullable=False,
+        default='pending'
+    )
+
+    verification_document = db.Column(
+        db.String(255),
+        nullable=True
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.func.now()
+    )
+
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=db.func.now()
+    )
+
+    user = db.relationship(
+        'User',
+        backref=db.backref(
+            'scout_profile',
+            uselist=False,
+            cascade='all, delete-orphan'
+        )
+    )
+
 class ChatMessage(db.Model):
     __tablename__ = 'chat_message'
 

@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+
+{% block title %}Scout Registration | D.A.R.T{% endblock %}
+
+{% block content %}
+
+<div class="container py-5">
+
+    <div class="row justify-content-center">
+
+        <div class="col-lg-8 col-xl-7">
+
+            <div class="card shadow-sm border-0">
+
+                <div class="card-header bg-dark text-white text-center py-4">
+
+                    <i class="fa-solid fa-binoculars fa-2x mb-2"></i>
+
+                    <h3 class="mb-1">
+                        Scout Registration
+                    </h3>
+
+                    <p class="mb-0 small">
+                        Create your free D.A.R.T. scouting account
+                    </p>
+
+                </div>
+
+                <div class="card-body p-4 p-md-5">
+
+                    <div class="alert alert-info">
+
+                        <div class="d-flex">
+
+                            <i class="fa-solid fa-circle-info me-3 mt-1"></i>
+
+                            <div>
+                                <strong>Free Scout Account</strong>
+
+                                <div class="small mt-1">
+                                    Registration is free. Your account will
+                                    be reviewed by D.A.R.T. administration
+                                    before scout verification is completed.
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <form
+                        method="POST"
+                        action="{{ url_for('register_scout') }}"
+                    >
+
+                        <input
+                            type="hidden"
+                            name="csrf_token"
+                            value="{{ csrf_token() }}"
+                        >
+
+                        <!-- Personal Information -->
+
+                        <h5 class="mb-3">
+                            <i class="fa-solid fa-user me-2"></i>
+                            Personal Information
+                        </h5>
+
+                        <div class="mb-3">
+
+                            <label
+                                for="full_name"
+                                class="form-label"
+                            >
+                                Full Name
+                            </label>
+
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="full_name"
+                                name="full_name"
+                                maxlength="150"
+                                required
+                                autocomplete="name"
+                            >
+
+                        </div>
+
+                        <div class="row">
+
+                            <div class="col-md-6 mb-3">
+
+                                <label
+                                    for="gender"
+                                    class="form-label"
+                                >
+                                    Gender
+                                </label>
+
+                                <select
+                                    class="form-select"
+                                    id="gender"
+                                    name="gender"
+                                >
+
+                                    <option value="">
+                                        Select Gender
+                                    </option>
+
+                                    <option value="Male">
+                                        Male
+                                    </option>
+
+                                    <option value="Female">
+                                        Female
+                                    </option>
+
+                                </select>
+
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+
+                                <label
+                                    for="nationality"
+                                    class="form-label"
+                                >
+                                    Nationality
+                                </label>
+
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="nationality"
+                                    name="nationality"
+                                    maxlength="100"
+                                >
+
+                            </div>
+
+                        </div>
+
+                        <!-- Professional Information -->
+
+                        <h5 class="mb-3 mt-4">
+                            <i class="fa-solid fa-building me-2"></i>
+                            Scouting Information
+                        </h5>
+
+                        <div class="mb-3">
+
+                            <label
+                                for="organization"
+                                class="form-label"
+                            >
+                                Organization / Scouting Agency
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="organization"
+                                name="organization"
+                                maxlength="200"
+                                required
+                                placeholder="e.g. ABC Sports Agency"
+                            >
+
+                        </div>
+
+                        <div class="mb-3">
+
+                            <label
+                                for="job_title"
+                                class="form-label"
+                            >
+                                Job Title
+                            </label>
+
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="job_title"
+                                name="job_title"
+                                maxlength="150"
+                                placeholder="e.g. Football Scout"
+                            >
+
+                        </div>
+
+                        <div class="mb-3">
+
+                            <label
+                                for="sports"
+                                class="form-label"
+                            >
+                                Sports You Scout
+                            </label>
+
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="sports"
+                                name="sports"
+                                maxlength="500"
+                                placeholder="e.g. Football, Basketball"
+                            >
+
+                            <div class="form-text">
+                                You can list more than one sport.
+                            </div>
+
+                        </div>
+
+                        <div class="row">
+
+                            <div class="col-md-6 mb-3">
+
+                                <label
+                                    for="country"
+                                    class="form-label"
+                                >
+                                    Country
+                                </label>
+
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="country"
+                                    name="country"
+                                    maxlength="100"
+                                    placeholder="e.g. Liberia"
+                                >
+
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+
+                                <label
+                                    for="city"
+                                    class="form-label"
+                                >
+                                    City
+                                </label>
+
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="city"
+                                    name="city"
+                                    maxlength="100"
+                                    placeholder="e.g. Monrovia"
+                                >
+
+                            </div>
+
+                        </div>
+
+                        <div class="mb-3">
+
+                            <label
+                                for="years_experience"
+                                class="form-label"
+                            >
+                                Years of Scouting Experience
+                            </label>
+
+                            <input
+                                type="number"
+                                class="form-control"
+                                id="years_experience"
+                                name="years_experience"
+                                min="0"
+                                max="80"
+                                step="1"
+                                placeholder="e.g. 5"
+                            >
+
+                        </div>
+
+                        <!-- Account -->
+
+                        <h5 class="mb-3 mt-4">
+                            <i class="fa-solid fa-lock me-2"></i>
+                            Account Security
+                        </h5>
+
+                        <div class="mb-3">
+
+                            <label
+                                for="email"
+                                class="form-label"
+                            >
+                                Email Address
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <input
+                                type="email"
+                                class="form-control"
+                                id="email"
+                                name="email"
+                                maxlength="255"
+                                required
+                                autocomplete="email"
+                            >
+
+                        </div>
+
+                        <div class="mb-3">
+
+                            <label
+                                for="password"
+                                class="form-label"
+                            >
+                                Password
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <input
+                                type="password"
+                                class="form-control"
+                                id="password"
+                                name="password"
+                                required
+                                autocomplete="new-password"
+                            >
+
+                            <div class="form-text">
+                                Use a strong password that meets the
+                                D.A.R.T. password requirements.
+                            </div>
+
+                        </div>
+
+                        <div class="mb-4">
+
+                            <label
+                                for="confirm_password"
+                                class="form-label"
+                            >
+                                Confirm Password
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <input
+                                type="password"
+                                class="form-control"
+                                id="confirm_password"
+                                name="confirm_password"
+                                required
+                                autocomplete="new-password"
+                            >
+
+                        </div>
+
+                        <!-- Verification Notice -->
+
+                        <div class="alert alert-warning">
+
+                            <div class="d-flex">
+
+                                <i class="fa-solid fa-shield-halved me-3 mt-1"></i>
+
+                                <div>
+
+                                    <strong>Verification Required</strong>
+
+                                    <div class="small mt-1">
+                                        Scout accounts are reviewed before
+                                        verification. Advanced scouting
+                                        capabilities will be introduced
+                                        separately.
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <button
+                            type="submit"
+                            class="btn btn-success btn-lg w-100"
+                        >
+
+                            <i class="fa-solid fa-user-plus me-2"></i>
+
+                            Create Free Scout Account
+
+                        </button>
+
+                    </form>
+
+                    <div class="text-center mt-4">
+
+                        <span class="text-muted">
+                            Already have an account?
+                        </span>
+
+                        <a href="{{ url_for('login') }}">
+                            Sign in
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
