@@ -2153,8 +2153,35 @@ def login():
             return redirect(url_for('verify_2fa'))
 
         # Students do not require 2FA
-        login_user(user)
-        return redirect(url_for('student_dashboard'))
+        # ==========================================================
+        # ROLE-BASED LOGIN
+        # ==========================================================
+
+        # Scouts must be verified before they can access the
+        # Scout dashboard.
+        if user.role == 'Scout':
+            if not user.is_verified:
+                flash(
+                    'Your Scout account is pending D.A.R.T. administrator verification.',
+                    'warning'
+                )
+                return redirect(url_for('login'))
+
+            login_user(user)
+            return redirect(url_for('scout_dashboard'))
+
+        # Athletes do not require 2FA.
+        if user.role == 'Athlete':
+            login_user(user)
+            return redirect(url_for('student_dashboard'))
+
+        # Safety fallback — do not allow unknown roles to authenticate
+        # into another role's dashboard.
+        flash(
+            'Your account role is not authorized for application access.',
+            'danger'
+        )
+        return redirect(url_for('login'))
 
     return render_template('login.html')
 
@@ -2756,7 +2783,40 @@ def student_dashboard():
         current_year=current_year,
         registered_categories=registered_categories
     )
+# ==========================================================
+# SCOUT DASHBOARD
+# ==========================================================
 
+@app.route('/scout')
+@login_required
+def scout_dashboard():
+
+    # Only verified Scout accounts can access this dashboard.
+    if current_user.role != 'Scout':
+        flash(
+            'You are not authorized to access the Scout dashboard.',
+            'danger'
+        )
+
+        if current_user.role == 'Athlete':
+            return redirect(url_for('student_dashboard'))
+
+        if current_user.role in ('Coach', 'System'):
+            return redirect(url_for('admin_dashboard'))
+
+        return redirect(url_for('index'))
+
+    if not current_user.is_verified:
+        logout_user()
+        flash(
+            'Your Scout account is pending D.A.R.T. administrator verification.',
+            'warning'
+        )
+        return redirect(url_for('login'))
+
+    return render_template(
+        'scout_dashboard.html'
+    )
 @app.route('/submit_record', methods=['POST'])
 @login_required
 def submit_record():
@@ -3710,10 +3770,13 @@ def edit_record(record_id):
 @app.route('/admin')
 @login_required
 def admin_dashboard():
+    # Only Coaches and Super Admins can access this dashboard.
     if current_user.role not in ('Coach', 'System'):
         return redirect(url_for('student_dashboard'))
 
-    # Students pending verification
+    # ==========================================================
+    # PENDING ATHLETE VERIFICATIONS
+    # ==========================================================
     if current_user.role == 'System':
         pending_users = User.query.filter_by(
             role='Athlete',
@@ -3726,15 +3789,44 @@ def admin_dashboard():
             school=current_user.school
         ).all()
 
-    # Records pending approval
+    # ==========================================================
+    # PENDING COACH APPROVALS
+    # ==========================================================
+    pending_coaches = []
+
+    if current_user.role == 'System':
+        pending_coaches = User.query.filter_by(
+            role='Coach',
+            is_verified=False
+        ).all()
+
+    # ==========================================================
+    # PENDING SCOUT APPROVALS
+    # SUPER ADMIN ONLY
+    # ==========================================================
+    pending_scouts = []
+
+    if current_user.role == 'System':
+        pending_scouts = User.query.filter_by(
+            role='Scout',
+            is_verified=False
+        ).all()
+
+    # ==========================================================
+    # PENDING SPORTS RECORDS
+    # ==========================================================
     all_pending_records = SportRecord.query.join(User).filter(
         SportRecord.status.in_(['pending', 'rejected'])
-    ).order_by(SportRecord.status.desc()).all()
+    ).order_by(
+        SportRecord.status.desc()
+    ).all()
 
-    # System sees every pending record. Coaches are restricted by exact team/school
-    # matching and their coach competition category.
+    # System sees every pending record.
+    # Coaches are restricted by exact team/school matching
+    # and their coach competition category.
     if current_user.role == 'System':
         pending_records = all_pending_records
+
     else:
         pending_records = [
             record
@@ -3752,36 +3844,24 @@ def admin_dashboard():
             )
         ]
 
-    # TEMPORARY DEBUG
-    print("========== COACH DASHBOARD DEBUG ==========")
-    print("Logged-in coach:", current_user.full_name)
-    print("Coach school/team:", repr(current_user.school))
-    print("Pending records found:", len(pending_records))
-
-    for record in pending_records:
-        print(
-            "Record:",
-            record.id,
-            "| Team:", repr(record.team),
-            "| Status:", record.status,
-            "| Student:", record.user.full_name
-        )
-
+    # ==========================================================
+    # DEBUG
+    # ==========================================================
+    print("========== ADMIN DASHBOARD DEBUG ==========")
+    print("Logged-in user:", current_user.full_name)
+    print("Role:", current_user.role)
+    print("Pending athletes:", len(pending_users))
+    print("Pending coaches:", len(pending_coaches))
+    print("Pending scouts:", len(pending_scouts))
+    print("Pending records:", len(pending_records))
     print("==========================================")
-
-    # Pending Coaches (only Super Admin)
-    pending_coaches = []
-    if current_user.role == 'System':
-        pending_coaches = User.query.filter_by(
-            role='Coach',
-            is_verified=False
-        ).all()
 
     return render_template(
         'admin_dashboard.html',
         pending_users=pending_users,
-        pending_records=pending_records,
-        pending_coaches=pending_coaches
+        pending_coaches=pending_coaches,
+        pending_scouts=pending_scouts,
+        pending_records=pending_records
     )
 
 @app.route('/approve_coach/<int:user_id>', methods=['POST'])
@@ -3896,7 +3976,73 @@ def build_recruitment_highlights(pinned_records):
         highlights.append(highlight)
 
     return highlights
+#==============Approve Scout===================================
+@app.route('/approve_scout/<int:user_id>', methods=['POST'])
+@login_required
+def approve_scout(user_id):
 
+    # Only Super Admin can approve Scouts.
+    if current_user.role != 'System':
+        flash(
+            'Only Super Admin can approve Scout accounts.',
+            'danger'
+        )
+        return redirect(url_for('admin_dashboard'))
+
+    scout = User.query.get_or_404(user_id)
+
+    # Never allow this route to approve another role.
+    if scout.role != 'Scout':
+        flash(
+            'Invalid Scout approval request.',
+            'danger'
+        )
+        return redirect(url_for('admin_dashboard'))
+
+    # Do not approve an account that is already verified.
+    if scout.is_verified:
+        flash(
+            f'{scout.full_name} is already verified.',
+            'info'
+        )
+        return redirect(url_for('admin_dashboard'))
+
+    try:
+        scout.is_verified = True
+
+        create_audit_log(
+            action='scout_account_approved',
+            actor_user_id=current_user.id,
+            target_type='User',
+            target_id=scout.id,
+            details={
+                'role': 'Scout',
+                'scout_name': scout.full_name
+            }
+        )
+
+        db.session.commit()
+
+    except Exception:
+        db.session.rollback()
+
+        app.logger.exception(
+            'Scout approval failed.'
+        )
+
+        flash(
+            'Scout approval could not be completed. Please try again.',
+            'danger'
+        )
+
+        return redirect(url_for('admin_dashboard'))
+
+    flash(
+        f'Scout {scout.full_name} has been approved successfully.',
+        'success'
+    )
+
+    return redirect(url_for('admin_dashboard'))
 #============Profile route================================
 #============Profile route================================
 @app.route('/profile')

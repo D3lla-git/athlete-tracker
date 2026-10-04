@@ -3,7 +3,7 @@
 
 {% block content %}
 <h2 class="mb-4">Admin / Coach Dashboard</h2>
-<!-- ========== PENDING STUDENT VERIFICATIONS ========== -->
+<!-- ========== PENDING VERIFICATIONS ========== -->
 {% if pending_coaches %}
 <div class="card mb-4 border-warning">
   <div class="card-header bg-warning text-dark">
@@ -51,7 +51,154 @@
 </div>
 {% endif %}
 
-<h4>Pending Student Verifications</h4>
+<!-- ========== PENDING SCOUT APPROVALS ========== -->
+{% if current_user.role == 'System' %}
+<div class="card mb-4 border-info">
+
+  <div class="card-header bg-info text-dark">
+    <strong>
+      Pending Scout Approvals (Super Admin Only)
+    </strong>
+  </div>
+
+  <div class="card-body">
+
+    {% if pending_scouts %}
+
+    <div class="table-responsive">
+
+      <table class="table table-bordered table-hover align-middle">
+
+        <thead>
+          <tr>
+            <th>Scout Name</th>
+            <th>Organization</th>
+            <th>Job Title</th>
+            <th>Sports</th>
+            <th>Location</th>
+            <th>Experience</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+
+        <tbody>
+
+          {% for scout in pending_scouts %}
+
+          <tr>
+
+            <!-- Scout -->
+            <td>
+              <a href="{{ url_for('user_profile', user_id=scout.id) }}"
+                 class="text-decoration-none">
+
+                <strong>
+                  {{ scout.full_name }}
+                </strong>
+
+              </a>
+            </td>
+
+            <!-- Organization -->
+            <td>
+              {{ scout.school or '-' }}
+            </td>
+
+            <!-- Job Title -->
+            <td>
+              {% if scout.scout_profile %}
+                {{ scout.scout_profile.job_title or '-' }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+
+            <!-- Sports -->
+            <td>
+              {% if scout.scout_profile %}
+                {{ scout.scout_profile.sports or '-' }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+
+            <!-- Location -->
+            <td>
+              {% if scout.scout_profile %}
+                {{ scout.scout_profile.city or '-' }}
+                {% if scout.scout_profile.country %}
+                  , {{ scout.scout_profile.country }}
+                {% endif %}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+
+            <!-- Experience -->
+            <td>
+              {% if scout.scout_profile and scout.scout_profile.years_experience is not none %}
+                {{ scout.scout_profile.years_experience }} years
+              {% else %}
+                -
+              {% endif %}
+            </td>
+
+            <!-- Status -->
+            <td>
+              <span class="badge bg-warning text-dark">
+                Pending Verification
+              </span>
+            </td>
+
+            <!-- Action -->
+            <td>
+
+              <form method="POST"
+                    action="{{ url_for('approve_scout', user_id=scout.id) }}"
+                    style="display:inline;">
+
+                <input type="hidden"
+                       name="csrf_token"
+                       value="{{ csrf_token() }}">
+
+                <button type="submit"
+                        class="btn btn-success btn-sm"
+                        onclick="return confirm('Approve this Scout account?')">
+
+                  <i class="fa-solid fa-check"></i>
+                  Approve Scout
+
+                </button>
+
+              </form>
+
+            </td>
+
+          </tr>
+
+          {% endfor %}
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+    {% else %}
+
+      <p class="text-muted mb-0">
+        No Scouts waiting for verification.
+      </p>
+
+    {% endif %}
+
+  </div>
+
+</div>
+{% endif %}
+
+<h4>Pending Athlete Verifications</h4>
 {% if pending_users %}
   {% for u in pending_users %}
   <div class="card mb-3">
