@@ -413,7 +413,7 @@
                         <th>Team Played Against <i class="fa-solid fa-shield-halved"></i></th>
                         <th>Position <i class="fa-solid fa-shirt"></i></th>
                         <th>Games Played <i class="fa-solid fa-person-running"></i></th>
-                        <th>Club Division <i class="fa-solid fa-layer-group"></i></th>
+                        <th>Division / Team <i class="fa-solid fa-layer-group"></i></th>
                         <th>Trophy <i class="fa-solid fa-trophy" style="color:goldenrod;"></i></th>
                         <th>Stats <i class="fa-solid fa-chart-line"></i></th>
                       </tr>
@@ -427,7 +427,7 @@
                         <td>{{ r.team_played_against or '-' }}</td>
                         <td>{{ r.position or '-' }}</td>
                         <td>{{ r.games_played }}</td>
-                        <td>{{ r.club_division or '-' }}</td>
+                        <td>{{ r.club_division or r.competition_team or '-' }}</td>
                         <td>{{ r.trophy or '-' }}</td>
                         <td>
                           {% if r.sport == 'Football' %}
@@ -531,11 +531,11 @@
                     </div>
 <div>
     <strong>
-        Club Division
+        {{ r.competition_team_label or 'Club Division' }}
         <i class="fa-solid fa-layer-group"></i> :
     </strong>
 
-    {{ r.club_division or 'None' }}
+    {{ r.club_division or r.competition_team or 'None' }}
 </div>
                     {% if r.sport == 'Football' %}
                       <div>

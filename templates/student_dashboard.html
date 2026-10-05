@@ -26,12 +26,36 @@
 </div>
 
 {% if current_user.is_verified %}
+  <!-- ==================== PWA: RECORDS SAVED OFFLINE ==================== -->
+  <!-- Filled in by public/static/js/offline-records.js. Hidden when nothing is saved. -->
+  <div id="offlineRecordsPanel" class="card mb-4 border-warning" hidden>
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <span class="fw-bold">
+        <i class="fa-solid fa-cloud-arrow-up"></i>
+        Saved on this device
+        <span id="offlineRecordsCount" class="badge bg-warning text-dark ms-1">0</span>
+      </span>
+      <button type="button" id="offlineSyncBtn" class="btn btn-sm btn-success">
+        <i class="fa-solid fa-rotate"></i> Upload now
+      </button>
+    </div>
+    <div class="card-body">
+      <p id="offlineRecordsStatus" class="small text-muted mb-2" role="status"></p>
+      <ul id="offlineRecordsList" class="list-group"></ul>
+    </div>
+  </div>
+
   <!-- ==================== SUBMIT FORM ==================== -->
   <div class="card mb-4">
 
     <h5><div class="card-header">Submit New Sports Record</div></h5>
     <div class="card-body">
-      <form method="POST" action="{{ url_for('submit_record') }}">
+      <div id="recordFormAlert" role="alert" aria-live="polite"></div>
+      <form method="POST"
+            action="{{ url_for('submit_record') }}"
+            id="recordForm"
+            data-dart-offline-form
+            data-success-url="{{ url_for('student_dashboard') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <div class="row g-3">
@@ -89,6 +113,7 @@
 
   <select
       id="afconSelect"
+      name="afcon_team"
       class="form-select">
 
     <option value="">-- Select --</option>
@@ -108,6 +133,7 @@
 
   <select
       id="wafuSelect"
+      name="wafu_category"
       class="form-select">
 
     <option value="">-- Select --</option>
@@ -136,6 +162,7 @@
 
   <select
       id="worldCupSelect"
+      name="world_cup_team"
       class="form-select">
 
     <option value="">-- Select --</option>
@@ -342,6 +369,10 @@
     >
         <option value="">Select Competition Category First</option>
     </select>
+
+    <script id="trophyOptionsData" type="application/json">
+        {{ trophy_options_table() | tojson }}
+    </script>
 </div>
   </div>
 
@@ -412,7 +443,7 @@
     </div>
     <div class="col-md-2">
       <label class="form-label">Assists <i class="fa-solid fa-handshake-angle"></i></label>
-      <input type="number" name="assists" class="form-control" min="0" value="0">
+      <input type="number" name="basketball_assists" class="form-control" min="0" value="0">
     </div>
     <div class="col-md-2">
       <label class="form-label">Blocks <i class="fa-regular fa-hand" style="color: burlywood;"></i></label>
@@ -444,7 +475,12 @@
   </div>
 
   <div class="mt-3">
-    <button type="submit" class="btn btn-success">Submit Record</button>
+    <button type="submit" id="recordSubmitBtn" class="btn btn-success">Submit Record</button>
+    <small class="d-block text-muted mt-2">
+      <i class="fa-solid fa-wifi"></i>
+      No internet or data? Your record is saved on this device and uploaded
+      for approval when you're back online.
+    </small>
   </div>
 </form>
 <!---------CSS-Stylings----------------->
@@ -669,30 +705,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     // =====================================================
-    // STANDARD COMPETITION -> TROPHY
+    // COMPETITION -> TROPHY OPTIONS (from competitions.py)
     // =====================================================
+    // Keys are "sport|competition|division"; the division part is only
+    // used for Club League.
 
-    const trophyMap = {
-        "High School": "Classes League",
-        "County Meet": "County Meet",
-        "Club League": "Club Trophy",
-        "University League": "University Championship",
-        "Community/Area League": "Community Trophy",
-        "AFCON": "AFCON",
-        "WAFU": "WAFU",
-        "World Cup": "World Cup"
-    };
-
-
-    // =====================================================
-    // BASKETBALL-ONLY TROPHIES
-    // =====================================================
-
-    const basketballTrophies = [
-        "Basketball Africa League (BAL)",
-        "FIBA Africa Zone",
-        "FIBA AfroBasket Championships"
-    ];
+    const trophyOptionsTable = JSON.parse(
+        document.getElementById('trophyOptionsData').textContent
+    );
 
 
     // =====================================================
@@ -739,112 +759,86 @@ document.addEventListener('DOMContentLoaded', function () {
     // TROPHY OPTIONS
     // =====================================================
 
+    function setTrophyPlaceholder(text) {
+
+        const placeholder =
+            document.createElement('option');
+
+        placeholder.value = '';
+        placeholder.textContent = text;
+
+        trophy.appendChild(placeholder);
+    }
+
     function updateTrophy(category) {
 
+        const previousTrophy = trophy.value;
+
         trophy.innerHTML = '';
+        trophy.required = true;
 
         if (!category) {
-
-            const placeholder =
-                document.createElement('option');
-
-            placeholder.value = '';
-            placeholder.textContent =
-                'Select Competition Category First';
-
-            trophy.appendChild(placeholder);
-
-            trophy.required = true;
-
+            setTrophyPlaceholder('Select Competition Category First');
             return;
         }
 
-
-        // ---------------------------------------------
-        // Basketball
-        // ---------------------------------------------
-
-        if (sportSelect.value === 'Basketball') {
-
-            const placeholder =
-                document.createElement('option');
-
-            placeholder.value = '';
-            placeholder.textContent =
-                '-- Select Trophy Won --';
-
-            trophy.appendChild(placeholder);
-
-
-            // Standard category trophy
-            const standardTrophy =
-                trophyMap[category];
-
-            if (standardTrophy) {
-
-                const option =
-                    document.createElement('option');
-
-                option.value = standardTrophy;
-                option.textContent = standardTrophy;
-
-                trophy.appendChild(option);
-            }
-
-
-            // Basketball-specific trophies
-            basketballTrophies.forEach(function (basketballTrophy) {
-
-                const option =
-                    document.createElement('option');
-
-                option.value = basketballTrophy;
-                option.textContent = basketballTrophy;
-
-                trophy.appendChild(option);
-            });
-
-            trophy.required = true;
-
+        if (!sportSelect.value) {
+            setTrophyPlaceholder('Select Sport First');
             return;
         }
 
+        // Football Club League titles depend on the division.
+        if (
+            category === 'Club League' &&
+            sportSelect.value === 'Football' &&
+            !clubDivision.value
+        ) {
+            setTrophyPlaceholder('Select Club League Division First');
+            return;
+        }
 
-        // ---------------------------------------------
-        // Non-basketball sports
-        // ---------------------------------------------
+        const division =
+            category === 'Club League' ? clubDivision.value : '';
 
-        const expectedTrophy =
-            trophyMap[category];
+        const options =
+            trophyOptionsTable[
+                sportSelect.value + '|' + category + '|' + division
+            ] || [];
 
-        if (!expectedTrophy) {
+        if (!options.length) {
+            setTrophyPlaceholder('Invalid Competition Category');
+            return;
+        }
+
+        if (options.length > 1) {
+            setTrophyPlaceholder('-- Select Trophy Won --');
+        }
+
+        options.forEach(function (value) {
 
             const option =
                 document.createElement('option');
 
-            option.value = '';
-            option.textContent =
-                'Invalid Competition Category';
+            option.value = value;
+            option.textContent = value;
+
+            // A single option is chosen automatically; otherwise keep
+            // the athlete's earlier choice when it is still allowed.
+            option.selected =
+                options.length === 1 || value === previousTrophy;
 
             trophy.appendChild(option);
-
-            trophy.required = true;
-
-            return;
-        }
-
-
-        const option =
-            document.createElement('option');
-
-        option.value = expectedTrophy;
-        option.textContent = expectedTrophy;
-        option.selected = true;
-
-        trophy.appendChild(option);
-
-        trophy.required = true;
+        });
     }
+
+
+    // =====================================================
+    // CLUB DIVISION CHANGE
+    // =====================================================
+
+    clubDivision.addEventListener('change', function () {
+        updateTrophy(competitionSelect.value);
+    });
 
 
     // =====================================================
@@ -1045,7 +1039,7 @@ document.addEventListener('DOMContentLoaded', function () {
         <th>Games Played <i class="fa-solid fa-person-running"></i></th>
         <th>MOTM/QOTM <i class="fa-solid fa-trophy" style="color: silver;"></i></th>
         <th>MVP <i class="fa-solid fa-star" style="color: goldenrod"></i></th>
-        <th>Club Division<i class="fa-solid fa-layer-group"></i></th>
+        <th>Division / Team <i class="fa-solid fa-layer-group"></i></th>
         <th>Trophy <i class="fa-solid fa-trophy" style="color: goldenrod;"></i></th>
         <th>Stats <i class="fa-solid fa-chart-line"></i></th>
         <th>Status <i class="bi bi-check2-circle"></i></th>
@@ -1062,7 +1056,7 @@ document.addEventListener('DOMContentLoaded', function () {
         <td>{{ r.games_played }}</td>
         <td>{{ r.man_of_the_match or 0 }}</td>
         <td>{{ r.mvp or 0 }}</td>
-        <td>{{ r.club_division or '-' }}</td>
+        <td>{{ r.club_division or r.competition_team or '-' }}</td>
         <td>{{ r.trophy or '-' }}</td>
        <td>
          {% if r.sport == 'Football' %}
@@ -1257,11 +1251,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             <div>
     <strong>
-        Club Division
+        {{ r.competition_team_label or 'Club Division' }}
         <i class="fa-solid fa-layer-group"></i> :
     </strong>
 
-    {{ r.club_division or 'None' }}
+    {{ r.club_division or r.competition_team or 'None' }}
 </div>
 
        {% if r.sport == 'Football' %}

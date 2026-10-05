@@ -730,6 +730,15 @@
                     </div>
                   {% endif %}
 
+                  {% if record.competition_team %}
+                    <div class="col-12">
+                      <div class="small">
+                        <strong>{{ record.competition_team_label }}:</strong>
+                        {{ record.competition_team }}
+                      </div>
+                    </div>
+                  {% endif %}
+
                   {% if record.position %}
                     <div class="col-12">
                       <div class="small">

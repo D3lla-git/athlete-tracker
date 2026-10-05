@@ -206,9 +206,13 @@
       <div>
         <a href="{% if current_user.id == u.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=u.id) }}{% endif %}" class="text-decoration-none"><strong>{{ u.full_name }}</strong></a> — {{ u.school }}
         <br>
+        {% if u.id_document %}
         <a href="{{ url_for('id_document', filename=u.id_document) }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
           View ID / Passport
         </a>
+        {% else %}
+        <span class="badge bg-warning text-dark mt-1">No ID document uploaded</span>
+        {% endif %}
       </div>
             <div class="d-flex gap-2 flex-wrap">
 
@@ -290,7 +294,7 @@
             <div class="card-grid">
               <div><strong>Year <i class="fa-solid fa-calendar" style="color: green;"></i>:</strong> {{ r.year }}</div>
               <div><strong>Opponent <i class="fa-solid fa-shield-halved"></i>:</strong> {{ r.team_played_against or '-' }}</div>
-              <div><strong>Competition <i class="fa-solid fa-trophy"></i>:</strong> {{ r.competition_category or '-' }}</div>
+              <div><strong>Competition <i class="fa-solid fa-trophy"></i>:</strong> {{ r.competition_display or '-' }}</div>
               <div><strong>Position <i class="fa-solid fa-shirt"></i>:</strong> {{ r.position or '-' }}</div>
               <div><strong>Games <i class="fa-solid fa-person-running"></i>:</strong> {{ r.games_played }}</div>
               <div>
@@ -478,7 +482,7 @@
           <!-- Competition -->
           <td>
             <span class="badge bg-info text-dark">
-              {{ r.competition_category or '-' }}
+              {{ r.competition_display or '-' }}
             </span>
           </td>
 

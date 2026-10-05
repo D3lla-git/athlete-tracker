@@ -418,6 +418,13 @@
                 </div>
               {% endif %}
 
+              {% if record.competition_team %}
+                <div class="col-md-6">
+                  <strong>{{ record.competition_team_label }}:</strong>
+                  {{ record.competition_team }}
+                </div>
+              {% endif %}
+
             </div>
 
           </div>

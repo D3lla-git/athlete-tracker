@@ -67,6 +67,10 @@ class SportRecord(db.Model):
     # Competition category
     competition_category = db.Column(db.String(50),nullable=False,default='County Meet')
     club_division = db.Column(db.String(30),nullable=True)
+    # National-team competitions only: the AFCON / World Cup team or the
+    # WAFU age category (e.g. "Lonestar Men's Team", "Male-U17").
+    # competition_category says which of the three it is.
+    competition_team = db.Column(db.String(50), nullable=True)
 
     # Football fields
     goals = db.Column(db.Integer, default=0)
@@ -100,6 +104,29 @@ class SportRecord(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship('User', backref='records')
+
+    # What competition_team means for each national-team competition.
+    COMPETITION_TEAM_LABELS = {
+        'AFCON': 'AFCON Team',
+        'WAFU': 'WAFU Category',
+        'World Cup': 'World Cup Team',
+    }
+
+    @property
+    def competition_team_label(self):
+        """e.g. 'WAFU Category', or None when there is no competition team."""
+        if not self.competition_team:
+            return None
+
+        return self.COMPETITION_TEAM_LABELS.get(self.competition_category)
+
+    @property
+    def competition_display(self):
+        """Competition with its team/category, e.g. 'WAFU · Male-U17'."""
+        if self.competition_team and self.competition_category:
+            return f'{self.competition_category} · {self.competition_team}'
+
+        return self.competition_category
 
 
 class LoginAttempt(db.Model):

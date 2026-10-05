@@ -59,6 +59,23 @@
 
         </a>
 
+
+        <a href="{{ url_for('register_scout') }}"
+           class="dart-action-btn dart-action-scout">
+
+            <span class="dart-action-icon">
+                <i class="fa-solid fa-binoculars"></i>
+            </span>
+
+            <span class="dart-action-text">
+                <strong>Register as Scout</strong>
+                <small>Discover and evaluate talent</small>
+            </span>
+
+            <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
+
+        </a>
+
     </div>
 </section>
    <!--D.A.R.T. Hero Section-->   <!--D.A.R.T. Hero Section--> 
@@ -501,7 +518,7 @@
 
     display: grid;
     grid-template-columns:
-        repeat(3, minmax(0, 1fr));
+        repeat(4, minmax(0, 1fr));
 
     gap: 20px;
 }
@@ -580,6 +597,10 @@
     background: goldenrod;
 }
 
+.dart-action-scout .dart-action-icon {
+    background: rgba(111,66,193,0.40);
+}
+
 .dart-action-text {
     flex: 1;
     min-width: 0;
@@ -609,6 +630,13 @@
 .dart-action-btn:hover .dart-action-arrow {
     opacity: 1;
     transform: translateX(4px);
+}
+
+@media (max-width: 1199px) {
+
+    .dart-action-container {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 991px) {

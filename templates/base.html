@@ -2,8 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- viewport-fit=cover exposes env(safe-area-inset-*) so the mobile tab bar
+       clears the iPhone home indicator. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
+  <!-- D.A.R.T. PROGRESSIVE WEB APP -->
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <meta name="theme-color" content="#212529">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="D.A.R.T.">
+  <!-- Used by public/static/js/pwa.js to clear another user's offline data on shared devices. -->
+  <meta name="dart-user" content="{{ current_user.id if current_user.is_authenticated else '' }}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="D.A.R.T.">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/icons/favicon-32.png') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/icons/apple-touch-icon.png') }}">
+  <!-- Capture the install prompt as early as possible. Chrome can fire it
+       before deferred scripts run; public/static/js/pwa.js picks it up from here. -->
+  <script>
+    window.addEventListener('beforeinstallprompt', function (event) {
+      event.preventDefault();
+      window.dartDeferredInstallPrompt = event;
+    });
+  </script>
   <title>{% block title %}Athlete Tracker{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -366,11 +388,12 @@ html[data-theme="dark"] .alert {
   border-color: var(--surface-border);
 }
 
-html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item) {
+html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item):not(.dart-tab) {
   color: #8ab4f8;
 }
 
-.theme-toggle {
+.theme-toggle,
+.pwa-install-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -384,16 +407,148 @@ html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item) {
   background: rgba(255,255,255,0.08) !important;
 }
 
-.theme-toggle:hover {
+.theme-toggle:hover,
+.pwa-install-btn:hover {
   background: rgba(255,255,255,0.18) !important;
 }
 
-.theme-toggle .theme-label {
+.theme-toggle .theme-label,
+.pwa-install-btn .pwa-install-label {
   font-size: 0.82rem;
 }
 
+/* ===== PWA INSTALL BUTTON ===== */
+.pwa-install-btn {
+  border-color: rgba(57,185,114,0.65) !important;
+}
+
+/* .pwa-install-btn sets display, so [hidden] needs to win explicitly. */
+.pwa-install-btn[hidden] {
+  display: none !important;
+}
+
+/* ===== PWA: MOBILE BOTTOM TAB BAR ===== */
+.dart-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1030;
+  display: flex;
+  background: #212529;
+  border-top: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 -6px 20px rgba(0,0,0,0.25);
+  padding:
+    0
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+.dart-tab {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: rgba(255,255,255,0.62);
+  text-decoration: none;
+  font-size: 0.7rem;
+  font-weight: 600;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dart-tab i {
+  font-size: 1.15rem;
+}
+
+.dart-tab span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dart-tab:hover,
+.dart-tab:focus-visible,
+.dart-tab.active {
+  color: #ffffff;
+}
+
+.dart-tab:active {
+  background: rgba(255,255,255,0.06);
+}
+
+.dart-tab.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 28%;
+  right: 28%;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: #39b972;
+}
+
+.dart-tab-badge {
+  position: absolute;
+  top: 6px;
+  left: calc(50% + 5px);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #dc3545;
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* Keep page content and the footer clear of the fixed tab bar. */
 @media (max-width: 991.98px) {
-  .theme-toggle {
+  body {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom));
+  }
+}
+
+.pwa-ios-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pwa-ios-steps li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.pwa-ios-steps li + li {
+  border-top: 1px solid var(--surface-border);
+}
+
+.pwa-ios-step-icon {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: #ffffff;
+  background: darkgreen;
+}
+
+@media (max-width: 991.98px) {
+  .theme-toggle,
+  .pwa-install-btn {
     margin-top: 6px;
     width: fit-content;
   }
@@ -601,6 +756,17 @@ html[data-theme="light"] .athlete-footer {
     <span id="themeLabel" class="theme-label d-none d-lg-inline">Dark</span>
 </button>
 
+<!-- Install App button: shown by public/static/js/pwa.js only when installing is possible -->
+<button type="button"
+        id="pwaInstallBtn"
+        class="pwa-install-btn border-0 me-2"
+        aria-label="Install the D.A.R.T. app"
+        title="Install the D.A.R.T. app"
+        hidden>
+    <i class="fa-solid fa-download"></i>
+    <span class="pwa-install-label d-none d-lg-inline">Install App</span>
+</button>
+
 <!-- Hamburger -->
 <button class="navbar-toggler"
         type="button"
@@ -640,25 +806,23 @@ html[data-theme="light"] .athlete-footer {
 </li>
 {% endif %}
           {% if current_user.is_authenticated %}
-            {% if current_user.role == 'admin' %}
+            {% if dashboard_nav %}
               <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('admin_dashboard') }}"style="color: white;">Admin <i class="fa-solid fa-user-shield"></i></a>
-              </li>
-            {% else %}
-              <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('student_dashboard') }}"style="color: white;">My Records <i class="fa-solid fa-book"></i></a>
+                <a class="nav-link" href="{{ url_for(dashboard_nav.endpoint) }}" style="color: white;">{{ dashboard_nav.label }} <i class="{{ dashboard_nav.icon }}"></i></a>
               </li>
             {% endif %}
-{% if current_user.is_authenticated and current_user.role == 'admin' %}
-    <a class="nav-link" href="{{ url_for('setup_2fa') }}">
-        <i class="fa-solid fa-shield-halved"></i>
-        2FA Security
-    </a>
-{% endif %}
+            {% if current_user.role in ('Coach', 'System') %}
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('setup_2fa') }}" style="color: white;">
+                  2FA Security <i class="fa-solid fa-shield-halved"></i>
+                </a>
+              </li>
+            {% endif %}
 
             <li class="nav-item">
  <form method="POST"
       action="{{ url_for('logout') }}"
+      data-dart-logout
       style="display:inline; margin:0; padding:0;">
 
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -706,6 +870,9 @@ html[data-theme="light"] .athlete-footer {
 
   <!-- ========== PAGE CONTENT ========== -->
   <div class="container py-4">
+    {# The markers let the service worker strip one-time messages from the
+       copy of a page it saves for offline use. #}
+    <!--dart-flash-start-->
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, message in messages %}
         <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
@@ -714,6 +881,7 @@ html[data-theme="light"] .athlete-footer {
         </div>
       {% endfor %}
     {% endwith %}
+    <!--dart-flash-end-->
 
     {% block content %}{% endblock %}
   </div>
@@ -1056,5 +1224,116 @@ html[data-theme="light"] .athlete-footer {
     })();
   </script>
 
+  <!-- ========== PWA: MOBILE BOTTOM TAB BAR (phones/tablets only) ========== -->
+  {% set current_endpoint = request.endpoint %}
+  <nav class="dart-tabbar d-lg-none" aria-label="App navigation">
+
+    <a href="{{ url_for('index') }}"
+       class="dart-tab {% if current_endpoint == 'index' %}active{% endif %}"
+       {% if current_endpoint == 'index' %}aria-current="page"{% endif %}>
+      <i class="fa-solid fa-house" aria-hidden="true"></i>
+      <span>Home</span>
+    </a>
+
+    <a href="{{ url_for('search') }}"
+       class="dart-tab {% if current_endpoint == 'search' %}active{% endif %}"
+       {% if current_endpoint == 'search' %}aria-current="page"{% endif %}>
+      <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+      <span>Search</span>
+    </a>
+
+    {% if current_user.is_authenticated %}
+
+      {% if dashboard_nav %}
+        <a href="{{ url_for(dashboard_nav.endpoint) }}"
+           class="dart-tab {% if current_endpoint == dashboard_nav.endpoint %}active{% endif %}"
+           {% if current_endpoint == dashboard_nav.endpoint %}aria-current="page"{% endif %}>
+          <i class="{{ dashboard_nav.icon }}" aria-hidden="true"></i>
+          <span>{{ dashboard_nav.short_label }}</span>
+        </a>
+      {% endif %}
+
+      {% if current_user.role in ('Athlete', 'Coach', 'Scout') %}
+        {% set inbox_active = current_endpoint in ('inbox', 'conversation', 'new_message') %}
+        <a href="{{ url_for('inbox') }}"
+           class="dart-tab {% if inbox_active %}active{% endif %}"
+           {% if inbox_active %}aria-current="page"{% endif %}
+           aria-label="Inbox{% if unread_message_count > 0 %}, {{ unread_message_count }} unread{% endif %}">
+          <i class="fa-solid fa-envelope" aria-hidden="true"></i>
+          <span>Inbox</span>
+          {% if unread_message_count > 0 %}
+            <span class="dart-tab-badge" aria-hidden="true">{{ unread_message_count if unread_message_count < 100 else '99+' }}</span>
+          {% endif %}
+        </a>
+      {% endif %}
+
+      <a href="{{ url_for('profile') }}"
+         class="dart-tab {% if current_endpoint == 'profile' %}active{% endif %}"
+         {% if current_endpoint == 'profile' %}aria-current="page"{% endif %}>
+        <i class="fa-solid fa-circle-user" aria-hidden="true"></i>
+        <span>Profile</span>
+      </a>
+
+    {% else %}
+
+      <a href="{{ url_for('login') }}"
+         class="dart-tab {% if current_endpoint == 'login' %}active{% endif %}"
+         {% if current_endpoint == 'login' %}aria-current="page"{% endif %}>
+        <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>
+        <span>Login</span>
+      </a>
+
+    {% endif %}
+  </nav>
+
+  <!-- ========== PWA: iOS INSTALL INSTRUCTIONS ========== -->
+  <!-- iOS has no install prompt API, so users add the app from the Share menu. -->
+  <div class="modal fade" id="pwaIosInstallModal" tabindex="-1"
+       aria-labelledby="pwaIosInstallTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="pwaIosInstallTitle">
+            <i class="fa-solid fa-mobile-screen-button me-1"></i>
+            Install D.A.R.T.
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted mb-2">
+            Add D.A.R.T. to your Home Screen to open it like an app.
+          </p>
+          <ol class="pwa-ios-steps">
+            <li>
+              <span class="pwa-ios-step-icon"><i class="fa-solid fa-arrow-up-from-bracket"></i></span>
+              <span>Tap the <strong>Share</strong> button in your browser.</span>
+            </li>
+            <li>
+              <span class="pwa-ios-step-icon"><i class="fa-regular fa-square-plus"></i></span>
+              <span>Scroll down and tap <strong>Add to Home Screen</strong>.</span>
+            </li>
+            <li>
+              <span class="pwa-ios-step-icon"><i class="fa-solid fa-check"></i></span>
+              <span>Tap <strong>Add</strong>. D.A.R.T. will appear on your Home Screen.</span>
+            </li>
+          </ol>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-success" data-bs-dismiss="modal">Got it</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== D.A.R.T. PWA SERVICE WORKER ========== -->
+  <script src="{{ url_for('static', filename='js/pwa.js') }}" defer></script>
+
+  {% if current_user.is_authenticated and current_user.role == 'Athlete' %}
+  <!-- ========== PWA: OFFLINE RECORD SAVING + SYNC (athletes only) ========== -->
+  <script id="dartAthleteContext" type="application/json">
+    {{ {'user_id': current_user.id, 'can_submit_records': true if current_user.is_verified else false}|tojson }}
+  </script>
+  <script src="{{ url_for('static', filename='js/offline-records.js') }}" defer></script>
+  {% endif %}
 </body>
 </html>

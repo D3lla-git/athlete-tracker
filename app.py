@@ -1,7 +1,7 @@
 import os
-from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, send_from_directory, session, abort
+from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, send_from_directory, session, abort, make_response
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from pymongo import MongoClient
@@ -9,7 +9,9 @@ from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Su
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
+from competitions import validate_trophy, trophy_options_table, legacy_trophy_options
 from datetime import datetime
+from urllib.parse import urlsplit
 from flask_migrate import Migrate
 from supabase import create_client
 import uuid
@@ -241,7 +243,14 @@ def get_or_create_premium_profile(user_id):
 
     return premium_profile
 
-app = Flask(__name__)
+# Static files live in public/static so Vercel serves them straight from its
+# CDN (Vercel serves public/** and does not use Flask's static folder).
+# They keep the same /static/... URLs, and Flask still serves them locally.
+app = Flask(
+    __name__,
+    static_folder='public/static',
+    static_url_path='/static'
+)
 app.config.from_object(Config)
 
 # ========== DATABASE CONNECTION POOL ==========
@@ -274,6 +283,9 @@ def add_security_headers(response):
     response.headers['Permissions-Policy'] = (
         'camera=(), microphone=(), geolocation=()'
     )
+    # Force HTTPS for a year. Browsers ignore this header on plain-HTTP
+    # localhost, so it is safe during local development.
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000'
     return response
 # ========== SUPABASE STORAGE ==========
 supabase = create_client(
@@ -356,23 +368,62 @@ VALID_COMPETITIONS = {
     'Community/Area League',
     'High School',
 
-    # Additional competition categories
-        # AFCON
-    "AFCON - Lonestar Men's Team",
-
-    # WAFU
-    'WAFU - Male-U15',
-    'WAFU - Female-U15',
-    'WAFU - Male-U17',
-    'WAFU - Female-U17',
-    'WAFU - Male-U20',
-    'WAFU - Female-U20',
-    'WAFU - Male-U23',
-    'WAFU - Female-U23',
-
-    # World Cup
-    "World Cup - Lonestar Men's Team"
+    # National-team competitions. The team / age category is stored
+    # separately in SportRecord.competition_team (see COMPETITION_TEAM_OPTIONS).
+    'AFCON',
+    'WAFU',
+    'World Cup',
 }
+
+# Allowed SportRecord.competition_team values for each national-team
+# competition. Used to validate submissions and to build the edit form.
+COMPETITION_TEAM_OPTIONS = {
+    'AFCON': [
+        "Lonestar Men's Team",
+    ],
+    'WAFU': [
+        'Male-U15', 'Female-U15',
+        'Male-U17', 'Female-U17',
+        'Male-U20', 'Female-U20',
+        'Male-U23', 'Female-U23',
+    ],
+    'World Cup': [
+        "Lonestar Men's Team",
+    ],
+}
+
+# Form field that carries the choice on the new-record form, which has a
+# separate dropdown per competition. The edit form sends 'competition_team'.
+COMPETITION_TEAM_FORM_FIELDS = {
+    'AFCON': 'afcon_team',
+    'WAFU': 'wafu_category',
+    'World Cup': 'world_cup_team',
+}
+
+
+def clean_competition_team(form, competition_category):
+    """
+    Return (competition_team, error_message) for a submitted record.
+
+    National-team competitions must have a valid team/category; every
+    other competition stores None.
+    """
+    options = COMPETITION_TEAM_OPTIONS.get(competition_category)
+
+    if not options:
+        return None, None
+
+    value = (
+        form.get('competition_team')
+        or form.get(COMPETITION_TEAM_FORM_FIELDS[competition_category])
+        or ''
+    ).strip()
+
+    if value not in options:
+        label = SportRecord.COMPETITION_TEAM_LABELS[competition_category]
+        return None, f'Please select a valid {label} for {competition_category}.'
+
+    return value, None
 # ==========================================================
 # SPORT-SPECIFIC POSITIONS
 # ==========================================================
@@ -656,6 +707,8 @@ def country_flag(nationality):
 
 
 app.jinja_env.globals['country_flag'] = country_flag
+# Competition → trophy lists for the record forms (see competitions.py).
+app.jinja_env.globals['trophy_options_table'] = trophy_options_table
 
 @app.route('/')
 def index():
@@ -676,6 +729,23 @@ def suggest_names():
     ).order_by(User.full_name).limit(8).all()
 
     return jsonify([{'full_name': s.full_name} for s in students])
+
+# ==========================================================
+# PWA: SERVICE WORKER
+# ==========================================================
+# Served from the site root (not /static/) so the worker's
+# scope covers the whole app.
+@app.route('/service-worker.js')
+def service_worker():
+    response = app.send_static_file('service-worker.js')
+
+    response.headers['Content-Type'] = 'application/javascript'
+    response.headers['Service-Worker-Allowed'] = '/'
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+
+    return response
 
 # ==========================================================
 # MESSAGING RECIPIENT NAME SUGGESTIONS
@@ -725,6 +795,16 @@ def suggest_message_recipients():
         })
 
     return jsonify(results)
+
+# ==========================================================
+# PWA: OFFLINE FALLBACK PAGE
+# ==========================================================
+# Precached by the service worker and shown when a page
+# cannot be loaded because the device is offline.
+@app.route('/offline')
+def offline():
+    return render_template('offline.html')
+
 # =================premiumPro5 ROUTE=========================================
 # =================premiumPro5 ROUTE=========================================
 @app.route('/profile/premium', methods=['POST'])
@@ -2064,8 +2144,55 @@ def reset_password(token):
         token=token
     )
 
+def safe_next_url(target):
+    """
+    Return `target` only if it is a path on this site, otherwise None.
+
+    Protects the ?next= redirect after login (e.g. from an app shortcut
+    to /inbox) from being used to send users to another website.
+    """
+    if not target:
+        return None
+
+    target = target.strip()
+
+    # Must be a site-relative path. Reject protocol-relative ("//evil.com"),
+    # backslash tricks ("/\\evil.com") and header-injection characters.
+    if (
+        not target.startswith('/')
+        or target.startswith('//')
+        or '\\' in target
+        or '\r' in target
+        or '\n' in target
+    ):
+        return None
+
+    parsed = urlsplit(target)
+
+    if parsed.scheme or parsed.netloc:
+        return None
+
+    return target
+
+
+def redirect_after_login(default_endpoint):
+    """Go to the page the user originally asked for, else their dashboard."""
+    next_url = safe_next_url(session.pop('login_next', None))
+    return redirect(next_url or url_for(default_endpoint))
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # Remember where the user was going (Flask-Login adds ?next= when a
+    # logged-out user opens a protected page). The login form posts back
+    # to this same URL, so ?next= is available on POST too.
+    requested_next = safe_next_url(request.args.get('next'))
+
+    if requested_next:
+        session['login_next'] = requested_next
+    elif request.method == 'GET':
+        session.pop('login_next', None)
+
     if request.method == 'POST':
         full_name = request.form['full_name'].strip()
         password = request.form['password']
@@ -2168,12 +2295,12 @@ def login():
                 return redirect(url_for('login'))
 
             login_user(user)
-            return redirect(url_for('scout_dashboard'))
+            return redirect_after_login('scout_dashboard')
 
         # Athletes do not require 2FA.
         if user.role == 'Athlete':
             login_user(user)
-            return redirect(url_for('student_dashboard'))
+            return redirect_after_login('student_dashboard')
 
         # Safety fallback — do not allow unknown roles to authenticate
         # into another role's dashboard.
@@ -2219,6 +2346,37 @@ def inject_unread_message_count():
 
     return {
         'unread_message_count': unread_count
+    }
+
+
+# ==========================================================
+# NAVIGATION: ROLE → DASHBOARD
+# ==========================================================
+# Used by the navbar and the mobile bottom tab bar so every role
+# lands on the dashboard it is actually allowed to open.
+ROLE_DASHBOARDS = {
+    'Athlete': ('student_dashboard', 'My Records', 'Records', 'fa-solid fa-book'),
+    'Scout': ('scout_dashboard', 'Scout Dashboard', 'Scout', 'fa-solid fa-binoculars'),
+    'Coach': ('admin_dashboard', 'Dashboard', 'Dashboard', 'fa-solid fa-gauge-high'),
+    'System': ('admin_dashboard', 'Admin', 'Admin', 'fa-solid fa-user-shield'),
+}
+
+
+@app.context_processor
+def inject_dashboard_nav():
+    dashboard = None
+
+    if current_user.is_authenticated and current_user.role in ROLE_DASHBOARDS:
+        endpoint, label, short_label, icon = ROLE_DASHBOARDS[current_user.role]
+        dashboard = {
+            'endpoint': endpoint,
+            'label': label,
+            'short_label': short_label,
+            'icon': icon,
+        }
+
+    return {
+        'dashboard_nav': dashboard
     }
 # ==========================================================
 # INBOX / MESSAGING
@@ -2732,24 +2890,6 @@ def id_document(filename):
         flash('Unable to open the ID document.', 'danger')
         return redirect(url_for('admin_dashboard'))
 
-        if isinstance(result, dict):
-            signed_url = (
-                result.get('signedURL')
-                or result.get('signedUrl')
-                or result.get('signed_url')
-            )
-
-            if signed_url:
-                return redirect(signed_url)
-
-        flash('ID document could not be loaded.', 'danger')
-        return redirect(url_for('admin_dashboard'))
-
-    except Exception as e:
-        print("ID document error:", e)
-        flash('Unable to open the ID document.', 'danger')
-        return redirect(url_for('admin_dashboard'))
-
 # ========== STUDENT DASHBOARD ==========
 from datetime import datetime
 
@@ -2777,12 +2917,20 @@ def student_dashboard():
         for registration in athlete_registrations
     ]
 
-    return render_template(
+    response = make_response(render_template(
         'student_dashboard.html',
         records=records,
         current_year=current_year,
         registered_categories=registered_categories
-    )
+    ))
+
+    # PWA: let the service worker keep a copy of this page on the athlete's
+    # device so they can open the record form and save records offline.
+    # Only verified athletes can submit records, so only they opt in.
+    if current_user.is_verified:
+        response.headers['X-DART-Offline-Cacheable'] = '1'
+
+    return response
 # ==========================================================
 # SCOUT DASHBOARD
 # ==========================================================
@@ -2817,14 +2965,24 @@ def scout_dashboard():
     return render_template(
         'scout_dashboard.html'
     )
-@app.route('/submit_record', methods=['POST'])
-@login_required
-def submit_record():
-    if current_user.role != 'Athlete' or not current_user.is_verified:
-        flash('You are not allowed to submit records.', 'danger')
-        return redirect(url_for('student_dashboard'))
+class RecordSubmissionError(Exception):
+    """A submitted sports record failed validation."""
 
-    club_division = request.form.get(
+
+class DuplicateRecordError(RecordSubmissionError):
+    """The same game record was already submitted (pending or approved)."""
+
+
+def build_sport_record_from_form(form):
+    """
+    Validate a sports-record submission for the current athlete and
+    return an unsaved SportRecord.
+
+    Shared by the regular form post and the PWA offline-sync API so both
+    paths apply exactly the same rules. Raises RecordSubmissionError
+    (or DuplicateRecordError) with a user-facing message.
+    """
+    club_division = form.get(
         'club_division',
         ''
     ).strip()
@@ -2835,161 +2993,87 @@ def submit_record():
         '3rd Division'
     }
 
-    competition_category = request.form.get('competition_category', '').strip()
+    competition_category = form.get('competition_category', '').strip()
 
     if competition_category == 'Club League':
         if club_division not in VALID_CLUB_DIVISIONS:
-            flash(
-                'Please select a valid Club League Division.',
-                'danger'
-            )
-            return redirect(url_for('student_dashboard'))
+            raise RecordSubmissionError('Please select a valid Club League Division.')
     else:
         club_division = None
 
-    sport = request.form.get('sport')
-    year = request.form.get('year')
-    position = request.form.get('position', '').strip()
-    games_played = request.form.get('games_played') or 0
-    trophies = request.form.getlist('trophy')
-    man_of_the_match = request.form.get('man_of_the_match')
+    sport = form.get('sport')
+    year = form.get('year')
+    position = form.get('position', '').strip()
+    games_played = form.get('games_played') or 0
+    trophies = form.getlist('trophy')
+    man_of_the_match = form.get('man_of_the_match')
 
     try:
         games_played = int(games_played)
         man_of_the_match = int(man_of_the_match)
     except (TypeError, ValueError):
-        flash(
-            'Games Played or MOTM/QOTM(if given) must both be 1 for every game record.',
-            'danger'
-        )
-        return redirect(url_for('student_dashboard'))
+        raise RecordSubmissionError('Games Played or MOTM/QOTM(if given) must both be 1 for every game record.')
 
     if games_played != 1:
-        flash(
-            'Games Played must be exactly 1 because records are submitted game-by-game.',
-            'danger'
-        )
-        return redirect(url_for('student_dashboard'))
+        raise RecordSubmissionError('Games Played must be exactly 1 because records are submitted game-by-game.')
 
     if man_of_the_match == 2:
-        flash(
-            'MOTM/QOTM must be exactly 1 for every submitted game record.',
-            'danger'
-        )
-        return redirect(url_for('student_dashboard'))
+        raise RecordSubmissionError('MOTM/QOTM must be exactly 1 for every submitted game record.')
 
     # ============================================================
     # COMPETITION CATEGORY ↔ TROPHY VALIDATION
     # ============================================================
-    allowed_trophies = {
-        'High School': {'Classes League'},
-        'County Meet': {'County Meet'},
-        'Club League': {'Club Trophy'},
-        'University League': {'University Championship'},
-        'Community/Area League': {'Community Trophy'},
-        'AFCON': {'AFCON'},
-        'WAFU': {'WAFU'},
-        'World Cup': {'World Cup'},
-    }
+    # Rules live in competitions.py (LFA competitions for Football).
+    trophy_value, trophy_error = validate_trophy(
+        trophies,
+        sport,
+        competition_category,
+        club_division
+    )
 
-    BASKETBALL_TROPHIES = {
-    'Basketball Africa League (BAL)',
-    'FIBA Africa Zone',
-    'FIBA AfroBasket Championships'
-}
+    if trophy_error:
+        raise RecordSubmissionError(trophy_error)
 
-    if sport != 'Basketball':
-        invalid_basketball_trophies = [
-            trophy for trophy in trophies
-            if trophy in BASKETBALL_TROPHIES
-        ]
-
-        if invalid_basketball_trophies:
-            flash(
-                'BAL, FIBA Africa Zone, and FIBA AfroBasket Championships '
-                'are only available for Basketball records.',
-                'danger'
-            )
-            return redirect(url_for('student_dashboard'))
-
-    if competition_category not in allowed_trophies:
-        flash(
-            f'Invalid competition category: {competition_category}.',
-            'danger'
-        )
-        return redirect(url_for('student_dashboard'))
-
-    if not trophies:
-        flash(
-            f'Please select the trophy won for the {competition_category} competition.',
-            'danger'
-        )
-        return redirect(url_for('student_dashboard'))
-
-    invalid_trophies = [
-        trophy for trophy in trophies
-        if trophy not in allowed_trophies[competition_category]
-    ]
-
-    if invalid_trophies:
-        expected_trophy = ', '.join(
-            sorted(allowed_trophies[competition_category])
-        )
-
-        flash(
-            f'Invalid trophy for {competition_category}. '
-            f'The trophy must be: {expected_trophy}.',
-            'danger'
-        )
-        return redirect(url_for('student_dashboard'))
-
-    trophy_value = ", ".join(trophies) if trophies else None
-    team = request.form.get('team', '').strip()
-    team_played_against = request.form.get('team_played_against', '').strip()
-    match_minutes_played = request.form.get('match_minutes_played') or 0
-    clean_sheets = request.form.get('clean_sheets') or 0
-    saves = request.form.get('saves') or 0 
-    rebound_type = request.form.get('rebound_type','').strip()
-    preferred_foot = request.form.get(
+    team = form.get('team', '').strip()
+    team_played_against = form.get('team_played_against', '').strip()
+    match_minutes_played = form.get('match_minutes_played') or 0
+    clean_sheets = form.get('clean_sheets') or 0
+    saves = form.get('saves') or 0 
+    rebound_type = form.get('rebound_type','').strip()
+    preferred_foot = form.get(
             'preferred_foot',
             ''
         ).strip()
 
     if preferred_foot not in ['', 'Right', 'Left', 'Both']:
-        flash('Invalid preferred foot selection.', 'danger')
-        return redirect(url_for('student_dashboard'))
+        raise RecordSubmissionError('Invalid preferred foot selection.')
 
     current_user.preferred_foot = preferred_foot or None
 
     if not competition_category:
-        flash(
-            'Please select a competition.',
-            'danger'
-        )
-        return redirect(url_for('student_dashboard'))
+        raise RecordSubmissionError('Please select a competition.')
 
     if competition_category not in VALID_COMPETITIONS:
-        flash(
-            'Invalid competition category selected.',
-            'danger'
-        )
-        return redirect(url_for('student_dashboard'))
+        raise RecordSubmissionError('Invalid competition category selected.')
+
+    # ===== AFCON / WAFU / WORLD CUP TEAM =====
+    competition_team, competition_team_error = clean_competition_team(
+        form,
+        competition_category
+    )
+
+    if competition_team_error:
+        raise RecordSubmissionError(competition_team_error)
 
     # ===== POSITION VALIDATION =====
     if sport not in VALID_POSITIONS:
-        flash('Please select a valid sport.', 'danger')
-        return redirect(url_for('student_dashboard'))
+        raise RecordSubmissionError('Please select a valid sport.')
 
     if not position:
-        flash('Please select a position.', 'danger')
-        return redirect(url_for('student_dashboard'))
+        raise RecordSubmissionError('Please select a position.')
 
     if position not in VALID_POSITIONS[sport]:
-        flash(
-            f'Invalid position selected for {sport}.',
-            'danger'
-        )
-        return redirect(url_for('student_dashboard'))
+        raise RecordSubmissionError(f'Invalid position selected for {sport}.')
     
     # ===== CATEGORY PERMISSION CHECK =====
     current_year = datetime.now().year
@@ -3015,11 +3099,7 @@ def submit_record():
     )
 
     if not allowed_to_submit:
-        flash(
-            'You are not allowed to submit a record for this competition category.',
-            'danger'
-        )
-        return redirect(url_for('student_dashboard'))
+        raise RecordSubmissionError('You are not allowed to submit a record for this competition category.')
 
     # ===== PREVENT DUPLICATE: Same Sport + Same Year =====
     # Only block if there is already an approved or pending record
@@ -3027,14 +3107,10 @@ def submit_record():
     # GAME DATE
     # =====================================================
 
-    game_date_raw = request.form.get('game_date', '').strip()
+    game_date_raw = form.get('game_date', '').strip()
 
     if not game_date_raw:
-        flash(
-            'Please enter the date the game was played.',
-            'danger'
-        )
-        return redirect(url_for('student_dashboard'))
+        raise RecordSubmissionError('Please enter the date the game was played.')
 
     try:
         game_date = datetime.strptime(
@@ -3043,11 +3119,7 @@ def submit_record():
         ).date()
 
     except ValueError:
-        flash(
-            'Invalid game date. Please select a valid date.',
-            'danger'
-        )
-        return redirect(url_for('student_dashboard'))
+        raise RecordSubmissionError('Invalid game date. Please select a valid date.')
 
 
     # =====================================================
@@ -3057,20 +3129,12 @@ def submit_record():
     try:
         year = int(year)
     except (TypeError, ValueError):
-        flash(
-            'Invalid record year.',
-            'danger'
-        )
-        return redirect(url_for('student_dashboard'))
+        raise RecordSubmissionError('Invalid record year.')
 
     if game_date.year != year:
-        flash(
-            f'The game date belongs to {game_date.year}, '
+        raise RecordSubmissionError(f'The game date belongs to {game_date.year}, '
             f'but the selected record year is {year}. '
-            f'Please make them match.',
-            'danger'
-        )
-        return redirect(url_for('student_dashboard'))
+            f'Please make them match.')
 
 
 # =====================================================
@@ -3096,14 +3160,12 @@ def submit_record():
     ).first()
 
     if existing:
-        flash(
+        raise DuplicateRecordError(
             f'You already submitted a {existing.sport} record '
             f'for {existing.competition_category} against '
             f'{existing.team or "this team"} on '
-            f'{existing.game_date.strftime("%B %d, %Y")}.',
-            'danger'
+            f'{existing.game_date.strftime("%B %d, %Y")}.'
         )
-        return redirect(url_for('student_dashboard'))
 
     # Safe conversion helper
     def safe_int(value):
@@ -3120,32 +3182,33 @@ def submit_record():
     position=position,
     games_played=1,
     match_minutes_played=safe_int(match_minutes_played),
-    man_of_the_match=safe_int(request.form.get('man_of_the_match')),
+    man_of_the_match=safe_int(form.get('man_of_the_match')),
     trophy=trophy_value,
     team=team,
     team_played_against=team_played_against,
     competition_category=competition_category,
     club_division=club_division,
-    mvp=safe_int(request.form.get('mvp')),
+    competition_team=competition_team,
+    mvp=safe_int(form.get('mvp')),
     status='pending'
 )
 
     if sport == 'Football':
 
         record.goals = safe_int(
-            request.form.get('goals')
+            form.get('goals')
         )
 
         record.assists = safe_int(
-            request.form.get('assists')
+            form.get('assists')
         )
 
         record.yellow_cards = safe_int(
-            request.form.get('yellow_cards')
+            form.get('yellow_cards')
         )
 
         record.red_cards = safe_int(
-            request.form.get('red_cards')
+            form.get('red_cards')
         )
 
         # ======================================================
@@ -3155,11 +3218,11 @@ def submit_record():
         if position == 'GK':
 
             record.clean_sheets = safe_int(
-                request.form.get('clean_sheets')
+                form.get('clean_sheets')
             )
 
             record.saves = safe_int(
-                request.form.get('saves')
+                form.get('saves')
             )
 
         else:
@@ -3170,10 +3233,22 @@ def submit_record():
         record.rebound_type = None
 
     elif sport == 'Basketball':
-        record.points = safe_int(request.form.get('points'))
-        record.assists = safe_int(request.form.get('assists'))
-        record.blocks = safe_int(request.form.get('blocks'))
-        record.sent_off = safe_int(request.form.get('sent_off'))
+        record.points = safe_int(form.get('points'))
+
+        # The form's Football and Basketball sections used to share the
+        # name 'assists' (Football first), so Basketball assists were read
+        # from the hidden Football field. Basketball now sends
+        # 'basketball_assists'; the fallback covers records saved offline
+        # with the older form.
+        basketball_assists = form.get('basketball_assists')
+
+        if basketball_assists is None:
+            assists_values = form.getlist('assists')
+            basketball_assists = assists_values[-1] if assists_values else 0
+
+        record.assists = safe_int(basketball_assists)
+        record.blocks = safe_int(form.get('blocks'))
+        record.sent_off = safe_int(form.get('sent_off'))
         record.rebound_type = (rebound_type
         if rebound_type in [
             'Offensive rebound',
@@ -3185,19 +3260,114 @@ def submit_record():
         record.clean_sheets = 0
 
     elif sport == 'Kickball':
-        record.home_runs = safe_int(request.form.get('home_runs'))
-        record.kickball_red_cards = safe_int(request.form.get('kickball_red_cards'))
-        record.kickball_yellow_cards = safe_int(request.form.get('kickball_yellow_cards'))
-        record.cut_base = safe_int(request.form.get('cut_base'))
-        record.foul_played = safe_int(request.form.get('foul_played'))
+        record.home_runs = safe_int(form.get('home_runs'))
+        record.kickball_red_cards = safe_int(form.get('kickball_red_cards'))
+        record.kickball_yellow_cards = safe_int(form.get('kickball_yellow_cards'))
+        record.cut_base = safe_int(form.get('cut_base'))
+        record.foul_played = safe_int(form.get('foul_played'))
         record.clean_sheets = 0
         record.rebound_type = None
+
+    return record
+
+
+@app.route('/submit_record', methods=['POST'])
+@login_required
+def submit_record():
+    if current_user.role != 'Athlete' or not current_user.is_verified:
+        flash('You are not allowed to submit records.', 'danger')
+        return redirect(url_for('student_dashboard'))
+
+    try:
+        record = build_sport_record_from_form(request.form)
+    except RecordSubmissionError as error:
+        flash(str(error), 'danger')
+        return redirect(url_for('student_dashboard'))
 
     db.session.add(record)
     db.session.commit()
 
     flash('Record submitted successfully and is pending approval.', 'success')
     return redirect(url_for('student_dashboard'))
+
+# ==========================================================
+# PWA: OFFLINE RECORD SYNC API
+# ==========================================================
+# Athletes can save records on their device when they have no
+# internet/data. public/static/js/offline-records.js uploads them here once
+# they are back online. Records still go through the same validation
+# and arrive as 'pending' for coach/admin approval.
+
+def _no_store_json(payload, status=200):
+    response = jsonify(payload)
+    response.status_code = status
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@app.route('/api/records/sync-status')
+def record_sync_status():
+    """Tell the sync script who is logged in, plus a fresh CSRF token."""
+    if not current_user.is_authenticated:
+        return _no_store_json({'authenticated': False})
+
+    return _no_store_json({
+        'authenticated': True,
+        'user_id': current_user.id,
+        'can_submit_records': (
+            current_user.role == 'Athlete' and bool(current_user.is_verified)
+        ),
+        'csrf_token': generate_csrf()
+    })
+
+
+@app.route('/api/records', methods=['POST'])
+def api_submit_record():
+    """JSON version of submit_record, used for online and offline-synced records."""
+    # Not @login_required: that would redirect to the login page, and the
+    # sync script needs a clear 401 so it keeps the record queued.
+    if not current_user.is_authenticated:
+        return _no_store_json({
+            'ok': False,
+            'reason': 'login_required',
+            'error': 'Please log in to upload your saved records.'
+        }, 401)
+
+    if current_user.role != 'Athlete' or not current_user.is_verified:
+        return _no_store_json({
+            'ok': False,
+            'reason': 'not_allowed',
+            'error': 'You are not allowed to submit records.'
+        }, 403)
+
+    try:
+        record = build_sport_record_from_form(request.form)
+    except DuplicateRecordError as error:
+        return _no_store_json({
+            'ok': False,
+            'reason': 'duplicate',
+            'error': str(error)
+        }, 409)
+    except RecordSubmissionError as error:
+        return _no_store_json({
+            'ok': False,
+            'reason': 'invalid',
+            'error': str(error)
+        }, 422)
+
+    db.session.add(record)
+    db.session.commit()
+
+    if request.headers.get('X-DART-Submit-Mode') == 'online':
+        # Regular "Submit Record" click: show the usual message after
+        # the page redirects back to the dashboard.
+        flash('Record submitted successfully and is pending approval.', 'success')
+
+    return _no_store_json({
+        'ok': True,
+        'status': 'created',
+        'record_id': record.id
+    }, 201)
 
 # ========== Delete route ==========#
 @app.route('/delete_record/<int:record_id>', methods=['POST'])
@@ -3453,9 +3623,14 @@ def edit_record(record_id):
         # =====================================================
         # CATEGORY PERMISSION CHECK
         # =====================================================
-        if not athlete_can_submit_competition(
-            current_user.athlete_category,
-            competition_category
+        # Same rule as submitting a new record: any of the athlete's
+        # active registrations for this season must allow the competition.
+        if not any(
+            athlete_can_submit_competition(
+                category,
+                competition_category
+            )
+            for category in registered_categories
         ):
             flash(
                 'You are not allowed to use this competition category.',
@@ -3469,124 +3644,6 @@ def edit_record(record_id):
             )
 
         record.competition_category = competition_category
-
-        # =====================================================
-        # TROPHIES
-        # =====================================================
-
-        trophies = [
-            trophy.strip()
-            for trophy in request.form.getlist('trophy')
-            if trophy.strip()
-        ]
-
-        # Competition -> required trophy
-        allowed_trophies = {
-            'High School': {'Classes League'},
-            'County Meet': {'County Meet'},
-            'Club League': {'Club Trophy'},
-            'University League': {'University Championship'},
-            'Community/Area League': {'Community Trophy'},
-            'AFCON': {'AFCON'},
-            'WAFU': {'WAFU'},
-            'World Cup': {'World Cup'},
-        }
-
-        # Basketball-only trophies
-        basketball_trophies = {
-            'Basketball Africa League (BAL)',
-            'FIBA Africa Zone',
-            'FIBA AfroBasket Championships'
-        }
-
-        required_trophy = next(
-            iter(
-                allowed_trophies[competition_category]
-            )
-        )
-
-        # =====================================================
-        # TROPHY MUST MATCH COMPETITION
-        # =====================================================
-
-        if required_trophy not in trophies:
-            flash(
-                f'The trophy must match the selected competition. '
-                f'{competition_category} requires: {required_trophy}.',
-                'danger'
-            )
-            return redirect(
-                url_for(
-                    'edit_record',
-                    record_id=record.id
-                )
-            )
-
-        # =====================================================
-        # BASKETBALL TROPHY VALIDATION
-        # =====================================================
-
-        if record.sport != 'Basketball':
-
-            invalid_basketball_trophies = [
-                trophy
-                for trophy in trophies
-                if trophy in basketball_trophies
-            ]
-
-            if invalid_basketball_trophies:
-                flash(
-                    'BAL, FIBA Africa Zone, and FIBA AfroBasket '
-                    'Championships are only available for Basketball records.',
-                    'danger'
-                )
-                return redirect(
-                    url_for(
-                        'edit_record',
-                        record_id=record.id
-                    )
-                )
-
-        # =====================================================
-        # INVALID TROPHY CHECK
-        # =====================================================
-
-        valid_trophies_for_record = (
-            allowed_trophies[competition_category].union(
-                basketball_trophies
-                if record.sport == 'Basketball'
-                else set()
-            )
-        )
-
-        invalid_trophies = [
-            trophy
-            for trophy in trophies
-            if trophy not in valid_trophies_for_record
-        ]
-
-        if invalid_trophies:
-            flash(
-                'One or more selected trophies are not valid '
-                'for this competition.',
-                'danger'
-            )
-            return redirect(
-                url_for(
-                    'edit_record',
-                    record_id=record.id
-                )
-            )
-
-        # =====================================================
-        # SAVE TROPHIES
-        # =====================================================
-
-        record.trophy = (
-            ", ".join(trophies)
-            if trophies
-            else None
-        )
 
         # =====================================================
         # CLUB LEAGUE DIVISION
@@ -3621,6 +3678,51 @@ def edit_record(record_id):
             club_division = None
 
         record.club_division = club_division
+
+        # =====================================================
+        # AFCON / WAFU / WORLD CUP TEAM
+        # =====================================================
+
+        competition_team, competition_team_error = clean_competition_team(
+            request.form,
+            competition_category
+        )
+
+        if competition_team_error:
+            flash(competition_team_error, 'danger')
+            return redirect(
+                url_for(
+                    'edit_record',
+                    record_id=record.id
+                )
+            )
+
+        record.competition_team = competition_team
+
+        # =====================================================
+        # TROPHY
+        # =====================================================
+        # Rules live in competitions.py (LFA competitions for Football).
+        # Checked after the division because Club League trophies depend
+        # on it. An existing record may keep a retired trophy name.
+        trophy_value, trophy_error = validate_trophy(
+            request.form.getlist('trophy'),
+            record.sport,
+            competition_category,
+            club_division,
+            current_trophy=record.trophy
+        )
+
+        if trophy_error:
+            flash(trophy_error, 'danger')
+            return redirect(
+                url_for(
+                    'edit_record',
+                    record_id=record.id
+                )
+            )
+
+        record.trophy = trophy_value
 
         # =====================================================
         # MVP
@@ -3764,7 +3866,13 @@ def edit_record(record_id):
     return render_template(
         'edit_record.html',
         record=record,
-        registered_categories=registered_categories
+        registered_categories=registered_categories,
+        competition_team_options=COMPETITION_TEAM_OPTIONS,
+        competition_team_labels=SportRecord.COMPETITION_TEAM_LABELS,
+        trophy_legacy=legacy_trophy_options(
+            record.sport,
+            record.competition_category
+        )
     )
 
 @app.route('/admin')
@@ -5244,7 +5352,7 @@ def verify_2fa():
                 session.pop('2fa_user_id', None)
                 login_user(user)
 
-                return redirect(url_for('admin_dashboard'))
+                return redirect_after_login('admin_dashboard')
 
             record_failed_attempt(
                 identifier,
@@ -5295,7 +5403,7 @@ def verify_2fa():
                     'success'
                 )
 
-                return redirect(url_for('admin_dashboard'))
+                return redirect_after_login('admin_dashboard')
 
             record_failed_attempt(
                 identifier,

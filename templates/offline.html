@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="theme-color"
+        content="#212529"
+    >
+
+    <title>D.A.R.T. - Offline</title>
+
+    <link
+        rel="icon"
+        type="image/png"
+        href="{{ url_for('static', filename='images/icons/favicon-32.png') }}"
+    >
+
+    <style>
+        :root {
+            --dart-green: darkgreen;
+            --dart-dark: #121212;
+            --dart-surface: #212529;
+            --dart-text: #ffffff;
+            --dart-muted: #adb5bd;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background:
+                radial-gradient(
+                    circle at top,
+                    #17351f 0%,
+                    #121212 55%
+                );
+            color: var(--dart-text);
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+        }
+
+        .offline-container {
+            width: 100%;
+            max-width: 480px;
+            text-align: center;
+        }
+
+        .offline-card {
+            background: rgba(33, 37, 41, 0.96);
+            border: 1px solid #3a3a3a;
+            border-radius: 24px;
+            padding: 40px 28px;
+            box-shadow:
+                0 20px 50px rgba(0, 0, 0, 0.35);
+        }
+
+        .dart-logo {
+            width: 120px;
+            height: 120px;
+            object-fit: contain;
+            margin-bottom: 24px;
+        }
+
+        .offline-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            margin-bottom: 12px;
+            font-size: 2rem;
+        }
+
+        p {
+            color: var(--dart-muted);
+            line-height: 1.7;
+            margin-bottom: 24px;
+        }
+
+        .retry-button {
+            border: 2px solid var(--dart-green);
+            background: var(--dart-green);
+            color: white;
+            border-radius: 12px;
+            padding: 12px 24px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .retry-button:hover {
+            background: #000000;
+        }
+
+        .offline-records-text {
+            margin: 24px 0 14px;
+            font-size: 0.92rem;
+        }
+
+        .offline-records-button {
+            display: inline-block;
+            text-decoration: none;
+            background: transparent;
+        }
+
+        .status {
+            margin-top: 18px;
+            font-size: 0.85rem;
+            color: var(--dart-muted);
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="offline-container">
+
+    <div class="offline-card">
+
+        <img
+            src="{{ url_for('static', filename='images/dartlogo.png') }}"
+            alt="D.A.R.T. Logo"
+            class="dart-logo"
+        >
+
+        <div class="offline-icon">
+            📡
+        </div>
+
+        <h1>
+            You're Offline
+        </h1>
+
+        <p>
+            D.A.R.T. could not connect to the server.
+            Please check your internet connection and try again.
+        </p>
+
+        <button
+            type="button"
+            class="retry-button"
+            onclick="window.location.reload()"
+        >
+            Try Again
+        </button>
+
+        <!-- Shown only when the athlete dashboard is saved on this device. -->
+        <div id="offlineRecordsLink" hidden>
+            <p class="offline-records-text">
+                Athletes can still save new records. They upload for
+                approval when you're back online.
+            </p>
+            <a href="/student" class="retry-button offline-records-button">
+                Open My Records
+            </a>
+        </div>
+
+        <div class="status" id="connectionStatus" role="status">
+            This page will reload automatically when you're back online.
+        </div>
+
+        <div class="status">
+            D.A.R.T. — D3ll Athlete Records Tracker
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+    // This page is shown in place of the page the user asked for,
+    // so reloading returns them to that page once the network is back.
+    window.addEventListener('online', function () {
+        var status = document.getElementById('connectionStatus');
+
+        if (status) {
+            status.textContent = 'Back online. Reloading…';
+        }
+
+        window.location.reload();
+    });
+
+    // 'dart-pages-v1' is the service worker's offline-pages cache.
+    if ('caches' in window) {
+        caches.open('dart-pages-v1')
+            .then(function (cache) {
+                return cache.match('/student');
+            })
+            .then(function (savedPage) {
+                if (savedPage) {
+                    document.getElementById('offlineRecordsLink').hidden = false;
+                }
+            })
+            .catch(function () {});
+    }
+</script>
+
+</body>
+</html>

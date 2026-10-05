@@ -238,6 +238,29 @@
     </select>
 </div>
 
+<!-- AFCON / WAFU / World Cup team. Options are filled in by the script
+     below from the server's list for the selected competition. -->
+<div class="mb-4" id="competitionTeamOptions" style="display: none;">
+    <label class="form-label" for="competitionTeam">
+        <span id="competitionTeamLabel">Team</span>
+        <i class="fa-solid fa-flag"></i>
+    </label>
+
+    <select
+        name="competition_team"
+        id="competitionTeam"
+        class="form-select">
+    </select>
+
+    <script id="competitionTeamData" type="application/json">
+        {{ {
+            'options': competition_team_options,
+            'labels': competition_team_labels,
+            'selected': record.competition_team or ''
+        } | tojson }}
+    </script>
+</div>
+
    <div class="mb-4">
     <label class="form-label fw-bold">
         Trophy Won
@@ -245,6 +268,16 @@
         <i class="fa-solid fa-medal"></i>
         <i class="fa-solid fa-trophy" style="color: goldenrod;"></i>
     </label>
+
+    <script id="trophyOptionsData" type="application/json">
+        {{ {
+            'table': trophy_options_table(),
+            'sport': record.sport,
+            'competition': record.competition_category,
+            'trophy': record.trophy or '',
+            'legacy': trophy_legacy
+        } | tojson }}
+    </script>
 
     <div id="trophyOptions" class="row g-2">
 
@@ -533,76 +566,74 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     /*
-     * The trophy that belongs to each competition.
+     * Competition -> trophy options, from competitions.py.
+     * Keys are "sport|competition|division"; the division part is
+     * only used for Club League.
      */
-    const trophyMap = {
-        'High School': 'Classes League',
-        'County Meet': 'County Meet',
-        'Club League': 'Club Trophy',
-        'University League': 'University Championship',
-        'Community/Area League': 'Community Trophy',
-        'AFCON': 'AFCON',
-        'WAFU': 'WAFU',
-        'World Cup': 'World Cup'
-    };
+    const trophyData = JSON.parse(
+        document.getElementById('trophyOptionsData').textContent
+    );
+
+    const trophyOptionsTable = trophyData.table;
+    const recordSport = trophyData.sport;
+    const originalCompetition = trophyData.competition;
+    const originalTrophy = trophyData.trophy;
+
+    /*
+     * Retired trophy names (e.g. "Club Trophy") this record may keep
+     * while its competition is unchanged.
+     */
+    const legacyTrophies = trophyData.legacy;
+
+    let selectedTrophy = originalTrophy;
 
 
     /*
-     * Basketball-specific trophies.
+     * One radio button per trophy: a game record has exactly one.
      */
-    const basketballTrophies = [
-        'Basketball Africa League (BAL)',
-        'FIBA Africa Zone',
-        'FIBA AfroBasket Championships'
-    ];
+    function addTrophyRadio(value, index, label) {
 
-
-    /*
-     * Existing trophy value stored in the database.
-     *
-     * Example:
-     * record.trophy = "Classes League"
-     */
-    const existingTrophies =
-        "{{ record.trophy or '' }}".split(',')
-            .map(function (trophy) {
-                return trophy.trim();
-            })
-            .filter(Boolean);
-
-
-    /*
-     * Create the trophy checkbox.
-     */
-    function createTrophyCheckbox(
-        trophy,
-        index,
-        checked
-    ) {
-
-        const wrapper =
-            document.createElement('div');
-
+        const wrapper = document.createElement('div');
         wrapper.className = 'col-md-6';
 
-        wrapper.innerHTML = `
-            <div class="form-check">
-                <input
-                    class="form-check-input trophy-checkbox"
-                    type="checkbox"
-                    name="trophy"
-                    value="${trophy}"
-                    id="editTrophy${index}"
-                    ${checked ? 'checked' : ''}>
+        const check = document.createElement('div');
+        check.className = 'form-check';
 
-                <label
-                    class="form-check-label"
-                    for="editTrophy${index}">
-                    ${trophy}
-                </label>
-            </div>
-        `;
+        const input = document.createElement('input');
+        input.className = 'form-check-input';
+        input.type = 'radio';
+        input.name = 'trophy';
+        input.value = value;
+        input.id = 'editTrophy' + index;
+        input.required = true;
+        input.checked = value === selectedTrophy;
 
+        input.addEventListener('change', function () {
+            selectedTrophy = this.value;
+        });
+
+        const text = document.createElement('label');
+        text.className = 'form-check-label';
+        text.htmlFor = input.id;
+        text.textContent = label || value;
+
+        check.appendChild(input);
+        check.appendChild(text);
+        wrapper.appendChild(check);
+        trophyOptions.appendChild(wrapper);
+    }
+
+
+    function showTrophyMessage(message) {
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'col-12';
+
+        const text = document.createElement('div');
+        text.className = 'text-muted';
+        text.textContent = message;
+
+        wrapper.appendChild(text);
         trophyOptions.appendChild(wrapper);
     }
 
@@ -610,8 +641,9 @@ document.addEventListener('DOMContentLoaded', function () {
     /*
      * Update trophy choices based on:
      *
-     * 1. Competition
-     * 2. Sport
+     * 1. Sport
+     * 2. Competition
+     * 3. Club League Division (Football)
      */
     function updateTrophies() {
 
@@ -619,125 +651,57 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const competition =
-            competitionSelect.value;
+        const competition = competitionSelect.value;
 
         trophyOptions.innerHTML = '';
 
-
-        /*
-         * No competition selected.
-         */
         if (!competition) {
-
-            trophyOptions.innerHTML = `
-                <div class="col-12">
-                    <div class="text-muted">
-                        Please select a competition category first.
-                    </div>
-                </div>
-            `;
-
+            showTrophyMessage('Please select a competition category first.');
             return;
         }
 
+        const division =
+            competition === 'Club League' && clubDivision
+                ? clubDivision.value
+                : '';
 
-        /*
-         * The main trophy MUST match the competition.
-         */
-        const requiredTrophy =
-            trophyMap[competition];
-
-
-        if (requiredTrophy) {
-
-            createTrophyCheckbox(
-                requiredTrophy,
-                1,
-                existingTrophies.includes(requiredTrophy)
-            );
+        if (
+            competition === 'Club League' &&
+            recordSport === 'Football' &&
+            !division
+        ) {
+            showTrophyMessage('Please select the Club League Division first.');
+            return;
         }
 
+        const options =
+            trophyOptionsTable[
+                recordSport + '|' + competition + '|' + division
+            ] || [];
 
-        /*
-         * Basketball-only trophies.
-         *
-         * These are displayed only when the record
-         * belongs to Basketball.
-         */
-        const isBasketballSport = JSON.parse(
-            '{{ (record.sport == "Basketball") | tojson }}'
-        );
-
-        if (isBasketballSport) {
-
-            basketballTrophies.forEach(function (trophy, index) {
-
-                createTrophyCheckbox(
-                    trophy,
-                    index + 2,
-                    existingTrophies.includes(trophy)
-                );
-
-            });
-
-        }
-
-
-        /*
-         * Prevent selecting more than one trophy.
-         */
-        const checkboxes =
-            document.querySelectorAll(
-                '.trophy-checkbox'
-            );
-
-        checkboxes.forEach(function (checkbox) {
-
-            checkbox.addEventListener(
-                'change',
-                function () {
-
-                    /*
-                     * The competition trophy must remain
-                     * selected when the competition has
-                     * a mapped trophy.
-                     */
-                    if (
-                        requiredTrophy &&
-                        this.value === requiredTrophy &&
-                        !this.checked
-                    ) {
-
-                        this.checked = true;
-
-                        alert(
-                            'The trophy must match the selected competition: '
-                            + requiredTrophy
-                        );
-
-                        return;
-                    }
-
-                    /*
-                     * Only one trophy can be selected
-                     * for a game record.
-                     */
-                    if (this.checked) {
-
-                        checkboxes.forEach(function (other) {
-
-                            if (other !== checkbox) {
-                                other.checked = false;
-                            }
-
-                        });
-                    }
-
-                }
-            );
-
+        options.forEach(function (value, index) {
+            addTrophyRadio(value, index + 1);
         });
+
+        if (
+            competition === originalCompetition &&
+            legacyTrophies.includes(originalTrophy) &&
+            !options.includes(originalTrophy)
+        ) {
+            addTrophyRadio(
+                originalTrophy,
+                options.length + 1,
+                originalTrophy + ' (previous name)'
+            );
+        }
+
+        const radios =
+            trophyOptions.querySelectorAll('input[name="trophy"]');
+
+        if (radios.length === 1) {
+            radios[0].checked = true;
+            selectedTrophy = radios[0].value;
+        }
     }
 
 
@@ -777,6 +741,92 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     /*
+     * AFCON / WAFU / World Cup team.
+     */
+    const competitionTeamOptions =
+        document.getElementById('competitionTeamOptions');
+
+    const competitionTeam =
+        document.getElementById('competitionTeam');
+
+    const competitionTeamLabel =
+        document.getElementById('competitionTeamLabel');
+
+    const competitionTeamData = JSON.parse(
+        document.getElementById('competitionTeamData').textContent
+    );
+
+    const teamOptionsByCompetition = competitionTeamData.options;
+    const teamLabelsByCompetition = competitionTeamData.labels;
+    let selectedCompetitionTeam = competitionTeamData.selected;
+
+    function updateCompetitionTeam() {
+
+        if (
+            !competitionSelect ||
+            !competitionTeamOptions ||
+            !competitionTeam
+        ) {
+            return;
+        }
+
+        const options =
+            teamOptionsByCompetition[competitionSelect.value];
+
+        competitionTeam.innerHTML = '';
+
+        if (!options) {
+
+            competitionTeamOptions.style.display = 'none';
+            competitionTeam.required = false;
+
+            return;
+        }
+
+        const label =
+            teamLabelsByCompetition[competitionSelect.value];
+
+        competitionTeamLabel.textContent = label;
+
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '-- Select ' + label + ' --';
+        competitionTeam.appendChild(placeholder);
+
+        options.forEach(function (value) {
+
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            option.selected = value === selectedCompetitionTeam;
+
+            competitionTeam.appendChild(option);
+        });
+
+        competitionTeamOptions.style.display = 'block';
+        competitionTeam.required = true;
+    }
+
+    if (clubDivision) {
+
+        clubDivision.addEventListener(
+            'change',
+            updateTrophies
+        );
+    }
+
+    if (competitionTeam) {
+
+        competitionTeam.addEventListener(
+            'change',
+            function () {
+                selectedCompetitionTeam = this.value;
+            }
+        );
+    }
+
+
+    /*
      * Competition changed.
      */
     if (competitionSelect) {
@@ -787,6 +837,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 updateTrophies();
                 updateClubDivision();
+                updateCompetitionTeam();
 
             }
         );
@@ -797,6 +848,7 @@ document.addEventListener('DOMContentLoaded', function () {
          */
         updateTrophies();
         updateClubDivision();
+        updateCompetitionTeam();
     }
 
 
