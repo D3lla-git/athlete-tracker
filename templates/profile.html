@@ -273,27 +273,50 @@
 
 </div>
 
-<div class="mb-3 mt-3">
-  <label class="form-label">
-    Preferred Foot
-    <i class="fa-solid fa-shoe-prints"></i>
-  </label>
+<div class="row g-3 mt-0 mb-3">
 
-  <select name="preferred_foot" class="form-select">
-    <option value="">-- Select --</option>
-    <option value="Right"
-      {% if current_user.preferred_foot == 'Right' %}selected{% endif %}>
-      Right
-    </option>
-    <option value="Left"
-      {% if current_user.preferred_foot == 'Left' %}selected{% endif %}>
-      Left
-    </option>
-    <option value="Both"
-      {% if current_user.preferred_foot == 'Both' %}selected{% endif %}>
-      Both
-    </option>
-  </select>
+  <div class="col-md-6">
+    <label class="form-label">
+      Preferred Foot
+      <i class="fa-solid fa-shoe-prints"></i>
+    </label>
+
+    <select name="preferred_foot" class="form-select">
+      <option value="">-- Select --</option>
+      <option value="Right"
+        {% if current_user.preferred_foot == 'Right' %}selected{% endif %}>
+        Right
+      </option>
+      <option value="Left"
+        {% if current_user.preferred_foot == 'Left' %}selected{% endif %}>
+        Left
+      </option>
+      <option value="Both"
+        {% if current_user.preferred_foot == 'Both' %}selected{% endif %}>
+        Both
+      </option>
+    </select>
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label" for="profileShirtNumber">
+      Shirt # <span class="text-muted fw-normal">(optional)</span>
+      <i class="fa-solid fa-shirt"></i>
+    </label>
+    <input
+        type="text"
+        name="shirt_number"
+        id="profileShirtNumber"
+        class="form-control"
+        inputmode="numeric"
+        pattern="[0-9]{1,2}"
+        maxlength="2"
+        autocomplete="off"
+        value="{{ current_user.shirt_number or '' }}"
+        placeholder="e.g. 10"
+        title="Shirt number from 0 to 99">
+  </div>
+
 </div>
 
 {% endif %}
@@ -788,12 +811,17 @@ function toggleChangePassword() {
     </div>
   </div>
 
+{% if current_user.role == 'Athlete' %}
+  {% from '_highlights.html' import highlights_section with context %}
+  {{ highlights_section(highlights, owner=current_user, can_manage=true) }}
+{% endif %}
+
 <!-- Danger Zone -->
 <div class="card border-danger mt-5">
   <div class="card-header bg-danger text-white"><i class="fa-solid fa-triangle-exclamation"></i> Danger Zone</div>
   <div class="card-body">
     <h5 class="text-danger">Permanently Delete My Account</h5>
-    <p class="text-muted">This action permanently removes your account, sports records, registrations, profile picture, and ID document. This action cannot be undone.</p>
+    <p class="text-muted">This action permanently removes your account, sports records, registrations, highlights, profile picture, and ID document. This action cannot be undone.</p>
     <form method="POST" action="{{ url_for('delete_account') }}" onsubmit="return confirmAccountDeletion();">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="mb-3">

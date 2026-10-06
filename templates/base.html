@@ -709,6 +709,23 @@ html[data-theme="dark"] .rt-trophy {
   opacity: 0.8;
 }
 
+/* Shirt number badge, e.g. "#10". */
+.rt-shirt {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #146c43;
+  background: rgba(25, 135, 84, 0.12);
+}
+
+html[data-theme="dark"] .rt-shirt {
+  color: #4cd38a;
+  background: rgba(76, 211, 138, 0.14);
+}
+
 /* Coach / admin tables have an extra Athlete column. */
 .records-table.records-table-wide {
   min-width: 1100px;
@@ -1966,6 +1983,8 @@ html[data-theme="light"] .athlete-footer {
       });
     })();
   </script>
+
+  {% include '_celebration.html' %}
 
   <!-- ========== D.A.R.T. PWA SERVICE WORKER ========== -->
   <script src="{{ url_for('static', filename='js/pwa.js') }}" defer></script>

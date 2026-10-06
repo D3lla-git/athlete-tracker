@@ -23,6 +23,8 @@ class User(UserMixin, db.Model):
     height_cm = db.Column(db.Numeric(6, 2), nullable=True)
     weight_kg = db.Column(db.Numeric(6, 2), nullable=True)
     preferred_foot = db.Column(db.String(20), nullable=True)
+    # Current shirt number (optional, "0"-"99"; text so "00" is kept).
+    shirt_number = db.Column(db.String(2), nullable=True)
     email = db.Column(db.String(255), nullable=True, unique=True)
 
         # Password reset security fields
@@ -62,6 +64,8 @@ class SportRecord(db.Model):
     # sport, team and year.
     game_date = db.Column(db.Date, nullable=True)
     position = db.Column(db.String(50))
+    # Shirt number worn in this game (optional).
+    shirt_number = db.Column(db.String(2), nullable=True)
     games_played = db.Column(db.Integer, default=0)
     trophy = db.Column(db.String(100), nullable=True)
     team = db.Column(db.String(100), nullable=True)
@@ -186,6 +190,42 @@ class SavedSearch(db.Model):
     # Cleaned search filters, e.g. "sport=Football&gender=Male&stat=goals&stat_op=gte&stat_value=2"
     query_string = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class AthleteHighlight(db.Model):
+    """
+    A photo or short video (60 seconds max) an athlete uploaded to show
+    their live action. The file itself is in Supabase Storage, bucket
+    'athlete-highlights', at storage_path ("<user_id>/<random>.<ext>").
+    """
+    __tablename__ = 'athlete_highlight'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    user_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    media_type = db.Column(db.String(10), nullable=False)   # photo / video
+    storage_path = db.Column(db.String(255), nullable=False, unique=True)
+    content_type = db.Column(db.String(50), nullable=False)
+    size_bytes = db.Column(db.BigInteger, nullable=False)
+    duration_seconds = db.Column(db.Numeric(6, 2), nullable=True)   # videos only
+    caption = db.Column(db.String(150), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    @property
+    def is_video(self):
+        return self.media_type == 'video'
+
+    @property
+    def duration_label(self):
+        """e.g. 0:42"""
+        if self.duration_seconds is None:
+            return ''
+        seconds = int(round(float(self.duration_seconds)))
+        return f'{seconds // 60}:{seconds % 60:02d}'
 
 
 class LoginAttempt(db.Model):

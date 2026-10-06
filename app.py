@@ -6,7 +6,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.datastructures import MultiDict
 from werkzeug.security import generate_password_hash, check_password_hash
 from pymongo import MongoClient
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
@@ -25,6 +25,8 @@ from datetime import datetime, timedelta
 from urllib.parse import urlsplit, parse_qsl, urlencode
 from flask_migrate import Migrate
 from supabase import create_client
+import re
+import requests as http_requests
 import uuid
 import pycountry
 import base64
@@ -2239,6 +2241,7 @@ def register(registration_category=None):
             attach_google_signup(user)
             db.session.add(user)
             db.session.flush()
+            record_account_created(user)
 
         else: 
 
@@ -2800,6 +2803,122 @@ def link_pending_google_account(sender, user, **extra):
     db.session.commit()
 
     flash('Google sign-in is now connected to your account.', 'success')
+
+
+# ==========================================================
+# CELEBRATIONS (party poppers on first login)
+# ==========================================================
+# - New account: registration records an 'account_created' audit event.
+#   The first login after that shows the welcome celebration once.
+#   Accounts created before this feature have no such event, so existing
+#   users are not shown it.
+# - Premium: each subscription that is active is celebrated once, on the
+#   next login after it became active.
+# Celebrations already shown are recorded in the audit log, so they never
+# repeat (even on another device).
+
+def queue_celebrations(user):
+    """Work out which celebrations this login should show (at most once each)."""
+    shown = []
+
+    def already(action, target_type, target_id):
+        return AuditLog.query.filter_by(
+            actor_user_id=user.id,
+            action=action,
+            target_type=target_type,
+            target_id=str(target_id)
+        ).first() is not None
+
+    if (
+        already('account_created', 'User', user.id)
+        and not already('welcome_celebrated', 'User', user.id)
+    ):
+        create_audit_log(
+            action='welcome_celebrated',
+            actor_user_id=user.id,
+            target_type='User',
+            target_id=str(user.id)
+        )
+        shown.append('welcome')
+
+    active_subscriptions = Subscription.query.filter_by(
+        user_id=user.id,
+        status='active'
+    ).all()
+
+    for subscription in active_subscriptions:
+        if not already('premium_celebrated', 'Subscription', subscription.id):
+            create_audit_log(
+                action='premium_celebrated',
+                actor_user_id=user.id,
+                target_type='Subscription',
+                target_id=str(subscription.id)
+            )
+            if 'premium' not in shown:
+                shown.append('premium')
+
+    return shown
+
+
+@user_logged_in.connect_via(app)
+def celebrate_on_login(sender, user, **extra):
+    try:
+        celebrations = queue_celebrations(user)
+        if celebrations:
+            db.session.commit()
+            session['celebrations'] = celebrations
+    except Exception:
+        # A celebration must never stop someone from logging in.
+        db.session.rollback()
+        app.logger.exception('Could not queue login celebration')
+
+
+def pop_celebration():
+    """Used once by base.html: the celebration to show on this page, if any."""
+    celebrations = session.pop('celebrations', None) or []
+
+    if not celebrations or not current_user.is_authenticated:
+        return None
+
+    first_name = (current_user.full_name or '').split(' ')[0]
+    role_lines = {
+        'Athlete': 'Your account is ready. Start building your sports CV.',
+        'Coach': "Your coach account is ready. Manage and verify your team's records.",
+        'Scout': 'Your scout account is ready. Start discovering athletes.',
+    }
+
+    # One-time id: the page script skips it if this exact celebration was
+    # already played (e.g. the page is shown again from the offline cache).
+    token = uuid.uuid4().hex
+
+    if 'premium' in celebrations:
+        return {
+            'id': token,
+            'kind': 'premium',
+            'title': f'You\'re Premium, {first_name}!',
+            'message': 'Your premium features are now unlocked. Enjoy!',
+        }
+
+    return {
+        'id': token,
+        'kind': 'welcome',
+        'title': f'Welcome to D.A.R.T., {first_name}!',
+        'message': role_lines.get(current_user.role, 'Your account is ready.'),
+    }
+
+
+app.jinja_env.globals['pop_celebration'] = pop_celebration
+
+
+def record_account_created(user):
+    """Mark a brand-new account so its first login is celebrated."""
+    create_audit_log(
+        action='account_created',
+        actor_user_id=user.id,
+        target_type='User',
+        target_id=str(user.id),
+        details={'role': user.role}
+    )
 
 
 @app.context_processor
@@ -3402,6 +3521,393 @@ def conversation(user_id):
         messages=messages
     )
 
+# ==========================================================
+# ATHLETE HIGHLIGHTS (photos + videos up to 60 seconds)
+# ==========================================================
+# Files go straight from the athlete's browser to Supabase Storage with a
+# one-time signed upload URL (videos are too big to pass through Vercel,
+# which limits requests to 4.5 MB). Afterwards the server checks the
+# stored file itself (type, size and, for videos, the length written in
+# the MP4/MOV file) before the highlight is saved.
+#
+# Free for verified athletes for now. When Premium starts, restrict
+# uploads in can_upload_highlights() (e.g. with has_entitlement()).
+
+HIGHLIGHTS_BUCKET = 'athlete-highlights'
+
+# content type -> (media type, file extension)
+HIGHLIGHT_TYPES = {
+    'image/jpeg': ('photo', 'jpg'),
+    'image/png': ('photo', 'png'),
+    'image/webp': ('photo', 'webp'),
+    'video/mp4': ('video', 'mp4'),
+    'video/quicktime': ('video', 'mov'),
+}
+
+MB = 1024 * 1024
+HIGHLIGHT_PHOTO_MAX_BYTES = 10 * MB
+# Supabase Free plan: 50 MB per file. On a paid plan raise the bucket's
+# file_size_limit and set HIGHLIGHT_VIDEO_MAX_MB to the same value.
+HIGHLIGHT_VIDEO_MAX_BYTES = int(os.environ.get('HIGHLIGHT_VIDEO_MAX_MB', '50')) * MB
+HIGHLIGHT_VIDEO_MAX_SECONDS = 60
+# Small allowance for rounding in phone recordings (60.4 s shows as 1:00).
+HIGHLIGHT_DURATION_TOLERANCE = 0.5
+HIGHLIGHT_LIMIT = 30
+HIGHLIGHT_CAPTION_MAX = 150
+HIGHLIGHT_PENDING_SECONDS = 2 * 60 * 60
+
+
+def can_upload_highlights(user):
+    """Who may upload highlights. Premium restriction will go here later."""
+    return (
+        user.is_authenticated
+        and user.role == 'Athlete'
+        and bool(user.is_verified)
+    )
+
+
+def highlights_for(user_id):
+    return AthleteHighlight.query.filter_by(
+        user_id=user_id
+    ).order_by(
+        AthleteHighlight.created_at.desc(),
+        AthleteHighlight.id.desc()
+    ).all()
+
+
+def highlight_public_url(path):
+    result = supabase.storage.from_(HIGHLIGHTS_BUCKET).get_public_url(path)
+
+    if isinstance(result, dict):
+        result = result.get('publicUrl') or result.get('public_url')
+
+    # get_public_url can add a trailing "?" with no parameters.
+    return (result or '').rstrip('?')
+
+
+app.jinja_env.globals.update(
+    highlight_url=highlight_public_url,
+    highlight_limit=HIGHLIGHT_LIMIT,
+    highlight_photo_max_bytes=HIGHLIGHT_PHOTO_MAX_BYTES,
+    highlight_video_max_bytes=HIGHLIGHT_VIDEO_MAX_BYTES,
+    highlight_video_max_seconds=HIGHLIGHT_VIDEO_MAX_SECONDS,
+)
+
+
+def storage_object_info(path):
+    """(size in bytes, content type) of a stored highlight, or None if missing."""
+    response = http_requests.head(highlight_public_url(path), timeout=10, allow_redirects=True)
+
+    if response.status_code != 200:
+        return None
+
+    size = response.headers.get('Content-Length')
+    content_type = (response.headers.get('Content-Type') or '').split(';')[0].strip().lower()
+
+    return (int(size) if size and size.isdigit() else None), content_type
+
+
+def read_storage_range(path, start, length):
+    """Read `length` bytes from `start` of a stored highlight (HTTP Range)."""
+    response = http_requests.get(
+        highlight_public_url(path),
+        headers={'Range': f'bytes={start}-{start + length - 1}'},
+        timeout=10,
+        stream=True
+    )
+
+    try:
+        if response.status_code == 206:
+            return response.content[:length]
+
+        if response.status_code == 200:
+            # Range ignored: read only what we need from the start.
+            data = b''
+            for chunk in response.iter_content(64 * 1024):
+                data += chunk
+                if len(data) >= start + length:
+                    break
+            return data[start:start + length]
+
+        return b''
+    finally:
+        response.close()
+
+
+def parse_mp4_duration(read_at, total_size):
+    """
+    Length in seconds of an MP4 / MOV (QuickTime) file, read from its
+    'moov' → 'mvhd' header. read_at(offset, length) returns bytes.
+    Returns None if the length can't be found.
+    """
+    def boxes(start, end):
+        offset = start
+        for _ in range(200):
+            if offset + 8 > end:
+                return
+            header = read_at(offset, 16)
+            if len(header) < 8:
+                return
+            size = int.from_bytes(header[0:4], 'big')
+            box_type = header[4:8]
+            header_size = 8
+            if size == 1:
+                if len(header) < 16:
+                    return
+                size = int.from_bytes(header[8:16], 'big')
+                header_size = 16
+            elif size == 0:
+                size = end - offset
+            if size < header_size:
+                return
+            yield box_type, offset, header_size, size
+            offset += size
+
+    for box_type, offset, header_size, size in boxes(0, total_size):
+        if box_type != b'moov':
+            continue
+
+        for child_type, child_offset, child_header, child_size in boxes(
+            offset + header_size, offset + size
+        ):
+            if child_type != b'mvhd':
+                continue
+
+            body = read_at(child_offset + child_header, 32)
+            if len(body) < 20:
+                return None
+
+            if body[0] == 1:
+                timescale = int.from_bytes(body[20:24], 'big')
+                duration = int.from_bytes(body[24:32], 'big')
+            else:
+                timescale = int.from_bytes(body[12:16], 'big')
+                duration = int.from_bytes(body[16:20], 'big')
+
+            if not timescale:
+                return None
+
+            return duration / timescale
+
+        return None
+
+    return None
+
+
+def remove_highlight_file(path):
+    try:
+        supabase.storage.from_(HIGHLIGHTS_BUCKET).remove([path])
+    except Exception as e:
+        app.logger.warning('Could not remove highlight file %s: %s', path, e)
+
+
+def highlight_error(message, status=400):
+    return jsonify({'ok': False, 'error': message}), status
+
+
+@app.route('/highlights/upload-url', methods=['POST'])
+@login_required
+def highlight_upload_url():
+    """Step 1: check the file details and hand out a one-time upload URL."""
+    if not can_upload_highlights(current_user):
+        return highlight_error(
+            'Only verified athletes can upload highlights.', 403
+        )
+
+    data = request.get_json(silent=True) or {}
+    content_type = str(data.get('content_type') or '').lower()
+
+    if content_type not in HIGHLIGHT_TYPES:
+        return highlight_error(
+            'Please choose a JPG, PNG or WEBP photo, or an MP4 or MOV video.'
+        )
+
+    media_type, extension = HIGHLIGHT_TYPES[content_type]
+
+    try:
+        size = int(data.get('size') or 0)
+    except (TypeError, ValueError):
+        size = 0
+
+    max_bytes = HIGHLIGHT_VIDEO_MAX_BYTES if media_type == 'video' else HIGHLIGHT_PHOTO_MAX_BYTES
+
+    if size <= 0:
+        return highlight_error('This file looks empty.')
+
+    if size > max_bytes:
+        return highlight_error(
+            f'{media_type.title()}s can be up to {max_bytes // MB} MB. '
+            'This file is too big.'
+        )
+
+    duration = None
+    if media_type == 'video':
+        try:
+            duration = float(data.get('duration'))
+        except (TypeError, ValueError):
+            duration = None
+
+        if duration is not None and duration > HIGHLIGHT_VIDEO_MAX_SECONDS + HIGHLIGHT_DURATION_TOLERANCE:
+            return highlight_error('Videos can be 1 minute long at most. Please trim it and try again.')
+
+    if AthleteHighlight.query.filter_by(user_id=current_user.id).count() >= HIGHLIGHT_LIMIT:
+        return highlight_error(
+            f'You can keep up to {HIGHLIGHT_LIMIT} highlights. Delete one to add another.'
+        )
+
+    caption = str(data.get('caption') or '').strip()[:HIGHLIGHT_CAPTION_MAX]
+    path = f'{current_user.id}/{uuid.uuid4().hex}.{extension}'
+
+    try:
+        signed = supabase.storage.from_(HIGHLIGHTS_BUCKET).create_signed_upload_url(path)
+        upload_url = signed.get('signed_url') or signed.get('signedUrl')
+    except Exception as e:
+        app.logger.exception('Highlight upload URL error: %s', e)
+        upload_url = None
+
+    if not upload_url:
+        return highlight_error('Uploads are unavailable right now. Please try again later.', 503)
+
+    # Remember what was requested; step 2 only accepts these paths.
+    now = time.time()
+    pending = {
+        key: value
+        for key, value in (session.get('pending_highlights') or {}).items()
+        if now - value.get('at', 0) < HIGHLIGHT_PENDING_SECONDS
+    }
+    pending[path] = {
+        'content_type': content_type,
+        'caption': caption,
+        'duration': duration,
+        'at': now,
+    }
+    # Keep the session small.
+    session['pending_highlights'] = dict(list(pending.items())[-5:])
+
+    return jsonify({'ok': True, 'upload_url': upload_url, 'path': path})
+
+
+@app.route('/highlights/complete', methods=['POST'])
+@login_required
+def highlight_complete():
+    """Step 2: after the browser uploaded the file, check it and save it."""
+    if not can_upload_highlights(current_user):
+        return highlight_error('Only verified athletes can upload highlights.', 403)
+
+    data = request.get_json(silent=True) or {}
+    path = str(data.get('path') or '')
+    pending_all = session.get('pending_highlights') or {}
+    pending = pending_all.get(path)
+
+    if (
+        not pending
+        or not path.startswith(f'{current_user.id}/')
+        or time.time() - pending.get('at', 0) > HIGHLIGHT_PENDING_SECONDS
+    ):
+        return highlight_error('This upload has expired. Please choose the file again.')
+
+    pending_all.pop(path, None)
+    session['pending_highlights'] = pending_all
+
+    content_type = pending['content_type']
+    media_type, _ = HIGHLIGHT_TYPES[content_type]
+    max_bytes = HIGHLIGHT_VIDEO_MAX_BYTES if media_type == 'video' else HIGHLIGHT_PHOTO_MAX_BYTES
+
+    try:
+        info = storage_object_info(path)
+    except Exception as e:
+        app.logger.exception('Highlight check error: %s', e)
+        info = None
+
+    if not info or not info[0]:
+        return highlight_error('We could not find your upload. Please try again.')
+
+    size, stored_type = info
+
+    if stored_type and stored_type != content_type:
+        remove_highlight_file(path)
+        return highlight_error('The uploaded file type does not match. Please try again.')
+
+    if size > max_bytes:
+        remove_highlight_file(path)
+        return highlight_error(f'{media_type.title()}s can be up to {max_bytes // MB} MB.')
+
+    duration = None
+    if media_type == 'video':
+        try:
+            duration = parse_mp4_duration(
+                lambda offset, length: read_storage_range(path, offset, length),
+                size
+            )
+        except Exception as e:
+            app.logger.warning('Could not read video length for %s: %s', path, e)
+            duration = None
+
+        # Some recorders write 0 in the header (streamed files); fall back
+        # to the length the browser measured.
+        if not duration:
+            duration = pending.get('duration')
+
+        if not duration:
+            remove_highlight_file(path)
+            return highlight_error(
+                "We couldn't read this video's length. Please upload an MP4 or MOV video."
+            )
+
+        if duration > HIGHLIGHT_VIDEO_MAX_SECONDS + HIGHLIGHT_DURATION_TOLERANCE:
+            remove_highlight_file(path)
+            return highlight_error('Videos can be 1 minute long at most. Please trim it and try again.')
+
+    if AthleteHighlight.query.filter_by(user_id=current_user.id).count() >= HIGHLIGHT_LIMIT:
+        remove_highlight_file(path)
+        return highlight_error(
+            f'You can keep up to {HIGHLIGHT_LIMIT} highlights. Delete one to add another.'
+        )
+
+    highlight = AthleteHighlight(
+        user_id=current_user.id,
+        media_type=media_type,
+        storage_path=path,
+        content_type=content_type,
+        size_bytes=size,
+        duration_seconds=round(min(duration, HIGHLIGHT_VIDEO_MAX_SECONDS), 2) if duration else None,
+        caption=pending.get('caption') or None
+    )
+    db.session.add(highlight)
+    db.session.commit()
+
+    flash(
+        'Your video highlight is live! 🎬' if media_type == 'video'
+        else 'Your photo highlight is live! 📸',
+        'success'
+    )
+
+    return jsonify({'ok': True, 'id': highlight.id})
+
+
+@app.route('/highlights/<int:highlight_id>/delete', methods=['POST'])
+@login_required
+def delete_highlight(highlight_id):
+    highlight = db.session.get(AthleteHighlight, highlight_id)
+
+    # The athlete, or the Super Admin (to remove inappropriate content).
+    if not highlight or (
+        highlight.user_id != current_user.id and current_user.role != 'System'
+    ):
+        abort(404)
+
+    remove_highlight_file(highlight.storage_path)
+    db.session.delete(highlight)
+    db.session.commit()
+
+    flash('Highlight deleted.', 'success')
+
+    return redirect(
+        safe_next_url(request.form.get('next'))
+        or url_for('student_dashboard')
+    )
+
+
 # ========== SUPABASE STORAGE ROUTES ==========
 
 @app.route('/profile-picture/<path:filename>')
@@ -3508,7 +4014,8 @@ def student_dashboard():
         'student_dashboard.html',
         records=records,
         current_year=current_year,
-        registered_categories=registered_categories
+        registered_categories=registered_categories,
+        highlights=highlights_for(current_user.id)
     ))
 
     # PWA: let the service worker keep a copy of this page on the athlete's
@@ -3701,6 +4208,25 @@ class DuplicateRecordError(RecordSubmissionError):
     """The same game record was already submitted (pending or approved)."""
 
 
+SHIRT_NUMBER_PATTERN = re.compile(r'^\d{1,2}$')
+
+
+def clean_shirt_number(value):
+    """
+    Optional shirt (jersey) number: 0-99, kept as text so basketball's
+    "00" stays different from "0". Returns (number or None, error).
+    """
+    value = (value or '').strip().lstrip('#').strip()
+
+    if not value:
+        return None, None
+
+    if not SHIRT_NUMBER_PATTERN.match(value):
+        return None, 'Shirt number must be a number from 0 to 99.'
+
+    return value, None
+
+
 def build_sport_record_from_form(form):
     """
     Validate a sports-record submission for the current athlete and
@@ -3782,17 +4308,24 @@ def build_sport_record_from_form(form):
     team_played_against = form.get('team_played_against', '').strip()
     match_minutes_played = form.get('match_minutes_played') or 0
     clean_sheets = form.get('clean_sheets') or 0
-    saves = form.get('saves') or 0 
+    saves = form.get('saves') or 0
     rebound_type = form.get('rebound_type','').strip()
-    preferred_foot = form.get(
-            'preferred_foot',
-            ''
-        ).strip()
 
-    if preferred_foot not in ['', 'Right', 'Left', 'Both']:
-        raise RecordSubmissionError('Invalid preferred foot selection.')
+    # Preferred foot is only changed when the form actually sends it
+    # (the record form doesn't, so submitting a record must not wipe the
+    # value the athlete saved in My Profile).
+    if 'preferred_foot' in form:
+        preferred_foot = form.get('preferred_foot', '').strip()
 
-    current_user.preferred_foot = preferred_foot or None
+        if preferred_foot not in ['', 'Right', 'Left', 'Both']:
+            raise RecordSubmissionError('Invalid preferred foot selection.')
+
+        current_user.preferred_foot = preferred_foot or None
+
+    shirt_number, shirt_number_error = clean_shirt_number(form.get('shirt_number'))
+
+    if shirt_number_error:
+        raise RecordSubmissionError(shirt_number_error)
 
     if not competition_category:
         raise RecordSubmissionError('Please select a competition.')
@@ -3919,12 +4452,18 @@ def build_sport_record_from_form(form):
         except:
             return 0
 
+    # The latest shirt number also becomes the athlete's current number
+    # (shown with their personal info). Leaving it blank keeps the old one.
+    if shirt_number:
+        current_user.shirt_number = shirt_number
+
     record = SportRecord(
     user_id=current_user.id,
     sport=sport,
     year=year,
     game_date=game_date,
     position=position,
+    shirt_number=shirt_number,
     games_played=1,
     match_minutes_played=safe_int(match_minutes_played),
     man_of_the_match=safe_int(form.get('man_of_the_match')),
@@ -4401,6 +4940,23 @@ def edit_record(record_id):
             'team',
             ''
         ).strip()
+
+        # Optional shirt number for this game. A number entered here also
+        # becomes the athlete's current number; clearing it only clears
+        # this record.
+        shirt_number, shirt_number_error = clean_shirt_number(
+            request.form.get('shirt_number')
+        )
+
+        if shirt_number_error:
+            db.session.rollback()
+            flash(shirt_number_error, 'danger')
+            return redirect(url_for('edit_record', record_id=record.id))
+
+        record.shirt_number = shirt_number
+
+        if shirt_number:
+            current_user.shirt_number = shirt_number
 
         record.team_played_against = request.form.get(
             'team_played_against',
@@ -5271,7 +5827,8 @@ def profile():
     premium_profile=premium_profile,
     pinned_records=pinned_records,
     approved_records=approved_records,
-    recruitment_highlights=recruitment_highlights
+    recruitment_highlights=recruitment_highlights,
+    highlights=highlights_for(current_user.id) if current_user.role == 'Athlete' else []
 )
 
 #========Read-only user profile route=========
@@ -5345,7 +5902,8 @@ def user_profile(user_id):
     current_category=current_category,
     premium_profile=premium_profile,
     pinned_records=pinned_records,
-    recruitment_highlights=recruitment_highlights
+    recruitment_highlights=recruitment_highlights,
+    highlights=highlights_for(user.id) if user.role == 'Athlete' else []
 )
 # ==========================================================
 
@@ -5522,6 +6080,18 @@ def update_profile():
     current_user.preferred_foot = (
         new_preferred_foot or None
     )
+
+    # ---------- SHIRT NUMBER (athletes; optional, blank clears it) ----------
+    if current_user.role == 'Athlete' and 'shirt_number' in request.form:
+        new_shirt_number, shirt_number_error = clean_shirt_number(
+            request.form.get('shirt_number')
+        )
+
+        if shirt_number_error:
+            flash(shirt_number_error, 'danger')
+            return redirect(url_for('profile'))
+
+        current_user.shirt_number = new_shirt_number
 
     # ==========================================================
     # UPDATE ATHLETE CATEGORY
@@ -5768,6 +6338,10 @@ def delete_account():
     profile_picture_path = current_user.profile_picture
     id_document_path = current_user.id_document
     user_id = current_user.id
+    highlight_paths = [
+        h.storage_path
+        for h in AthleteHighlight.query.filter_by(user_id=user_id).all()
+    ]
 
     # Remove associated Storage objects before deleting database data.
     # If Storage reports an error, keep the account intact.
@@ -5777,6 +6351,9 @@ def delete_account():
 
         if id_document_path:
             supabase.storage.from_('id-documents').remove([id_document_path])
+
+        if highlight_paths:
+            supabase.storage.from_(HIGHLIGHTS_BUCKET).remove(highlight_paths)
 
     except Exception as e:
         print('ACCOUNT STORAGE DELETION ERROR:', e)
@@ -5796,6 +6373,10 @@ def delete_account():
         ).delete(synchronize_session=False)
 
         SavedSearch.query.filter_by(
+            user_id=user_id
+        ).delete(synchronize_session=False)
+
+        AthleteHighlight.query.filter_by(
             user_id=user_id
         ).delete(synchronize_session=False)
 
@@ -6089,6 +6670,7 @@ def register_coach(registration_category=None):
         attach_google_signup(coach)
         db.session.add(coach)
         db.session.flush()
+        record_account_created(coach)
 
         # Save the selected coach category for the current registration year.
         current_year = datetime.utcnow().year
@@ -6271,6 +6853,7 @@ def register_scout():
 
             db.session.add(scout_profile)
             db.session.add(registration)
+            record_account_created(scout)
 
             create_audit_log(
                 action='scout_registration_created',

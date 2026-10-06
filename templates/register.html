@@ -4,14 +4,17 @@
 <div class="row justify-content-center">
   <div class="col-md-6">
     <div class="card shadow">
-      <div class="card-header"><h4>
-    {{ selected_category or 'All Athlete' }} Registration
-    <i class="fa-solid fa-futbol"></i>
-    <i class="fa-solid fa-basketball-ball" style="color: orangered;"></i>
-    <i class="fa-solid fa-baseball"></i>
-</h4>
-<p>Build your Sport(s) CV with <strong><span style="color: darkgreen;">D</span>.A.R.T!</strong></p>
-</div> 
+      <div class="card-header">
+        <h4 class="reg-title">
+          <span>{{ selected_category or 'All Athlete' }} Registration</span>
+          <span class="reg-sport-icons" aria-hidden="true">
+            <i class="fa-solid fa-futbol"></i>
+            <i class="fa-solid fa-basketball-ball" style="color: orangered;"></i>
+            <i class="fa-solid fa-baseball"></i>
+          </span>
+        </h4>
+        <p class="reg-tagline">Build your Sport(s) CV with <strong><span style="color: darkgreen;">D</span>.A.R.T!</strong></p>
+      </div>
       <div class="card-body">
       <div class="mb-3">
         <div class="dropdown">
@@ -184,6 +187,33 @@
         );
         color: white;
         }
+  /* Title + the three sport icons: icons stay together as one evenly
+     spaced group, centred on the title, and wrap as a set on narrow phones. */
+  .reg-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.75rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .reg-sport-icons {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    white-space: nowrap;
+    font-size: 0.95em;
+  }
+
+  .reg-sport-icons i {
+    width: 1.1em;
+    text-align: center;
+  }
+
+  .reg-tagline {
+    margin: 0;
+  }
+
   .category-dropdown-btn {
     white-space: normal;
     overflow-wrap: break-word;

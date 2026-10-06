@@ -256,16 +256,31 @@
 
         </div>
 
-        <!-- Preferred Foot -->
-        <div class="mb-3 mt-3">
-          <label class="form-label fw-bold">
-            Preferred Foot
-            <i class="fa-solid fa-shoe-prints"></i>
-          </label>
+        <!-- Preferred Foot / Shirt Number -->
+        <div class="row g-3 mt-0 mb-3">
 
-          <div class="form-control bg-light">
-            {{ user.preferred_foot or 'Not provided' }}
+          <div class="col-md-6">
+            <label class="form-label fw-bold">
+              Preferred Foot
+              <i class="fa-solid fa-shoe-prints"></i>
+            </label>
+
+            <div class="form-control bg-light">
+              {{ user.preferred_foot or 'Not provided' }}
+            </div>
           </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-bold">
+              Shirt #
+              <i class="fa-solid fa-shirt"></i>
+            </label>
+
+            <div class="form-control bg-light">
+              {% if user.shirt_number %}#{{ user.shirt_number }}{% else %}Not provided{% endif %}
+            </div>
+          </div>
+
         </div>
 
       {% endif %}
@@ -279,6 +294,11 @@
 
   </div>
 </div>
+
+{% if user.role == 'Athlete' %}
+  {% from '_highlights.html' import highlights_section with context %}
+  {{ highlights_section(highlights, owner=user, can_manage=false) }}
+{% endif %}
 
 
 <!-- ========================================================= -->

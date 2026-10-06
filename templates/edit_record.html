@@ -182,6 +182,25 @@
 </div>
 
 <div class="mb-4">
+  <label class="form-label" for="editShirtNumber">
+    Shirt # <span class="text-muted fw-normal">(optional)</span>
+    <i class="fa-solid fa-shirt"></i>
+  </label>
+  <input
+      type="text"
+      name="shirt_number"
+      id="editShirtNumber"
+      class="form-control"
+      inputmode="numeric"
+      pattern="[0-9]{1,2}"
+      maxlength="2"
+      autocomplete="off"
+      value="{{ record.shirt_number or '' }}"
+      placeholder="e.g. 10"
+      title="Shirt number from 0 to 99">
+</div>
+
+<div class="mb-4">
   <label class="form-label">Opponet <i class="fa-solid fa-shield-halved" style="color: red;"></i></label>
   <input type="text" name="team_played_against" class="form-control" value="{{ record.team_played_against or '' }}" placeholder="e.g. St. Mary Catholic School" required>
 </div>

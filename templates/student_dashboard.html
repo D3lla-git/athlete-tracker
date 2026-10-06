@@ -425,6 +425,25 @@ document.addEventListener('DOMContentLoaded', function () {
         {{ competition_form_rules() | tojson }}
     </script>
 </div>
+
+<div class="col-md-3">
+  <label class="form-label" for="shirtNumberInput">
+    Shirt # <span class="text-muted fw-normal">(optional)</span>
+    <i class="fa-solid fa-shirt"></i>
+  </label>
+  <input
+      type="text"
+      name="shirt_number"
+      id="shirtNumberInput"
+      class="form-control"
+      inputmode="numeric"
+      pattern="[0-9]{1,2}"
+      maxlength="2"
+      autocomplete="off"
+      value="{{ current_user.shirt_number or '' }}"
+      placeholder="e.g. 10"
+      title="Shirt number from 0 to 99">
+</div>
   </div>
 
   <!-- Football Fields -->
@@ -1051,6 +1070,10 @@ document.addEventListener('DOMContentLoaded', function () {
     Your Athlete ID is still pending verification. You cannot submit records yet.
   </div>
 {% endif %}
+
+<!-- ==================== MY HIGHLIGHTS ==================== -->
+{% from '_highlights.html' import highlights_section with context %}
+{{ highlights_section(highlights, owner=current_user, can_manage=true) }}
 
 <!-- ==================== MY RECORDS TABLE ==================== -->
 <!-- ==================== MY SUBMITTED RECORDS ==================== -->

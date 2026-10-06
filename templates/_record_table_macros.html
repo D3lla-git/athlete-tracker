@@ -20,9 +20,10 @@
                 {{ r.game_date.strftime('%b %d, %Y') if r.game_date else 'No date' }}
               </div>
               <div class="rt-muted">Season {{ r.year }}</div>
-              <div class="rt-position text-nowrap" title="Position · minutes played">
+              <div class="rt-position text-nowrap" title="Position{{ ' · shirt number' if r.shirt_number }} · minutes played">
                 <i class="fa-solid fa-shirt" aria-hidden="true"></i>
                 <strong>{{ r.position or '-' }}</strong>
+                {%- if r.shirt_number %} <span class="rt-shirt">#{{ r.shirt_number }}</span>{% endif %}
                 <span class="rt-muted">· <i class="fa-regular fa-clock" aria-hidden="true"></i> {{ r.match_minutes_played or 0 }} min</span>
               </div>
             </div>

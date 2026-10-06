@@ -1,0 +1,251 @@
+{# Party poppers on first login after sign-up, or after subscribing to Premium.
+   Shown once: the server only queues it once (see queue_celebrations in app.py). #}
+{% set celebration = pop_celebration() %}
+{% if celebration %}
+<div class="dart-celebration" id="dartCelebration" data-celebration-id="{{ celebration.id }}" hidden>
+  <div class="dart-confetti-layer" aria-hidden="true"></div>
+
+  <div class="dart-celebration-card dart-celebration-{{ celebration.kind }}" role="status" aria-live="polite">
+    <div class="dart-celebration-badge" aria-hidden="true">
+      {% if celebration.kind == 'premium' %}<i class="fa-solid fa-crown"></i>{% else %}🎉{% endif %}
+    </div>
+    <h2 class="dart-celebration-title">{{ celebration.title }}</h2>
+    <p class="dart-celebration-message">{{ celebration.message }}</p>
+    <button type="button" class="btn dart-btn dart-celebration-close">
+      Let's go <i class="fa-solid fa-arrow-right ms-1"></i>
+    </button>
+    <div class="dart-celebration-timer" aria-hidden="true"><span></span></div>
+  </div>
+</div>
+
+<style>
+  .dart-celebration {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(4, 12, 7, 0.45);
+    backdrop-filter: blur(2px);
+    animation: dartCelebFade 0.3s ease-out;
+  }
+
+  .dart-celebration[hidden] { display: none; }
+  .dart-celebration.is-leaving { animation: dartCelebFadeOut 0.35s ease-in forwards; }
+
+  .dart-confetti-layer {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .dart-confetti {
+    position: absolute;
+    top: -60px;
+    will-change: transform;
+    animation: dartConfettiFall var(--fall, 4s) cubic-bezier(0.25, 0.4, 0.45, 1) var(--delay, 0s) forwards;
+  }
+
+  .dart-confetti.is-popper { font-size: var(--size, 28px); line-height: 1; }
+
+  .dart-confetti.is-paper {
+    width: var(--w, 9px);
+    height: var(--h, 15px);
+    border-radius: 2px;
+    background: var(--color, #39b972);
+  }
+
+  .dart-confetti.is-dot {
+    width: var(--w, 9px);
+    height: var(--w, 9px);
+    border-radius: 50%;
+    background: var(--color, #39b972);
+  }
+
+  @keyframes dartConfettiFall {
+    0%   { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
+    25%  { transform: translate3d(var(--sway, 30px), 28vh, 0) rotate(calc(var(--spin, 360deg) * 0.25)); }
+    50%  { transform: translate3d(calc(var(--sway, 30px) * -0.6), 56vh, 0) rotate(calc(var(--spin, 360deg) * 0.5)); }
+    85%  { opacity: 1; }
+    100% { transform: translate3d(var(--sway, 30px), 112vh, 0) rotate(var(--spin, 360deg)); opacity: 0; }
+  }
+
+  .dart-celebration-card {
+    position: relative;
+    width: min(420px, 100%);
+    padding: 32px 26px 24px;
+    border-radius: 24px;
+    text-align: center;
+    color: #ffffff;
+    background:
+      radial-gradient(circle at 85% 15%, rgba(57, 185, 114, 0.35), transparent 40%),
+      linear-gradient(145deg, #071208, #0d2413 55%, #061008);
+    border: 1px solid rgba(76, 211, 138, 0.35);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    animation: dartCelebPop 0.55s cubic-bezier(0.18, 1.25, 0.4, 1);
+  }
+
+  .dart-celebration-premium {
+    border-color: rgba(245, 197, 66, 0.55);
+    background:
+      radial-gradient(circle at 85% 15%, rgba(245, 197, 66, 0.30), transparent 40%),
+      linear-gradient(145deg, #0b1208, #1d2410 55%, #0a0f06);
+  }
+
+  .dart-celebration-badge {
+    width: 76px;
+    height: 76px;
+    margin: 0 auto 14px;
+    display: grid;
+    place-items: center;
+    font-size: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    animation: dartCelebWiggle 1.2s ease-in-out 0.4s 2;
+  }
+
+  .dart-celebration-premium .dart-celebration-badge { color: #f5c542; }
+
+  .dart-celebration-title {
+    margin: 0 0 8px;
+    font-size: 1.45rem;
+    font-weight: 800;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .dart-celebration-message {
+    margin: 0 0 20px;
+    color: #cfe9da;
+    font-size: 0.97rem;
+  }
+
+  .dart-celebration-close {
+    min-width: 150px;
+    border: 2px solid #000000 !important;
+    border-radius: 999px;
+    color: #ffffff;
+    font-weight: 700;
+  }
+
+  .dart-celebration-timer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .dart-celebration-timer span {
+    display: block;
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, #39b972, #f5c542);
+    transform-origin: left;
+    animation: dartCelebTimer var(--celebration-ms, 7000ms) linear forwards;
+  }
+
+  .dart-celebration-card:hover .dart-celebration-timer span {
+    animation-play-state: paused;
+  }
+
+  @keyframes dartCelebFade    { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes dartCelebFadeOut { to { opacity: 0; } }
+  @keyframes dartCelebPop     { 0% { transform: scale(0.6) translateY(30px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+  @keyframes dartCelebWiggle  { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-14deg) scale(1.08); } 75% { transform: rotate(12deg) scale(1.08); } }
+  @keyframes dartCelebTimer   { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+  /* Users who turn off motion get the message without falling confetti. */
+  @media (prefers-reduced-motion: reduce) {
+    .dart-confetti-layer { display: none; }
+    .dart-celebration,
+    .dart-celebration-card,
+    .dart-celebration-badge { animation: none; }
+  }
+</style>
+
+<script>
+  (function () {
+    var root = document.getElementById('dartCelebration');
+    if (!root) return;
+
+    var key = 'dart-celebrated-' + root.dataset.celebrationId;
+    try {
+      if (localStorage.getItem(key)) { root.remove(); return; }
+      localStorage.setItem(key, '1');
+    } catch (e) { /* storage blocked: still show it this once */ }
+
+    var DURATION = 7000;
+    var layer = root.querySelector('.dart-confetti-layer');
+    var card = root.querySelector('.dart-celebration-card');
+    var closeBtn = root.querySelector('.dart-celebration-close');
+    var timer = root.querySelector('.dart-celebration-timer span');
+    var lastFocus = document.activeElement;
+    var premium = card.classList.contains('dart-celebration-premium');
+    var colors = premium
+      ? ['#f5c542', '#ffd96b', '#39b972', '#ffffff', '#e8a317']
+      : ['#39b972', '#4cd38a', '#f5c542', '#ff5a36', '#3fa9f5', '#ffffff'];
+    var poppers = premium ? ['🎉', '👑', '✨', '🎊'] : ['🎉', '🎊', '🥳', '✨'];
+
+    function rand(min, max) { return min + Math.random() * (max - min); }
+
+    function burst(count, startDelay) {
+      for (var i = 0; i < count; i++) {
+        var piece = document.createElement('span');
+        var kind = Math.random();
+        piece.className = 'dart-confetti ' + (kind < 0.22 ? 'is-popper' : kind < 0.75 ? 'is-paper' : 'is-dot');
+        if (kind < 0.22) piece.textContent = poppers[Math.floor(Math.random() * poppers.length)];
+        piece.style.left = rand(0, 100) + 'vw';
+        piece.style.setProperty('--delay', (startDelay + rand(0, 1.6)).toFixed(2) + 's');
+        piece.style.setProperty('--fall', rand(3.2, 5.6).toFixed(2) + 's');
+        piece.style.setProperty('--sway', rand(-70, 70).toFixed(0) + 'px');
+        piece.style.setProperty('--spin', rand(-720, 720).toFixed(0) + 'deg');
+        piece.style.setProperty('--color', colors[Math.floor(Math.random() * colors.length)]);
+        piece.style.setProperty('--w', rand(7, 11).toFixed(0) + 'px');
+        piece.style.setProperty('--h', rand(12, 18).toFixed(0) + 'px');
+        piece.style.setProperty('--size', rand(22, 34).toFixed(0) + 'px');
+        piece.addEventListener('animationend', function () { this.remove(); });
+        layer.appendChild(piece);
+      }
+    }
+
+    var autoClose;
+    function close() {
+      if (root.classList.contains('is-leaving')) return;
+      clearTimeout(autoClose);
+      root.classList.add('is-leaving');
+      document.removeEventListener('keydown', onKey);
+      setTimeout(function () {
+        root.remove();
+        if (lastFocus && lastFocus.focus) lastFocus.focus();
+      }, 350);
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+
+    root.style.setProperty('--celebration-ms', DURATION + 'ms');
+    root.hidden = false;
+    var small = window.innerWidth < 576;
+    burst(small ? 45 : 80, 0);
+    burst(small ? 25 : 45, 1.4);   // second wave of poppers
+
+    closeBtn.focus({ preventScroll: true });
+    closeBtn.addEventListener('click', close);
+    root.addEventListener('click', function (e) { if (!card.contains(e.target)) close(); });
+    document.addEventListener('keydown', onKey);
+
+    // Auto-close, paused while the pointer is over the card.
+    var remaining = DURATION, started = Date.now();
+    function schedule() { started = Date.now(); autoClose = setTimeout(close, remaining); }
+    function pause() { clearTimeout(autoClose); remaining -= Date.now() - started; }
+    card.addEventListener('mouseenter', pause);
+    card.addEventListener('mouseleave', schedule);
+    schedule();
+  })();
+</script>
+{% endif %}
