@@ -4,78 +4,794 @@
 
 {% block content %}
 
-<div class="container py-4">
+{% macro avatar(user, size='md') %}
+  {% if user.profile_picture %}
+    <img class="sd-avatar sd-avatar-{{ size }}" src="{{ url_for('profile_picture', filename=user.profile_picture) }}" alt="">
+  {% else %}
+    <span class="sd-avatar sd-avatar-{{ size }}" aria-hidden="true">{{ (user.full_name or '?')[0] | upper }}</span>
+  {% endif %}
+{% endmacro %}
 
-    <div class="mb-4">
-        <h1 class="fw-bold">Scout Dashboard</h1>
+{% macro key_stat(r) %}
+  {%- if r.sport == 'Football' -%}
+    {{ r.goals or 0 }} goal{{ 's' if (r.goals or 0) != 1 }} · {{ r.assists or 0 }} assist{{ 's' if (r.assists or 0) != 1 }}
+  {%- elif r.sport == 'Basketball' -%}
+    {{ r.points or 0 }} pts · {{ r.total_rebounds }} reb · {{ r.assists or 0 }} ast
+  {%- else -%}
+    {{ r.home_runs or 0 }} home run{{ 's' if (r.home_runs or 0) != 1 }} · {{ r.cut_base or 0 }} cut base
+  {%- endif -%}
+{% endmacro %}
 
-        <p class="text-muted mb-0">
-            Welcome, {{ current_user.full_name }}.
-        </p>
+<style>
+  /* ==========================================================
+     SCOUT DASHBOARD — "Scouting HQ"
+  ========================================================== */
+  .sd-hero {
+    position: relative;
+    overflow: hidden;
+    padding: 28px;
+    border-radius: 24px;
+    color: #ffffff;
+    background:
+      radial-gradient(circle at 88% 20%, rgba(57, 185, 114, 0.35), transparent 32%),
+      radial-gradient(circle at 10% 110%, rgba(57, 185, 114, 0.18), transparent 40%),
+      linear-gradient(135deg, #061008, #0d2413 55%, #071208);
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Faint pitch markings in the background. */
+  .sd-hero::after {
+    content: '';
+    position: absolute;
+    right: -60px;
+    top: 50%;
+    width: 260px;
+    height: 260px;
+    border: 2px solid rgba(255, 255, 255, 0.07);
+    border-radius: 50%;
+    transform: translateY(-50%);
+    box-shadow: -130px 0 0 -128px rgba(255, 255, 255, 0.07);
+    pointer-events: none;
+  }
+
+  .sd-eyebrow {
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #8fe3b4;
+  }
+
+  .sd-hero h1 {
+    margin: 6px 0 10px;
+    font-size: clamp(1.6rem, 3vw, 2.3rem);
+    font-weight: 800;
+  }
+
+  .sd-verified {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 10px;
+    max-width: 640px;
+    padding: 10px 14px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(143, 227, 180, 0.35);
+    font-size: 0.92rem;
+  }
+
+  .sd-verified i {
+    margin-top: 3px;
+    color: #4cd38a;
+  }
+
+  .sd-quick-search {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(130px, 180px) auto;
+    gap: 8px;
+    max-width: 760px;
+    margin-top: 20px;
+  }
+
+  .sd-quick-search .form-control,
+  .sd-quick-search .form-select {
+    height: 48px;
+    border-radius: 14px;
+    border: 0;
+  }
+
+  .sd-quick-search .btn {
+    height: 48px;
+    padding: 0 22px;
+    white-space: nowrap;
+    border-color: #ffffff !important;
+  }
+
+  .sd-hero-links {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin-top: 12px;
+    font-size: 0.85rem;
+  }
+
+  .sd-hero-links a {
+    color: #b9f0d1;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .sd-hero-links a:hover {
+    color: #ffffff;
+  }
+
+  /* KPIs */
+  .sd-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin: 18px 0 22px;
+  }
+
+  .sd-kpi {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 18px;
+    background: var(--surface-bg);
+    border: 1px solid var(--surface-border);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+  }
+
+  .sd-kpi-icon {
+    flex: 0 0 46px;
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+  }
+
+  .sd-kpi-value {
+    font-size: 1.7rem;
+    font-weight: 800;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sd-kpi-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--muted-text);
+  }
+
+  .sd-tone-green .sd-kpi-icon { background: rgba(25, 135, 84, 0.14); color: #198754; }
+  .sd-tone-blue .sd-kpi-icon { background: rgba(13, 110, 253, 0.12); color: #0d6efd; }
+  .sd-tone-gold .sd-kpi-icon { background: rgba(218, 165, 32, 0.18); color: #b8860b; }
+  .sd-tone-purple .sd-kpi-icon { background: rgba(111, 66, 193, 0.14); color: #6f42c1; }
+  html[data-theme="dark"] .sd-tone-green .sd-kpi-icon { color: #4cd38a; }
+  html[data-theme="dark"] .sd-tone-blue .sd-kpi-icon { color: #6ea8fe; }
+  html[data-theme="dark"] .sd-tone-gold .sd-kpi-icon { color: #e0b84c; }
+  html[data-theme="dark"] .sd-tone-purple .sd-kpi-icon { color: #b69cf0; }
+
+  /* Panels */
+  .sd-panel {
+    margin-bottom: 18px;
+    padding: 18px;
+    border-radius: 20px;
+    background: var(--surface-bg);
+    border: 1px solid var(--surface-border);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+  }
+
+  .sd-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .sd-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 800;
+  }
+
+  .sd-panel-title i {
+    color: #198754;
+  }
+
+  .sd-panel-sub {
+    font-size: 0.78rem;
+    color: var(--muted-text);
+  }
+
+  /* Leaderboards */
+  .sd-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .sd-tabs .nav-link {
+    padding: 6px 14px;
+    border-radius: 2rem !important;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--surface-text) !important;
+    background: var(--page-bg);
+    border: 1px solid var(--surface-border);
+  }
+
+  .sd-tabs .nav-link.active {
+    color: #ffffff !important;
+    background: #198754 !important;
+    border-color: #198754;
+  }
+
+  .sd-leader {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--surface-border);
+  }
+
+  .sd-leader:last-child {
+    border-bottom: 0;
+  }
+
+  .sd-rank {
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 800;
+    background: var(--page-bg);
+    border: 1px solid var(--surface-border);
+  }
+
+  .sd-rank-1 { background: #f6c945; color: #3d2e00; border-color: #e0b023; }
+  .sd-rank-2 { background: #cfd6dc; color: #2b3035; border-color: #b6c0c8; }
+  .sd-rank-3 { background: #d8935a; color: #3a1f08; border-color: #c27b40; }
+
+  .sd-person {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .sd-person a {
+    font-weight: 700;
+    text-decoration: none;
+    color: var(--surface-text);
+  }
+
+  .sd-person a:hover {
+    color: #198754;
+  }
+
+  .sd-person .sd-sub {
+    font-size: 0.78rem;
+    color: var(--muted-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Phones: show the full line (team, opponent, date) instead of cutting it. */
+  @media (max-width: 575.98px) {
+    .sd-person .sd-sub {
+      white-space: normal;
+    }
+  }
+
+  .sd-metric {
+    flex: 0 0 auto;
+    text-align: right;
+  }
+
+  .sd-metric strong {
+    display: block;
+    font-size: 1.25rem;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sd-metric span {
+    font-size: 0.72rem;
+    color: var(--muted-text);
+  }
+
+  .sd-avatar-sm { width: 36px; height: 36px; }
+  .sd-avatar-md { width: 42px; height: 42px; }
+
+  .sd-avatar {
+    flex: 0 0 auto;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: #ffffff;
+    background: #198754;
+    object-fit: cover;
+  }
+
+  /* Recent performances */
+  .sd-feed-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--surface-border);
+  }
+
+  .sd-feed-item:last-child {
+    border-bottom: 0;
+  }
+
+  .sd-sport-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 9px;
+    border-radius: 2rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #ffffff;
+    background: #198754;
+  }
+
+  .sd-sport-badge.Basketball { background: #e8590c; }
+  .sd-sport-badge.Kickball { background: #6f42c1; }
+
+  .sd-stat-line {
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  /* Discovery tiles */
+  .sd-sport-tiles {
+    display: grid;
+    gap: 8px;
+  }
+
+  .sd-sport-tile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    text-decoration: none;
+    color: var(--surface-text);
+    background: var(--page-bg);
+    border: 1px solid var(--surface-border);
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+
+  .sd-sport-tile:hover {
+    transform: translateY(-2px);
+    border-color: #198754;
+    color: var(--surface-text);
+  }
+
+  .sd-sport-tile .sd-tile-icon {
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    background: #198754;
+  }
+
+  .sd-sport-tile.Basketball .sd-tile-icon { background: #e8590c; }
+  .sd-sport-tile.Kickball .sd-tile-icon { background: #6f42c1; }
+
+  .sd-chip-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .sd-chip-cloud a {
+    padding: 5px 12px;
+    border-radius: 2rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--surface-text);
+    background: var(--page-bg);
+    border: 1px solid var(--surface-border);
+  }
+
+  .sd-chip-cloud a:hover {
+    border-color: #198754;
+    color: #198754;
+  }
+
+  /* Saved searches */
+  .sd-saved {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--surface-border);
+  }
+
+  .sd-saved:last-child {
+    border-bottom: 0;
+  }
+
+  .sd-saved .sd-person a {
+    font-size: 0.9rem;
+  }
+
+  .sd-saved form {
+    margin: 0;
+  }
+
+  .sd-icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--surface-border);
+    background: var(--page-bg);
+    color: var(--surface-text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+
+  .sd-icon-btn:hover {
+    border-color: #198754;
+    color: #198754;
+  }
+
+  .sd-icon-btn.danger:hover {
+    border-color: #dc3545;
+    color: #dc3545;
+  }
+
+  .sd-empty {
+    padding: 18px 8px;
+    text-align: center;
+    font-size: 0.88rem;
+    color: var(--muted-text);
+  }
+
+  .sd-empty i {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 1.6rem;
+    color: #198754;
+  }
+
+  @media (max-width: 991.98px) {
+    .sd-kpis {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 575.98px) {
+    .sd-hero {
+      padding: 20px 16px;
+      border-radius: 20px;
+    }
+
+    .sd-quick-search {
+      grid-template-columns: 1fr;
+    }
+
+    .sd-kpi {
+      padding: 12px;
+      gap: 10px;
+    }
+
+    .sd-kpi-icon {
+      flex-basis: 38px;
+      width: 38px;
+      height: 38px;
+      font-size: 1rem;
+    }
+
+    .sd-kpi-value {
+      font-size: 1.35rem;
+    }
+  }
+</style>
+
+<!-- ===================== HERO ===================== -->
+<section class="sd-hero" aria-labelledby="sdWelcome">
+  <div class="sd-eyebrow"><i class="fa-solid fa-binoculars me-1"></i> Scout Dashboard</div>
+  <h1 id="sdWelcome">Welcome, {{ current_user.full_name }}.</h1>
+
+  <div class="sd-verified">
+    <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+    <span>
+      <strong>Scout account verified.</strong>
+      You can now access D.A.R.T. athlete discovery tools.
+    </span>
+  </div>
+
+  <!-- Find Athletes -->
+  <form class="sd-quick-search" method="GET" action="{{ url_for('search') }}" role="search">
+    <input type="text" name="name" class="form-control" placeholder="Search athletes by name…" aria-label="Athlete name">
+    <select name="sport" class="form-select" aria-label="Sport">
+      <option value="">All sports</option>
+      {% for s in dash.sports %}
+        <option value="{{ s.name }}">{{ s.name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn dart-btn">
+      <i class="fa-solid fa-magnifying-glass me-1"></i> Find Athletes
+    </button>
+  </form>
+
+  <div class="sd-hero-links">
+    <a href="{{ url_for('search') }}"><i class="fa-solid fa-sliders me-1"></i>Advanced filters</a>
+    <a href="{{ url_for('search', sort_by='most_recent') }}"><i class="fa-solid fa-clock-rotate-left me-1"></i>Latest records</a>
+    <a href="{{ url_for('search', sort_by='youngest') }}"><i class="fa-solid fa-seedling me-1"></i>Youngest athletes</a>
+  </div>
+</section>
+
+<!-- ===================== KPIs ===================== -->
+<div class="sd-kpis">
+  <div class="sd-kpi sd-tone-green">
+    <div class="sd-kpi-icon" aria-hidden="true"><i class="fa-solid fa-user-check"></i></div>
+    <div>
+      <div class="sd-kpi-value">{{ dash.kpis.athletes }}</div>
+      <div class="sd-kpi-label">Verified Athletes</div>
     </div>
-
-    <div class="alert alert-success">
-        <strong>Scout account verified.</strong>
-        You can now access D.A.R.T. athlete discovery tools.
+  </div>
+  <div class="sd-kpi sd-tone-blue">
+    <div class="sd-kpi-icon" aria-hidden="true"><i class="fa-solid fa-clipboard-check"></i></div>
+    <div>
+      <div class="sd-kpi-value">{{ dash.kpis.records }}</div>
+      <div class="sd-kpi-label">Approved Game Records</div>
     </div>
-
-    <div class="row g-4">
-
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-title">Find Athletes</h5>
-
-                    <p class="card-text text-muted">
-                        Search and discover registered athletes
-                        and their approved sports records.
-                    </p>
-
-                    <a href="{{ url_for('search') }}"
-                       class="btn btn-success">
-                        Search Athletes
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-title">Messages</h5>
-
-                    <p class="card-text text-muted">
-                        Communicate with athletes and coaches.
-                    </p>
-
-                    <a href="{{ url_for('inbox') }}"
-                       class="btn btn-outline-success">
-                        Open Messages
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-title">Scout Profile</h5>
-
-                    <p class="card-text text-muted">
-                        Manage your scouting organization,
-                        experience and professional information.
-                    </p>
-
-                    <a href="{{ url_for('profile') }}"
-                       class="btn btn-outline-secondary">
-                        View Profile
-                    </a>
-                </div>
-            </div>
-        </div>
-
+  </div>
+  <div class="sd-kpi sd-tone-gold">
+    <div class="sd-kpi-icon" aria-hidden="true"><i class="fa-solid fa-bolt"></i></div>
+    <div>
+      <div class="sd-kpi-value">{{ dash.kpis.new_this_week }}</div>
+      <div class="sd-kpi-label">New This Week</div>
     </div>
+  </div>
+  <div class="sd-kpi sd-tone-purple">
+    <div class="sd-kpi-icon" aria-hidden="true"><i class="fa-solid fa-bookmark"></i></div>
+    <div>
+      <div class="sd-kpi-value">{{ dash.kpis.saved_searches }}</div>
+      <div class="sd-kpi-label">Saved Searches</div>
+    </div>
+  </div>
+</div>
 
+<div class="row g-3">
+
+  <!-- ===================== MAIN COLUMN ===================== -->
+  <div class="col-lg-8">
+
+    <!-- Season leaders -->
+    <section class="sd-panel" aria-labelledby="sdLeadersTitle">
+      <div class="sd-panel-head flex-wrap">
+        <div>
+          <h2 class="sd-panel-title" id="sdLeadersTitle"><i class="fa-solid fa-ranking-star"></i> Season Leaders</h2>
+          <div class="sd-panel-sub">Approved records · {{ dash.season }} season</div>
+        </div>
+        <ul class="nav sd-tabs" role="tablist">
+          {% for board in dash.leaderboards %}
+            <li class="nav-item" role="presentation">
+              <button class="nav-link {% if loop.first %}active{% endif %}"
+                      id="leader-tab-{{ board.sport }}"
+                      data-bs-toggle="pill"
+                      data-bs-target="#leader-{{ board.sport }}"
+                      type="button"
+                      role="tab"
+                      aria-controls="leader-{{ board.sport }}"
+                      aria-selected="{{ 'true' if loop.first else 'false' }}">
+                <i class="fa-solid {{ board.icon }} me-1"></i>{{ board.sport }}
+              </button>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div class="tab-content">
+        {% for board in dash.leaderboards %}
+          <div class="tab-pane fade {% if loop.first %}show active{% endif %}"
+               id="leader-{{ board.sport }}"
+               role="tabpanel"
+               aria-labelledby="leader-tab-{{ board.sport }}">
+            {% for row in board.rows %}
+              <div class="sd-leader">
+                <span class="sd-rank sd-rank-{{ loop.index }}">{{ loop.index }}</span>
+                {{ avatar(row.athlete, 'sm') }}
+                <div class="sd-person">
+                  <a href="{{ url_for('user_profile', user_id=row.athlete.id) }}">{{ row.athlete.full_name }}</a>
+                  {% if row.athlete.nationality %}<span class="ms-1">{{ country_flag(row.athlete.nationality) }}</span>{% endif %}
+                  <div class="sd-sub">
+                    <i class="fa-solid fa-school"></i> {{ row.athlete.school }}
+                    {% if row.athlete.age %} · {{ row.athlete.age }} yrs{% endif %}
+                    · {{ row.games }} game{{ 's' if row.games != 1 }}
+                  </div>
+                </div>
+                <div class="sd-metric">
+                  <strong>{{ row.total }}</strong>
+                  <span>{{ board.label }}</span>
+                </div>
+              </div>
+            {% else %}
+              <div class="sd-empty">
+                <i class="fa-solid {{ board.icon }}"></i>
+                No approved {{ board.sport | lower }} {{ board.label | lower }} for {{ dash.season }} yet.
+              </div>
+            {% endfor %}
+
+            <div class="text-end mt-2">
+              <a href="{{ url_for('search', sport=board.sport, sort_by='highest_' ~ board.field) }}" class="small text-success text-decoration-none fw-semibold">
+                Full {{ board.sport }} ranking <i class="fa-solid fa-arrow-right"></i>
+              </a>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <!-- Recently approved performances -->
+    <section class="sd-panel" aria-labelledby="sdRecentTitle">
+      <div class="sd-panel-head">
+        <div>
+          <h2 class="sd-panel-title" id="sdRecentTitle"><i class="fa-solid fa-fire"></i> Recent Performances</h2>
+          <div class="sd-panel-sub">Newest approved game records</div>
+        </div>
+        <a href="{{ url_for('search', sort_by='most_recent') }}" class="small text-success text-decoration-none fw-semibold">View all</a>
+      </div>
+
+      {% for r in dash.recent %}
+        <div class="sd-feed-item">
+          {{ avatar(r.user, 'md') }}
+          <div class="sd-person">
+            <a href="{{ url_for('user_profile', user_id=r.user.id) }}">{{ r.user.full_name }}</a>
+            <span class="sd-sport-badge {{ r.sport }} ms-1">
+              <i class="fa-solid {{ {'Football': 'fa-futbol', 'Basketball': 'fa-basketball', 'Kickball': 'fa-baseball'}.get(r.sport, 'fa-medal') }}"></i> {{ r.sport }}
+            </span>
+            <div class="sd-stat-line">{{ key_stat(r) }}</div>
+            <div class="sd-sub">
+              {{ r.team or r.user.school }} vs {{ r.team_played_against or '-' }}
+              · {{ r.competition_display }}
+              · <i class="fa-regular fa-calendar-days"></i> {{ r.game_date.strftime('%b %d, %Y') if r.game_date else 'No date' }}
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <div class="sd-empty">
+          <i class="fa-solid fa-clipboard-list"></i>
+          No approved game records yet.
+        </div>
+      {% endfor %}
+    </section>
+  </div>
+
+  <!-- ===================== SIDE COLUMN ===================== -->
+  <div class="col-lg-4">
+
+    <!-- Saved searches -->
+    <section class="sd-panel" aria-labelledby="sdSavedTitle">
+      <div class="sd-panel-head">
+        <h2 class="sd-panel-title" id="sdSavedTitle"><i class="fa-solid fa-bookmark"></i> Saved Searches</h2>
+        <a href="{{ url_for('search') }}" class="sd-icon-btn" title="New search" aria-label="New search"><i class="fa-solid fa-plus"></i></a>
+      </div>
+
+      {% for saved in dash.saved_searches %}
+        <div class="sd-saved">
+          <div class="sd-person">
+            <a href="{{ url_for('search') }}?{{ saved.query_string }}">{{ saved.name }}</a>
+            <div class="sd-sub" title="{{ saved_search_summary(saved.query_string) }}">{{ saved_search_summary(saved.query_string) }}</div>
+          </div>
+          <a href="{{ url_for('search') }}?{{ saved.query_string }}" class="sd-icon-btn" title="Run search" aria-label="Run {{ saved.name }}">
+            <i class="fa-solid fa-play"></i>
+          </a>
+          <form method="POST" action="{{ url_for('delete_saved_search', search_id=saved.id) }}"
+                onsubmit="return confirm('Delete this saved search?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ url_for('scout_dashboard') }}">
+            <button type="submit" class="sd-icon-btn danger" title="Delete" aria-label="Delete {{ saved.name }}">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </form>
+        </div>
+      {% else %}
+        <div class="sd-empty">
+          <i class="fa-regular fa-bookmark"></i>
+          Save any athlete search with <strong>Save Search</strong> and it will appear here.
+          <div class="mt-2"><a href="{{ url_for('search') }}" class="btn btn-sm dart-btn">Start a search</a></div>
+        </div>
+      {% endfor %}
+    </section>
+
+    <!-- Discover by sport -->
+    <section class="sd-panel" aria-labelledby="sdSportsTitle">
+      <h2 class="sd-panel-title mb-3" id="sdSportsTitle"><i class="fa-solid fa-compass"></i> Discover by Sport</h2>
+      <div class="sd-sport-tiles">
+        {% for s in dash.sports %}
+          <a href="{{ url_for('search', sport=s.name) }}" class="sd-sport-tile {{ s.name }}">
+            <span class="sd-tile-icon" aria-hidden="true"><i class="fa-solid {{ s.icon }}"></i></span>
+            <span class="sd-person">
+              <strong>{{ s.name }}</strong>
+              <span class="sd-sub d-block">{{ s.athletes }} athlete{{ 's' if s.athletes != 1 }} · {{ s.records }} record{{ 's' if s.records != 1 }}</span>
+            </span>
+            <i class="fa-solid fa-chevron-right text-muted" aria-hidden="true"></i>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+
+    <!-- Browse by competition / profile -->
+    <section class="sd-panel" aria-labelledby="sdBrowseTitle">
+      <h2 class="sd-panel-title mb-3" id="sdBrowseTitle"><i class="fa-solid fa-filter"></i> Quick Filters</h2>
+      <div class="sd-panel-sub mb-2">Competition</div>
+      <div class="sd-chip-cloud mb-3">
+        {% for c in dash.competitions %}
+          <a href="{{ url_for('search', competition=c) }}">{{ c }}</a>
+        {% endfor %}
+      </div>
+      <div class="sd-panel-sub mb-2">Athletes</div>
+      <div class="sd-chip-cloud">
+        <a href="{{ url_for('search', gender='Male') }}"><i class="fa-solid fa-mars me-1"></i>Male</a>
+        <a href="{{ url_for('search', gender='Female') }}"><i class="fa-solid fa-venus me-1"></i>Female</a>
+        <a href="{{ url_for('search', age_max=17) }}">Under 18</a>
+        <a href="{{ url_for('search', motm=1) }}"><i class="fa-solid fa-medal me-1"></i>MOTM winners</a>
+        <a href="{{ url_for('search', mvp=1) }}"><i class="fa-solid fa-star me-1"></i>MVP winners</a>
+      </div>
+    </section>
+
+    <!-- Rising talent -->
+    <section class="sd-panel" aria-labelledby="sdRisingTitle">
+      <div class="sd-panel-head">
+        <div>
+          <h2 class="sd-panel-title" id="sdRisingTitle"><i class="fa-solid fa-seedling"></i> Rising Talent</h2>
+          <div class="sd-panel-sub">18 and under · by awards</div>
+        </div>
+      </div>
+      {% for row in dash.rising %}
+        <div class="sd-leader">
+          {{ avatar(row.athlete, 'sm') }}
+          <div class="sd-person">
+            <a href="{{ url_for('user_profile', user_id=row.athlete.id) }}">{{ row.athlete.full_name }}</a>
+            <div class="sd-sub">{{ row.athlete.age }} yrs · {{ row.games }} game{{ 's' if row.games != 1 }}</div>
+          </div>
+          <div class="sd-metric">
+            <strong>{{ row.awards }}</strong>
+            <span>Awards</span>
+          </div>
+        </div>
+      {% else %}
+        <div class="sd-empty">
+          <i class="fa-solid fa-seedling"></i>
+          No athletes 18 and under with approved records yet.
+        </div>
+      {% endfor %}
+    </section>
+  </div>
 </div>
 
 {% endblock %}

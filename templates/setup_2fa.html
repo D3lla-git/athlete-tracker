@@ -89,7 +89,7 @@
     </a>
 
     <a
-        href="{{ url_for('admin_dashboard') }}"
+        href="{{ url_for(dashboard_nav.endpoint) if dashboard_nav else url_for('login') }}"
         class="text-decoration-none">
         Cancel
     </a>

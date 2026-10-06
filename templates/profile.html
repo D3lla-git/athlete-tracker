@@ -376,21 +376,11 @@
         Current Password <i class="fa-solid fa-key"></i>
     </label>
 
-    <div class="input-group">
-        <input type="password"
+    <input type="password"
                class="form-control"
                id="current_password"
                name="current_password"
                required>
-
-        <button type="button"
-                class="btn btn-outline-secondary"
-                onclick="togglePasswordVisibility('current_password', 'currentPasswordIcon')"
-                title="Show password">
-            <i class="fa-solid fa-eye"
-               id="currentPasswordIcon"></i>
-        </button>
-    </div>
 </div>
 
            <div class="mb-3">
@@ -398,22 +388,12 @@
         New Password <i class="fa-solid fa-key"></i>
     </label>
 
-    <div class="input-group">
-        <input type="password"
+    <input type="password"
                class="form-control"
                id="new_password"
                name="new_password"
                minlength="8"
                required>
-
-        <button type="button"
-                class="btn btn-outline-secondary"
-                onclick="togglePasswordVisibility('new_password', 'newPasswordIcon')"
-                title="Show password">
-            <i class="fa-solid fa-eye"
-               id="newPasswordIcon"></i>
-        </button>
-    </div>
 
     <small class="text-muted">
         At least 8 characters, including uppercase,
@@ -426,22 +406,12 @@
         Confirm New Password <i class="fa-solid fa-key"></i>
     </label>
 
-    <div class="input-group">
-        <input type="password"
+    <input type="password"
                class="form-control"
                id="confirm_password"
                name="confirm_password"
                minlength="8"
                required>
-
-        <button type="button"
-                class="btn btn-outline-secondary"
-                onclick="togglePasswordVisibility('confirm_password', 'confirmPasswordIcon')"
-                title="Show password">
-            <i class="fa-solid fa-eye"
-               id="confirmPasswordIcon"></i>
-        </button>
-    </div>
 </div>
   </div>
             <button type="submit" class="btn btn-primary">
@@ -813,22 +783,6 @@ function toggleChangePassword() {
 </script>
 <!--==== Script for toggling password visibility ====-->
 <script>
-function togglePasswordVisibility(inputId, iconId) {
-    const passwordInput = document.getElementById(inputId);
-    const eyeIcon = document.getElementById(iconId);
-
-    if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-
-        eyeIcon.classList.remove('fa-eye');
-        eyeIcon.classList.add('fa-eye-slash');
-    } else {
-        passwordInput.type = 'password';
-
-        eyeIcon.classList.remove('fa-eye-slash');
-        eyeIcon.classList.add('fa-eye');
-    }
-}
 </script>
       </div>
     </div>

@@ -3,9 +3,10 @@ from flask import Flask, jsonify, render_template, request, redirect, url_for, f
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user, user_logged_in
 from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
+from werkzeug.datastructures import MultiDict
 from werkzeug.security import generate_password_hash, check_password_hash
 from pymongo import MongoClient
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
@@ -20,8 +21,8 @@ from competitions import (
     legacy_trophy_options,
     validate_trophy,
 )
-from datetime import datetime
-from urllib.parse import urlsplit
+from datetime import datetime, timedelta
+from urllib.parse import urlsplit, parse_qsl, urlencode
 from flask_migrate import Migrate
 from supabase import create_client
 import uuid
@@ -1634,7 +1635,148 @@ def search():
         stat_operators={key: symbol for key, (symbol, _) in SEARCH_STAT_OPERATORS.items()},
         max_stat_conditions=MAX_STAT_CONDITIONS,
         valid_positions={k: sorted(v) for k, v in VALID_POSITIONS.items()},
+        current_query=clean_search_query(request.query_string.decode('utf-8', 'ignore')),
+        saved_searches=saved_searches_for(current_user, 20) if current_user.is_authenticated else [],
     )
+# ==========================================================
+# SAVED SEARCHES
+# ==========================================================
+# Any logged-in user can save the current search filters and run them
+# again later (search page + scout dashboard). Later this can be limited
+# to premium users for the advanced filters.
+
+SAVED_SEARCH_LIMIT = 50
+
+# Search parameters that may be stored (everything the search form sends).
+SAVED_SEARCH_KEYS = {
+    'name', 'school', 'team_played_against', 'year', 'sport', 'sort_by',
+    'stat_op', 'stat_value',
+} | set(ADVANCED_SEARCH_FILTERS)
+
+
+def clean_search_query(query_string):
+    """Keep only known, non-empty search parameters (max 60 pairs)."""
+    pairs = [
+        (key, value.strip())
+        for key, value in parse_qsl(query_string or '', keep_blank_values=False)
+        if key in SAVED_SEARCH_KEYS and value.strip()
+    ][:60]
+
+    return urlencode(pairs)
+
+
+def saved_search_summary(query_string):
+    """Short human description, e.g. 'Football · Male · Goals ≥ 2'."""
+    args = MultiDict(parse_qsl(query_string or ''))
+    parts = []
+
+    if args.get('name'):
+        parts.append(f'"{args["name"]}"')
+
+    for key in ('sport', 'gender', 'competition', 'position', 'year',
+                'nationality', 'age_group', 'club_division', 'competition_team', 'trophy'):
+        if args.get(key):
+            parts.append(args[key])
+
+    if args.get('school'):
+        parts.append(f'Team: {args["school"]}')
+
+    age_min, age_max = args.get('age_min'), args.get('age_max')
+    if age_min and age_max:
+        parts.append(f'Age {age_min}–{age_max}')
+    elif age_min:
+        parts.append(f'Age ≥ {age_min}')
+    elif age_max:
+        parts.append(f'Age ≤ {age_max}')
+
+    stat_labels = {
+        field: label
+        for stats in SEARCH_STATS.values()
+        for field, label in stats
+    }
+
+    for field, operator, value in zip(args.getlist('stat'), args.getlist('stat_op'), args.getlist('stat_value')):
+        symbol = SEARCH_STAT_OPERATORS.get(operator, ('?',))[0]
+        parts.append(f'{stat_labels.get(field, field)} {symbol} {value}')
+
+    if args.get('stat_scope') == 'total':
+        parts.append('season totals')
+
+    if args.get('motm'):
+        parts.append('MOTM winners')
+
+    if args.get('mvp'):
+        parts.append('MVP winners')
+
+    return ' · '.join(parts) or 'All athletes'
+
+
+app.jinja_env.globals['saved_search_summary'] = saved_search_summary
+
+
+def saved_searches_for(user, limit=None):
+    query = SavedSearch.query.filter_by(user_id=user.id).order_by(SavedSearch.created_at.desc())
+    return query.limit(limit).all() if limit else query.all()
+
+
+@app.route('/search/save', methods=['POST'])
+@login_required
+def save_search():
+    query_string = clean_search_query(request.form.get('query', ''))
+    back = url_for('search') + (f'?{query_string}' if query_string else '')
+
+    if not query_string:
+        flash('Choose at least one filter before saving a search.', 'warning')
+        return redirect(back)
+
+    existing = SavedSearch.query.filter_by(
+        user_id=current_user.id,
+        query_string=query_string
+    ).first()
+
+    if existing:
+        flash(f'This search is already saved as "{existing.name}".', 'info')
+        return redirect(back)
+
+    if SavedSearch.query.filter_by(user_id=current_user.id).count() >= SAVED_SEARCH_LIMIT:
+        flash(
+            f'You can keep up to {SAVED_SEARCH_LIMIT} saved searches. '
+            'Delete one to save another.',
+            'warning'
+        )
+        return redirect(back)
+
+    name = (request.form.get('search_name') or '').strip()[:80]
+
+    if not name:
+        name = saved_search_summary(query_string)[:80]
+
+    db.session.add(SavedSearch(
+        user_id=current_user.id,
+        name=name,
+        query_string=query_string
+    ))
+    db.session.commit()
+
+    flash(f'Search saved as "{name}".', 'success')
+    return redirect(back)
+
+
+@app.route('/search/saved/<int:search_id>/delete', methods=['POST'])
+@login_required
+def delete_saved_search(search_id):
+    saved = db.session.get(SavedSearch, search_id)
+
+    if not saved or saved.user_id != current_user.id:
+        abort(404)
+
+    db.session.delete(saved)
+    db.session.commit()
+
+    flash('Saved search deleted.', 'info')
+    return redirect(safe_next_url(request.form.get('next')) or url_for('search'))
+
+
 # ========== AUTH ROUTES ==========
 @app.route('/register', methods=['GET', 'POST'])
 @app.route('/register/<registration_category>', methods=['GET', 'POST'])
@@ -2415,10 +2557,20 @@ def redirect_after_login(default_endpoint):
     return redirect(next_url or url_for(default_endpoint))
 
 
+# Roles that must use two-factor authentication (authenticator app).
+TWO_FACTOR_ROLES = ('Coach', 'System', 'Scout')
+
+
+def dashboard_endpoint_for(user):
+    """The dashboard a signed-in user lands on (see ROLE_DASHBOARDS)."""
+    return ROLE_DASHBOARDS.get(user.role, ('index',))[0]
+
+
 def continue_login(user):
     """
     Finish signing in a user whose identity is confirmed (password or
-    Google): approval checks, Coach/System 2FA and role-based redirects.
+    Google): approval checks, 2FA (Coach / System / Scout) and role-based
+    redirects.
     Shared by the password login and Google sign-in so both follow exactly
     the same rules.
     """
@@ -2433,8 +2585,17 @@ def continue_login(user):
         )
         return redirect(url_for('login'))
 
-    # Coaches/admins must complete 2FA before being logged in
-    if user.role in ('Coach', 'System'):
+    # Scouts must be verified before they can access the
+    # Scout dashboard.
+    if user.role == 'Scout' and not user.is_verified:
+        flash(
+            'Your Scout account is pending D.A.R.T. administrator verification.',
+            'warning'
+        )
+        return redirect(url_for('login'))
+
+    # Coaches, admins and scouts must complete 2FA before being logged in
+    if user.role in TWO_FACTOR_ROLES:
 
         # If 2FA has not been enabled yet, require setup first
         if not user.two_factor_enabled:
@@ -2449,24 +2610,6 @@ def continue_login(user):
         session['2fa_user_id'] = user.id
 
         return redirect(url_for('verify_2fa'))
-
-    # Students do not require 2FA
-    # ==========================================================
-    # ROLE-BASED LOGIN
-    # ==========================================================
-
-    # Scouts must be verified before they can access the
-    # Scout dashboard.
-    if user.role == 'Scout':
-        if not user.is_verified:
-            flash(
-                'Your Scout account is pending D.A.R.T. administrator verification.',
-                'warning'
-            )
-            return redirect(url_for('login'))
-
-        login_user(user)
-        return redirect_after_login('scout_dashboard')
 
     # Athletes do not require 2FA.
     if user.role == 'Athlete':
@@ -2670,7 +2813,7 @@ def inject_google_signup():
 @app.route('/auth/google')
 def google_login():
     if not GOOGLE_SIGN_IN_ENABLED:
-        flash('Google sign-in is not available yet.', 'warning')
+        flash('Google sign-in is coming soon. Please use the form for now.', 'info')
         return redirect(url_for('login'))
 
     if current_user.is_authenticated:
@@ -3379,6 +3522,146 @@ def student_dashboard():
 # SCOUT DASHBOARD
 # ==========================================================
 
+# ==========================================================
+# SCOUT DASHBOARD DATA
+# ==========================================================
+# Everything is computed live from approved records of verified athletes.
+
+SCOUT_LEADERBOARDS = (
+    # sport, stat column, label, icon
+    ('Football', 'goals', 'Goals', 'fa-futbol'),
+    ('Basketball', 'points', 'Points', 'fa-basketball'),
+    ('Kickball', 'home_runs', 'Home Runs', 'fa-baseball'),
+)
+
+SCOUT_SPORT_ICONS = {
+    'Football': 'fa-futbol',
+    'Basketball': 'fa-basketball',
+    'Kickball': 'fa-baseball',
+}
+
+
+def _approved_records_query():
+    return (
+        SportRecord.query
+        .join(User, User.id == SportRecord.user_id)
+        .filter(
+            User.role == 'Athlete',
+            User.is_verified == True,
+            SportRecord.status == 'approved'
+        )
+    )
+
+
+def scout_dashboard_data(scout):
+    approved = _approved_records_query()
+
+    # Season = latest year with approved records (else this year).
+    season = (
+        db.session.query(func.max(SportRecord.year))
+        .filter(SportRecord.status == 'approved')
+        .scalar()
+        or datetime.now().year
+    )
+
+    week_ago = datetime.utcnow() - timedelta(days=7)
+
+    kpis = {
+        'athletes': User.query.filter_by(role='Athlete', is_verified=True).count(),
+        'records': approved.count(),
+        'new_this_week': approved.filter(SportRecord.created_at >= week_ago).count(),
+        'saved_searches': SavedSearch.query.filter_by(user_id=scout.id).count(),
+    }
+
+    # Athletes and records per sport, for the discovery tiles.
+    sports = []
+
+    for sport, icon in SCOUT_SPORT_ICONS.items():
+        sport_records = approved.filter(SportRecord.sport == sport)
+        sports.append({
+            'name': sport,
+            'icon': icon,
+            'records': sport_records.count(),
+            'athletes': sport_records.with_entities(
+                func.count(func.distinct(SportRecord.user_id))
+            ).scalar() or 0,
+        })
+
+    # Season leaders per sport.
+    leaderboards = []
+
+    for sport, field, label, icon in SCOUT_LEADERBOARDS:
+        total = func.sum(func.coalesce(getattr(SportRecord, field), 0)).label('total')
+        rows = (
+            db.session.query(User, total, func.count(SportRecord.id).label('games'))
+            .join(SportRecord, SportRecord.user_id == User.id)
+            .filter(
+                User.role == 'Athlete',
+                User.is_verified == True,
+                SportRecord.status == 'approved',
+                SportRecord.sport == sport,
+                SportRecord.year == season
+            )
+            .group_by(User.id)
+            .order_by(total.desc(), func.count(SportRecord.id).asc())
+            .limit(5)
+            .all()
+        )
+        leaderboards.append({
+            'sport': sport,
+            'label': label,
+            'icon': icon,
+            'field': field,
+            'rows': [
+                {'athlete': user, 'total': int(value or 0), 'games': games}
+                for user, value, games in rows
+                if value
+            ],
+        })
+
+    # Rising talent: athletes 18 and under, ranked by awards then games.
+    awards = (
+        func.sum(func.coalesce(SportRecord.man_of_the_match, 0))
+        + func.sum(func.coalesce(SportRecord.mvp, 0))
+    ).label('awards')
+    rising = (
+        db.session.query(User, awards, func.count(SportRecord.id).label('games'))
+        .join(SportRecord, SportRecord.user_id == User.id)
+        .filter(
+            User.role == 'Athlete',
+            User.is_verified == True,
+            User.age.isnot(None),
+            User.age <= 18,
+            SportRecord.status == 'approved'
+        )
+        .group_by(User.id)
+        .order_by(awards.desc(), func.count(SportRecord.id).desc())
+        .limit(5)
+        .all()
+    )
+
+    recent = (
+        approved
+        .order_by(SportRecord.created_at.desc(), SportRecord.id.desc())
+        .limit(6)
+        .all()
+    )
+
+    return {
+        'season': season,
+        'kpis': kpis,
+        'sports': sports,
+        'leaderboards': leaderboards,
+        'rising': [
+            {'athlete': user, 'awards': int(value or 0), 'games': games}
+            for user, value, games in rising
+        ],
+        'recent': recent,
+        'saved_searches': saved_searches_for(scout),
+        'competitions': competitions_for('Football'),
+    }
+
+
 @app.route('/scout')
 @login_required
 def scout_dashboard():
@@ -3407,7 +3690,8 @@ def scout_dashboard():
         return redirect(url_for('login'))
 
     return render_template(
-        'scout_dashboard.html'
+        'scout_dashboard.html',
+        dash=scout_dashboard_data(current_user)
     )
 class RecordSubmissionError(Exception):
     """A submitted sports record failed validation."""
@@ -5511,7 +5795,11 @@ def delete_account():
             user_id=user_id
         ).delete(synchronize_session=False)
 
-        user = User.query.get(user_id)
+        SavedSearch.query.filter_by(
+            user_id=user_id
+        ).delete(synchronize_session=False)
+
+        user = db.session.get(User, user_id)
         if user:
             db.session.delete(user)
 
@@ -6027,8 +6315,8 @@ def register_scout():
 @app.route('/admin/2fa/recovery-codes', methods=['GET', 'POST'])
 @login_required
 def recovery_codes():
-    # Only admins/coaches can access recovery codes
-    if current_user.role not in ('Coach', 'System'):
+    # Only accounts that use 2FA (admins, coaches, scouts) have recovery codes
+    if current_user.role not in TWO_FACTOR_ROLES:
         flash('You are not authorized to access this page.', 'danger')
         return redirect(url_for('student_dashboard'))
 
@@ -6069,9 +6357,9 @@ def verify_2fa():
         flash('Your 2FA session has expired. Please log in again.', 'warning')
         return redirect(url_for('login'))
 
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
 
-    if not user or user.role not in ('Coach', 'System') or not user.two_factor_enabled:
+    if not user or user.role not in TWO_FACTOR_ROLES or not user.two_factor_enabled:
         session.pop('2fa_user_id', None)
         flash('Unable to verify two-factor authentication.', 'danger')
         return redirect(url_for('login'))
@@ -6117,7 +6405,7 @@ def verify_2fa():
                 session.pop('2fa_user_id', None)
                 login_user(user)
 
-                return redirect_after_login('admin_dashboard')
+                return redirect_after_login(dashboard_endpoint_for(user))
 
             record_failed_attempt(
                 identifier,
@@ -6168,7 +6456,7 @@ def verify_2fa():
                     'success'
                 )
 
-                return redirect_after_login('admin_dashboard')
+                return redirect_after_login(dashboard_endpoint_for(user))
 
             record_failed_attempt(
                 identifier,
@@ -6202,13 +6490,13 @@ def setup_2fa():
     # or an admin who has just authenticated with their password.
     setup_user_id = session.get('2fa_setup_user_id')
 
-    if current_user.is_authenticated and current_user.role in ('Coach', 'System'):
+    if current_user.is_authenticated and current_user.role in TWO_FACTOR_ROLES:
         user = current_user
 
     elif setup_user_id:
-        user = User.query.get(setup_user_id)
+        user = db.session.get(User, setup_user_id)
 
-        if not user or user.role not in ('Coach', 'System'):
+        if not user or user.role not in TWO_FACTOR_ROLES:
             session.pop('2fa_setup_user_id', None)
             flash('Unable to set up two-factor authentication.', 'danger')
             return redirect(url_for('login'))
@@ -6266,7 +6554,7 @@ def setup_2fa():
                 'success'
             )
 
-            return redirect(url_for('admin_dashboard'))
+            return redirect(url_for(dashboard_endpoint_for(user)))
 
         flash(
             'Invalid authenticator code. Please try again.',

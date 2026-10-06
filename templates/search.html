@@ -512,9 +512,162 @@
       <a href="{{ url_for('search') }}" class="btn btn-outline-secondary rounded-pill">
         <i class="fa-solid fa-rotate-left"></i> Clear Filters
       </a>
+
+      {# Save search: every logged-in user for now; can later be limited
+         to premium users for advanced filters. #}
+      {% if search_active %}
+        {% if current_user.is_authenticated %}
+          <button type="button"
+                  class="btn btn-outline-success rounded-pill"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#saveSearchPanel"
+                  aria-expanded="false"
+                  aria-controls="saveSearchPanel">
+            <i class="fa-regular fa-bookmark"></i> Save Search
+          </button>
+        {% else %}
+          <a href="{{ url_for('login', next=request.full_path) }}" class="btn btn-outline-success rounded-pill">
+            <i class="fa-regular fa-bookmark"></i> Log in to save this search
+          </a>
+        {% endif %}
+      {% endif %}
     </div>
   </div>
 </form>
+
+{% if search_active and current_user.is_authenticated %}
+  <!-- ================= SAVE THIS SEARCH ================= -->
+  <div class="collapse" id="saveSearchPanel">
+    <form method="POST" action="{{ url_for('save_search') }}" class="save-search-form mb-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="query" value="{{ current_query }}">
+      <div class="save-search-summary">
+        <i class="fa-solid fa-filter text-success"></i>
+        {{ saved_search_summary(current_query) }}
+      </div>
+      <div class="save-search-row">
+        <input type="text"
+               name="search_name"
+               class="form-control"
+               maxlength="80"
+               placeholder="Name this search, e.g. Top male strikers"
+               aria-label="Saved search name">
+        <button type="submit" class="btn dart-btn">
+          <i class="fa-solid fa-bookmark"></i> Save
+        </button>
+      </div>
+    </form>
+  </div>
+{% endif %}
+
+{% if saved_searches %}
+  <!-- ================= SAVED SEARCHES ================= -->
+  <div class="saved-searches mb-4">
+    <div class="saved-searches-title">
+      <i class="fa-solid fa-bookmark text-success"></i> Saved Searches
+    </div>
+    <div class="saved-searches-list">
+      {% for saved in saved_searches %}
+        <div class="saved-search-chip {% if saved.query_string == current_query %}active{% endif %}">
+          <a href="{{ url_for('search') }}?{{ saved.query_string }}"
+             title="{{ saved_search_summary(saved.query_string) }}">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> {{ saved.name }}
+          </a>
+          <form method="POST" action="{{ url_for('delete_saved_search', search_id=saved.id) }}"
+                onsubmit="return confirm('Delete this saved search?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <button type="submit" aria-label="Delete saved search {{ saved.name }}">
+              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endif %}
+
+<style>
+  .save-search-form,
+  .saved-searches {
+    padding: 14px 16px;
+    border: 1px solid var(--surface-border);
+    border-radius: 18px;
+    background: var(--surface-bg);
+  }
+
+  .save-search-summary {
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+    color: var(--muted-text);
+  }
+
+  .save-search-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .save-search-row .form-control {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .saved-searches-title {
+    margin-bottom: 10px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted-text);
+  }
+
+  .saved-searches-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .saved-search-chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    border: 1px solid var(--surface-border);
+    border-radius: 2rem;
+    background: var(--page-bg);
+    overflow: hidden;
+  }
+
+  .saved-search-chip.active {
+    border-color: #198754;
+    box-shadow: 0 0 0 2px rgba(25, 135, 84, 0.2);
+  }
+
+  .saved-search-chip a {
+    padding: 6px 10px 6px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--surface-text);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .saved-search-chip form {
+    margin: 0;
+  }
+
+  .saved-search-chip button {
+    border: 0;
+    background: transparent;
+    color: var(--muted-text);
+    padding: 6px 12px 6px 4px;
+  }
+
+  .saved-search-chip button:hover {
+    color: #dc3545;
+  }
+</style>
 
   <!-- ===================== RESULTS ===================== -->
   {% if search_active %}

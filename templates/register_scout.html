@@ -50,8 +50,7 @@
 
 {% include '_google_signup_notice.html' %}
 {% if not google_signup %}
-  {% with google_label = 'Sign up with Google' %}{% include '_google_button.html' %}{% endwith %}
-  {% if google_sign_in_enabled %}<div class="google-divider mb-3" role="separator"><span>or fill in the form</span></div>{% endif %}
+  {% with google_label = 'Sign up with Google', google_position = 'above' %}{% include '_google_button.html' %}{% endwith %}
 {% endif %}
                     <form
                         method="POST"

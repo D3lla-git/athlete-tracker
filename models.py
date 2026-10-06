@@ -171,6 +171,23 @@ class SportRecord(db.Model):
         return self.competition_category
 
 
+class SavedSearch(db.Model):
+    """An athlete search a user saved to run again (the search page's filters)."""
+    __tablename__ = 'saved_search'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    user_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    name = db.Column(db.String(80), nullable=False)
+    # Cleaned search filters, e.g. "sport=Football&gender=Male&stat=goals&stat_op=gte&stat_value=2"
+    query_string = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
 class LoginAttempt(db.Model):
     __tablename__ = 'login_attempt'
 

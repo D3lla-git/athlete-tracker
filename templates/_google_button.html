@@ -1,8 +1,16 @@
-{# "Continue with Google" button. Shown only when Google sign-in is
-   configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET). Set google_label
-   before including to change the text. #}
-{% if google_sign_in_enabled %}
+{# "Continue with Google" button (Google's standard white button).
+   Always visible; until GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are set,
+   clicking it shows "Google sign-in is coming soon".
+
+   Set before including:
+     google_label     button text (default "Continue with Google")
+     google_position  'above' — above a form: button, then "or fill in the form"
+                      'below' — below a form: "or", then the button (default) #}
+{% set position = google_position or 'below' %}
+
+{% if position == 'below' %}
 <div class="google-divider my-3" role="separator"><span>or</span></div>
+{% endif %}
 
 <a href="{{ url_for('google_login') }}" class="btn google-btn w-100">
   <svg class="google-btn-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
@@ -13,4 +21,7 @@
   </svg>
   <span>{{ google_label or 'Continue with Google' }}</span>
 </a>
+
+{% if position == 'above' %}
+<div class="google-divider my-3" role="separator"><span>or fill in the form</span></div>
 {% endif %}

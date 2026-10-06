@@ -14,34 +14,9 @@
           </div>
         <div class="mb-3">
   <label class="form-label">Password <i class="fa-solid fa-key"></i></label>
-  <div class="input-group">
-    <input type="password" name="password" id="password" placeholder="Example: @Xxxxx" class="form-control" required>
-    <button type="button" class="btn btn-outline-secondary" id="togglePassword">
-      <i class="fa-solid fa-eye" id="eyeIcon"></i>
-    </button>
-  </div>
+  <input type="password" name="password" id="password" placeholder="Example: @Xxxxx" class="form-control" required>
 </div>
 
-<script>
-  const togglePassword = document.getElementById('togglePassword');
-  const password = document.getElementById('password');
-  const eyeIcon = document.getElementById('eyeIcon');
-
-  togglePassword.addEventListener('click', function () {
-    // Toggle the type attribute
-    const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
-    password.setAttribute('type', type);
-
-    // Toggle the eye icon
-    if (type === 'password') {
-      eyeIcon.classList.remove('fa-eye-slash');
-      eyeIcon.classList.add('fa-eye');
-    } else {
-      eyeIcon.classList.remove('fa-eye');
-      eyeIcon.classList.add('fa-eye-slash');
-    }
-  });
-</script>
           <button type="submit" class="btn w-100 dart-btn"><strong>Login</strong></button>
           <div class="text-center mt-3">
     <a href="{{ url_for('forgot_password') }}">

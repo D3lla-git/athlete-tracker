@@ -32,8 +32,7 @@
  
 {% include '_google_signup_notice.html' %}
 {% if not google_signup %}
-  {% with google_label = 'Sign up with Google' %}{% include '_google_button.html' %}{% endwith %}
-  {% if google_sign_in_enabled %}<div class="google-divider mb-3" role="separator"><span>or fill in the form</span></div>{% endif %}
+  {% with google_label = 'Sign up with Google', google_position = 'above' %}{% include '_google_button.html' %}{% endwith %}
 {% endif %}
         <form method="POST" enctype="multipart/form-data">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -152,34 +151,9 @@
 </div>
           <div class="mb-3">
   <label class="form-label">Password <i class="fa-solid fa-key"></i></label>
-  <div class="input-group">
-    <input type="password" name="password" id="password" placeholder="Example: @Xxxxx" class="form-control" required>
-    <button type="button" class="btn btn-outline-secondary" id="togglePassword">
-      <i class="fa-solid fa-eye" id="eyeIcon"></i>
-    </button>
-  </div>
+  <input type="password" name="password" id="password" placeholder="Example: @Xxxxx" class="form-control" required>
 </div>
 
-<script>
-  const togglePassword = document.getElementById('togglePassword');
-  const password = document.getElementById('password');
-  const eyeIcon = document.getElementById('eyeIcon');
-
-  togglePassword.addEventListener('click', function () {
-    // Toggle the type attribute
-    const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
-    password.setAttribute('type', type);
-
-    // Toggle the eye icon
-    if (type === 'password') {
-      eyeIcon.classList.remove('fa-eye-slash');
-      eyeIcon.classList.add('fa-eye');
-    } else {
-      eyeIcon.classList.remove('fa-eye');
-      eyeIcon.classList.add('fa-eye-slash');
-    }
-  });
-</script>
           <div class="mb-3">
             <label>ID or Passport (PNG/JPG/PDF) <i class="fa-solid fa-id-card"></i></label>
             <input type="file" name="id_document" class="form-control" accept=".png,.jpg,.jpeg,.pdf">

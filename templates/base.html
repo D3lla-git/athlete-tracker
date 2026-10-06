@@ -343,6 +343,169 @@ html[data-theme="dark"] .record-card a {
   background: #0d6efd !important;
 }
 
+/* ===== MODERN FORMS (app-wide) ===== */
+/* Same look for every form; page styles can still override. Texts,
+   icons and placeholders are untouched — only presentation changes. */
+.form-label,
+.mb-3 > label:not(.form-check-label):not(.btn) {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--surface-text);
+}
+
+.form-label i,
+.mb-3 > label:not(.form-check-label):not(.btn) i {
+  margin-left: 3px;
+  color: #198754;
+}
+
+html[data-theme="dark"] .form-label i,
+html[data-theme="dark"] .mb-3 > label:not(.form-check-label):not(.btn) i {
+  color: #4cd38a;
+}
+
+.form-text {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: #5f6b66;
+}
+
+html[data-theme="dark"] .form-text {
+  color: #a7b3ad;
+}
+
+.form-control,
+.form-select {
+  min-height: 46px;
+  padding: 0.6rem 0.9rem;
+  border: 1.5px solid var(--input-border);
+  border-radius: 12px;
+  background-color: var(--input-bg);
+  color: var(--input-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.form-select {
+  padding-right: 2.4rem;
+}
+
+.form-control-sm,
+.form-select-sm {
+  min-height: 34px;
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+  border-radius: 10px;
+}
+
+textarea.form-control {
+  min-height: 96px;
+}
+
+.form-control:hover:not(:focus):not([readonly]):not(:disabled),
+.form-select:hover:not(:focus):not(:disabled) {
+  border-color: rgba(25, 135, 84, 0.55);
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #198754;
+  box-shadow: 0 0 0 4px rgba(25, 135, 84, 0.16);
+  background-color: var(--input-bg);
+  color: var(--input-text);
+}
+
+.form-control::placeholder {
+  color: var(--muted-text);
+  opacity: 0.85;
+}
+
+.form-control[readonly] {
+  background-color: var(--page-bg);
+}
+
+.form-control[type="file"] {
+  padding: 0.45rem 0.6rem;
+}
+
+.form-control::file-selector-button {
+  margin-right: 10px;
+  padding: 0.35rem 0.9rem;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #198754;
+  font-weight: 600;
+}
+
+.form-check-input:checked {
+  background-color: #198754;
+  border-color: #198754;
+}
+
+.form-check-input:focus {
+  border-color: #198754;
+  box-shadow: 0 0 0 4px rgba(25, 135, 84, 0.16);
+}
+
+/* Auth / form cards: softer corners and a cleaner header. */
+.card.shadow {
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid var(--surface-border);
+}
+
+.card.shadow > .card-header {
+  padding: 1.1rem 1.25rem 0.9rem;
+  border-bottom: 1px solid var(--surface-border);
+  background: transparent;
+}
+
+.card.shadow > .card-header h4 {
+  margin: 0;
+  font-weight: 800;
+}
+
+.card.shadow > .card-body {
+  padding: 1.25rem;
+}
+
+/* ===== PASSWORD SHOW / HIDE (added to every password field) ===== */
+.dart-password-field {
+  position: relative;
+}
+
+.dart-password-field > .form-control {
+  padding-right: 3rem;
+}
+
+.dart-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted-text);
+  transform: translateY(-50%);
+}
+
+.dart-password-toggle:hover {
+  color: #198754;
+  background: rgba(25, 135, 84, 0.08);
+}
+
+.dart-password-toggle:focus-visible {
+  outline: 2px solid #198754;
+  outline-offset: 1px;
+}
+
 /* ===== GOOGLE SIGN-IN BUTTON (Google's standard white button) ===== */
 .google-btn {
   display: inline-flex;
@@ -915,6 +1078,10 @@ html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item):not(.dart
   body {
     padding-bottom: calc(58px + env(safe-area-inset-bottom));
   }
+  /* Fields scrolled into view (focus, validation) stop above the tab bar. */
+  html {
+    scroll-padding-bottom: calc(74px + env(safe-area-inset-bottom));
+  }
 }
 
 .pwa-ios-steps {
@@ -1211,7 +1378,7 @@ html[data-theme="light"] .athlete-footer {
                 <a class="nav-link" href="{{ url_for(dashboard_nav.endpoint) }}" style="color: white;">{{ dashboard_nav.label }} <i class="{{ dashboard_nav.icon }}"></i></a>
               </li>
             {% endif %}
-            {% if current_user.role in ('Coach', 'System') %}
+            {% if current_user.role in ('Coach', 'System', 'Scout') %}
               <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('setup_2fa') }}" style="color: white;">
                   2FA Security <i class="fa-solid fa-shield-halved"></i>
@@ -1742,6 +1909,43 @@ html[data-theme="light"] .athlete-footer {
 
       setNavHeight();
       window.addEventListener('resize', setNavHeight);
+
+      // Show / hide button on the right of every password field
+      // (passwords, coach secret code, ...).
+      function addPasswordToggles() {
+        document.querySelectorAll('input[type="password"]:not([data-dart-password])').forEach(function (input) {
+          input.setAttribute('data-dart-password', '');
+
+          var wrapper = document.createElement('div');
+          wrapper.className = 'dart-password-field';
+          input.parentNode.insertBefore(wrapper, input);
+          wrapper.appendChild(input);
+
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'dart-password-toggle';
+          button.setAttribute('aria-label', 'Show password');
+          button.setAttribute('aria-pressed', 'false');
+          button.innerHTML = '<i class="fa-solid fa-eye" aria-hidden="true"></i>';
+
+          button.addEventListener('click', function () {
+            var show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            button.setAttribute('aria-pressed', show ? 'true' : 'false');
+            button.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            button.firstElementChild.className = show ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+            input.focus();
+          });
+
+          wrapper.appendChild(button);
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', addPasswordToggles);
+      } else {
+        addPasswordToggles();
+      }
 
       // Phone keyboard open while a text field has focus.
       var typingFields = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=submit]):not([type=button]):not([type=hidden])';
