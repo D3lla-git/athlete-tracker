@@ -5,479 +5,641 @@
 <div class="container py-4">
   <h2 class="mb-4">Search Athletes <i class="fa-solid fa-person-running"></i><i class="fa-solid fa-futbol"></i><i class="fa-solid fa-basketball" style="color: orangered;"></i><i class="fa-solid fa-baseball"></i></h2>
   <!-- ===================== SEARCH / FILTER FORM ===================== -->
-<div class="d-flex justify-content-between align-items-center mb-3">
-
-  <button
-      class="btn btn-outline-success rounded-5"
-      type="button"
-      data-bs-toggle="collapse"
-      data-bs-target="#advancedSearchFilters"
-      aria-expanded="true"
-      aria-controls="advancedSearchFilters">
-    Filters <i class="fa-solid fa-sliders"></i>
-  </button>
-</div>
-
-<form method="GET"
-      action="{{ url_for('search') }}"
-      class="mb-4">
-
-  <!-- ================= BASIC SEARCH ================= -->
-
-  <div class="row g-3">
-
-    <!-- Athlete Name -->
-    <div class="col-md-4 position-relative">
-      <label class="form-label fw-bold">
-        Athlete Name
-        <i class="fa-solid fa-user"></i>
-      </label>
-
-      <input
-          type="text"
-          name="name"
-          id="nameInput"
-          value="{{ name }}"
-          class="form-control form-control-lg"
-          placeholder="Enter athlete name"
-          autocomplete="off">
-
-      <div
-          id="nameSuggestions"
-          class="list-group position-absolute w-100 shadow-sm"
-          style="z-index: 1050; display:none; max-height:250px; overflow-y:auto;">
-      </div>
-    </div>
-
-    <!-- Team Name -->
-    <div class="col-md-4">
-      <label class="form-label fw-bold">
-        Team Name
-        <i class="fa-solid fa-users"></i>
-      </label>
-
-      <input
-          type="text"
-          name="school"
-          value="{{ school }}"
-          class="form-control form-control-lg"
-          placeholder="Enter team name">
-    </div>
-
-    <!-- Opponent Team -->
-    <div class="col-md-4">
-      <label class="form-label fw-bold">
-        Opponent Team
-        <i class="fa-solid fa-shield-halved" style="color: red;"></i>
-      </label>
-
-      <input
-          type="text"
-          name="team_played_against"
-          value="{{ team_played_against }}"
-          class="form-control form-control-lg"
-          placeholder="Enter opponent team">
-    </div>
-
-  </div>
-
-          <!-- ================= BUTTONS ================= -->
-
-        <div class="mt-4 d-flex gap-3 flex-wrap search-action-buttons">
-          <button
-              type="submit"
-              class="btn btn-lg rounded-5 search-submit-btn"
-              style="border:2px solid black; color:white;">
-            Search
-            <i class="fa-solid fa-magnifying-glass"></i>
-          </button>
-  <!-- ================= ADVANCED FILTERS ================= -->
-
-  <div class="collapse show mt-3" id="advancedSearchFilters">
-
-    <div class="card shadow-sm">
-      <div class="card-body">
-
-        <div class="row g-3">
-
-  <!-- Year -->
-  <div class="col-md-4">
-    <label class="form-label fw-bold">
-      Year
-      <i class="fa-solid fa-calendar" style="color: darkgreen;"></i>
-    </label>
-
-    <select name="year" class="form-select form-select-lg">
-      <option value="">All Years</option>
-
-      {% for y in available_years %}
-        <option value="{{ y }}"
-                {% if year == y|string %}selected{% endif %}>
-          {{ y }}
-        </option>
-      {% endfor %}
-    </select>
-  </div>
-
-
-  <!-- Sport -->
-  <div class="col-md-4">
-    <label class="form-label fw-bold">
-      Sport
-      <i class="fa-solid fa-futbol"></i><i class="fa-solid fa-basketball" style="color: orangered;"></i><i class="fa-solid fa-baseball"></i>
-    </label>
-
-    <select
-        name="sport"
-        id="sportFilter"
-        class="form-select form-select-lg">
-
-      <option value="">
-        All Sports
-      </option>
-
-      <option value="Football"
-              {% if sport == 'Football' %}selected{% endif %}>
-        Football
-      </option>
-
-      <option value="Basketball"
-              {% if sport == 'Basketball' %}selected{% endif %}>
-        Basketball
-      </option>
-
-      <option value="Kickball"
-              {% if sport == 'Kickball' %}selected{% endif %}>
-        Kickball
-      </option>
-
-    </select>
-  </div>
-
-
-  <!-- Rank By -->
-  <div class="col-md-4">
-    <label class="form-label fw-bold">
-      Rank By
-      <i class="fa-solid fa-ranking-star"></i>
-    </label>
-
-    <select
-        name="sort_by"
-        id="sortByFilter"
-        class="form-select form-select-lg">
-
-      <option value="">Default Search Order</option>
-
-      <!-- Football -->
-      <optgroup label="Football" data-sport-group="Football">
-
-        <option value="highest_goals">
-          Highest Goals
-        </option>
-
-        <option value="highest_assists">
-          Highest Assists
-        </option>
-
-        <option value="highest_games">
-          Highest Games Played
-        </option>
-
-        <option value="highest_trophies">
-          Highest Trophy Won
-        </option>
-
-        <option value="highest_yellow_cards">
-          Highest Yellow Cards
-        </option>
-
-        <option value="highest_red_cards">
-          Highest Red Cards
-        </option>
-
-        <option value="highest_motm">
-          Highest MOTM / QOTM
-        </option>
-
-        <option value="highest_mvp">
-          Highest MVP
-        </option>
-
-      </optgroup>
-
-
-      <!-- Basketball -->
-      <optgroup label="Basketball" data-sport-group="Basketball">
-
-        <option value="highest_points">
-          Highest Points
-        </option>
-
-        <option value="highest_assists">
-          Highest Assists
-        </option>
-
-        <option value="highest_games">
-          Highest Games Played
-        </option>
-
-        <option value="highest_trophies">
-          Highest Trophy Won
-        </option>
-
-        <option value="highest_blocks">
-          Highest Blocks
-        </option>
-
-        <option value="highest_sent_off">
-          Highest Times Sent Off
-        </option>
-
-        <option value="highest_motm">
-          Highest MOTM / QOTM
-        </option>
-
-        <option value="highest_mvp">
-          Highest MVP
-        </option>
-
-      </optgroup>
-
-
-      <!-- Kickball -->
-      <optgroup label="Kickball" data-sport-group="Kickball">
-
-        <option value="highest_home_runs">
-          Highest Home Runs
-        </option>
-
-        <option value="highest_games">
-          Highest Games Played
-        </option>
-
-        <option value="highest_trophies">
-          Highest Trophy Won
-        </option>
-
-        <option value="highest_red_cards">
-          Highest Red Cards
-        </option>
-
-        <option value="highest_yellow_cards">
-          Highest Yellow Cards
-        </option>
-
-        <option value="highest_cut_base">
-          Highest Cut Base
-        </option>
-
-        <option value="highest_foul_played">
-          Highest Foul Played
-        </option>
-
-        <option value="highest_motm">
-          Highest MOTM / QOTM
-        </option>
-
-        <option value="highest_mvp">
-          Highest MVP
-        </option>
-
-      </optgroup>
-
-    </select>
-  </div>
-
-</div>
-  <!-----CSS-------->  <!-----CSS-------->
-  <!-----CSS-------->  <!-----CSS-------->
 <style>
-  .btn {
-    background:
-      radial-gradient(
-        circle at 85% 30%,
-        rgba(57,185,114,0.30),
-        transparent 30%
-      ),
-      linear-gradient(
-        135deg,
-        #071208,
-        #0d2413 55%,
-        #061008
-      );
+  .search-panel {
+    border: 1px solid var(--surface-border);
+    border-radius: 20px;
+    background: var(--surface-bg);
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.06);
+    padding: 18px;
   }
 
-  /* ===== DESKTOP SEARCH BUTTON UX ===== */
-  @media (min-width: 992px) {
+  .search-panel .form-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
 
-    .search-action-buttons {
-      width: 100%;
-      margin-top: 30px !important;
-      padding-top: 6px;
-      align-items: center;
-      gap: 16px !important;
-    }
+  .filter-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 16px;
+    padding: 10px 14px;
+    border: 1px dashed var(--surface-border);
+    border-radius: 14px;
+    background: var(--page-bg);
+    color: var(--surface-text);
+    font-weight: 700;
+  }
 
-    .search-action-buttons .search-submit-btn,
-    .search-action-buttons .clear-filter-btn {
-      height: 52px;
-      min-height: 52px;
-      padding: 0 24px !important;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      align-self: center;
-      flex: 0 0 auto;
-      white-space: nowrap;
-    }
+  .filter-toggle .chevron {
+    transition: transform 0.2s ease;
+  }
 
-    .search-action-buttons .search-submit-btn {
-      min-width: 150px;
-    }
+  .filter-toggle[aria-expanded="true"] .chevron {
+    transform: rotate(180deg);
+  }
 
-    .search-action-buttons .clear-filter-btn {
-      min-width: 170px;
-      margin-left: 4px;
-    }
+  .filter-count {
+    margin-left: 8px;
+    padding: 2px 9px;
+    border-radius: 2rem;
+    font-size: 0.75rem;
+    background: #198754;
+    color: #ffffff;
+  }
+
+  .filter-group {
+    margin-top: 16px;
+    padding: 14px;
+    border-radius: 16px;
+    border: 1px solid var(--surface-border);
+  }
+
+  .filter-group-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted-text);
+  }
+
+  .range-pair {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .range-pair span {
+    color: var(--muted-text);
+    font-size: 0.8rem;
+  }
+
+  .stat-condition {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(70px, 0.8fr) minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .scope-switch .btn {
+    font-size: 0.82rem;
+  }
+
+  .scope-switch .btn-check:checked + .btn {
+    background: #198754;
+    border-color: #198754;
+    color: #ffffff;
+  }
+
+  .search-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .search-actions .btn {
+    min-height: 46px;
+    padding: 0 22px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .search-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    border-radius: 16px;
+    border: 1px solid var(--surface-border);
+    background: var(--surface-bg);
+    font-weight: 600;
+  }
+
+  .search-summary .rt-chip {
+    font-size: 0.85rem;
   }
 </style>
-          
 
+<form method="GET" action="{{ url_for('search') }}" class="mb-4" id="searchForm">
+  <div class="search-panel">
+
+    <!-- ================= BASIC SEARCH ================= -->
+    <div class="row g-3">
+
+      <!-- Athlete Name -->
+      <div class="col-md-4 position-relative">
+        <label class="form-label" for="nameInput">Athlete Name <i class="fa-solid fa-user"></i></label>
+        <input
+            type="text"
+            name="name"
+            id="nameInput"
+            value="{{ name }}"
+            class="form-control"
+            placeholder="Enter athlete name"
+            autocomplete="off">
+        <div
+            id="nameSuggestions"
+            class="list-group position-absolute w-100 shadow-sm"
+            style="z-index: 1050; display:none; max-height:250px; overflow-y:auto;">
+        </div>
+      </div>
+
+      <!-- Team Name -->
+      <div class="col-md-4">
+        <label class="form-label" for="teamInput">Team Name <i class="fa-solid fa-users"></i></label>
+        <input type="text" name="school" id="teamInput" value="{{ school }}" class="form-control" placeholder="Enter team name">
+      </div>
+
+      <!-- Opponent Team -->
+      <div class="col-md-4">
+        <label class="form-label" for="opponentInput">Opponent Team <i class="fa-solid fa-shield-halved" style="color: red;"></i></label>
+        <input type="text" name="team_played_against" id="opponentInput" value="{{ team_played_against }}" class="form-control" placeholder="Enter opponent team">
+      </div>
+
+      <!-- Sport -->
+      <div class="col-6 col-md-3">
+        <label class="form-label" for="sportFilter">Sport <i class="fa-solid fa-futbol"></i></label>
+        <select name="sport" id="sportFilter" class="form-select">
+          <option value="">All Sports</option>
+          {% for s in ['Football', 'Basketball', 'Kickball'] %}
+            <option value="{{ s }}" {% if sport == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Year -->
+      <div class="col-6 col-md-3">
+        <label class="form-label" for="yearFilter">Season <i class="fa-solid fa-calendar" style="color: darkgreen;"></i></label>
+        <select name="year" id="yearFilter" class="form-select">
+          <option value="">All Years</option>
+          {% for y in available_years %}
+            <option value="{{ y }}" {% if year == y|string %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Competition -->
+      <div class="col-6 col-md-3">
+        <label class="form-label" for="competitionFilter">Competition <i class="fa-solid fa-medal"></i></label>
+        <select name="competition" id="competitionFilter" class="form-select">
+          <option value="">All Competitions</option>
+          {% for c in competition_form_rules().competitions.Football %}
+            <option value="{{ c }}" {% if filters.competition == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Rank By -->
+      <div class="col-6 col-md-3">
+        <label class="form-label" for="sortByFilter">Rank By <i class="fa-solid fa-ranking-star"></i></label>
+        <select name="sort_by" id="sortByFilter" class="form-select">
+          <option value="">Default Search Order</option>
+
+          <optgroup label="General" data-sport-group="*">
+            <option value="most_recent">Most Recent Game</option>
+            <option value="youngest">Youngest Athletes</option>
+            <option value="most_minutes">Most Match Minutes</option>
+          </optgroup>
+
+          <optgroup label="Football" data-sport-group="Football">
+            <option value="highest_goals">Highest Goals</option>
+            <option value="highest_assists">Highest Assists</option>
+            <option value="highest_games">Highest Games Played</option>
+            <option value="highest_trophies">Highest Trophy Won</option>
+            <option value="highest_clean_sheets">Highest Clean Sheets</option>
+            <option value="highest_saves">Highest Saves</option>
+            <option value="highest_yellow_cards">Highest Yellow Cards</option>
+            <option value="highest_red_cards">Highest Red Cards</option>
+            <option value="highest_motm">Highest MOTM / QOTM</option>
+            <option value="highest_mvp">Highest MVP</option>
+          </optgroup>
+
+          <optgroup label="Basketball" data-sport-group="Basketball">
+            <option value="highest_points">Highest Points</option>
+            <option value="highest_assists">Highest Assists</option>
+            <option value="highest_games">Highest Games Played</option>
+            <option value="highest_trophies">Highest Trophy Won</option>
+            <option value="highest_blocks">Highest Blocks</option>
+            <option value="highest_rebounds">Highest Total Rebounds</option>
+            <option value="highest_offensive_rebounds">Highest Offensive Rebounds</option>
+            <option value="highest_defensive_rebounds">Highest Defensive Rebounds</option>
+            <option value="highest_sent_off">Highest Times Sent Off</option>
+            <option value="highest_motm">Highest MOTM / QOTM</option>
+            <option value="highest_mvp">Highest MVP</option>
+          </optgroup>
+
+          <optgroup label="Kickball" data-sport-group="Kickball">
+            <option value="highest_home_runs">Highest Home Runs</option>
+            <option value="highest_games">Highest Games Played</option>
+            <option value="highest_trophies">Highest Trophy Won</option>
+            <option value="highest_red_cards">Highest Red Cards</option>
+            <option value="highest_yellow_cards">Highest Yellow Cards</option>
+            <option value="highest_cut_base">Highest Cut Base</option>
+            <option value="highest_foul_played">Highest Foul Played</option>
+            <option value="highest_motm">Highest MOTM / QOTM</option>
+            <option value="highest_mvp">Highest MVP</option>
+          </optgroup>
+        </select>
+      </div>
+    </div>
+
+    <!-- ================= ADVANCED FILTERS ================= -->
+    {# Advanced filters (ADVANCED_SEARCH_FILTERS in app.py) — to be limited
+       to paid scout subscribers later. #}
+    <button
+        class="filter-toggle"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#advancedSearchFilters"
+        aria-expanded="{{ 'true' if advanced_count else 'false' }}"
+        aria-controls="advancedSearchFilters">
+      <span>
+        <i class="fa-solid fa-sliders me-2"></i>Advanced Filters
+        {% if advanced_count %}<span class="filter-count">{{ advanced_count }} active</span>{% endif %}
+      </span>
+      <i class="fa-solid fa-chevron-down chevron" aria-hidden="true"></i>
+    </button>
+
+    <div class="collapse {% if advanced_count %}show{% endif %}" id="advancedSearchFilters">
+
+      <!-- Athlete profile -->
+      <div class="filter-group">
+        <div class="filter-group-title"><i class="fa-solid fa-id-card"></i> Athlete Profile</div>
+        <div class="row g-3">
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="genderFilter">Gender</label>
+            <select name="gender" id="genderFilter" class="form-select">
+              <option value="">Any</option>
+              <option value="Male" {% if filters.gender == 'Male' %}selected{% endif %}>Male ♂</option>
+              <option value="Female" {% if filters.gender == 'Female' %}selected{% endif %}>Female ♀</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="nationalityFilter">Nationality</label>
+            <select name="nationality" id="nationalityFilter" class="form-select">
+              <option value="">Any</option>
+              {% for n in available_nationalities %}
+                <option value="{{ n }}" {% if filters.nationality == n %}selected{% endif %}>{{ country_flag(n) }} {{ n }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="footFilter">Preferred Foot</label>
+            <select name="preferred_foot" id="footFilter" class="form-select">
+              <option value="">Any</option>
+              {% for f in ['Right', 'Left', 'Both'] %}
+                <option value="{{ f }}" {% if filters.preferred_foot == f %}selected{% endif %}>{{ f }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label">Age (years)</label>
+            <div class="range-pair">
+              <input type="number" name="age_min" class="form-control" min="3" max="99" placeholder="Min" value="{{ filters.age_min if filters.age_min is not none }}" aria-label="Minimum age">
+              <span>–</span>
+              <input type="number" name="age_max" class="form-control" min="3" max="99" placeholder="Max" value="{{ filters.age_max if filters.age_max is not none }}" aria-label="Maximum age">
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label">Height (cm)</label>
+            <div class="range-pair">
+              <input type="number" name="height_min" class="form-control" min="0" step="0.1" placeholder="Min" value="{{ filters.height_min if filters.height_min is not none }}" aria-label="Minimum height">
+              <span>–</span>
+              <input type="number" name="height_max" class="form-control" min="0" step="0.1" placeholder="Max" value="{{ filters.height_max if filters.height_max is not none }}" aria-label="Maximum height">
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label">Weight (kg)</label>
+            <div class="range-pair">
+              <input type="number" name="weight_min" class="form-control" min="0" step="0.1" placeholder="Min" value="{{ filters.weight_min if filters.weight_min is not none }}" aria-label="Minimum weight">
+              <span>–</span>
+              <input type="number" name="weight_max" class="form-control" min="0" step="0.1" placeholder="Max" value="{{ filters.weight_max if filters.weight_max is not none }}" aria-label="Maximum weight">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Competition & game -->
+      <div class="filter-group">
+        <div class="filter-group-title"><i class="fa-solid fa-trophy"></i> Competition &amp; Game</div>
+        <div class="row g-3">
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="positionFilter">Position</label>
+            <select name="position" id="positionFilter" class="form-select" data-selected="{{ filters.position }}">
+              <option value="">Any</option>
+              {% for sp, positions in valid_positions.items() %}
+                <optgroup label="{{ sp }}" data-sport-group="{{ sp }}">
+                  {% for pos in positions %}
+                    <option value="{{ pos }}" {% if filters.position == pos %}selected{% endif %}>{{ pos }}</option>
+                  {% endfor %}
+                </optgroup>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="divisionFilter">Club Division</label>
+            <select name="club_division" id="divisionFilter" class="form-select">
+              <option value="">Any</option>
+              {% for d in ['1st Division', '2nd Division', '3rd Division'] %}
+                <option value="{{ d }}" {% if filters.club_division == d %}selected{% endif %}>{{ d }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="ageGroupFilter">Grassroots Age Group</label>
+            <select name="age_group" id="ageGroupFilter" class="form-select">
+              <option value="">Any</option>
+              {% for a in competition_form_rules().ageGroups %}
+                <option value="{{ a }}" {% if filters.age_group == a %}selected{% endif %}>{{ a }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="teamCategoryFilter">National Team / Category</label>
+            <select name="competition_team" id="teamCategoryFilter" class="form-select">
+              <option value="">Any</option>
+              {% set team_names = [] %}
+              {% for key, teams in competition_form_rules().teams.items() %}
+                {% for t in teams %}{% if t not in team_names %}{% set _ = team_names.append(t) %}{% endif %}{% endfor %}
+              {% endfor %}
+              {% for t in team_names %}
+                <option value="{{ t }}" {% if filters.competition_team == t %}selected{% endif %}>{{ t }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="trophyFilter">Trophy / Competition Won</label>
+            <select name="trophy" id="trophyFilter" class="form-select">
+              <option value="">Any</option>
+              {% for t in available_trophies %}
+                <option value="{{ t }}" {% if filters.trophy == t %}selected{% endif %}>{{ t }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Game Date</label>
+            <div class="range-pair">
+              <input type="date" name="date_from" class="form-control" value="{{ filters.date_from }}" aria-label="Games from">
+              <span>to</span>
+              <input type="date" name="date_to" class="form-control" value="{{ filters.date_to }}" aria-label="Games to">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Performance -->
+      <div class="filter-group">
+        <div class="filter-group-title"><i class="fa-solid fa-chart-line"></i> Performance</div>
+
+        <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+          <div class="btn-group scope-switch" role="group" aria-label="Apply stat conditions to">
+            <input type="radio" class="btn-check" name="stat_scope" id="scopeGame" value="game" {% if filters.stat_scope != 'total' %}checked{% endif %}>
+            <label class="btn btn-outline-secondary" for="scopeGame"><i class="fa-solid fa-futbol me-1"></i>In a single game</label>
+            <input type="radio" class="btn-check" name="stat_scope" id="scopeTotal" value="total" {% if filters.stat_scope == 'total' %}checked{% endif %}>
+            <label class="btn btn-outline-secondary" for="scopeTotal"><i class="fa-solid fa-calculator me-1"></i>Season / career total</label>
+          </div>
+
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="motm" value="1" id="motmFilter" {% if filters.motm %}checked{% endif %}>
+            <label class="form-check-label" for="motmFilter"><i class="fa-solid fa-medal" style="color: goldenrod;"></i> Won MOTM / QOTM</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="mvp" value="1" id="mvpFilter" {% if filters.mvp %}checked{% endif %}>
+            <label class="form-check-label" for="mvpFilter"><i class="fa-solid fa-star" style="color: goldenrod;"></i> Won MVP</label>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <label class="form-label mb-0" for="minGamesFilter">Min. matching games</label>
+            <input type="number" name="min_games" id="minGamesFilter" class="form-control" style="width: 90px;" min="1" max="500" value="{{ filters.min_games or '' }}">
+          </div>
         </div>
 
-      </div>
-      
-    </div>
-<a
-    href="{{ url_for('search') }}"
-    class="btn btn-outline-secondary btn-lg rounded-5 clear-filter-btn" style="color: aliceblue;">
-            Clear Filters
-            <i class="fa-solid fa-rotate-left"></i>
-          </a>
-  </div>
+        <div id="statConditions">
+          {% for field, op, value in filters.stat_conditions %}
+            <div class="stat-condition" data-condition>
+              <select name="stat" class="form-select stat-field" data-selected="{{ field }}" aria-label="Statistic"></select>
+              <select name="stat_op" class="form-select" aria-label="Comparison">
+                {% for key, symbol in stat_operators.items() %}
+                  <option value="{{ key }}" {% if key == op %}selected{% endif %}>{{ symbol }}</option>
+                {% endfor %}
+              </select>
+              <input type="number" name="stat_value" class="form-control" min="0" value="{{ value }}" aria-label="Value">
+              <button type="button" class="btn btn-outline-danger" data-remove-condition aria-label="Remove condition"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          {% endfor %}
+        </div>
 
+        <button type="button" class="btn btn-outline-success btn-sm" id="addStatCondition">
+          <i class="fa-solid fa-plus me-1"></i>Add stat condition
+        </button>
+        <span class="small text-muted ms-2">e.g. Goals ≥ 2 · up to {{ max_stat_conditions }}</span>
+
+        <template id="statConditionTemplate">
+          <div class="stat-condition" data-condition>
+            <select name="stat" class="form-select stat-field" aria-label="Statistic"></select>
+            <select name="stat_op" class="form-select" aria-label="Comparison">
+              {% for key, symbol in stat_operators.items() %}
+                <option value="{{ key }}">{{ symbol }}</option>
+              {% endfor %}
+            </select>
+            <input type="number" name="stat_value" class="form-control" min="0" value="1" aria-label="Value">
+            <button type="button" class="btn btn-outline-danger" data-remove-condition aria-label="Remove condition"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </template>
+
+        <script id="searchStatsData" type="application/json">{{ search_stats | tojson }}</script>
+      </div>
+    </div>
+
+    <!-- ================= BUTTONS ================= -->
+    <div class="search-actions">
+      <button type="submit" class="btn dart-btn">
+        <i class="fa-solid fa-magnifying-glass"></i> Search
+      </button>
+      <a href="{{ url_for('search') }}" class="btn btn-outline-secondary rounded-pill">
+        <i class="fa-solid fa-rotate-left"></i> Clear Filters
+      </a>
+    </div>
+  </div>
 </form>
 
   <!-- ===================== RESULTS ===================== -->
-  {% if name or school or team_played_against or year or sport or sort_by %}
+  {% if search_active %}
+    <div class="search-summary" role="status">
+      <i class="fa-solid fa-filter text-success"></i>
+      <span>{{ summary.athletes }} athlete{{ 's' if summary.athletes != 1 }}</span>
+      <span class="text-muted">·</span>
+      <span>{{ summary.records }} matching game{{ 's' if summary.records != 1 }}</span>
+      <span class="rt-chip"><i class="fa-solid fa-mars"></i> {{ summary.male }} male</span>
+      <span class="rt-chip"><i class="fa-solid fa-venus"></i> {{ summary.female }} female</span>
+      {% if filters.stat_conditions %}
+        <span class="text-muted small ms-1">
+          Stats {{ 'in a single game' if filters.stat_scope == 'game' else 'as season / career totals' }}
+        </span>
+      {% endif %}
+    </div>
+
     {% if results %}
 
       <!-- DESKTOP TABLE -->
+      {% from '_record_table_macros.html' import record_cells, record_header_cells with context %}
       <div class="d-none d-md-block">
         {% for item in results %}
-          <div class="card mb-4 shadow-sm">
-            <div class="card-body">
-              <h5 class="mb-1">
-                <a href="{% if current_user.is_authenticated and current_user.id == item.student.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=item.student.id) }}{% endif %}" class="text-decoration-none">{{ item.student.full_name }} <i class="fa-solid fa-user"></i></a>
-              </h5>
-              <p class="text-muted mb-2">
-  {{ item.student.school }}
-  <i class="fa-solid fa-school"></i>
-</p>
+          {% set a = item.student %}
+          <div class="search-athlete mb-4">
 
-{% if item.student.role == 'Athlete' %}
-  <div class="small text-muted mb-3">
-    <span class="me-3">
-      {{ country_flag(item.student.nationality) }}
-      {{ item.student.nationality or 'Nationality not provided' }}
-    </span>
-
-    <span class="me-3">
-      Age: {{ item.student.age or '-' }}
-    </span>
-
-    <span class="me-3">
-      Height: {{ item.student.height_cm or '-' }} cm
-    </span>
-
-    <span class="me-3">
-      Weight: {{ item.student.weight_kg or '-' }} kg
-    </span>
-
-    <span>
-      Preferred Foot:
-      {{ item.student.preferred_foot or '-' }}
-    </span>
-  </div>
-{% endif %}
-
-              {% if item.records %}
-                <div class="table-responsive">
-                  <table class="table table-bordered table-hover mb-0">
-                    <thead class="table-dark">
-                      <tr>
-                        <th><i class="fa-solid fa-futbol"></i> Sport <i class="fa-solid fa-basketball" style="color:orangered;"></i></th>
-                        <th>Year <i class="fa-solid fa-calendar" style="color:lightgreen;"></i></th>
-                        <th>Team Played For <i class="fa-solid fa-users"></i></th>
-                        <th>Team Played Against <i class="fa-solid fa-shield-halved"></i></th>
-                        <th>Position <i class="fa-solid fa-shirt"></i></th>
-                        <th>Games Played <i class="fa-solid fa-person-running"></i></th>
-                        <th>Division / Team <i class="fa-solid fa-layer-group"></i></th>
-                        <th>Trophy <i class="fa-solid fa-trophy" style="color:goldenrod;"></i></th>
-                        <th>Stats <i class="fa-solid fa-chart-line"></i></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for r in item.records %}
-                      <tr>
-                        <td>{{ r.sport }}</td>
-                        <td>{{ r.year }}</td>
-                       <td>{{ r.team or item.student.school }}</td>
-                        <td>{{ r.team_played_against or '-' }}</td>
-                        <td>{{ r.position or '-' }}</td>
-                        <td>{{ r.games_played }}</td>
-                        <td>{{ r.club_division or r.competition_team or '-' }}</td>
-                        <td>{{ r.trophy or '-' }}</td>
-                        <td>
-                          {% if r.sport == 'Football' %}
-                            <i class="fa-solid fa-futbol"></i> Goals: {{ r.goals }} |
-                            <i class="fa-solid fa-handshake-angle"></i> Assists: {{ r.assists }} |
-                            Yellow Card <i class="fa-solid fa-square" style="color:#FFCC00;"></i>: {{ r.yellow_cards }} |
-                            Red Card <i class="fa-solid fa-square" style="color:#FF0000;"></i>: {{ r.red_cards }} |
-                            Match Minutes<i class="fa-solid fa-clock"></i>: {{ r.match_minutes_played or 0 }}
-                            {% if r.position == 'GK' %} |
-                            Clean Sheets <i class="fa-solid fa-clipboard"></i>: {{ r.clean_sheets or 0 }} |
-                            Saves <i class="fa-solid fa-hands"></i>: {{ r.saves or 0 }}
-                         {% endif %}
-
-                          {% elif r.sport == 'Basketball' %}
-  <i class="fa-solid fa-basketball" style="color:orangered;"></i> Points: {{ r.points }} |
-  <i class="fa-solid fa-handshake-angle"></i> Assists: {{ r.assists }} |
-  Blocks <i class="fa-solid fa-hand"></i>: {{ r.blocks }} |
-  Rebounds <i class="fa-solid fa-basketball" style="color:orangered;"></i>: {{ r.rebound_type or 'None' }} |
-  <i class="fa-solid fa-ban"></i> Times Sent Off Court: {{ r.sent_off }}
-
-{% else %}
-
-  Home Runs <i class="fa-solid fa-baseball"></i>: {{ r.home_runs or 0 }} |
-  Red Cards <i class="fa-solid fa-square" style="color:#FF0000;"></i>: {{ r.kickball_red_cards or 0 }} |
-  Yellow Cards <i class="fa-solid fa-square" style="color:#FFCC00;"></i>: {{ r.kickball_yellow_cards or 0 }} |
-  Cut Base <i class="fa-solid fa-person-running"></i>: {{ r.cut_base or 0 }} |
-  Foul Played <i class="fa-solid fa-triangle-exclamation"></i>: {{ r.foul_played or 0 }} |
-  Match Minutes <i class="fa-solid fa-clock"></i>: {{ r.match_minutes_played or 0 }}
-
-{% endif %}
-                        </td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
+            <!-- Athlete header -->
+            <div class="search-athlete-header">
+              {% if a.profile_picture %}
+                <img class="search-athlete-avatar" src="{{ url_for('profile_picture', filename=a.profile_picture) }}" alt="">
               {% else %}
-                <p class="text-muted mb-0">No approved records yet.</p>
+                <span class="search-athlete-avatar" aria-hidden="true">{{ (a.full_name or '?')[0] | upper }}</span>
               {% endif %}
+
+              <div class="search-athlete-info">
+                <a href="{% if current_user.is_authenticated and current_user.id == a.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=a.id) }}{% endif %}"
+                   class="search-athlete-name">
+                  {{ a.full_name }} <i class="fa-solid fa-user" aria-hidden="true"></i>
+                </a>
+                <div class="rt-muted">
+                  <i class="fa-solid fa-school" aria-hidden="true"></i> {{ a.school }}
+                </div>
+
+                {% if a.role == 'Athlete' %}
+                  <div class="rt-chips mt-2">
+                    <span class="rt-chip" title="Nationality">{{ country_flag(a.nationality) }} {{ a.nationality or 'Nationality not provided' }}</span>
+                    {% if a.gender %}
+                      <span class="rt-chip" title="Gender"><i class="fa-solid {{ 'fa-mars' if a.gender == 'Male' else 'fa-venus' }}" aria-hidden="true"></i> {{ a.gender }}</span>
+                    {% endif %}
+                    <span class="rt-chip" title="Age"><i class="fa-solid fa-cake-candles" aria-hidden="true"></i> Age: {{ a.age or '-' }}</span>
+                    <span class="rt-chip" title="Height"><i class="fa-solid fa-ruler-vertical" aria-hidden="true"></i> Height: {{ a.height_cm or '-' }} cm</span>
+                    <span class="rt-chip" title="Weight"><i class="fa-solid fa-weight-scale" aria-hidden="true"></i> Weight: {{ a.weight_kg or '-' }} kg</span>
+                    <span class="rt-chip" title="Preferred foot"><i class="fa-solid fa-shoe-prints" aria-hidden="true"></i> Preferred Foot: {{ a.preferred_foot or '-' }}</span>
+                  </div>
+                {% endif %}
+              </div>
+
+              <span class="badge dart-pill search-athlete-count">
+                {{ item.records | length }} game{{ 's' if item.records | length != 1 }}
+              </span>
             </div>
+
+            <!-- Records -->
+            {% if item.records %}
+              <div class="records-table-wrap search-records-wrap">
+                <table class="table records-table align-middle mb-0">
+                  <thead>
+                    <tr>
+                      {{ record_header_cells() }}
+                      <th scope="col" class="text-center">Games <i class="fa-solid fa-person-running" aria-hidden="true"></i></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for r in item.records %}
+                      <tr>
+                        {{ record_cells(r) }}
+                        <td class="text-center rt-strong">{{ r.games_played }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <p class="text-muted mb-0">No approved records yet.</p>
+            {% endif %}
           </div>
         {% endfor %}
       </div>
+
+      <style>
+        /* Athlete result: header + records table (desktop). */
+        .search-athlete {
+          border: 1px solid var(--surface-border);
+          border-radius: 20px;
+          background: var(--surface-bg);
+          box-shadow: 0 8px 26px rgba(0, 0, 0, 0.06);
+          overflow: hidden;
+        }
+
+        .search-athlete-header {
+          display: flex;
+          align-items: flex-start;
+          gap: 14px;
+          padding: 16px 18px;
+          border-bottom: 1px solid var(--surface-border);
+        }
+
+        .search-athlete-avatar {
+          flex: 0 0 52px;
+          width: 52px;
+          height: 52px;
+          border-radius: 50%;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.3rem;
+          font-weight: 700;
+          color: #ffffff;
+          background: #198754;
+          object-fit: cover;
+        }
+
+        .search-athlete-info {
+          flex: 1 1 auto;
+          min-width: 0;
+        }
+
+        .search-athlete-name {
+          font-size: 1.1rem;
+          font-weight: 700;
+          text-decoration: none;
+        }
+
+        .search-athlete-count {
+          flex: 0 0 auto;
+          align-self: center;
+        }
+
+        /* The table sits inside the athlete card: no second border. */
+        .search-records-wrap {
+          border: 0;
+          border-radius: 0;
+          box-shadow: none;
+        }
+      </style>
 
 <!-- ========== MOBILE SLIDER CARDS ========== -->
 <div class="d-md-none">
   {% for item in results %}
     <div class="mb-5">
       <h5 class="mb-1"><a href="{% if current_user.is_authenticated and current_user.id == item.student.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=item.student.id) }}{% endif %}" class="text-decoration-none">{{ item.student.full_name }} <i class="fa-solid fa-user"></i></a></h5>
-      <p class="text-muted small mb-3">{{ item.student.school }} <i class="fa-solid fa-school"></i></p>
+      <p class="text-muted small mb-2">{{ item.student.school }} <i class="fa-solid fa-school"></i></p>
+
+      {% if item.student.role == 'Athlete' %}
+        {% set a = item.student %}
+        {# Personal info, same as the desktop athlete header. #}
+        <div class="rt-chips search-mobile-chips mb-3">
+          <span class="rt-chip" title="Nationality">{{ country_flag(a.nationality) }} {{ a.nationality or 'Nationality not provided' }}</span>
+          {% if a.gender %}
+            <span class="rt-chip" title="Gender"><i class="fa-solid {{ 'fa-mars' if a.gender == 'Male' else 'fa-venus' }}" aria-hidden="true"></i> {{ a.gender }}</span>
+          {% endif %}
+          <span class="rt-chip" title="Age"><i class="fa-solid fa-cake-candles" aria-hidden="true"></i> Age: {{ a.age or '-' }}</span>
+          <span class="rt-chip" title="Height"><i class="fa-solid fa-ruler-vertical" aria-hidden="true"></i> Height: {{ a.height_cm or '-' }} cm</span>
+          <span class="rt-chip" title="Weight"><i class="fa-solid fa-weight-scale" aria-hidden="true"></i> Weight: {{ a.weight_kg or '-' }} kg</span>
+          <span class="rt-chip" title="Preferred foot"><i class="fa-solid fa-shoe-prints" aria-hidden="true"></i> Preferred Foot: {{ a.preferred_foot or '-' }}</span>
+        </div>
+      {% endif %}
 
       {% if item.records %}
         {% set carousel_id = 'searchCarousel' ~ loop.index %}
@@ -493,10 +655,18 @@
                   <div class="card-sport text-center mb-3">
                     {% if r.sport == 'Football' %}
                       {{ r.sport | upper }} <i class="fa-solid fa-futbol"></i>
+                    {% elif r.sport == 'Kickball' %}
+                      {{ r.sport | upper }} <i class="fa-solid fa-baseball"></i>
                     {% else %}
                       {{ r.sport | upper }} <i class="fa-solid fa-basketball" style="color:orangered;"></i>
                     {% endif %}
                   </div>
+{# Game date: below the sport, above team/opponent (styled in base.html). #}
+<div class="card-game-date text-center mb-3">
+  <i class="fa-regular fa-calendar-days"></i>
+  {{ r.game_date.strftime('%B %d, %Y') if r.game_date else 'Game date not recorded' }}
+</div>
+
                    <div class="text-center mb-3">
               <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}" class="text-decoration-none"><strong>{{ r.user.full_name }}</strong></a><br>
               <small class="text-muted">{{ r.team or r.user.school }} <i class="fa-solid fa-school"></i></small><br>
@@ -531,11 +701,11 @@
                     </div>
 <div>
     <strong>
-        {{ r.competition_team_label or 'Club Division' }}
+        {{ r.competition_detail_label or 'Club Division' }}
         <i class="fa-solid fa-layer-group"></i> :
     </strong>
 
-    {{ r.club_division or r.competition_team or 'None' }}
+    {{ r.competition_detail or 'None' }}
 </div>
                     {% if r.sport == 'Football' %}
                       <div>
@@ -568,7 +738,7 @@
 
 <div>
   <strong>Rebounds <i class="fa-solid fa-basketball"></i> :</strong>
-  {{ r.rebound_type or 'None' }}
+  {{ r.rebounds_display }}
 </div>
                     {% endif %}
                   </div>
@@ -652,83 +822,126 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const sportFilter = document.getElementById('sportFilter');
     const sortByFilter = document.getElementById('sortByFilter');
+    const positionFilter = document.getElementById('positionFilter');
+    const conditions = document.getElementById('statConditions');
+    const addCondition = document.getElementById('addStatCondition');
+    const template = document.getElementById('statConditionTemplate');
+    const stats = JSON.parse(document.getElementById('searchStatsData').textContent);
+    const maxConditions = {{ max_stat_conditions }};
 
-    if (!sportFilter || !sortByFilter) {
-        return;
-    }
+    // ===== Rank By: general rankings + the selected sport's rankings =====
+    const rankingGroups = Array.from(sortByFilter.querySelectorAll('optgroup'))
+        .map(function (group) { return group.cloneNode(true); });
 
-    // Save all original ranking groups
-    const rankingGroups = Array.from(
-        sortByFilter.querySelectorAll('optgroup')
-    ).map(function (group) {
-        return group.cloneNode(true);
-    });
+    const currentSort = {{ sort_by | tojson }};
 
-    // Current ranking value from the server
-    const currentSort = "{{ sort_by }}";
-
-    function updateRankOptions(resetValue = false) {
-
+    function updateRankOptions(resetValue) {
         const selectedSport = sportFilter.value;
+        const previous = resetValue ? '' : (sortByFilter.value || currentSort);
 
-        // Remove everything
         sortByFilter.innerHTML = '';
 
-        // Always keep default option
         const defaultOption = document.createElement('option');
         defaultOption.value = '';
         defaultOption.textContent = 'Default Search Order';
-
         sortByFilter.appendChild(defaultOption);
 
-        // No sport selected
-        if (!selectedSport) {
-            return;
-        }
-
-        // Add only the selected sport group
         rankingGroups.forEach(function (group) {
+            const groupSport = group.getAttribute('data-sport-group');
 
-            const groupSport =
-                group.getAttribute('data-sport-group');
-
-            if (groupSport === selectedSport) {
-
-                sortByFilter.appendChild(
-                    group.cloneNode(true)
-                );
-
+            if (groupSport === '*' || groupSport === selectedSport) {
+                sortByFilter.appendChild(group.cloneNode(true));
             }
         });
 
-        // Restore previous ranking when page loads
-        if (!resetValue && currentSort) {
-
-            const matchingOption =
-                sortByFilter.querySelector(
-                    `option[value="${currentSort}"]`
-                );
-
-            if (matchingOption) {
-                sortByFilter.value = currentSort;
-            }
+        if (previous && sortByFilter.querySelector('option[value="' + previous + '"]')) {
+            sortByFilter.value = previous;
         }
-
     }
 
+    // ===== Position: only the selected sport's positions =====
+    function updatePositions() {
+        const selectedSport = sportFilter.value;
 
-    // When user changes Sport
-    sportFilter.addEventListener('change', function () {
+        positionFilter.querySelectorAll('optgroup').forEach(function (group) {
+            const show = !selectedSport || group.getAttribute('data-sport-group') === selectedSport;
+            group.hidden = !show;
+            Array.from(group.children).forEach(function (option) { option.disabled = !show; });
+        });
 
-        // Changing sport should reset the ranking
-        updateRankOptions(true);
+        const selected = positionFilter.selectedOptions[0];
+        if (selected && selected.disabled) {
+            positionFilter.value = '';
+        }
+    }
 
+    // ===== Stat conditions =====
+    function statOptions() {
+        const selectedSport = sportFilter.value;
+        const groups = selectedSport ? [selectedSport, 'All'] : ['Football', 'Basketball', 'Kickball', 'All'];
+        const seen = new Set();
+        const options = [];
+
+        groups.forEach(function (group) {
+            (stats[group] || []).forEach(function (pair) {
+                if (!seen.has(pair[0])) {
+                    seen.add(pair[0]);
+                    options.push({ value: pair[0], label: pair[1], group: group });
+                }
+            });
+        });
+
+        return options;
+    }
+
+    function fillStatSelect(select, selected) {
+        const options = statOptions();
+        select.innerHTML = '';
+
+        options.forEach(function (item) {
+            const option = document.createElement('option');
+            option.value = item.value;
+            option.textContent = item.label + (sportFilter.value || item.group === 'All' ? '' : ' (' + item.group + ')');
+            option.selected = item.value === selected;
+            select.appendChild(option);
+        });
+    }
+
+    function refreshConditionFields() {
+        conditions.querySelectorAll('.stat-field').forEach(function (select) {
+            fillStatSelect(select, select.value || select.dataset.selected);
+        });
+        addCondition.disabled = conditions.children.length >= maxConditions;
+    }
+
+    addCondition.addEventListener('click', function () {
+        if (conditions.children.length >= maxConditions) {
+            return;
+        }
+        const row = template.content.firstElementChild.cloneNode(true);
+        conditions.appendChild(row);
+        fillStatSelect(row.querySelector('.stat-field'), '');
+        addCondition.disabled = conditions.children.length >= maxConditions;
+        row.querySelector('input').focus();
     });
 
+    conditions.addEventListener('click', function (event) {
+        const remove = event.target.closest('[data-remove-condition]');
+        if (remove) {
+            remove.closest('[data-condition]').remove();
+            addCondition.disabled = false;
+        }
+    });
 
-    // Run once when page loads
+    sportFilter.addEventListener('change', function () {
+        updateRankOptions(true);
+        updatePositions();
+        refreshConditionFields();
+    });
+
     updateRankOptions(false);
-
+    updatePositions();
+    refreshConditionFields();
 });
 </script>
 {% endblock %}

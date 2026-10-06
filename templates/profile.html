@@ -10,7 +10,7 @@
         {% if current_user.is_verified %}
           <span class="badge">Verified <i class="fa-solid fa-user-check"></i></span>
         {% else %}
-          <span class="badge bg-warning text-dark">Pending</span>
+          <span class="badge dart-status-pending">Pending</span>
         {% endif %}
       </div>
       {% if current_user.role == 'Athlete' %}
@@ -21,7 +21,7 @@
 
             <a
                 href="{{ url_for('premium_plans') }}"
-                class="btn btn-success"
+                class="btn btn-success dart-btn"
             >
                 <i class="fa-solid fa-crown me-2"></i>
                 Recruit-Ready Premium
@@ -45,7 +45,7 @@
 
             <a
                 href="{{ url_for('premium_plans') }}"
-                class="btn btn-outline-success"
+                class="btn btn-outline-success dart-btn"
             >
                 <i class="fa-solid fa-crown me-2"></i>
                 Unlock Recruit-Ready Premium
@@ -101,6 +101,13 @@
     margin: 0 !important;
 }
 
+/* Desktop: line the picture up with the Full Name field. */
+@media (min-width: 768px) {
+    .profile-picture-col {
+        padding-top: 4px;
+    }
+}
+
 /* Small screens */
 @media (max-width: 576px) {
     .premium-profile-actions {
@@ -117,10 +124,12 @@
       <div class="card-body">
         <form method="POST" action="{{ url_for('update_profile') }}" enctype="multipart/form-data">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div class="row align-items-center">
+          {# Desktop: the picture sits at the top, beside Full Name and Team
+             Name; phones keep it centred above the form. #}
+          <div class="row align-items-center align-items-md-start">
 
             <!-- Profile Picture -->
-            <div class="col-md-4 text-center mb-4">
+            <div class="col-md-4 text-center mb-4 profile-picture-col">
               {% if current_user.profile_picture %}
                 <img src="{{ url_for('profile_picture', filename=current_user.profile_picture) }}"
                      class="rounded-circle shadow"
@@ -334,7 +343,7 @@
                 <input type="file" name="profile_picture" class="form-control" accept=".png,.jpg,.jpeg">
               </div>
 
-              <button type="submit" class="btn btn-primary">Save Changes <i class="fa-regular fa-floppy-disk"></i></button>
+              <button type="submit" class="btn btn-primary dart-btn dart-btn-blue">Save Changes <i class="fa-regular fa-floppy-disk"></i></button>
             </div>
 
           </div>
@@ -342,7 +351,7 @@
 <!-- Change Password -->
 <div class="mt-4">
     <button type="button"
-            class="btn btn-outline-primary"
+            class="btn btn-outline-primary dart-btn"
             onclick="toggleChangePassword()">
         <i class="fa-solid fa-key"></i>
         Change Password

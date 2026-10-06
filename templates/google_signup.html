@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Finish signing up - D.A.R.T.{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-6">
+    <div class="card shadow">
+      <div class="card-header text-center">
+        <h4 class="mb-1">Finish signing up</h4>
+        <small class="text-muted">
+          Google confirmed <strong>{{ pending.email }}</strong>
+        </small>
+      </div>
+
+      <div class="card-body">
+        <p class="text-center">
+          Choose how you'll use D.A.R.T. Your name and Google email are
+          filled in for you — complete the rest of the form to create your
+          account. Google sign-in is connected when the account is created.
+        </p>
+
+        <div class="d-grid gap-3">
+          <a href="{{ url_for('register') }}" class="btn btn-lg dart-btn">
+            <i class="fa-solid fa-person-running me-2"></i>
+            I'm an Athlete
+          </a>
+
+          <a href="{{ url_for('register_coach') }}" class="btn btn-lg dart-btn">
+            <i class="fa-solid fa-user-shield me-2"></i>
+            I'm a Coach / Admin
+          </a>
+
+          <a href="{{ url_for('register_scout') }}" class="btn btn-lg dart-btn">
+            <i class="fa-solid fa-binoculars me-2"></i>
+            I'm a Scout
+          </a>
+        </div>
+
+        <p class="text-center small text-muted mt-4 mb-0">
+          Athlete IDs, coaches and scouts are still verified by D.A.R.T.
+          administrators before full access.
+          <br>
+          <a href="{{ url_for('google_signup_cancel') }}">Not you? Cancel Google sign-up</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

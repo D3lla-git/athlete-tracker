@@ -4,26 +4,29 @@
   Conversation with {{ recipient.full_name }} | D.A.R.T
 {% endblock %}
 
+{# Full-screen chat: no footer under the conversation. #}
+{% block body_class %}dart-chat-page{% endblock %}
+{% block footer %}{% endblock %}
+
 {% block content %}
 
 <style>
   /* ==========================================================
      D.A.R.T CONVERSATION
+     The page fills the space between the navbar and the bottom
+     of the screen (or the mobile tab bar), and only the message
+     list scrolls, so the composer is always visible.
   ========================================================== */
 
-  html,
-  body {
-    height: 100%;
+  .conversation-page {
+    max-width: 950px;
+    /* Viewport minus navbar minus the page container's padding (py-4). */
+    height: calc(100dvh - var(--dart-nav-h, 76px) - 3rem);
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
-
- .conversation-page {
-  max-width: 950px;
-  height: calc(100vh - 70px);
-  margin: -8px auto 0;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
 
   .conversation-card {
     background: var(--surface-bg);
@@ -32,8 +35,6 @@
     border-radius: 20px;
     overflow: hidden;
     box-shadow: 0 10px 32px rgba(0, 0, 0, 0.10);
-
-    /* IMPORTANT */
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
@@ -52,8 +53,7 @@
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 16px 20px;
-
+    padding: 14px 18px;
     background:
       radial-gradient(
         circle at 85% 30%,
@@ -66,10 +66,7 @@
         #0d2413 55%,
         #061008
       );
-
     color: #ffffff;
-
-    /* IMPORTANT: header never shrinks */
     flex: 0 0 auto;
   }
 
@@ -91,26 +88,25 @@
     color: #ffffff;
   }
 
-  .conversation-header-avatar {
-    width: 52px;
-    height: 52px;
-    min-width: 52px;
+  .conversation-header-avatar,
+  .conversation-header-avatar-placeholder {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
     border-radius: 50%;
-    object-fit: cover;
     border: 2px solid rgba(255, 255, 255, 0.75);
   }
 
+  .conversation-header-avatar {
+    object-fit: cover;
+  }
+
   .conversation-header-avatar-placeholder {
-    width: 52px;
-    height: 52px;
-    min-width: 52px;
-    border-radius: 50%;
     background: rgba(255, 255, 255, 0.14);
-    border: 2px solid rgba(255, 255, 255, 0.75);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.25rem;
+    font-size: 1.2rem;
     font-weight: 700;
   }
 
@@ -120,46 +116,58 @@
   }
 
   .conversation-header-name {
-    font-size: 1.08rem;
+    font-size: 1.05rem;
     font-weight: 700;
     margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .conversation-header-role {
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     opacity: 0.85;
     margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-
   /* ==========================================================
-     MESSAGE AREA
-     ONLY THIS SECTION SCROLLS
+     MESSAGE AREA — the only part that scrolls
   ========================================================== */
 
   .message-area {
     flex: 1 1 auto;
     min-height: 0;
-
     overflow-y: auto;
     overflow-x: hidden;
-
-    padding: 24px 20px;
-
+    padding: 18px 16px;
     background: var(--page-bg);
-
-    scroll-behavior: smooth;
-
-    /*
-     * Prevent the browser/page from taking over the scroll.
-     */
     overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .message-day {
+    text-align: center;
+    margin: 6px 0 14px;
+  }
+
+  .message-day span {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 2rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--muted-text);
+    background: var(--surface-bg);
+    border: 1px solid var(--surface-border);
   }
 
   .message-row {
     display: flex;
     width: 100%;
-    margin-bottom: 14px;
+    margin-bottom: 8px;
   }
 
   .message-row.sent {
@@ -170,12 +178,14 @@
     justify-content: flex-start;
   }
 
+  /* Bubbles shrink to their text and never exceed ~78% of the width. */
   .message-bubble {
-    max-width: 72%;
-    padding: 11px 14px 9px;
-    border-radius: 17px;
-    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
-    word-break: break-word;
+    width: fit-content;
+    max-width: min(78%, 560px);
+    padding: 7px 11px 5px;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    overflow-wrap: anywhere;
   }
 
   .message-row.sent .message-bubble {
@@ -191,7 +201,6 @@
         #0d2413 55%,
         #061008
       );
-
     color: #ffffff;
     border-bottom-right-radius: 5px;
   }
@@ -203,23 +212,38 @@
     border-bottom-left-radius: 5px;
   }
 
+  /* Emoji fonts so emojis render in color on every device. */
+  .message-body,
+  .message-input,
+  .emoji-option {
+    font-family:
+      system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif,
+      "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
+  }
+
   .message-body {
     white-space: pre-wrap;
-    line-height: 1.45;
+    line-height: 1.4;
     font-size: 0.95rem;
+  }
+
+  /* A message that is only emojis shows them larger. */
+  .message-body.emoji-only {
+    font-size: 1.9rem;
+    line-height: 1.2;
   }
 
   .message-time {
     display: block;
-    margin-top: 5px;
+    margin-top: 2px;
     text-align: right;
-    font-size: 0.68rem;
-    opacity: 0.68;
+    font-size: 0.66rem;
+    opacity: 0.7;
+    white-space: nowrap;
   }
 
   .conversation-empty {
     height: 100%;
-    min-height: 360px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -234,52 +258,65 @@
     margin-bottom: 14px;
   }
 
-
   /* ==========================================================
-     MESSAGE COMPOSER
-     ALWAYS REMAINS AT THE BOTTOM
+     COMPOSER — always at the bottom of the card
   ========================================================== */
 
   .message-composer {
+    position: relative;
     flex: 0 0 auto;
-
     border-top: 1px solid var(--surface-border);
-
-    padding: 14px;
-
+    padding: 10px 12px;
     background: var(--surface-bg);
-
-    z-index: 20;
   }
 
   .message-composer form {
     display: flex;
     align-items: flex-end;
-    gap: 10px;
+    gap: 8px;
     margin: 0;
   }
 
   .message-input {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
     resize: none;
-
-    min-height: 48px;
+    min-height: 46px;
     max-height: 140px;
-
-    border-radius: 15px;
-
+    border-radius: 23px;
+    padding: 11px 16px;
+    font-size: 16px; /* 16px stops iOS from zooming into the field */
+    line-height: 1.35;
     overflow-y: auto;
   }
 
+  .composer-icon-btn,
   .send-button {
     flex: 0 0 auto;
+    width: 46px;
+    height: 46px;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+  }
 
-    min-width: 100px;
-    min-height: 48px;
+  .composer-icon-btn {
+    border: 1px solid var(--surface-border) !important;
+    background: var(--page-bg) !important;
+    color: var(--surface-text) !important;
+  }
 
-    border: 2px solid black !important;
+  .composer-icon-btn[aria-expanded="true"] {
+    border-color: #198754 !important;
+    color: #198754 !important;
+  }
+
+  .send-button {
+    border: 2px solid #000000 !important;
     color: #ffffff !important;
-
     background:
       radial-gradient(
         circle at 85% 30%,
@@ -291,165 +328,121 @@
         #071208,
         #0d2413 55%,
         #061008
-      );
-
-    border-radius: 15px;
+      ) !important;
   }
 
   .send-button:hover {
-    filter: brightness(1.12);
-    color: #ffffff !important;
+    filter: brightness(1.2);
   }
-
 
   /* ==========================================================
-     MOBILE
+     EMOJI PANEL
   ========================================================== */
 
-  @media (max-width: 767.98px) {
-
-  /*
-   * Keep the conversation inside the visible mobile screen.
-   */
-.conversation-page {
-  width: 100%;
-  max-width: none;
-  height: calc(100dvh - 75px);
-  padding: 0;
-  margin: -6px 0 0;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-  /*
-   * The card fills the available screen.
-   */
-  .conversation-card {
-    width: 100%;
-    height: 100%;
-
-    border-radius: 14px;
-    border-left: 0;
-    border-right: 0;
-    border-bottom: 0;
-
-    display: flex;
-    flex-direction: column;
-
-    min-height: 0;
-  }
-
-  /*
-   * Header remains visible.
-   */
-  .conversation-header {
-    flex: 0 0 auto;
-
-    padding: 13px 12px;
-    gap: 10px;
-  }
-
-  .conversation-header-avatar,
-  .conversation-header-avatar-placeholder {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-  }
-
-  .conversation-header-name {
-    font-size: 0.98rem;
-  }
-
-  .conversation-header-role {
-    font-size: 0.74rem;
-  }
-
-  /*
-   * ONLY THE MESSAGE AREA SCROLLS.
-   */
-  .message-area {
-    flex: 1 1 auto;
-
-    min-height: 0;
-
-    height: auto;
-    max-height: none;
-
-    padding: 18px 12px;
-
+  .emoji-panel {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: calc(100% + 6px);
+    max-width: 380px;
+    max-height: 230px;
     overflow-y: auto;
-    overflow-x: hidden;
-
-    overscroll-behavior: contain;
-
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .message-bubble {
-    max-width: 84%;
-    padding: 10px 12px 8px;
-  }
-
-  .message-body {
-    font-size: 0.9rem;
-  }
-
-  /*
-   * COMPOSER ALWAYS REMAINS VISIBLE
-   * AT THE BOTTOM OF THE CONVERSATION.
-   */
-  .message-composer {
-    flex: 0 0 auto;
-
-    position: relative;
-
-    padding: 10px;
-
+    padding: 8px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+    gap: 2px;
     background: var(--surface-bg);
-
-    border-top: 1px solid var(--surface-border);
-
-    z-index: 100;
+    border: 1px solid var(--surface-border);
+    border-radius: 16px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+    z-index: 30;
   }
 
-  .message-composer form {
-    display: flex;
-    align-items: flex-end;
-    gap: 7px;
-    margin: 0;
-  }
-
-  .message-input {
-    flex: 1;
-
-    min-height: 45px;
-    max-height: 120px;
-
-    font-size: 0.9rem;
-
-    border-radius: 13px;
-  }
-
-  .send-button {
-    flex: 0 0 auto;
-
-    min-width: 78px;
-    min-height: 45px;
-
-    padding: 8px 10px !important;
-
-    border-radius: 13px;
-  }
-
-  .send-button .send-label {
+  .emoji-panel[hidden] {
     display: none;
   }
-}
+
+  .emoji-option {
+    border: 0;
+    background: transparent;
+    font-size: 1.45rem;
+    line-height: 1;
+    padding: 6px 0;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+
+  .emoji-option:hover,
+  .emoji-option:focus-visible {
+    background: var(--page-bg);
+  }
+
+  /* ==========================================================
+     PHONES & TABLETS (tab bar visible)
+     Pin the chat between the navbar and the tab bar.
+  ========================================================== */
+
+  @media (max-width: 991.98px) {
+
+    body.dart-chat-page {
+      overflow: hidden;
+    }
+
+    .conversation-page {
+      position: fixed;
+      top: var(--dart-nav-h, 76px);
+      left: 0;
+      right: 0;
+      bottom: calc(58px + env(safe-area-inset-bottom));
+      height: auto;
+      max-width: none;
+      margin: 0;
+      padding: 6px 6px 0;
+      z-index: 1020;
+    }
+
+    /* Keyboard open: tab bar hides, chat reaches the bottom. */
+    body.dart-keyboard-open .conversation-page {
+      bottom: 0;
+    }
+
+    .conversation-card {
+      border-radius: 16px 16px 0 0;
+      border-bottom: 0;
+    }
+
+    .conversation-header {
+      padding: 10px 12px;
+      gap: 10px;
+    }
+
+    .conversation-header-avatar,
+    .conversation-header-avatar-placeholder {
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
+    }
+
+    .message-area {
+      padding: 14px 10px;
+    }
+
+    .message-bubble {
+      max-width: 84%;
+    }
+
+    .message-composer {
+      padding: 8px;
+    }
+
+    .message-composer form {
+      gap: 6px;
+    }
+  }
 </style>
 
 
-<div class="container py-4 conversation-page">
+<div class="conversation-page">
 
   <div class="conversation-card">
 
@@ -467,43 +460,28 @@
         <i class="fa-solid fa-arrow-left"></i>
       </a>
 
-
       {% if recipient.profile_picture %}
-
         <img
           src="{{ url_for('profile_picture', filename=recipient.profile_picture) }}"
           alt="{{ recipient.full_name }}"
           class="conversation-header-avatar">
-
       {% else %}
-
         <div class="conversation-header-avatar-placeholder">
           {{ recipient.full_name[0] | upper }}
         </div>
-
       {% endif %}
 
-
       <div class="conversation-header-info">
-
         <p class="conversation-header-name">
           {{ recipient.full_name }}
-
           {% if recipient.nationality %}
-            <span class="ms-1">
-              {{ country_flag(recipient.nationality) }}
-            </span>
+            <span class="ms-1">{{ country_flag(recipient.nationality) }}</span>
           {% endif %}
         </p>
 
         <div class="conversation-header-role">
-          {{ recipient.role }}
-
-          {% if recipient.school %}
-            · {{ recipient.school }}
-          {% endif %}
+          {{ recipient.role }}{% if recipient.school %} · {{ recipient.school }}{% endif %}
         </div>
-
       </div>
 
     </div>
@@ -513,72 +491,43 @@
          MESSAGES
     ========================================================= -->
 
-    <div
-      class="message-area"
-      id="messageArea">
+    <div class="message-area" id="messageArea">
 
       {% if messages %}
 
+        {% set ns = namespace(day=None) %}
+
         {% for message in messages %}
 
-          {% if message.sender_id == current_user.id %}
-
-            <!-- SENT MESSAGE -->
-            <div class="message-row sent">
-
-              <div class="message-bubble">
-
-                <div class="message-body">
-                  {{ message.body }}
-                </div>
-
-                <span class="message-time">
-                  {{ message.created_at.strftime('%b %d, %Y · %I:%M %p') }}
-                </span>
-
-              </div>
-
-            </div>
-
-          {% else %}
-
-            <!-- RECEIVED MESSAGE -->
-            <div class="message-row received">
-
-              <div class="message-bubble">
-
-                <div class="message-body">
-                  {{ message.body }}
-                </div>
-
-                <span class="message-time">
-                  {{ message.created_at.strftime('%b %d, %Y · %I:%M %p') }}
-                </span>
-
-              </div>
-
-            </div>
-
+          {# Day divider whenever the date changes. #}
+          {% set day = message.created_at.strftime('%B %d, %Y') %}
+          {% if day != ns.day %}
+            <div class="message-day"><span>{{ day }}</span></div>
+            {% set ns.day = day %}
           {% endif %}
+
+          {# The body sits directly inside its div (no spaces or new lines
+             around it) so pre-wrap does not add blank space to bubbles. #}
+          <div class="message-row {{ 'sent' if message.sender_id == current_user.id else 'received' }}">
+            <div class="message-bubble">
+              <div class="message-body">{{ message.body }}</div>
+              {# Time only (the date is in the day divider); full date on hover. #}
+              <time class="message-time"
+                    datetime="{{ message.created_at.strftime('%Y-%m-%dT%H:%M') }}"
+                    title="{{ message.created_at.strftime('%b %d, %Y · %I:%M %p') }}">{{ message.created_at.strftime('%I:%M %p') }}</time>
+            </div>
+          </div>
 
         {% endfor %}
 
       {% else %}
 
         <div class="conversation-empty">
-
           <div>
-
             <i class="fa-regular fa-comments"></i>
-
             <h5>No messages yet</h5>
-
-            <p class="mb-0">
-              Start the conversation with {{ recipient.full_name }}.
-            </p>
-
+            <p class="mb-0">Start the conversation with {{ recipient.full_name }}.</p>
           </div>
-
         </div>
 
       {% endif %}
@@ -592,14 +541,24 @@
 
     <div class="message-composer">
 
+      <div class="emoji-panel" id="emojiPanel" role="dialog" aria-label="Choose an emoji" hidden></div>
+
       <form
         method="POST"
-        action="{{ url_for('conversation', user_id=recipient.id) }}">
+        action="{{ url_for('conversation', user_id=recipient.id) }}"
+        id="messageForm">
 
-        <input
-          type="hidden"
-          name="csrf_token"
-          value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <button
+          type="button"
+          class="btn composer-icon-btn"
+          id="emojiToggle"
+          aria-label="Insert emoji"
+          aria-expanded="false"
+          aria-controls="emojiPanel">
+          <i class="fa-regular fa-face-smile"></i>
+        </button>
 
         <textarea
           name="body"
@@ -608,18 +567,14 @@
           rows="1"
           maxlength="5000"
           placeholder="Write a message..."
+          aria-label="Message"
           required></textarea>
 
         <button
           type="submit"
-          class="btn send-button">
-
-          <span class="send-label">
-            Send
-          </span>
-
+          class="btn send-button"
+          aria-label="Send message">
           <i class="fa-solid fa-paper-plane"></i>
-
         </button>
 
       </form>
@@ -636,54 +591,107 @@
 
     const messageArea = document.getElementById('messageArea');
     const messageInput = document.getElementById('messageInput');
+    const messageForm = document.getElementById('messageForm');
+    const emojiToggle = document.getElementById('emojiToggle');
+    const emojiPanel = document.getElementById('emojiPanel');
 
-    /* Always open the conversation at the newest message. */
-    if (messageArea) {
-      messageArea.scrollTop = messageArea.scrollHeight;
+    function scrollToNewest() {
+      if (messageArea) {
+        messageArea.scrollTop = messageArea.scrollHeight;
+      }
     }
 
-    /* Auto-expand the message box while typing. */
-    if (messageInput) {
+    // Always open the conversation at the newest message, and keep it
+    // there when the keyboard opens or the screen resizes.
+    scrollToNewest();
+    window.addEventListener('resize', scrollToNewest);
 
-      messageInput.addEventListener('input', function () {
+    // Messages that are only emojis are shown larger.
+    const emojiOnly = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|️|‍|\s)+$/u;
 
-        this.style.height = 'auto';
+    document.querySelectorAll('.message-body').forEach(function (body) {
+      const text = body.textContent.trim();
+      if (text && /\p{Extended_Pictographic}/u.test(text) && emojiOnly.test(text) && Array.from(text).length <= 8) {
+        body.classList.add('emoji-only');
+      }
+    });
 
-        const maxHeight = 140;
+    // Auto-grow the message box while typing.
+    function resizeInput() {
+      messageInput.style.height = 'auto';
+      messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + 'px';
+    }
 
-        this.style.height = Math.min(
-          this.scrollHeight,
-          maxHeight
-        ) + 'px';
+    messageInput.addEventListener('input', resizeInput);
 
-      });
+    // Enter sends; Shift + Enter adds a new line.
+    messageInput.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
 
-      /*
-       * Enter sends the message.
-       * Shift + Enter creates a new line.
-       */
-      messageInput.addEventListener('keydown', function (event) {
-
-        if (
-          event.key === 'Enter'
-          && !event.shiftKey
-          && !event.isComposing
-        ) {
-
-          event.preventDefault();
-
-          const form = this.closest('form');
-
-          if (form && this.value.trim()) {
-            form.submit();
-          }
-
+        if (this.value.trim()) {
+          messageForm.requestSubmit();
         }
+      }
+    });
 
-      });
+    // ===== Emoji picker =====
+    const emojis = [
+      '😀','😁','😂','🤣','😊','😍','🥰','😎','🤩','🙂','😉','😅','🤔','😮','😢','😭',
+      '😡','🙏','👏','🙌','👍','👎','👌','✌️','💪','🤝','👋','❤️','💚','💛','🔥','⭐',
+      '🎉','🏆','🥇','🥈','🥉','🏅','⚽','🏀','⚾','🥅','👟','🏃','⏱️','📅','📍','✅',
+      '❌','⚠️','💯','🇱🇷'
+    ];
 
+    emojis.forEach(function (emoji) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'emoji-option';
+      button.textContent = emoji;
+      button.setAttribute('aria-label', 'Insert ' + emoji);
+      emojiPanel.appendChild(button);
+    });
+
+    function setPanel(open) {
+      emojiPanel.hidden = !open;
+      emojiToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     }
 
+    emojiToggle.addEventListener('click', function () {
+      setPanel(emojiPanel.hidden);
+    });
+
+    // Insert the emoji where the cursor is.
+    emojiPanel.addEventListener('click', function (event) {
+      const option = event.target.closest('.emoji-option');
+
+      if (!option) {
+        return;
+      }
+
+      const start = messageInput.selectionStart ?? messageInput.value.length;
+      const end = messageInput.selectionEnd ?? messageInput.value.length;
+
+      messageInput.setRangeText(option.textContent, start, end, 'end');
+      messageInput.focus();
+      resizeInput();
+    });
+
+    document.addEventListener('click', function (event) {
+      if (!emojiPanel.hidden && !event.target.closest('.message-composer')) {
+        setPanel(false);
+      }
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        setPanel(false);
+      }
+    });
+
+    messageForm.addEventListener('submit', function () {
+      setPanel(false);
+    });
   });
 </script>
 

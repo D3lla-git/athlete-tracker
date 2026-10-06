@@ -16,7 +16,7 @@
     {% if user.is_verified %}
       <span class="badge">Verified</span>
     {% else %}
-      <span class="badge bg-warning text-dark">Pending</span>
+      <span class="badge dart-status-pending">Pending</span>
     {% endif %}
   </div>
 
@@ -735,6 +735,15 @@
                       <div class="small">
                         <strong>{{ record.competition_team_label }}:</strong>
                         {{ record.competition_team }}
+                      </div>
+                    </div>
+                  {% endif %}
+
+                  {% if record.age_group %}
+                    <div class="col-12">
+                      <div class="small">
+                        <strong>Age Group:</strong>
+                        {{ record.age_group }}
                       </div>
                     </div>
                   {% endif %}

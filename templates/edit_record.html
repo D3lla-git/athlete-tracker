@@ -109,6 +109,41 @@
         required>
 </div>
 
+<!-- Game date (must stay in this record's season) and minutes played -->
+<div class="row g-3 mt-1">
+  <div class="col-md-6">
+    <label class="form-label" for="editGameDate">
+      Game Date
+      <i class="fa-regular fa-calendar-days"></i>
+    </label>
+    <input
+        type="date"
+        name="game_date"
+        id="editGameDate"
+        class="form-control"
+        value="{{ record.game_date.strftime('%Y-%m-%d') if record.game_date else '' }}"
+        min="{{ record.year }}-01-01"
+        max="{{ record.year }}-12-31"
+        required>
+    <div class="form-text">Must be in the {{ record.year }} season.</div>
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label" for="editMatchMinutes">
+      Match Minutes Played
+      <i class="fa-solid fa-clock"></i>
+    </label>
+    <input
+        type="number"
+        name="match_minutes_played"
+        id="editMatchMinutes"
+        class="form-control"
+        value="{{ record.match_minutes_played or 0 }}"
+        min="0"
+        step="1">
+  </div>
+</div>
+
 <div class="row g-3 mt-1">
   <div class="col-md-6">
    <label class="form-label">
@@ -124,6 +159,7 @@
            class="form-control"
            value="{{ record.man_of_the_match or 0 }}"
            min="0"
+           max="1"
            step="1">
   </div>
 
@@ -164,45 +200,20 @@
 
         <option value="">-- Select Competition --</option>
 
-        <option value="High School"
-            {% if record.competition_category == 'High School' %}selected{% endif %}>
-            High School Competition
+        {# Competitions offered for this sport (competitions.py). An old
+           record keeps its existing competition even if no longer offered. #}
+        {% for competition in sport_competitions %}
+        <option value="{{ competition }}"
+            {% if record.competition_category == competition %}selected{% endif %}>
+            {{ competition }}
         </option>
+        {% endfor %}
 
-        <option value="County Meet"
-            {% if record.competition_category == 'County Meet' %}selected{% endif %}>
-            County Meet
+        {% if record.competition_category and record.competition_category not in sport_competitions %}
+        <option value="{{ record.competition_category }}" selected>
+            {{ record.competition_category }} (no longer offered)
         </option>
-
-        <option value="Club League"
-            {% if record.competition_category == 'Club League' %}selected{% endif %}>
-            Club League
-        </option>
-
-        <option value="University League"
-            {% if record.competition_category == 'University League' %}selected{% endif %}>
-            University League
-        </option>
-
-        <option value="Community/Area League"
-            {% if record.competition_category == 'Community/Area League' %}selected{% endif %}>
-            Community/Area League
-        </option>
-
-        <option value="AFCON"
-            {% if record.competition_category == 'AFCON' %}selected{% endif %}>
-            AFCON
-        </option>
-
-        <option value="WAFU"
-            {% if record.competition_category == 'WAFU' %}selected{% endif %}>
-            WAFU
-        </option>
-
-        <option value="World Cup"
-            {% if record.competition_category == 'World Cup' %}selected{% endif %}>
-            World Cup
-        </option>
+        {% endif %}
 
     </select>
 </div>
@@ -238,6 +249,30 @@
     </select>
 </div>
 
+<!-- Grassroots League Age Group (LFA grassroots) -->
+<div class="mb-4" id="ageGroupOptions" style="display: none;">
+    <label class="form-label" for="ageGroup">
+        Age Group
+        <i class="fa-solid fa-children"></i>
+    </label>
+
+    <select
+        name="age_group"
+        id="ageGroup"
+        class="form-select">
+
+        <option value="">-- Select Age Group --</option>
+
+        {% for age_group in competition_form_rules().ageGroups %}
+        <option value="{{ age_group }}"
+            {% if record.age_group == age_group %}selected{% endif %}>
+            {{ age_group }}
+        </option>
+        {% endfor %}
+
+    </select>
+</div>
+
 <!-- AFCON / WAFU / World Cup team. Options are filled in by the script
      below from the server's list for the selected competition. -->
 <div class="mb-4" id="competitionTeamOptions" style="display: none;">
@@ -251,14 +286,6 @@
         id="competitionTeam"
         class="form-select">
     </select>
-
-    <script id="competitionTeamData" type="application/json">
-        {{ {
-            'options': competition_team_options,
-            'labels': competition_team_labels,
-            'selected': record.competition_team or ''
-        } | tojson }}
-    </script>
 </div>
 
    <div class="mb-4">
@@ -269,12 +296,13 @@
         <i class="fa-solid fa-trophy" style="color: goldenrod;"></i>
     </label>
 
-    <script id="trophyOptionsData" type="application/json">
+    <script id="editRulesData" type="application/json">
         {{ {
-            'table': trophy_options_table(),
+            'rules': competition_form_rules(),
             'sport': record.sport,
             'competition': record.competition_category,
             'trophy': record.trophy or '',
+            'team': record.competition_team or '',
             'legacy': trophy_legacy
         } | tojson }}
     </script>
@@ -485,29 +513,48 @@
                    value="{{ record.sent_off or 0 }}">
         </div>
         <div class="col-md-6">
-    <label class="form-label">
-        Rebounds
-        <i class="fa-solid fa-basketball"></i>
-    </label>
+            <label class="form-label" for="editOffensiveRebounds">
+                Offensive Rebounds
+                <i class="fa-solid fa-arrow-up" style="color: orangered;"></i>
+            </label>
+            <input type="number"
+                   name="offensive_rebounds"
+                   id="editOffensiveRebounds"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.offensive_rebounds or 0 }}">
+        </div>
 
-    <select name="rebound_type" class="form-select">
-        <option value="">-- Select --</option>
-        <option value="Offensive rebound"
-            {% if record.rebound_type == 'Offensive rebound' %}selected{% endif %}>
-            Offensive rebound
-        </option>
-        <option value="Defensive rebound"
-            {% if record.rebound_type == 'Defensive rebound' %}selected{% endif %}>
-            Defensive rebound
-        </option>
-    </select>
-</div>
+        <div class="col-md-6">
+            <label class="form-label" for="editDefensiveRebounds">
+                Defensive Rebounds
+                <i class="fa-solid fa-shield" style="color: orangered;"></i>
+            </label>
+            <input type="number"
+                   name="defensive_rebounds"
+                   id="editDefensiveRebounds"
+                   class="form-control"
+                   min="0"
+                   step="1"
+                   value="{{ record.defensive_rebounds or 0 }}">
+        </div>
+
+        {% if record.rebound_type and not record.total_rebounds %}
+        <div class="col-12">
+            <div class="form-text">
+                <i class="fa-solid fa-circle-info"></i>
+                This record was saved before rebound counts and shows
+                "{{ record.rebound_type }}". Enter the counts to replace it.
+            </div>
+        </div>
+        {% endif %}
     </div>
 
 {% endif %}
 
           <div class="mt-4">
-            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <button type="submit" class="btn btn-primary dart-btn dart-btn-blue">Save Changes</button>
             <a href="{{ url_for('student_dashboard') }}" class="btn btn-secondary">Cancel</a>
           </div>
         </form>
@@ -564,26 +611,32 @@ document.addEventListener('DOMContentLoaded', function () {
     const clubDivision =
         document.getElementById('clubDivision');
 
+    const ageGroupOptions =
+        document.getElementById('ageGroupOptions');
+
+    const ageGroup =
+        document.getElementById('ageGroup');
+
 
     /*
-     * Competition -> trophy options, from competitions.py.
-     * Keys are "sport|competition|division"; the division part is
-     * only used for Club League.
+     * Competition / trophy rules, from competitions.py.
+     * rules.trophies keys are "sport|competition|detail", where detail
+     * is the club division or age group (empty otherwise).
      */
-    const trophyData = JSON.parse(
-        document.getElementById('trophyOptionsData').textContent
+    const editData = JSON.parse(
+        document.getElementById('editRulesData').textContent
     );
 
-    const trophyOptionsTable = trophyData.table;
-    const recordSport = trophyData.sport;
-    const originalCompetition = trophyData.competition;
-    const originalTrophy = trophyData.trophy;
+    const rules = editData.rules;
+    const recordSport = editData.sport;
+    const originalCompetition = editData.competition;
+    const originalTrophy = editData.trophy;
 
     /*
      * Retired trophy names (e.g. "Club Trophy") this record may keep
      * while its competition is unchanged.
      */
-    const legacyTrophies = trophyData.legacy;
+    const legacyTrophies = editData.legacy;
 
     let selectedTrophy = originalTrophy;
 
@@ -643,7 +696,7 @@ document.addEventListener('DOMContentLoaded', function () {
      *
      * 1. Sport
      * 2. Competition
-     * 3. Club League Division (Football)
+     * 3. Club League Division / Grassroots Age Group
      */
     function updateTrophies() {
 
@@ -660,24 +713,35 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const division =
-            competition === 'Club League' && clubDivision
-                ? clubDivision.value
-                : '';
+        const detailField = rules.detailFields[competition];
+        let detail = '';
 
-        if (
-            competition === 'Club League' &&
-            recordSport === 'Football' &&
-            !division
-        ) {
-            showTrophyMessage('Please select the Club League Division first.');
-            return;
+        if (detailField === 'club_division') {
+
+            detail = clubDivision ? clubDivision.value : '';
+
+            if (!detail) {
+                showTrophyMessage('Please select the Club League Division first.');
+                return;
+            }
+
+        } else if (detailField === 'age_group') {
+
+            detail = ageGroup ? ageGroup.value : '';
+
+            if (!detail) {
+                showTrophyMessage('Please select the Age Group first.');
+                return;
+            }
         }
 
         const options =
-            trophyOptionsTable[
-                recordSport + '|' + competition + '|' + division
+            rules.trophies[
+                recordSport + '|' + competition + '|' + detail
             ] || [];
+
+        // Not every game wins a trophy: "None" is saved as no trophy.
+        addTrophyRadio('', 0, 'None — no trophy won');
 
         options.forEach(function (value, index) {
             addTrophyRadio(value, index + 1);
@@ -698,9 +762,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const radios =
             trophyOptions.querySelectorAll('input[name="trophy"]');
 
-        if (radios.length === 1) {
+        if (!Array.from(radios).some(function (radio) { return radio.checked; })) {
             radios[0].checked = true;
-            selectedTrophy = radios[0].value;
+            selectedTrophy = '';
         }
     }
 
@@ -741,6 +805,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     /*
+     * Grassroots League Age Group.
+     */
+    function updateAgeGroup() {
+
+        if (!competitionSelect || !ageGroupOptions || !ageGroup) {
+            return;
+        }
+
+        const show = competitionSelect.value === 'Grassroots League';
+
+        ageGroupOptions.style.display = show ? 'block' : 'none';
+        ageGroup.required = show;
+
+        if (!show) {
+            ageGroup.value = '';
+        }
+    }
+
+
+    /*
      * AFCON / WAFU / World Cup team.
      */
     const competitionTeamOptions =
@@ -752,13 +836,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const competitionTeamLabel =
         document.getElementById('competitionTeamLabel');
 
-    const competitionTeamData = JSON.parse(
-        document.getElementById('competitionTeamData').textContent
-    );
-
-    const teamOptionsByCompetition = competitionTeamData.options;
-    const teamLabelsByCompetition = competitionTeamData.labels;
-    let selectedCompetitionTeam = competitionTeamData.selected;
+    let selectedCompetitionTeam = editData.team;
 
     function updateCompetitionTeam() {
 
@@ -770,21 +848,31 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        const label =
+            rules.teamLabels[competitionSelect.value];
+
         const options =
-            teamOptionsByCompetition[competitionSelect.value];
+            (rules.teams[recordSport + '|' + competitionSelect.value] || []).slice();
+
+        // An old record keeps its saved team while its competition is unchanged.
+        if (
+            label &&
+            competitionSelect.value === originalCompetition &&
+            editData.team &&
+            !options.includes(editData.team)
+        ) {
+            options.push(editData.team);
+        }
 
         competitionTeam.innerHTML = '';
 
-        if (!options) {
+        if (!label || !options.length) {
 
             competitionTeamOptions.style.display = 'none';
             competitionTeam.required = false;
 
             return;
         }
-
-        const label =
-            teamLabelsByCompetition[competitionSelect.value];
 
         competitionTeamLabel.textContent = label;
 
@@ -815,6 +903,14 @@ document.addEventListener('DOMContentLoaded', function () {
         );
     }
 
+    if (ageGroup) {
+
+        ageGroup.addEventListener(
+            'change',
+            updateTrophies
+        );
+    }
+
     if (competitionTeam) {
 
         competitionTeam.addEventListener(
@@ -835,9 +931,10 @@ document.addEventListener('DOMContentLoaded', function () {
             'change',
             function () {
 
-                updateTrophies();
                 updateClubDivision();
+                updateAgeGroup();
                 updateCompetitionTeam();
+                updateTrophies();
 
             }
         );
@@ -846,9 +943,10 @@ document.addEventListener('DOMContentLoaded', function () {
          * Run when page first loads so the
          * existing record is displayed correctly.
          */
-        updateTrophies();
         updateClubDivision();
+        updateAgeGroup();
         updateCompetitionTeam();
+        updateTrophies();
     }
 
 

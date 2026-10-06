@@ -468,12 +468,13 @@
 
         // The form builds some fields from earlier choices, so set those in
         // order and let the page's own scripts react: sport → position list,
-        // competition → trophy/division/special options, division → Club
-        // League trophies, position → GK stats.
+        // competition → trophy/division/special options, division / age
+        // group → trophies, position → GK stats.
         var sequence = [
             ['sportSelect', 'sport'],
             ['competition', 'competition'],
             ['clubDivision', 'club_division'],
+            ['ageGroup', 'age_group'],
             ['positionSelect', 'position']
         ];
 
@@ -510,6 +511,9 @@
             }
         });
 
+        // Re-check Year / Season against the game date.
+        fireChange(document.getElementById('game_date'));
+
         editingRecordId = item.id;
 
         showFormAlert(
@@ -523,6 +527,7 @@
         form.reset();
         fireChange(document.getElementById('sportSelect'));
         fireChange(document.getElementById('competition'));
+        fireChange(document.getElementById('game_date'));
     }
 
     // Once the edited version is safely submitted or saved, drop the old copy.

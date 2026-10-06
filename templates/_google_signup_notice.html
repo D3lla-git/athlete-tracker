@@ -1,0 +1,11 @@
+{# Shown on the registration forms while a Google sign-up is in progress. #}
+{% if google_signup %}
+<div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-2">
+  <span>
+    <i class="fa-brands fa-google me-1"></i>
+    Signing up with Google as <strong>{{ google_signup.email }}</strong>.
+    Google sign-in is connected when your account is created.
+  </span>
+  <a href="{{ url_for('google_signup_cancel') }}" class="small">Cancel</a>
+</div>
+{% endif %}

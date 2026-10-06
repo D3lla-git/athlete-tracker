@@ -1,6 +1,6 @@
 import os
 from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, send_from_directory, session, abort, make_response
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user, user_logged_in
 from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -9,7 +9,17 @@ from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Su
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
-from competitions import validate_trophy, trophy_options_table, legacy_trophy_options
+from competitions import (
+    ALL_COMPETITIONS,
+    clean_age_group,
+    clean_competition_team,
+    competition_allowed,
+    competition_team_options,
+    competitions_for,
+    form_rules,
+    legacy_trophy_options,
+    validate_trophy,
+)
 from datetime import datetime
 from urllib.parse import urlsplit
 from flask_migrate import Migrate
@@ -22,7 +32,9 @@ import pyotp
 import qrcode
 import secrets
 from flask_mail import Mail, Message
-from sqlalchemy import or_
+from sqlalchemy import or_, func
+from authlib.integrations.flask_client import OAuth
+import time
 from flask import abort
 
 
@@ -312,7 +324,7 @@ login_manager.init_app(app)
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 # ========== FILE UPLOAD Security HELPERS ==========
 def allowed_file(filename):
@@ -361,69 +373,8 @@ def is_strong_password(password):
 
 # ========== CATEGORY PERMISSION HELPERS ==========
 
-VALID_COMPETITIONS = {
-    'County Meet',
-    'Club League',
-    'University League',
-    'Community/Area League',
-    'High School',
-
-    # National-team competitions. The team / age category is stored
-    # separately in SportRecord.competition_team (see COMPETITION_TEAM_OPTIONS).
-    'AFCON',
-    'WAFU',
-    'World Cup',
-}
-
-# Allowed SportRecord.competition_team values for each national-team
-# competition. Used to validate submissions and to build the edit form.
-COMPETITION_TEAM_OPTIONS = {
-    'AFCON': [
-        "Lonestar Men's Team",
-    ],
-    'WAFU': [
-        'Male-U15', 'Female-U15',
-        'Male-U17', 'Female-U17',
-        'Male-U20', 'Female-U20',
-        'Male-U23', 'Female-U23',
-    ],
-    'World Cup': [
-        "Lonestar Men's Team",
-    ],
-}
-
-# Form field that carries the choice on the new-record form, which has a
-# separate dropdown per competition. The edit form sends 'competition_team'.
-COMPETITION_TEAM_FORM_FIELDS = {
-    'AFCON': 'afcon_team',
-    'WAFU': 'wafu_category',
-    'World Cup': 'world_cup_team',
-}
-
-
-def clean_competition_team(form, competition_category):
-    """
-    Return (competition_team, error_message) for a submitted record.
-
-    National-team competitions must have a valid team/category; every
-    other competition stores None.
-    """
-    options = COMPETITION_TEAM_OPTIONS.get(competition_category)
-
-    if not options:
-        return None, None
-
-    value = (
-        form.get('competition_team')
-        or form.get(COMPETITION_TEAM_FORM_FIELDS[competition_category])
-        or ''
-    ).strip()
-
-    if value not in options:
-        label = SportRecord.COMPETITION_TEAM_LABELS[competition_category]
-        return None, f'Please select a valid {label} for {competition_category}.'
-
-    return value, None
+# Competitions are defined per sport in competitions.py (LFA / LBA / LKF).
+VALID_COMPETITIONS = set(ALL_COMPETITIONS)
 # ==========================================================
 # SPORT-SPECIFIC POSITIONS
 # ==========================================================
@@ -707,8 +658,8 @@ def country_flag(nationality):
 
 
 app.jinja_env.globals['country_flag'] = country_flag
-# Competition → trophy lists for the record forms (see competitions.py).
-app.jinja_env.globals['trophy_options_table'] = trophy_options_table
+# Competition / trophy rules for the record forms (see competitions.py).
+app.jinja_env.globals['competition_form_rules'] = form_rules
 
 @app.route('/')
 def index():
@@ -1139,17 +1090,157 @@ def premium_checkout_pending(payment_reference):
         payment=payment
     )
 # =================SEARCH ROUTE=========================================
+# ==========================================================
+# SEARCH: FILTER DEFINITIONS
+# ==========================================================
+# Numeric record stats that can be filtered ("goals >= 2"), by sport.
+SEARCH_STATS = {
+    'Football': [
+        ('goals', 'Goals'),
+        ('assists', 'Assists'),
+        ('yellow_cards', 'Yellow Cards'),
+        ('red_cards', 'Red Cards'),
+        ('clean_sheets', 'Clean Sheets'),
+        ('saves', 'Saves'),
+    ],
+    'Basketball': [
+        ('points', 'Points'),
+        ('assists', 'Assists'),
+        ('blocks', 'Blocks'),
+        ('total_rebounds', 'Total Rebounds'),
+        ('offensive_rebounds', 'Offensive Rebounds'),
+        ('defensive_rebounds', 'Defensive Rebounds'),
+        ('sent_off', 'Times Sent Off'),
+    ],
+    'Kickball': [
+        ('home_runs', 'Home Runs'),
+        ('cut_base', 'Cut Base'),
+        ('foul_played', 'Fouls Played'),
+        ('kickball_yellow_cards', 'Yellow Cards'),
+        ('kickball_red_cards', 'Red Cards'),
+    ],
+    # Every sport.
+    'All': [
+        ('match_minutes_played', 'Match Minutes'),
+        ('man_of_the_match', 'MOTM / QOTM'),
+        ('mvp', 'MVP'),
+    ],
+}
+
+SEARCH_STAT_COLUMNS = {
+    field
+    for stats in SEARCH_STATS.values()
+    for field, _ in stats
+}
+
+SEARCH_STAT_OPERATORS = {
+    'gte': ('≥', lambda value, target: value >= target),
+    'lte': ('≤', lambda value, target: value <= target),
+    'eq': ('=', lambda value, target: value == target),
+}
+
+MAX_STAT_CONDITIONS = 5
+
+# Filters beyond the basic name/team/opponent/sport/year search. Kept in
+# one list so they can later be limited to paid scout subscribers.
+ADVANCED_SEARCH_FILTERS = (
+    'gender', 'nationality', 'age_min', 'age_max', 'height_min',
+    'height_max', 'weight_min', 'weight_max', 'preferred_foot',
+    'competition', 'club_division', 'age_group', 'competition_team',
+    'position', 'trophy', 'date_from', 'date_to', 'motm', 'mvp',
+    'stat_scope', 'min_games', 'stat',
+)
+
+
+def _search_int(value, minimum=None, maximum=None):
+    try:
+        number = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+    if minimum is not None and number < minimum:
+        return None
+
+    if maximum is not None and number > maximum:
+        return None
+
+    return number
+
+
+def _search_decimal(value):
+    try:
+        number = float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+    return number if 0 <= number <= 1000 else None
+
+
+def _search_date(value):
+    try:
+        return datetime.strptime((value or '').strip(), '%Y-%m-%d').date()
+    except ValueError:
+        return None
+
+
 @app.route('/search')
 def search():
-    name = request.args.get('name', '').strip()
-    school = request.args.get('school', '').strip()
-    team_played_against = request.args.get('team_played_against', '').strip()
-    year = request.args.get('year', '').strip()
-    sport = request.args.get('sport', '').strip()
-    sort_by = request.args.get('sort_by', '').strip()
+    args = request.args
+
+    name = args.get('name', '').strip()
+    school = args.get('school', '').strip()
+    team_played_against = args.get('team_played_against', '').strip()
+    year = args.get('year', '').strip()
+    sport = args.get('sport', '').strip()
+    sort_by = args.get('sort_by', '').strip()
+
+    # ---------- Advanced filters ----------
+    gender = args.get('gender', '').strip()
+    nationality = args.get('nationality', '').strip()
+    age_min = _search_int(args.get('age_min'), 3, 99)
+    age_max = _search_int(args.get('age_max'), 3, 99)
+    height_min = _search_decimal(args.get('height_min'))
+    height_max = _search_decimal(args.get('height_max'))
+    weight_min = _search_decimal(args.get('weight_min'))
+    weight_max = _search_decimal(args.get('weight_max'))
+    preferred_foot = args.get('preferred_foot', '').strip()
+    competition = args.get('competition', '').strip()
+    club_division = args.get('club_division', '').strip()
+    age_group = args.get('age_group', '').strip()
+    competition_team = args.get('competition_team', '').strip()
+    position = args.get('position', '').strip()
+    trophy = args.get('trophy', '').strip()
+    date_from = _search_date(args.get('date_from'))
+    date_to = _search_date(args.get('date_to'))
+    motm = args.get('motm') == '1'
+    mvp = args.get('mvp') == '1'
+    stat_scope = args.get('stat_scope', 'game')
+    stat_scope = stat_scope if stat_scope in ('game', 'total') else 'game'
+    min_games = _search_int(args.get('min_games'), 1, 500)
+
+    # Stat conditions, e.g. goals >= 2. Only known columns and operators.
+    stat_conditions = []
+
+    for field, operator, value in zip(
+        args.getlist('stat'),
+        args.getlist('stat_op'),
+        args.getlist('stat_value')
+    ):
+        field = field.strip()
+        number = _search_int(value, 0, 100000)
+
+        if (
+            field in SEARCH_STAT_COLUMNS
+            and operator in SEARCH_STAT_OPERATORS
+            and number is not None
+        ):
+            stat_conditions.append((field, operator, number))
+
+        if len(stat_conditions) >= MAX_STAT_CONDITIONS:
+            break
 
     # ==========================================================
-    # AVAILABLE YEARS
+    # OPTIONS FOR THE FILTER FORM (from approved records only)
     # ==========================================================
     available_years = [
         row[0]
@@ -1158,6 +1249,37 @@ def search():
             .filter(SportRecord.status == 'approved')
             .distinct()
             .order_by(SportRecord.year.desc())
+            .all()
+        )
+    ]
+
+    available_nationalities = [
+        row[0]
+        for row in (
+            db.session.query(User.nationality)
+            .filter(
+                User.role == 'Athlete',
+                User.is_verified == True,
+                User.nationality.isnot(None),
+                User.nationality != ''
+            )
+            .distinct()
+            .order_by(User.nationality)
+            .all()
+        )
+    ]
+
+    available_trophies = [
+        row[0]
+        for row in (
+            db.session.query(SportRecord.trophy)
+            .filter(
+                SportRecord.status == 'approved',
+                SportRecord.trophy.isnot(None),
+                SportRecord.trophy != ''
+            )
+            .distinct()
+            .order_by(SportRecord.trophy)
             .all()
         )
     ]
@@ -1176,18 +1298,11 @@ def search():
         )
     )
 
-    # ==========================================================
-    # ATHLETE NAME
-    # ==========================================================
+    # ---------- Basic ----------
     if name:
-        query = query.filter(
-            User.full_name.ilike(f'%{name}%')
-        )
+        query = query.filter(User.full_name.ilike(f'%{name}%'))
 
-    # ==========================================================
-    # TEAM NAME
-    # Search both record.team and athlete school
-    # ==========================================================
+    # Team: record team or athlete school.
     if school:
         query = query.filter(
             or_(
@@ -1196,158 +1311,227 @@ def search():
             )
         )
 
-    # ==========================================================
-    # OPPONENT TEAM
-    # ==========================================================
     if team_played_against:
         query = query.filter(
-            SportRecord.team_played_against.ilike(
-                f'%{team_played_against}%'
-            )
+            SportRecord.team_played_against.ilike(f'%{team_played_against}%')
         )
 
-    # ==========================================================
-    # YEAR
-    # ==========================================================
     if year:
         try:
-            query = query.filter(
-                SportRecord.year == int(year)
-            )
+            query = query.filter(SportRecord.year == int(year))
         except ValueError:
-            pass
+            year = ''
 
-    # ==========================================================
-    # SPORT
-    # ==========================================================
-    valid_sports = {
-        'Football',
-        'Basketball',
-        'Kickball'
-    }
+    valid_sports = {'Football', 'Basketball', 'Kickball'}
 
     if sport in valid_sports:
-        query = query.filter(
-            SportRecord.sport == sport
-        )
+        query = query.filter(SportRecord.sport == sport)
     else:
         sport = ''
 
+    # ---------- Athlete profile ----------
+    if gender in ('Male', 'Female'):
+        query = query.filter(User.gender == gender)
+    else:
+        gender = ''
+
+    if nationality:
+        query = query.filter(User.nationality == nationality)
+
+    if age_min is not None:
+        query = query.filter(User.age >= age_min)
+
+    if age_max is not None:
+        query = query.filter(User.age <= age_max)
+
+    if height_min is not None:
+        query = query.filter(User.height_cm >= height_min)
+
+    if height_max is not None:
+        query = query.filter(User.height_cm <= height_max)
+
+    if weight_min is not None:
+        query = query.filter(User.weight_kg >= weight_min)
+
+    if weight_max is not None:
+        query = query.filter(User.weight_kg <= weight_max)
+
+    if preferred_foot in ('Right', 'Left', 'Both'):
+        query = query.filter(User.preferred_foot == preferred_foot)
+    else:
+        preferred_foot = ''
+
+    # ---------- Competition ----------
+    if competition in VALID_COMPETITIONS:
+        query = query.filter(SportRecord.competition_category == competition)
+    else:
+        competition = ''
+
+    if club_division:
+        query = query.filter(SportRecord.club_division == club_division)
+
+    if age_group:
+        query = query.filter(SportRecord.age_group == age_group)
+
+    if competition_team:
+        query = query.filter(SportRecord.competition_team == competition_team)
+
+    if position:
+        query = query.filter(SportRecord.position == position)
+
+    if trophy:
+        query = query.filter(SportRecord.trophy == trophy)
+
+    if date_from:
+        query = query.filter(SportRecord.game_date >= date_from)
+
+    if date_to:
+        query = query.filter(SportRecord.game_date <= date_to)
+
+    if motm:
+        query = query.filter(SportRecord.man_of_the_match >= 1)
+
+    if mvp:
+        query = query.filter(SportRecord.mvp >= 1)
+
+    # ---------- Stats in a single game ----------
+    if stat_scope == 'game':
+        for field, operator, number in stat_conditions:
+            if field == 'total_rebounds':
+                # Not stored: offensive + defensive.
+                column = (
+                    func.coalesce(SportRecord.offensive_rebounds, 0)
+                    + func.coalesce(SportRecord.defensive_rebounds, 0)
+                )
+            else:
+                column = func.coalesce(getattr(SportRecord, field), 0)
+
+            if operator == 'gte':
+                query = query.filter(column >= number)
+            elif operator == 'lte':
+                query = query.filter(column <= number)
+            else:
+                query = query.filter(column == number)
+
     records = query.all()
+
+    # ---------- Stats as season / career totals ----------
+    # Sum each stat over the athlete's matching games, then keep
+    # athletes whose totals meet every condition.
+    if stat_scope == 'total' and stat_conditions:
+        totals = {}
+
+        for record in records:
+            athlete_totals = totals.setdefault(record.user_id, {})
+
+            for field, _, _ in stat_conditions:
+                athlete_totals[field] = (
+                    athlete_totals.get(field, 0)
+                    + (getattr(record, field) or 0)
+                )
+
+        qualified = {
+            user_id
+            for user_id, athlete_totals in totals.items()
+            if all(
+                SEARCH_STAT_OPERATORS[operator][1](athlete_totals.get(field, 0), number)
+                for field, operator, number in stat_conditions
+            )
+        }
+
+        records = [record for record in records if record.user_id in qualified]
+
+    # ---------- Minimum number of matching games ----------
+    if min_games:
+        games_per_athlete = {}
+
+        for record in records:
+            games_per_athlete[record.user_id] = games_per_athlete.get(record.user_id, 0) + 1
+
+        records = [
+            record
+            for record in records
+            if games_per_athlete[record.user_id] >= min_games
+        ]
 
     # ==========================================================
     # METRICS
     # ==========================================================
 
     def trophy_count(record):
-        trophy = (record.trophy or '').strip()
+        trophy_value = (record.trophy or '').strip()
 
-        if not trophy or trophy.lower() == 'none':
+        if not trophy_value or trophy_value.lower() == 'none':
             return 0
 
         return len([
-            item for item in trophy.split(',')
+            item for item in trophy_value.split(',')
             if item.strip()
             and item.strip().lower() != 'none'
         ])
 
-    def games_metric(record):
-        return record.games_played or 0
+    def stat(field):
+        return lambda record: getattr(record, field) or 0
 
-    def motm_metric(record):
-        return record.man_of_the_match or 0
-
-    def mvp_metric(record):
-        return record.mvp or 0
-
-    # ==========================================================
-    # SPORT-SPECIFIC METRICS
-    # ==========================================================
-
-    def football_goals(record):
-        return record.goals or 0
-
-    def football_assists(record):
-        return record.assists or 0
-
-    def football_yellow_cards(record):
-        return record.yellow_cards or 0
-
-    def football_red_cards(record):
-        return record.red_cards or 0
-
-    def basketball_points(record):
-        return record.points or 0
-
-    def basketball_assists(record):
-        return record.assists or 0
-
-    def basketball_blocks(record):
-        return record.blocks or 0
-
-    def basketball_sent_off(record):
-        return record.sent_off or 0
-
-    def kickball_home_runs(record):
-        return record.home_runs or 0
-
-    def kickball_red_cards(record):
-        return record.kickball_red_cards or 0
-
-    def kickball_yellow_cards(record):
-        return record.kickball_yellow_cards or 0
-
-    def kickball_cut_base(record):
-        return record.cut_base or 0
-
-    def kickball_foul_played(record):
-        return record.foul_played or 0
+    games_metric = stat('games_played')
+    motm_metric = stat('man_of_the_match')
+    mvp_metric = stat('mvp')
 
     # ==========================================================
     # ONLY ALLOW VALID RANKING FOR THE SELECTED SPORT
     # ==========================================================
 
-    ranking_functions = {}
+    # Rankings that work for any sport.
+    ranking_functions = {
+        'most_recent': lambda r: r.game_date or datetime.min.date(),
+        'youngest': lambda r: -(r.user.age or 999),
+        'most_minutes': stat('match_minutes_played'),
+    }
 
     if sport == 'Football':
 
-        ranking_functions = {
-            'highest_goals': football_goals,
-            'highest_assists': football_assists,
+        ranking_functions.update({
+            'highest_goals': stat('goals'),
+            'highest_assists': stat('assists'),
             'highest_games': games_metric,
             'highest_trophies': trophy_count,
-            'highest_yellow_cards': football_yellow_cards,
-            'highest_red_cards': football_red_cards,
+            'highest_yellow_cards': stat('yellow_cards'),
+            'highest_red_cards': stat('red_cards'),
+            'highest_clean_sheets': stat('clean_sheets'),
+            'highest_saves': stat('saves'),
             'highest_motm': motm_metric,
             'highest_mvp': mvp_metric
-        }
+        })
 
     elif sport == 'Basketball':
 
-        ranking_functions = {
-            'highest_points': basketball_points,
-            'highest_assists': basketball_assists,
+        ranking_functions.update({
+            'highest_points': stat('points'),
+            'highest_assists': stat('assists'),
             'highest_games': games_metric,
             'highest_trophies': trophy_count,
-            'highest_blocks': basketball_blocks,
-            'highest_sent_off': basketball_sent_off,
+            'highest_blocks': stat('blocks'),
+            'highest_rebounds': stat('total_rebounds'),
+            'highest_offensive_rebounds': stat('offensive_rebounds'),
+            'highest_defensive_rebounds': stat('defensive_rebounds'),
+            'highest_sent_off': stat('sent_off'),
             'highest_motm': motm_metric,
             'highest_mvp': mvp_metric
-        }
+        })
 
     elif sport == 'Kickball':
 
-        ranking_functions = {
-            'highest_home_runs': kickball_home_runs,
+        ranking_functions.update({
+            'highest_home_runs': stat('home_runs'),
             'highest_games': games_metric,
             'highest_trophies': trophy_count,
-            'highest_red_cards': kickball_red_cards,
-            'highest_yellow_cards': kickball_yellow_cards,
-            'highest_cut_base': kickball_cut_base,
-            'highest_foul_played': kickball_foul_played,
+            'highest_red_cards': stat('kickball_red_cards'),
+            'highest_yellow_cards': stat('kickball_yellow_cards'),
+            'highest_cut_base': stat('cut_base'),
+            'highest_foul_played': stat('foul_played'),
             'highest_motm': motm_metric,
             'highest_mvp': mvp_metric
-        }
+        })
 
     # ==========================================================
     # APPLY RANKING
@@ -1362,6 +1546,7 @@ def search():
 
     else:
 
+        sort_by = ''
         records.sort(
             key=lambda r: (
                 (r.user.full_name or '').lower(),
@@ -1391,6 +1576,44 @@ def search():
 
     results = list(grouped_results.values())
 
+    # ==========================================================
+    # SUMMARY + ACTIVE FILTERS
+    # ==========================================================
+    summary = {
+        'athletes': len(results),
+        'records': len(records),
+        'male': sum(1 for item in results if item['student'].gender == 'Male'),
+        'female': sum(1 for item in results if item['student'].gender == 'Female'),
+    }
+
+    filters = {
+        'name': name, 'school': school, 'team_played_against': team_played_against,
+        'year': year, 'sport': sport, 'sort_by': sort_by,
+        'gender': gender, 'nationality': nationality,
+        'age_min': age_min, 'age_max': age_max,
+        'height_min': height_min, 'height_max': height_max,
+        'weight_min': weight_min, 'weight_max': weight_max,
+        'preferred_foot': preferred_foot, 'competition': competition,
+        'club_division': club_division, 'age_group': age_group,
+        'competition_team': competition_team, 'position': position,
+        'trophy': trophy,
+        'date_from': date_from.isoformat() if date_from else '',
+        'date_to': date_to.isoformat() if date_to else '',
+        'motm': motm, 'mvp': mvp, 'stat_scope': stat_scope,
+        'min_games': min_games,
+        'stat_conditions': stat_conditions,
+    }
+
+    advanced_count = sum(
+        1 for key in ADVANCED_SEARCH_FILTERS
+        if key not in ('stat_scope', 'stat') and filters.get(key) not in (None, '', False)
+    ) + len(stat_conditions)
+
+    search_active = bool(
+        name or school or team_played_against or year or sport
+        or sort_by or advanced_count
+    )
+
     return render_template(
         'search.html',
         results=results,
@@ -1400,7 +1623,17 @@ def search():
         year=year,
         sport=sport,
         sort_by=sort_by,
-        available_years=available_years
+        available_years=available_years,
+        available_nationalities=available_nationalities,
+        available_trophies=available_trophies,
+        filters=filters,
+        advanced_count=advanced_count,
+        search_active=search_active,
+        summary=summary,
+        search_stats=SEARCH_STATS,
+        stat_operators={key: symbol for key, (symbol, _) in SEARCH_STAT_OPERATORS.items()},
+        max_stat_conditions=MAX_STAT_CONDITIONS,
+        valid_positions={k: sorted(v) for k, v in VALID_POSITIONS.items()},
     )
 # ========== AUTH ROUTES ==========
 @app.route('/register', methods=['GET', 'POST'])
@@ -1861,6 +2094,7 @@ def register(registration_category=None):
 )
 
             user.set_password(password)
+            attach_google_signup(user)
             db.session.add(user)
             db.session.flush()
 
@@ -2181,6 +2415,73 @@ def redirect_after_login(default_endpoint):
     return redirect(next_url or url_for(default_endpoint))
 
 
+def continue_login(user):
+    """
+    Finish signing in a user whose identity is confirmed (password or
+    Google): approval checks, Coach/System 2FA and role-based redirects.
+    Shared by the password login and Google sign-in so both follow exactly
+    the same rules.
+    """
+    # Make the authenticated session permanent
+    session.permanent = True
+
+    # Coaches/admins must be verified before continuing
+    if user.role == 'Coach' and not user.is_verified:
+        flash(
+            'Your coach account is waiting for Super Admin approval.',
+            'warning'
+        )
+        return redirect(url_for('login'))
+
+    # Coaches/admins must complete 2FA before being logged in
+    if user.role in ('Coach', 'System'):
+
+        # If 2FA has not been enabled yet, require setup first
+        if not user.two_factor_enabled:
+            session['2fa_setup_user_id'] = user.id
+            flash(
+                'Please set up two-factor authentication before continuing.',
+                'warning'
+            )
+            return redirect(url_for('setup_2fa'))
+
+        # Store the user temporarily until the 2FA code is verified
+        session['2fa_user_id'] = user.id
+
+        return redirect(url_for('verify_2fa'))
+
+    # Students do not require 2FA
+    # ==========================================================
+    # ROLE-BASED LOGIN
+    # ==========================================================
+
+    # Scouts must be verified before they can access the
+    # Scout dashboard.
+    if user.role == 'Scout':
+        if not user.is_verified:
+            flash(
+                'Your Scout account is pending D.A.R.T. administrator verification.',
+                'warning'
+            )
+            return redirect(url_for('login'))
+
+        login_user(user)
+        return redirect_after_login('scout_dashboard')
+
+    # Athletes do not require 2FA.
+    if user.role == 'Athlete':
+        login_user(user)
+        return redirect_after_login('student_dashboard')
+
+    # Safety fallback — do not allow unknown roles to authenticate
+    # into another role's dashboard.
+    flash(
+        'Your account role is not authorized for application access.',
+        'danger'
+    )
+    return redirect(url_for('login'))
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     # Remember where the user was going (Flask-Login adds ?next= when a
@@ -2251,66 +2552,209 @@ def login():
         # Password was correct — reset failed login attempts
         reset_failed_attempts(identifier)
         reset_failed_attempts(ip_identifier)
-        # Make the authenticated session permanent
-        session.permanent = True
+        return continue_login(user)
 
-        # Coaches/admins must be verified before continuing
-        if user.role == 'Coach' and not user.is_verified:
-            flash(
-                'Your coach account is waiting for Super Admin approval.',
-                'warning'
-            )
-            return redirect(url_for('login'))
+    return render_template('login.html')
 
-        # Coaches/admins must complete 2FA before being logged in
-        if user.role in ('Coach', 'System'):
+# ==========================================================
+# GOOGLE SIGN-IN (OpenID Connect via Authlib)
+# ==========================================================
+# Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (Google Cloud Console →
+# APIs & Services → Credentials → OAuth client ID, type "Web application").
+# Authorised redirect URI: https://<your-domain>/auth/google/callback
+# The Google buttons stay hidden until both variables are set.
+#
+# - A Google account already linked to a D.A.R.T. account signs straight
+#   in, through the same rules as a password login (approval checks and
+#   Coach/System 2FA).
+# - If an account already uses the same email, the owner must log in with
+#   their password once to connect Google. Registration does not verify
+#   email addresses, so linking automatically would let someone who
+#   registered with another person's email take over their Google sign-in.
+# - A new Google user completes the normal registration form (name and
+#   verified email pre-filled); Google is linked when the account is created.
 
-            # If 2FA has not been enabled yet, require setup first
-            if not user.two_factor_enabled:
-                session['2fa_setup_user_id'] = user.id
-                flash(
-                    'Please set up two-factor authentication before continuing.',
-                    'warning'
-                )
-                return redirect(url_for('setup_2fa'))
+oauth = OAuth(app)
 
-            # Store the user temporarily until the 2FA code is verified
-            session['2fa_user_id'] = user.id
+GOOGLE_SIGN_IN_ENABLED = bool(
+    os.environ.get('GOOGLE_CLIENT_ID')
+    and os.environ.get('GOOGLE_CLIENT_SECRET')
+)
 
-            return redirect(url_for('verify_2fa'))
+if GOOGLE_SIGN_IN_ENABLED:
+    oauth.register(
+        name='google',
+        client_id=os.environ.get('GOOGLE_CLIENT_ID'),
+        client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
+        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+        client_kwargs={'scope': 'openid email profile'},
+    )
 
-        # Students do not require 2FA
-        # ==========================================================
-        # ROLE-BASED LOGIN
-        # ==========================================================
+app.jinja_env.globals['google_sign_in_enabled'] = GOOGLE_SIGN_IN_ENABLED
 
-        # Scouts must be verified before they can access the
-        # Scout dashboard.
-        if user.role == 'Scout':
-            if not user.is_verified:
-                flash(
-                    'Your Scout account is pending D.A.R.T. administrator verification.',
-                    'warning'
-                )
-                return redirect(url_for('login'))
+# How long a Google sign-in waits for the user to finish registering or
+# to log in with their password to connect Google.
+GOOGLE_PENDING_SECONDS = 15 * 60
 
-            login_user(user)
-            return redirect_after_login('scout_dashboard')
 
-        # Athletes do not require 2FA.
-        if user.role == 'Athlete':
-            login_user(user)
-            return redirect_after_login('student_dashboard')
+def _google_redirect_uri():
+    configured = os.environ.get('GOOGLE_REDIRECT_URI')
 
-        # Safety fallback — do not allow unknown roles to authenticate
-        # into another role's dashboard.
+    if configured:
+        return configured
+
+    host = request.host.split(':')[0]
+    scheme = 'http' if host in ('localhost', '127.0.0.1') else 'https'
+
+    return url_for('google_callback', _external=True, _scheme=scheme)
+
+
+def pending_google(key):
+    """A Google identity waiting in the session ('google_signup' or 'google_link')."""
+    data = session.get(key)
+
+    if not data:
+        return None
+
+    if time.time() - data.get('at', 0) > GOOGLE_PENDING_SECONDS:
+        session.pop(key, None)
+        return None
+
+    return data
+
+
+def attach_google_signup(user):
+    """Link Google to a new account when registration started with Google."""
+    pending = pending_google('google_signup')
+
+    if (
+        pending
+        and (user.email or '').lower() == pending['email']
+        and not User.query.filter_by(google_sub=pending['sub']).first()
+    ):
+        user.google_sub = pending['sub']
+        session.pop('google_signup', None)
+
+
+@user_logged_in.connect_via(app)
+def link_pending_google_account(sender, user, **extra):
+    """Connect Google after the account owner logs in with their password."""
+    pending = pending_google('google_link')
+
+    if not pending:
+        return
+
+    session.pop('google_link', None)
+
+    if (
+        user.google_sub
+        or (user.email or '').lower() != pending['email']
+        or User.query.filter_by(google_sub=pending['sub']).first()
+    ):
+        return
+
+    user.google_sub = pending['sub']
+    db.session.commit()
+
+    flash('Google sign-in is now connected to your account.', 'success')
+
+
+@app.context_processor
+def inject_google_signup():
+    if current_user.is_authenticated:
+        return {'google_signup': None}
+
+    return {'google_signup': pending_google('google_signup')}
+
+
+@app.route('/auth/google')
+def google_login():
+    if not GOOGLE_SIGN_IN_ENABLED:
+        flash('Google sign-in is not available yet.', 'warning')
+        return redirect(url_for('login'))
+
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    return oauth.google.authorize_redirect(
+        _google_redirect_uri(),
+        prompt='select_account'
+    )
+
+
+@app.route('/auth/google/callback')
+def google_callback():
+    if not GOOGLE_SIGN_IN_ENABLED:
+        return redirect(url_for('login'))
+
+    try:
+        # Checks state and nonce and validates Google's signed ID token.
+        token = oauth.google.authorize_access_token()
+    except Exception as error:
+        app.logger.warning('Google sign-in failed: %s', error)
+        flash('Google sign-in was cancelled or failed. Please try again.', 'danger')
+        return redirect(url_for('login'))
+
+    info = token.get('userinfo') or {}
+    google_sub = info.get('sub')
+    email = (info.get('email') or '').strip().lower()
+
+    if not google_sub or not email or info.get('email_verified') is not True:
         flash(
-            'Your account role is not authorized for application access.',
+            'Google sign-in needs a Google account with a verified email address.',
             'danger'
         )
         return redirect(url_for('login'))
 
-    return render_template('login.html')
+    session.pop('google_signup', None)
+    session.pop('google_link', None)
+
+    # 1. Google already connected to an account.
+    user = User.query.filter_by(google_sub=google_sub).first()
+
+    if user:
+        return continue_login(user)
+
+    # 2. An account already uses this email: owner confirms with password.
+    if User.query.filter(func.lower(User.email) == email).first():
+        session['google_link'] = {
+            'sub': google_sub,
+            'email': email,
+            'at': time.time()
+        }
+        flash(
+            'A D.A.R.T. account already uses this email. Log in with your '
+            'full name and password once to connect Google sign-in.',
+            'info'
+        )
+        return redirect(url_for('login'))
+
+    # 3. New user: complete the normal registration.
+    session['google_signup'] = {
+        'sub': google_sub,
+        'email': email,
+        'name': (info.get('name') or '').strip()[:150],
+        'at': time.time()
+    }
+    return redirect(url_for('google_signup'))
+
+
+@app.route('/auth/google/signup')
+def google_signup():
+    pending = pending_google('google_signup')
+
+    if not pending:
+        flash('Please continue with Google again.', 'warning')
+        return redirect(url_for('login'))
+
+    return render_template('google_signup.html', pending=pending)
+
+
+@app.route('/auth/google/signup/cancel')
+def google_signup_cancel():
+    session.pop('google_signup', None)
+    flash('Google sign-up cancelled.', 'info')
+    return redirect(url_for('login'))
 
 #=============logout route=====================
 @app.route('/logout', methods=['POST'])
@@ -3021,14 +3465,30 @@ def build_sport_record_from_form(form):
         raise RecordSubmissionError('MOTM/QOTM must be exactly 1 for every submitted game record.')
 
     # ============================================================
-    # COMPETITION CATEGORY ↔ TROPHY VALIDATION
+    # SPORT ↔ COMPETITION ↔ AGE GROUP ↔ TROPHY
     # ============================================================
-    # Rules live in competitions.py (LFA competitions for Football).
+    # Rules live in competitions.py (LFA / LBA / LKF competitions).
+    if sport not in VALID_POSITIONS:
+        raise RecordSubmissionError('Please select a valid sport.')
+
+    if not competition_category:
+        raise RecordSubmissionError('Please select a competition.')
+
+    if not competition_allowed(sport, competition_category):
+        raise RecordSubmissionError(
+            f'{competition_category} is not a {sport} competition.'
+        )
+
+    age_group, age_group_error = clean_age_group(form, competition_category)
+
+    if age_group_error:
+        raise RecordSubmissionError(age_group_error)
+
     trophy_value, trophy_error = validate_trophy(
         trophies,
         sport,
         competition_category,
-        club_division
+        club_division or age_group
     )
 
     if trophy_error:
@@ -3059,6 +3519,7 @@ def build_sport_record_from_form(form):
     # ===== AFCON / WAFU / WORLD CUP TEAM =====
     competition_team, competition_team_error = clean_competition_team(
         form,
+        sport,
         competition_category
     )
 
@@ -3189,6 +3650,7 @@ def build_sport_record_from_form(form):
     competition_category=competition_category,
     club_division=club_division,
     competition_team=competition_team,
+    age_group=age_group,
     mvp=safe_int(form.get('mvp')),
     status='pending'
 )
@@ -3249,6 +3711,13 @@ def build_sport_record_from_form(form):
         record.assists = safe_int(basketball_assists)
         record.blocks = safe_int(form.get('blocks'))
         record.sent_off = safe_int(form.get('sent_off'))
+
+        # Rebound counts (never negative).
+        record.offensive_rebounds = max(safe_int(form.get('offensive_rebounds')), 0)
+        record.defensive_rebounds = max(safe_int(form.get('defensive_rebounds')), 0)
+
+        # Older form (e.g. a record saved offline before rebound counts)
+        # only sent the kind of rebound.
         record.rebound_type = (rebound_type
         if rebound_type in [
             'Offensive rebound',
@@ -3383,6 +3852,20 @@ def delete_record(record_id):
     if record.status != 'rejected':
         flash('You can only delete rejected records.', 'danger')
         return redirect(url_for('student_dashboard'))
+
+    # Deleted rows are gone, so record the deletion for the
+    # Super Admin dashboard's "records deleted" count.
+    create_audit_log(
+        RECORD_DELETED_ACTION,
+        actor_user_id=current_user.id,
+        target_type='sport_record',
+        target_id=str(record.id),
+        details={
+            'sport': record.sport,
+            'competition_category': record.competition_category,
+            'status': record.status
+        }
+    )
 
     db.session.delete(record)
     db.session.commit()
@@ -3552,11 +4035,11 @@ def edit_record(record_id):
             )
 
         # =====================================================
-        # MOTM / QOTM MUST BE EXACTLY 1
+        # MOTM / QOTM: 0 OR 1 PER GAME (same rule as new records)
         # =====================================================
-        if man_of_the_match != 1:
+        if man_of_the_match not in (0, 1):
             flash(
-                'MOTM/QOTM must be exactly 1 per game.',
+                'MOTM/QOTM must be 0 or 1 per game.',
                 'danger'
             )
             return redirect(
@@ -3566,9 +4049,60 @@ def edit_record(record_id):
                 )
             )
 
-        # Always save exactly 1.
+        # Records are game-by-game: always exactly 1 game.
         record.games_played = 1
-        record.man_of_the_match = 1
+
+        # MOTM / QOTM for this game: 0 or 1, as on the new-record form.
+        try:
+            man_of_the_match = int(request.form.get('man_of_the_match') or 0)
+        except (TypeError, ValueError):
+            man_of_the_match = 0
+
+        record.man_of_the_match = 1 if man_of_the_match >= 1 else 0
+
+        # =====================================================
+        # GAME DATE (must stay in this record's season)
+        # =====================================================
+        try:
+            game_date = datetime.strptime(
+                request.form.get('game_date', '').strip(),
+                '%Y-%m-%d'
+            ).date()
+        except ValueError:
+            flash('Please enter a valid game date.', 'danger')
+            return redirect(url_for('edit_record', record_id=record.id))
+
+        if game_date.year != record.year:
+            flash(
+                f'The game date must be in the {record.year} season.',
+                'danger'
+            )
+            return redirect(url_for('edit_record', record_id=record.id))
+
+        # Same rule as new records: the same game can't be on file twice.
+        edited_team = request.form.get('team', '').strip()
+        edited_competition = request.form.get('competition_category', '').strip()
+        duplicate = SportRecord.query.filter(
+            SportRecord.id != record.id,
+            SportRecord.user_id == record.user_id,
+            SportRecord.sport == record.sport,
+            SportRecord.year == record.year,
+            SportRecord.game_date == game_date,
+            SportRecord.competition_category == edited_competition,
+            SportRecord.team == edited_team,
+            SportRecord.status.in_(['approved', 'pending'])
+        ).first()
+
+        if duplicate:
+            flash(
+                f'You already have a {duplicate.sport} record for '
+                f'{duplicate.competition_category} with {edited_team or "this team"} '
+                f'on {game_date.strftime("%B %d, %Y")}.',
+                'danger'
+            )
+            return redirect(url_for('edit_record', record_id=record.id))
+
+        record.game_date = game_date
 
         # =====================================================
         # OTHER BASIC INFORMATION
@@ -3597,20 +4131,16 @@ def edit_record(record_id):
             ''
         ).strip()
 
-        allowed_competitions = {
-            'High School',
-            'County Meet',
-            'Club League',
-            'University League',
-            'Community/Area League',
-            'AFCON',
-            'WAFU',
-            'World Cup'
-        }
-
-        if competition_category not in allowed_competitions:
+        # Competitions offered for this sport (competitions.py). An old
+        # record keeps its existing competition even if no longer offered.
+        if not competition_allowed(
+            record.sport,
+            competition_category,
+            current_category=record.competition_category
+        ):
             flash(
-                'Invalid competition category selected.',
+                f'{competition_category or "That"} is not a '
+                f'{record.sport} competition.',
                 'danger'
             )
             return redirect(
@@ -3685,7 +4215,13 @@ def edit_record(record_id):
 
         competition_team, competition_team_error = clean_competition_team(
             request.form,
-            competition_category
+            record.sport,
+            competition_category,
+            current_team=(
+                record.competition_team
+                if competition_category == record.competition_category
+                else None
+            )
         )
 
         if competition_team_error:
@@ -3700,6 +4236,26 @@ def edit_record(record_id):
         record.competition_team = competition_team
 
         # =====================================================
+        # GRASSROOTS AGE GROUP
+        # =====================================================
+
+        age_group, age_group_error = clean_age_group(
+            request.form,
+            competition_category
+        )
+
+        if age_group_error:
+            flash(age_group_error, 'danger')
+            return redirect(
+                url_for(
+                    'edit_record',
+                    record_id=record.id
+                )
+            )
+
+        record.age_group = age_group
+
+        # =====================================================
         # TROPHY
         # =====================================================
         # Rules live in competitions.py (LFA competitions for Football).
@@ -3709,7 +4265,7 @@ def edit_record(record_id):
             request.form.getlist('trophy'),
             record.sport,
             competition_category,
-            club_division,
+            club_division or age_group,
             current_trophy=record.trophy
         )
 
@@ -3822,17 +4378,19 @@ def edit_record(record_id):
                 request.form.get('sent_off') or 0
             )
 
-            rebound_type = request.form.get(
-                'rebound_type',
-                ''
-            ).strip()
+            # Rebound counts (never negative).
+            def rebound_count(field):
+                try:
+                    return max(int(request.form.get(field) or 0), 0)
+                except ValueError:
+                    return 0
 
-            if rebound_type in {
-                'Offensive rebound',
-                'Defensive rebound'
-            }:
-                record.rebound_type = rebound_type
-            else:
+            record.offensive_rebounds = rebound_count('offensive_rebounds')
+            record.defensive_rebounds = rebound_count('defensive_rebounds')
+
+            # Older records only stored the kind of rebound. Keep it until
+            # real counts are entered, which then replace it.
+            if record.total_rebounds:
                 record.rebound_type = None
 
             record.clean_sheets = 0
@@ -3867,13 +4425,209 @@ def edit_record(record_id):
         'edit_record.html',
         record=record,
         registered_categories=registered_categories,
-        competition_team_options=COMPETITION_TEAM_OPTIONS,
-        competition_team_labels=SportRecord.COMPETITION_TEAM_LABELS,
+        sport_competitions=competitions_for(record.sport),
         trophy_legacy=legacy_trophy_options(
             record.sport,
             record.competition_category
         )
     )
+
+# ==========================================================
+# DASHBOARD STATISTICS (Super Admin + Coach)
+# ==========================================================
+# Computed live from the database on every page load, and refreshed
+# every 60 seconds on the page through /admin/dashboard-stats.
+
+RECORD_DELETED_ACTION = 'sport_record.deleted'
+
+# Subscription statuses that count as a paying subscriber.
+PAID_SUBSCRIPTION_STATUSES = ('active',)
+
+
+def paid_subscriber_ids():
+    """IDs of users with a paid (active) subscription."""
+    return {
+        user_id
+        for (user_id,) in db.session.query(Subscription.user_id)
+        .filter(Subscription.status.in_(PAID_SUBSCRIPTION_STATUSES))
+        .distinct()
+    }
+
+
+def super_admin_dashboard_stats():
+    records_by_status = dict(
+        db.session.query(SportRecord.status, func.count(SportRecord.id))
+        .group_by(SportRecord.status)
+        .all()
+    )
+    records_existing = sum(records_by_status.values())
+    records_deleted = AuditLog.query.filter_by(action=RECORD_DELETED_ACTION).count()
+
+    users_by_role = dict(
+        db.session.query(User.role, func.count(User.id))
+        .group_by(User.role)
+        .all()
+    )
+    total_users = sum(users_by_role.values())
+
+    paid_ids = paid_subscriber_ids()
+    paid_users = User.query.filter(User.id.in_(paid_ids)).count() if paid_ids else 0
+
+    def role_count(role, **filters):
+        return User.query.filter_by(role=role, **filters).count()
+
+    total_scouts = users_by_role.get('Scout', 0)
+    paid_scouts = (
+        User.query.filter(User.role == 'Scout', User.id.in_(paid_ids)).count()
+        if paid_ids else 0
+    )
+
+    return {
+        'records_uploaded': records_existing + records_deleted,
+        'records_approved': records_by_status.get('approved', 0),
+        'records_pending': records_by_status.get('pending', 0),
+        'records_rejected': records_by_status.get('rejected', 0),
+        'records_deleted': records_deleted,
+        'users_total': total_users,
+        'users_free': total_users - paid_users,
+        'users_paid': paid_users,
+        'athletes_total': users_by_role.get('Athlete', 0),
+        'coaches_approved': role_count('Coach', is_verified=True),
+        'coaches_pending': role_count('Coach', is_verified=False),
+        'scouts_approved': role_count('Scout', is_verified=True),
+        'scouts_pending': role_count('Scout', is_verified=False),
+        'scouts_free': total_scouts - paid_scouts,
+        'scouts_paid': paid_scouts,
+    }
+
+
+def coach_scope_records(coach):
+    """
+    Records a coach manages: the same rule as the approval queue —
+    team played for matches the coach's school/team (ignoring case and
+    spaces) and the coach's category allows the competition.
+    """
+    team = (coach.school or '').strip().casefold()
+
+    if not team:
+        return []
+
+    candidates = SportRecord.query.filter(
+        func.lower(func.trim(SportRecord.team)) == team
+    ).all()
+
+    return [
+        record
+        for record in candidates
+        if (record.team or '').strip().casefold() == team
+        and coach_can_manage_competition(
+            coach.coach_category,
+            record.competition_category
+        )
+    ]
+
+
+def coach_dashboard_data(coach):
+    records = coach_scope_records(coach)
+
+    by_status = {'approved': 0, 'pending': 0, 'rejected': 0}
+
+    for record in records:
+        by_status[record.status] = by_status.get(record.status, 0) + 1
+
+    # Verified athletes who played for the coach's team(s), grouped by
+    # the team name as entered on their records.
+    teams = {}
+
+    for record in records:
+        athlete = record.user
+
+        if not athlete or athlete.role != 'Athlete' or not athlete.is_verified:
+            continue
+
+        team_key = (record.team or '').strip().casefold()
+        team = teams.setdefault(team_key, {
+            'name': (record.team or '').strip(),
+            'athletes': {}
+        })
+
+        row = team['athletes'].setdefault(athlete.id, {
+            'athlete': athlete,
+            'sports': set(),
+            'positions': set(),
+            'competitions': set(),
+            'records': 0,
+            'approved': 0,
+            'pending': 0,
+            'last_game': None
+        })
+
+        row['sports'].add(record.sport)
+        if record.position:
+            row['positions'].add(record.position)
+        if record.competition_category:
+            row['competitions'].add(record.competition_category)
+        row['records'] += 1
+        if record.status == 'approved':
+            row['approved'] += 1
+        elif record.status == 'pending':
+            row['pending'] += 1
+        if record.game_date and (row['last_game'] is None or record.game_date > row['last_game']):
+            row['last_game'] = record.game_date
+
+    managed_teams = []
+
+    for team in sorted(teams.values(), key=lambda t: t['name'].casefold()):
+        athletes = sorted(
+            team['athletes'].values(),
+            key=lambda row: (row['athlete'].full_name or '').casefold()
+        )
+        for row in athletes:
+            row['sports'] = sorted(row['sports'])
+            row['positions'] = sorted(row['positions'])
+            row['competitions'] = sorted(row['competitions'])
+        managed_teams.append({'name': team['name'], 'athletes': athletes})
+
+    athletes_managed = len({
+        row['athlete'].id
+        for team in managed_teams
+        for row in team['athletes']
+    })
+
+    stats = {
+        'records_uploaded': len(records),
+        'records_approved': by_status.get('approved', 0),
+        'records_pending': by_status.get('pending', 0),
+        'records_rejected': by_status.get('rejected', 0),
+        'athletes_managed': athletes_managed,
+    }
+
+    # Approved records the coach can view (read-only), newest game first.
+    approved_records = sorted(
+        (record for record in records if record.status == 'approved'),
+        key=lambda record: (record.game_date or datetime.min.date(), record.id),
+        reverse=True
+    )
+
+    return stats, managed_teams, approved_records
+
+
+@app.route('/admin/dashboard-stats')
+@login_required
+def admin_dashboard_stats():
+    """Live dashboard numbers for the auto-refresh on /admin."""
+    if current_user.role == 'System':
+        stats = super_admin_dashboard_stats()
+    elif current_user.role == 'Coach':
+        stats, _, _ = coach_dashboard_data(current_user)
+    else:
+        return _no_store_json({'error': 'not_allowed'}, 403)
+
+    return _no_store_json({
+        'stats': stats,
+        'updated_at': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    })
+
 
 @app.route('/admin')
 @login_required
@@ -3953,23 +4707,25 @@ def admin_dashboard():
         ]
 
     # ==========================================================
-    # DEBUG
+    # DASHBOARD
     # ==========================================================
-    print("========== ADMIN DASHBOARD DEBUG ==========")
-    print("Logged-in user:", current_user.full_name)
-    print("Role:", current_user.role)
-    print("Pending athletes:", len(pending_users))
-    print("Pending coaches:", len(pending_coaches))
-    print("Pending scouts:", len(pending_scouts))
-    print("Pending records:", len(pending_records))
-    print("==========================================")
+    managed_teams = []
+    approved_records = []
+
+    if current_user.role == 'System':
+        dashboard_stats = super_admin_dashboard_stats()
+    else:
+        dashboard_stats, managed_teams, approved_records = coach_dashboard_data(current_user)
 
     return render_template(
         'admin_dashboard.html',
         pending_users=pending_users,
         pending_coaches=pending_coaches,
         pending_scouts=pending_scouts,
-        pending_records=pending_records
+        pending_records=pending_records,
+        dashboard_stats=dashboard_stats,
+        managed_teams=managed_teams,
+        approved_records=approved_records
     )
 
 @app.route('/approve_coach/<int:user_id>', methods=['POST'])
@@ -4855,6 +5611,13 @@ def reject_record(record_id):
             )
             return redirect(url_for('admin_dashboard'))
 
+        # Approved records are final for coaches: they can view them on
+        # their dashboard but not reject them (which would also let the
+        # athlete delete them).
+        if record.status == 'approved':
+            flash("Approved records can't be rejected.", 'warning')
+            return redirect(url_for('admin_dashboard'))
+
     record.status = 'rejected'
     db.session.commit()
 
@@ -5035,6 +5798,7 @@ def register_coach(registration_category=None):
             is_verified=False          # Pending Super Admin approval
         )
         coach.set_password(password)
+        attach_google_signup(coach)
         db.session.add(coach)
         db.session.flush()
 
@@ -5190,6 +5954,7 @@ def register_scout():
         )
 
         scout.set_password(password)
+        attach_google_signup(scout)
 
         try:
             db.session.add(scout)

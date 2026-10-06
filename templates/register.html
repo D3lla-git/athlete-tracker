@@ -15,7 +15,7 @@
       <div class="card-body">
       <div class="mb-3">
         <div class="dropdown">
-          <button class="btn dropdown-toggle w-100 category-dropdown-btn" type="button"
+          <button class="btn dropdown-toggle w-100 category-dropdown-btn dart-btn" type="button"
         data-bs-toggle="dropdown" aria-expanded="false">
   {{ selected_category or 'All Athlete' }} — Choose Athlete Category
 </button>
@@ -30,11 +30,16 @@
         </div>
       </div>
  
+{% include '_google_signup_notice.html' %}
+{% if not google_signup %}
+  {% with google_label = 'Sign up with Google' %}{% include '_google_button.html' %}{% endwith %}
+  {% if google_sign_in_enabled %}<div class="google-divider mb-3" role="separator"><span>or fill in the form</span></div>{% endif %}
+{% endif %}
         <form method="POST" enctype="multipart/form-data">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="mb-3">
             <label>Full Name <i class="fa-solid fa-user"></i></label>
-            <input type="text" name="full_name" placeholder="Example: John Brown" class="form-control" required>
+            <input type="text" name="full_name" placeholder="Example: John Brown" class="form-control" value="{{ google_signup.name if google_signup else '' }}" required>
           </div>
           <div class="mb-3">
             <label>Team Name <i class="fa-solid fa-users"></i></label>
@@ -139,6 +144,8 @@
         id="email"
         name="email"
         placeholder="Ex: john.brown@gmail.com"
+        value="{{ google_signup.email if google_signup else '' }}"
+        {% if google_signup %}readonly{% endif %}
         required
         autocomplete="email"
     >
@@ -177,7 +184,7 @@
             <label>ID or Passport (PNG/JPG/PDF) <i class="fa-solid fa-id-card"></i></label>
             <input type="file" name="id_document" class="form-control" accept=".png,.jpg,.jpeg,.pdf">
           </div>
-          <button type="submit"  class="btn btn-lg rounded-5"
+          <button type="submit"  class="btn btn-lg rounded-5 dart-btn"
                   style="border: 2px solid black; color: white;">Register 
                   <i class="fa-solid fa-user-plus"></i></button>
         </form>

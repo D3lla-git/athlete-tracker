@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash  # type: ignore[import-not-found]
+from competitions import COMPETITION_TEAM_LABELS
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -35,6 +36,8 @@ class User(UserMixin, db.Model):
     two_factor_recovery_codes = db.Column(db.Text, nullable=True)
 
     password_hash = db.Column(db.String(256), nullable=False)
+    # Google account ID ("sub") once Google sign-in is connected.
+    google_sub = db.Column(db.String(255), nullable=True, unique=True)
     role = db.Column(db.String(20), default='Athlete')  # Athlete, Coach, scout or System
     id_document = db.Column(db.String(255), nullable=True)      # from registration
     profile_picture = db.Column(db.String(255), nullable=True)  # optional update
@@ -71,6 +74,8 @@ class SportRecord(db.Model):
     # WAFU age category (e.g. "Lonestar Men's Team", "Male-U17").
     # competition_category says which of the three it is.
     competition_team = db.Column(db.String(50), nullable=True)
+    # Grassroots League only: LFA age group (U-10, U-12, U-15, U-17).
+    age_group = db.Column(db.String(10), nullable=True)
 
     # Football fields
     goals = db.Column(db.Integer, default=0)
@@ -87,7 +92,11 @@ class SportRecord(db.Model):
     points = db.Column(db.Integer, default=0)
     blocks = db.Column(db.Integer, default=0)
     sent_off = db.Column(db.Integer, default=0)
+    # Older records only stored which kind of rebound (no count).
     rebound_type = db.Column(db.String(50), nullable=True)
+    # Rebound counts for the game.
+    offensive_rebounds = db.Column(db.Integer, default=0)
+    defensive_rebounds = db.Column(db.Integer, default=0)
 
     # Kickball fields
     home_runs = db.Column(db.Integer, default=0)
@@ -106,11 +115,7 @@ class SportRecord(db.Model):
     user = db.relationship('User', backref='records')
 
     # What competition_team means for each national-team competition.
-    COMPETITION_TEAM_LABELS = {
-        'AFCON': 'AFCON Team',
-        'WAFU': 'WAFU Category',
-        'World Cup': 'World Cup Team',
-    }
+    COMPETITION_TEAM_LABELS = COMPETITION_TEAM_LABELS
 
     @property
     def competition_team_label(self):
@@ -121,10 +126,47 @@ class SportRecord(db.Model):
         return self.COMPETITION_TEAM_LABELS.get(self.competition_category)
 
     @property
+    def competition_detail(self):
+        """Club division, national team/category or age group, if any."""
+        return self.club_division or self.competition_team or self.age_group
+
+    @property
+    def competition_detail_label(self):
+        """Label for competition_detail, e.g. 'Club Division', 'Age Group'."""
+        if self.club_division:
+            return 'Club Division'
+
+        if self.competition_team:
+            return self.competition_team_label
+
+        if self.age_group:
+            return 'Age Group'
+
+        return None
+
+    @property
+    def total_rebounds(self):
+        return (self.offensive_rebounds or 0) + (self.defensive_rebounds or 0)
+
+    @property
+    def rebounds_display(self):
+        """e.g. 'Off 3 · Def 5 (8 total)'; older records show their rebound type."""
+        if self.total_rebounds or not self.rebound_type:
+            return (
+                f'Off {self.offensive_rebounds or 0} · '
+                f'Def {self.defensive_rebounds or 0} '
+                f'({self.total_rebounds} total)'
+            )
+
+        return self.rebound_type
+
+    @property
     def competition_display(self):
-        """Competition with its team/category, e.g. 'WAFU · Male-U17'."""
-        if self.competition_team and self.competition_category:
-            return f'{self.competition_category} · {self.competition_team}'
+        """Competition with its team/category or age group, e.g. 'WAFU · Male-U17'."""
+        detail = self.competition_team or self.age_group
+
+        if detail and self.competition_category:
+            return f'{self.competition_category} · {detail}'
 
         return self.competition_category
 

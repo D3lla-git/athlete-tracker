@@ -1,0 +1,376 @@
+{# ==========================================================
+   DASHBOARD OVERVIEW (top of /admin)
+   System accounts see the Super Admin dashboard; coaches see their
+   team's numbers and the athletes they manage. Numbers come from the
+   database and refresh every 60 seconds (/admin/dashboard-stats).
+========================================================== #}
+
+{% macro stat_card(key, label, icon, tone='neutral', hint=None) %}
+<div class="dash-stat dash-{{ tone }}">
+  <div class="dash-stat-icon" aria-hidden="true"><i class="{{ icon }}"></i></div>
+  <div class="dash-stat-body">
+    <div class="dash-stat-value" data-stat="{{ key }}">{{ dashboard_stats[key] }}</div>
+    <div class="dash-stat-label">{{ label }}</div>
+    {% if hint %}<div class="dash-stat-hint">{{ hint }}</div>{% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+<style>
+  .dash-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px 16px;
+    margin-bottom: 18px;
+  }
+
+  .dash-header h2 {
+    margin: 0;
+    font-weight: 800;
+  }
+
+  .dash-updated {
+    font-size: 0.8rem;
+    color: var(--muted-text);
+  }
+
+  .dash-updated .dash-live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: #198754;
+    box-shadow: 0 0 0 3px rgba(25, 135, 84, 0.2);
+  }
+
+  .dash-section {
+    margin-bottom: 22px;
+  }
+
+  .dash-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-text);
+  }
+
+  .dash-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 12px;
+  }
+
+  .dash-stat {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 18px;
+    background: var(--surface-bg);
+    border: 1px solid var(--surface-border);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+  }
+
+  .dash-stat-icon {
+    flex: 0 0 46px;
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+  }
+
+  .dash-stat-value {
+    font-size: 1.7rem;
+    font-weight: 800;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dash-stat-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .dash-stat-hint {
+    font-size: 0.72rem;
+    color: var(--muted-text);
+  }
+
+  /* Tones (solid colors: pending uses caution amber, not the gradient). */
+  .dash-neutral .dash-stat-icon { background: rgba(13, 110, 253, 0.12); color: #0d6efd; }
+  .dash-success .dash-stat-icon { background: rgba(25, 135, 84, 0.14); color: #198754; }
+  .dash-pending .dash-stat-icon { background: #ffc107; color: #212529; }
+  .dash-pending { border-left: 4px solid #ffc107; }
+  .dash-danger .dash-stat-icon { background: rgba(220, 53, 69, 0.14); color: #dc3545; }
+  .dash-gold .dash-stat-icon { background: rgba(218, 165, 32, 0.18); color: #b8860b; }
+  .dash-purple .dash-stat-icon { background: rgba(111, 66, 193, 0.14); color: #6f42c1; }
+
+  html[data-theme="dark"] .dash-neutral .dash-stat-icon { color: #6ea8fe; }
+  html[data-theme="dark"] .dash-success .dash-stat-icon { color: #4cd38a; }
+  html[data-theme="dark"] .dash-gold .dash-stat-icon { color: #e0b84c; }
+  html[data-theme="dark"] .dash-purple .dash-stat-icon { color: #b69cf0; }
+
+  /* Pending section headers: caution color, not gradient. */
+  .dash-caution-header {
+    background: #ffc107 !important;
+    background-image: none !important;
+    color: #212529 !important;
+    font-weight: 700;
+  }
+
+  .managed-team-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 18px 0 10px;
+    font-weight: 700;
+  }
+
+  .managed-team-title .badge {
+    font-weight: 600;
+  }
+
+  .managed-athlete {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .managed-avatar {
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: #ffffff;
+    background: #198754;
+    object-fit: cover;
+  }
+</style>
+
+<div class="dash-header">
+  <div>
+    <h2>
+      {% if current_user.role == 'System' %}
+        <i class="fa-solid fa-gauge-high me-1"></i> Super Admin Dashboard
+      {% else %}
+        <i class="fa-solid fa-clipboard-user me-1"></i> Coach Dashboard
+      {% endif %}
+    </h2>
+    {% if current_user.role != 'System' %}
+      <div class="dash-updated mt-1">
+        <i class="fa-solid fa-users me-1"></i>{{ current_user.school }}
+        · {{ current_user.coach_category or 'Coach' }}
+      </div>
+    {% endif %}
+  </div>
+  <div class="dash-updated" aria-live="polite">
+    <span class="dash-live-dot" aria-hidden="true"></span>
+    Live · updated <span id="dashUpdatedAt">just now</span>
+  </div>
+</div>
+
+{% if current_user.role == 'System' %}
+
+  <div class="dash-section">
+    <div class="dash-section-title"><i class="fa-solid fa-file-lines"></i> Sports Records</div>
+    <div class="dash-grid">
+      {{ stat_card('records_uploaded', 'Records Uploaded', 'fa-solid fa-cloud-arrow-up') }}
+      {{ stat_card('records_approved', 'Records Approved', 'fa-solid fa-circle-check', 'success') }}
+      {{ stat_card('records_pending', 'Records Pending', 'fa-solid fa-hourglass-half', 'pending') }}
+      {{ stat_card('records_rejected', 'Records Rejected', 'fa-solid fa-circle-xmark', 'danger') }}
+      {{ stat_card('records_deleted', 'Records Deleted', 'fa-solid fa-trash', 'danger', 'Counted since deletion tracking began') }}
+    </div>
+  </div>
+
+  <div class="dash-section">
+    <div class="dash-section-title"><i class="fa-solid fa-users"></i> Users</div>
+    <div class="dash-grid">
+      {{ stat_card('users_total', 'Total Users', 'fa-solid fa-users') }}
+      {{ stat_card('users_free', 'Basic / Free Users', 'fa-solid fa-user') }}
+      {{ stat_card('users_paid', 'Paid Subscribers', 'fa-solid fa-crown', 'gold') }}
+      {{ stat_card('athletes_total', 'Athletes', 'fa-solid fa-person-running', 'success') }}
+    </div>
+  </div>
+
+  <div class="dash-section">
+    <div class="dash-section-title"><i class="fa-solid fa-user-shield"></i> Coaches</div>
+    <div class="dash-grid">
+      {{ stat_card('coaches_approved', 'Approved Coaches', 'fa-solid fa-user-check', 'success') }}
+      {{ stat_card('coaches_pending', 'Pending Coaches', 'fa-solid fa-user-clock', 'pending') }}
+    </div>
+  </div>
+
+  <div class="dash-section">
+    <div class="dash-section-title"><i class="fa-solid fa-binoculars"></i> Scouts</div>
+    <div class="dash-grid">
+      {{ stat_card('scouts_approved', 'Approved Scouts', 'fa-solid fa-user-check', 'success') }}
+      {{ stat_card('scouts_pending', 'Pending Scouts', 'fa-solid fa-user-clock', 'pending') }}
+      {{ stat_card('scouts_free', 'Free Scout Accounts', 'fa-solid fa-user') }}
+      {{ stat_card('scouts_paid', 'Paid Scout Subscribers', 'fa-solid fa-crown', 'gold') }}
+    </div>
+  </div>
+
+{% else %}
+
+  <div class="dash-section">
+    <div class="dash-grid">
+      {{ stat_card('records_uploaded', 'Athlete Records Uploaded', 'fa-solid fa-cloud-arrow-up') }}
+      {{ stat_card('records_approved', 'Records Approved', 'fa-solid fa-circle-check', 'success') }}
+      {{ stat_card('records_pending', 'Records Pending', 'fa-solid fa-hourglass-half', 'pending') }}
+      {{ stat_card('athletes_managed', 'Athletes Managing', 'fa-solid fa-people-group', 'purple') }}
+    </div>
+  </div>
+
+  <!-- ===== ATHLETES THIS COACH MANAGES ===== -->
+  <div class="dash-section">
+    <div class="dash-section-title"><i class="fa-solid fa-clipboard-list"></i> Athletes I Manage</div>
+
+    {% if managed_teams %}
+      {% for team in managed_teams %}
+        <div class="managed-team-title">
+          <i class="fa-solid fa-shield-halved text-success"></i>
+          {{ team.name }}
+          <span class="badge rounded-pill text-bg-secondary">{{ team.athletes | length }} athlete{{ 's' if team.athletes | length != 1 }}</span>
+        </div>
+
+        <div class="records-table-wrap">
+          <table class="table records-table align-middle mb-0">
+            <thead>
+              <tr>
+                <th scope="col">Athlete</th>
+                <th scope="col">Sport</th>
+                <th scope="col">Position</th>
+                <th scope="col">Competitions</th>
+                <th scope="col" class="text-center">Records</th>
+                <th scope="col" class="text-center">Approved</th>
+                <th scope="col" class="text-center">Pending</th>
+                <th scope="col">Last Game</th>
+                <th scope="col" class="text-end">Profile</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in team.athletes %}
+                {% set a = row.athlete %}
+                <tr>
+                  <td>
+                    <div class="managed-athlete">
+                      {% if a.profile_picture %}
+                        <img class="managed-avatar" src="{{ url_for('profile_picture', filename=a.profile_picture) }}" alt="">
+                      {% else %}
+                        <span class="managed-avatar" aria-hidden="true">{{ (a.full_name or '?')[0] | upper }}</span>
+                      {% endif %}
+                      <div>
+                        <div class="rt-strong">
+                          {{ a.full_name }}
+                          {% if a.nationality %}<span class="ms-1">{{ country_flag(a.nationality) }}</span>{% endif %}
+                        </div>
+                        <div class="rt-muted">
+                          {% if a.gender %}<i class="fa-solid {{ 'fa-mars' if a.gender == 'Male' else 'fa-venus' }}" aria-hidden="true"></i> {{ a.gender }}{% endif %}
+                          {% if a.age %} · {{ a.age }} yrs{% endif %}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="rt-chips">
+                      {% for sport in row.sports %}
+                        <span class="rt-chip">
+                          <i class="fa-solid {{ {'Football': 'fa-futbol', 'Basketball': 'fa-basketball', 'Kickball': 'fa-baseball'}.get(sport, 'fa-medal') }}" aria-hidden="true"></i>
+                          {{ sport }}
+                        </span>
+                      {% endfor %}
+                    </div>
+                  </td>
+                  <td>{{ row.positions | join(', ') or '-' }}</td>
+                  <td><span class="rt-muted">{{ row.competitions | join(', ') or '-' }}</span></td>
+                  <td class="text-center rt-strong">{{ row.records }}</td>
+                  <td class="text-center"><span class="badge dart-pill">{{ row.approved }}</span></td>
+                  <td class="text-center">
+                    {% if row.pending %}
+                      <span class="badge dart-status-pending">{{ row.pending }}</span>
+                    {% else %}
+                      <span class="rt-muted">0</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-nowrap">
+                    <i class="fa-regular fa-calendar-days rt-icon" aria-hidden="true"></i>{{ row.last_game.strftime('%b %d, %Y') if row.last_game else '-' }}
+                  </td>
+                  <td class="text-end">
+                    <a href="{{ url_for('user_profile', user_id=a.id) }}" class="btn btn-sm dart-btn">
+                      <i class="fa-solid fa-user" aria-hidden="true"></i> View
+                    </a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="alert alert-info mb-0">
+        No verified athletes have submitted records for {{ current_user.school }} yet.
+      </div>
+    {% endif %}
+  </div>
+
+{% endif %}
+
+<script>
+  // Refresh the numbers every 60 seconds while the page is visible.
+  (function () {
+    const updatedAt = document.getElementById('dashUpdatedAt');
+    let lastUpdate = Date.now();
+
+    function sinceText() {
+      const seconds = Math.round((Date.now() - lastUpdate) / 1000);
+      return seconds < 10 ? 'just now' : seconds < 60 ? seconds + 's ago' : Math.round(seconds / 60) + ' min ago';
+    }
+
+    function refresh() {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+
+      fetch('{{ url_for("admin_dashboard_stats") }}', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Accept': 'application/json' }
+      })
+        .then(function (response) { return response.ok ? response.json() : null; })
+        .then(function (data) {
+          if (!data || !data.stats) {
+            return;
+          }
+
+          Object.keys(data.stats).forEach(function (key) {
+            document.querySelectorAll('[data-stat="' + key + '"]').forEach(function (el) {
+              el.textContent = data.stats[key];
+            });
+          });
+
+          lastUpdate = Date.now();
+          updatedAt.textContent = sinceText();
+        })
+        .catch(function () {});
+    }
+
+    setInterval(refresh, 60000);
+    setInterval(function () { updatedAt.textContent = sinceText(); }, 15000);
+    document.addEventListener('visibilitychange', refresh);
+  })();
+</script>

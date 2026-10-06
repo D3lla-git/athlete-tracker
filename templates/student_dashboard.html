@@ -18,7 +18,7 @@
     <p class="text-muted mb-1">{{ current_user.school }} <i class="fa-solid fa-school"></i></p>
     
     {% if current_user.is_verified %}
-      <span class="badge bg-success">Verified Athlete <i class="fa-solid fa-user-check"></i></span>
+      <span class="badge dart-pill">Verified Athlete <i class="fa-solid fa-user-check"></i></span>
     {% else %}
       <span class="badge bg-warning text-dark">ID Pending Verification</span>
     {% endif %}
@@ -93,14 +93,11 @@
         required
     >
         <option value="">Select Competition</option>
-        <option value="High School">High School</option>
-        <option value="County Meet">County Meet</option>
-        <option value="Club League">Club League</option>
-        <option value="University League">University League</option>
-        <option value="Community/Area League">Community/Area League</option>
-        <option value="AFCON">AFCON</option>
-        <option value="WAFU">WAFU</option>
-        <option value="World Cup">World Cup</option>
+        {# Every competition; the script below hides the ones the chosen
+           sport doesn't offer (rules in competitions.py). #}
+        {% for competition in competition_form_rules().competitions.Football %}
+        <option value="{{ competition }}">{{ competition }}</option>
+        {% endfor %}
     </select>
 </div>
 
@@ -166,9 +163,7 @@
       class="form-select">
 
     <option value="">-- Select --</option>
-    <option value="Lonestar Men's Team">
-      Lonestar Men's Team
-    </option>
+    {# Filled per sport by the script below (Lone Star / Liberia national teams). #}
 
   </select>
 </div>
@@ -198,9 +193,29 @@
     </select>
 </div>
 
+<!-- Grassroots League Age Group (LFA grassroots) -->
+<div class="col-md-3" id="ageGroupOptions" style="display: none;">
+    <label for="ageGroup" class="form-label">
+        Age Group
+        <i class="fa-solid fa-children"></i>
+    </label>
+
+    <select
+        name="age_group"
+        id="ageGroup"
+        class="form-select"
+    >
+        <option value="">-- Select Age Group --</option>
+        {% for age_group in competition_form_rules().ageGroups %}
+        <option value="{{ age_group }}">{{ age_group }}</option>
+        {% endfor %}
+    </select>
+</div>
+
     <div class="col-md-2">
       <label class="form-label">Year / Season <i class="fa-regular fa-calendar" style="color: green;"></i></label>
-      <input type="number" name="year" class="form-control" placeholder="e.g. 2025" required>
+      <input type="number" name="year" id="recordYear" class="form-control" placeholder="e.g. 2025" required>
+      <div class="invalid-feedback" id="recordYearFeedback"></div>
     </div>
 
 <div class="col-md-2">
@@ -215,6 +230,43 @@
         class="form-control"
         required>
 </div>
+
+<script>
+// Year / Season must be the year of the game date (the server checks
+// this too). An empty year is filled in from the game date.
+document.addEventListener('DOMContentLoaded', function () {
+
+    const yearInput = document.getElementById('recordYear');
+    const gameDateInput = document.getElementById('game_date');
+    const feedback = document.getElementById('recordYearFeedback');
+
+    function checkYearMatchesGameDate() {
+
+        const gameYear = gameDateInput.value
+            ? gameDateInput.value.slice(0, 4)
+            : '';
+
+        if (gameYear && !yearInput.value) {
+            yearInput.value = gameYear;
+        }
+
+        const mismatch =
+            gameYear && yearInput.value && yearInput.value !== gameYear;
+
+        const message = mismatch
+            ? 'Year / Season must match the game date year (' + gameYear + ').'
+            : '';
+
+        yearInput.setCustomValidity(message);
+        yearInput.classList.toggle('is-invalid', Boolean(mismatch));
+        feedback.textContent = message;
+    }
+
+    yearInput.addEventListener('input', checkYearMatchesGameDate);
+    gameDateInput.addEventListener('input', checkYearMatchesGameDate);
+    gameDateInput.addEventListener('change', checkYearMatchesGameDate);
+});
+</script>
 
     <div class="col-md-3">
   <label class="form-label">
@@ -365,13 +417,12 @@
         name="trophy"
         id="trophy"
         class="form-select"
-        required
     >
         <option value="">Select Competition Category First</option>
     </select>
 
-    <script id="trophyOptionsData" type="application/json">
-        {{ trophy_options_table() | tojson }}
+    <script id="competitionRulesData" type="application/json">
+        {{ competition_form_rules() | tojson }}
     </script>
 </div>
   </div>
@@ -449,22 +500,20 @@
       <label class="form-label">Blocks <i class="fa-regular fa-hand" style="color: burlywood;"></i></label>
       <input type="number" name="blocks" class="form-control" min="0" value="0">
     </div>
-<div class="col-md-4">
-  <label class="form-label">
-    Rebounds
-    <i class="fa-solid fa-basketball" style="color: orangered;"></i>
+<div class="col-md-2">
+  <label class="form-label" for="offensiveRebounds">
+    Offensive Rebounds
+    <i class="fa-solid fa-arrow-up" style="color: orangered;"></i>
   </label>
+  <input type="number" name="offensive_rebounds" id="offensiveRebounds" class="form-control" min="0" step="1" value="0">
+</div>
 
-  <select
-      name="rebound_type"
-      id="reboundType"
-      class="form-select">
-
-    <option value="">-- Select --</option>
-    <option value="Offensive rebound">Offensive rebound</option>
-    <option value="Defensive rebound">Defensive rebound</option>
-
-  </select>
+<div class="col-md-2">
+  <label class="form-label" for="defensiveRebounds">
+    Defensive Rebounds
+    <i class="fa-solid fa-shield" style="color: orangered;"></i>
+  </label>
+  <input type="number" name="defensive_rebounds" id="defensiveRebounds" class="form-control" min="0" step="1" value="0">
 </div>
 
     <div class="col-md-2">
@@ -475,7 +524,7 @@
   </div>
 
   <div class="mt-3">
-    <button type="submit" id="recordSubmitBtn" class="btn btn-success">Submit Record</button>
+    <button type="submit" id="recordSubmitBtn" class="btn btn-success dart-btn px-4">Submit Record</button>
     <small class="d-block text-muted mt-2">
       <i class="fa-solid fa-wifi"></i>
       No internet or data? Your record is saved on this device and uploaded
@@ -685,6 +734,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const clubDivision =
         document.getElementById('clubDivision');
 
+    const ageGroupOptions =
+        document.getElementById('ageGroupOptions');
+
+    const ageGroup =
+        document.getElementById('ageGroup');
+
     const afconOptions =
         document.getElementById('afconOptions');
 
@@ -705,14 +760,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     // =====================================================
-    // COMPETITION -> TROPHY OPTIONS (from competitions.py)
+    // COMPETITION RULES (from competitions.py)
     // =====================================================
-    // Keys are "sport|competition|division"; the division part is only
-    // used for Club League.
+    // competitions: sport -> competitions offered
+    // trophies:     "sport|competition|detail" -> trophies, where detail
+    //               is the club division or age group (else empty)
+    // teams:        "sport|competition" -> national team options
 
-    const trophyOptionsTable = JSON.parse(
-        document.getElementById('trophyOptionsData').textContent
+    const rules = JSON.parse(
+        document.getElementById('competitionRulesData').textContent
     );
+
+    const specialCompetitions = {
+        'AFCON': [afconOptions, afconSelect],
+        'WAFU': [wafuOptions, wafuSelect],
+        'World Cup': [worldCupOptions, worldCupSelect]
+    };
 
 
     // =====================================================
@@ -721,37 +784,98 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function resetSpecialCompetitionOptions() {
 
-        afconOptions.style.display = 'none';
-        wafuOptions.style.display = 'none';
-        worldCupOptions.style.display = 'none';
+        Object.keys(specialCompetitions).forEach(function (name) {
 
-        afconSelect.required = false;
-        wafuSelect.required = false;
-        worldCupSelect.required = false;
+            const block = specialCompetitions[name][0];
+            const select = specialCompetitions[name][1];
 
-        afconSelect.value = '';
-        wafuSelect.value = '';
-        worldCupSelect.value = '';
+            block.style.display = 'none';
+            select.required = false;
+            select.value = '';
+        });
     }
 
 
     // =====================================================
-    // CLUB DIVISION
+    // COMPETITIONS OFFERED FOR THE SPORT
     // =====================================================
 
-    function updateClubDivision(category) {
+    function updateCompetitionChoices() {
 
-        if (category === 'Club League') {
+        const offered = rules.competitions[sportSelect.value];
 
-            clubDivisionOptions.style.display = 'block';
-            clubDivision.required = true;
+        Array.from(competitionSelect.options).forEach(function (option) {
 
-        } else {
+            if (!option.value) {
+                return;
+            }
 
-            clubDivisionOptions.style.display = 'none';
-            clubDivision.required = false;
-            clubDivision.value = '';
+            const available = !offered || offered.includes(option.value);
+
+            option.hidden = !available;
+            option.disabled = !available;
+        });
+
+        if (
+            competitionSelect.value &&
+            offered &&
+            !offered.includes(competitionSelect.value)
+        ) {
+            competitionSelect.value = '';
+            competitionSelect.dispatchEvent(new Event('change'));
         }
+    }
+
+
+    // =====================================================
+    // WORLD CUP TEAMS FOR THE SPORT
+    // =====================================================
+
+    function updateWorldCupTeams() {
+
+        const previous = worldCupSelect.value;
+        const teams =
+            rules.teams[sportSelect.value + '|World Cup'] || [];
+
+        worldCupSelect.innerHTML = '';
+
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '-- Select --';
+        worldCupSelect.appendChild(placeholder);
+
+        teams.forEach(function (team) {
+
+            const option = document.createElement('option');
+            option.value = team;
+            option.textContent = team;
+            option.selected = team === previous;
+
+            worldCupSelect.appendChild(option);
+        });
+    }
+
+
+    // =====================================================
+    // CLUB DIVISION / AGE GROUP
+    // =====================================================
+
+    function toggleDetail(block, select, show) {
+
+        block.style.display = show ? 'block' : 'none';
+        select.required = show;
+
+        if (!show) {
+            select.value = '';
+        }
+    }
+
+    function updateClubDivision(category) {
+        toggleDetail(clubDivisionOptions, clubDivision, category === 'Club League');
+    }
+
+    function updateAgeGroup(category) {
+        toggleDetail(ageGroupOptions, ageGroup, category === 'Grassroots League');
     }
 
 
@@ -775,7 +899,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const previousTrophy = trophy.value;
 
         trophy.innerHTML = '';
-        trophy.required = true;
+
+        // Not every game wins a trophy: "None" is a valid answer.
+        trophy.required = false;
 
         if (!category) {
             setTrophyPlaceholder('Select Competition Category First');
@@ -787,32 +913,37 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        // Football Club League titles depend on the division.
-        if (
-            category === 'Club League' &&
-            sportSelect.value === 'Football' &&
-            !clubDivision.value
-        ) {
-            setTrophyPlaceholder('Select Club League Division First');
-            return;
-        }
+        // Club League trophies depend on the division, Grassroots League
+        // trophies on the age group.
+        const detailField = rules.detailFields[category];
+        let detail = '';
 
-        const division =
-            category === 'Club League' ? clubDivision.value : '';
+        if (detailField === 'club_division') {
+
+            detail = clubDivision.value;
+
+            if (!detail) {
+                setTrophyPlaceholder('Select Club League Division First');
+                return;
+            }
+
+        } else if (detailField === 'age_group') {
+
+            detail = ageGroup.value;
+
+            if (!detail) {
+                setTrophyPlaceholder('Select Age Group First');
+                return;
+            }
+        }
 
         const options =
-            trophyOptionsTable[
-                sportSelect.value + '|' + category + '|' + division
+            rules.trophies[
+                sportSelect.value + '|' + category + '|' + detail
             ] || [];
 
-        if (!options.length) {
-            setTrophyPlaceholder('Invalid Competition Category');
-            return;
-        }
-
-        if (options.length > 1) {
-            setTrophyPlaceholder('-- Select Trophy Won --');
-        }
+        // First choice: no trophy won in this game (saved as None).
+        setTrophyPlaceholder('None — no trophy won');
 
         options.forEach(function (value) {
 
@@ -822,10 +953,8 @@ document.addEventListener('DOMContentLoaded', function () {
             option.value = value;
             option.textContent = value;
 
-            // A single option is chosen automatically; otherwise keep
-            // the athlete's earlier choice when it is still allowed.
-            option.selected =
-                options.length === 1 || value === previousTrophy;
+            // Keep the athlete's earlier choice when it is still allowed.
+            option.selected = value === previousTrophy;
 
             trophy.appendChild(option);
         });
@@ -833,10 +962,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     // =====================================================
-    // CLUB DIVISION CHANGE
+    // CLUB DIVISION / AGE GROUP CHANGE
     // =====================================================
 
     clubDivision.addEventListener('change', function () {
+        updateTrophy(competitionSelect.value);
+    });
+
+    ageGroup.addEventListener('change', function () {
         updateTrophy(competitionSelect.value);
     });
 
@@ -846,6 +979,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // =====================================================
 
     sportSelect.addEventListener('change', function () {
+
+        updateCompetitionChoices();
+        updateWorldCupTeams();
 
         // Rebuild trophy options based on sport
         updateTrophy(
@@ -864,158 +1000,51 @@ document.addEventListener('DOMContentLoaded', function () {
         const category = this.value;
 
         resetSpecialCompetitionOptions();
-
         updateClubDivision(category);
+        updateAgeGroup(category);
 
-
-        // ---------------------------------------------
-        // Regular competitions
-        // ---------------------------------------------
-
-        if (
-            category === 'High School' ||
-            category === 'County Meet' ||
-            category === 'Club League' ||
-            category === 'University League' ||
-            category === 'Community/Area League'
-        ) {
-
-            finalCompetitionCategory.value =
-                category;
-
-            updateTrophy(category);
-
-            return;
+        // AFCON / WAFU / World Cup also need the national team.
+        if (specialCompetitions[category]) {
+            specialCompetitions[category][0].style.display = 'block';
+            specialCompetitions[category][1].required = true;
         }
 
+        finalCompetitionCategory.value = category;
 
-        // ---------------------------------------------
-        // AFCON
-        // ---------------------------------------------
-
-        if (category === 'AFCON') {
-
-            afconOptions.style.display = 'block';
-            afconSelect.required = true;
-
-            finalCompetitionCategory.value =
-                'AFCON';
-
-            updateTrophy('AFCON');
-
-            return;
-        }
-
-
-        // ---------------------------------------------
-        // WAFU
-        // ---------------------------------------------
-
-        if (category === 'WAFU') {
-
-            wafuOptions.style.display = 'block';
-            wafuSelect.required = true;
-
-            finalCompetitionCategory.value =
-                'WAFU';
-
-            updateTrophy('WAFU');
-
-            return;
-        }
-
-
-        // ---------------------------------------------
-        // WORLD CUP
-        // ---------------------------------------------
-
-        if (category === 'World Cup') {
-
-            worldCupOptions.style.display = 'block';
-            worldCupSelect.required = true;
-
-            finalCompetitionCategory.value =
-                'World Cup';
-
-            updateTrophy('World Cup');
-
-            return;
-        }
-
-
-        finalCompetitionCategory.value = '';
-
-        updateTrophy('');
+        updateTrophy(category);
     });
 
 
     // =====================================================
-    // AFCON
+    // NATIONAL TEAM CHANGE (AFCON / WAFU / World Cup)
     // =====================================================
 
-    afconSelect.addEventListener('change', function () {
+    Object.keys(specialCompetitions).forEach(function (name) {
 
-        if (this.value) {
+        specialCompetitions[name][1].addEventListener('change', function () {
 
-            finalCompetitionCategory.value =
-                'AFCON';
-
-            updateTrophy('AFCON');
-
-        } else {
-
-            finalCompetitionCategory.value = '';
-        }
-    });
-
-
-    // =====================================================
-    // WAFU
-    // =====================================================
-
-    wafuSelect.addEventListener('change', function () {
-
-        if (this.value) {
-
-            finalCompetitionCategory.value =
-                'WAFU';
-
-            updateTrophy('WAFU');
-
-        } else {
-
-            finalCompetitionCategory.value = '';
-        }
-    });
-
-
-    // =====================================================
-    // WORLD CUP
-    // =====================================================
-
-    worldCupSelect.addEventListener('change', function () {
-
-        if (this.value) {
-
-            finalCompetitionCategory.value =
-                'World Cup';
-
-            updateTrophy('World Cup');
-
-        } else {
-
-            finalCompetitionCategory.value = '';
-        }
+            if (this.value) {
+                finalCompetitionCategory.value = name;
+                updateTrophy(name);
+            } else {
+                finalCompetitionCategory.value = '';
+            }
+        });
     });
 
 
     // Initial state
     resetSpecialCompetitionOptions();
     updateClubDivision('');
+    updateAgeGroup('');
+    updateWorldCupTeams();
     updateTrophy('');
 
 });
 </script>
+
+    </div>{# /.card-body #}
+  </div>{# /.card — closes the "Submit New Sports Record" card #}
 
 {% else %}
   <div class="alert alert-warning">
@@ -1027,135 +1056,68 @@ document.addEventListener('DOMContentLoaded', function () {
 <!-- ==================== MY SUBMITTED RECORDS ==================== -->
 <h4 class="mt-4 mb-3">My Submitted Records <i class="fa-solid fa-book"></i></h4>
 <!-- ===== DESKTOP TABLE (hidden on mobile) ===== -->
-<div class="table-responsive d-none d-md-block">
-  <table class="table table-bordered table-hover">
-    <thead class="table-dark">
+{# Styles: .records-table in base.html #}
+{% from '_record_table_macros.html' import record_cells, record_header_cells with context %}
+<div class="records-table-wrap d-none d-md-block">
+  <table class="table records-table align-middle mb-0">
+    <thead>
       <tr>
-       <th><i class="fa-solid fa-futbol"></i>Sport<i class="fa-solid fa-basketball" style="color: orangered;"></i></th>
-        <th>Team <i class="fa-solid fa-users"></i></th>
-        <th>Opponent <i class="fa-solid fa-shield-halved" style="color: red;"></i></th>
-        <th>Year <i class="fa-solid fa-calendar" style="color: lightgreen;"></i></th>
-        <th>Position <i class="fa-solid fa-shirt"></i></th>
-        <th>Games Played <i class="fa-solid fa-person-running"></i></th>
-        <th>MOTM/QOTM <i class="fa-solid fa-trophy" style="color: silver;"></i></th>
-        <th>MVP <i class="fa-solid fa-star" style="color: goldenrod"></i></th>
-        <th>Division / Team <i class="fa-solid fa-layer-group"></i></th>
-        <th>Trophy <i class="fa-solid fa-trophy" style="color: goldenrod;"></i></th>
-        <th>Stats <i class="fa-solid fa-chart-line"></i></th>
-        <th>Status <i class="bi bi-check2-circle"></i></th>
+        {{ record_header_cells() }}
+        <th scope="col" class="text-center">Status</th>
+        <th scope="col" class="text-end">Actions</th>
       </tr>
     </thead>
     <tbody>
       {% for r in records %}
       <tr>
-        <td>{{ r.sport }}</td>
-        <td>{{ r.team or '-' }}</td>
-        <td>{{ r.team_played_against or '-' }}</td>
-        <td>{{ r.year }}</td>
-        <td>{{ r.position or '-' }}</td>
-        <td>{{ r.games_played }}</td>
-        <td>{{ r.man_of_the_match or 0 }}</td>
-        <td>{{ r.mvp or 0 }}</td>
-        <td>{{ r.club_division or r.competition_team or '-' }}</td>
-        <td>{{ r.trophy or '-' }}</td>
-       <td>
-         {% if r.sport == 'Football' %}
+        {{ record_cells(r) }}
 
-    <div><strong>Goals <i class="fa-solid fa-futbol"></i>:</strong> {{ r.goals }}</div>
-    <div><strong>Assists <i class="fa-solid fa-handshake-angle"></i>:</strong> {{ r.assists }}</div>
-    <div><strong>Yellow <i class="fa-solid fa-square" style="color: #FFCC00;"></i>:</strong> {{ r.yellow_cards }}</div>
-    <div><strong>Red <i class="fa-solid fa-square" style="color: #FF0000;"></i>:</strong> {{ r.red_cards }}</div>
-      <strong>Match Minutes <i class="fa-solid fa-clock"></i>:</strong>
-  {{ r.match_minutes_played or 0 }}
-</div>
-
-{% if r.position == 'GK' %}
-
-<div>
-  <strong>Clean Sheets <i class="fa-solid fa-shield-halved"></i>:</strong>
-  {{ r.clean_sheets or 0 }}
-</div>
-
-<div>
-  <strong>Saves <i class="fa-solid fa-hands-bubbles"></i>:</strong>
-  {{ r.saves or 0 }}
-</div>
-
-{% endif %}   
-{% elif r.sport == 'Kickball' %}
-
-    <div><strong>Home Runs <i class="fa-solid fa-baseball"></i>:</strong> {{ r.home_runs }}</div>
-    <div><strong>Red Cards <i class="fa-solid fa-square" style="color: #FF0000;"></i>:</strong> {{ r.kickball_red_cards }}</div>
-    <div><strong>Yellow Cards <i class="fa-solid fa-square" style="color: #FFCC00;"></i>:</strong> {{ r.kickball_yellow_cards }}</div>
-    <div><strong>Cut Base <i class="fa-solid fa-person-running"></i>:</strong> {{ r.cut_base }}</div>
-    <div><strong>Foul Played <i class="fa-solid fa-triangle-exclamation"></i>:</strong> {{ r.foul_played }}</div>
-    <div>
-  <strong>Match Minutes <i class="fa-solid fa-clock"></i>:</strong>
-  {{ r.match_minutes_played or 0 }}
-</div>
-
-{% else %}
-
-    <div><strong>Points <i class="fa-solid fa-basketball" style="color: orangered;"></i>:</strong> {{ r.points }}</div>
-    <div><strong>Assists <i class="fa-solid fa-handshake-angle"></i>:</strong> {{ r.assists }}</div>
-    <div><strong>Blocks <i class="fa-solid fa-shield-alt"></i>:</strong> {{ r.blocks }}</div>
-    <div><strong>Sent Off Court <i class="fa-solid fa-user-times"></i>:</strong> {{ r.sent_off }}</div>
-    <div>
-  <strong>Match Minutes <i class="fa-solid fa-clock"></i>:</strong>
-  {{ r.match_minutes_played or 0 }}
-</div>
-
-<div>
-  <strong>Rebounds <i class="fa-solid fa-basketball"></i>:</strong>
-  {{ r.rebound_type or 'None' }}
-</div>
-{% endif %}
+        <!-- Status -->
+        <td class="text-center">
+          {% if r.status == 'approved' %}
+            <span class="badge dart-pill">Approved</span>
+          {% elif r.status == 'rejected' %}
+            <span class="badge dart-status-rejected">Rejected</span>
+          {% else %}
+            <span class="badge dart-status-pending">Pending</span>
+          {% endif %}
         </td>
 
-<td>
-  <div class="d-flex align-items-center gap-1 flex-wrap">
-    {% if r.status == 'approved' %}
-      <span class="badge">Approved</span>
-    {% elif r.status == 'rejected' %}
-      <span class="badge bg-danger">Rejected</span>
-    {% else %}
-      <span class="badge bg-warning">Pending</span>
-    {% endif %}
+        <!-- Actions -->
+        <td class="text-end">
+          <div class="rt-actions">
+            {% if r.status == 'rejected' %}
+              <form
+                  method="POST"
+                  action="{{ url_for('resubmit_record', record_id=r.id) }}"
+                  onsubmit="return confirm('Resubmit this record?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm dart-btn">
+                  <i class="fa-solid fa-rotate-right" aria-hidden="true"></i> Resubmit
+                </button>
+              </form>
+              <form
+                  method="POST"
+                  action="{{ url_for('delete_record', record_id=r.id) }}"
+                  onsubmit="return confirm('Are you sure you want to delete this record?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm dart-btn">
+                  <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete
+                </button>
+              </form>
+            {% endif %}
 
-    {% if r.status == 'rejected' %}
-      <form
-    method="POST"
-    action="{{ url_for('delete_record', record_id=r.id) }}"
-    style="display:inline;"
-    onsubmit="return confirm('Are you sure you want to delete this record?');"
->
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    <button type="submit" class="btn btn-danger btn-sm">
-        Delete
-    </button>
-</form>
-      <a href="{{ url_for('resubmit_record', record_id=r.id) }}" 
-         class="btn btn-warning btn-sm py-0 px-2"
-         style="font-size: 0.75rem;"
-         onclick="return confirm('Resubmit this record?')">
-        Resubmit
-      </a>
-    {% endif %}
-
-    {% if r.year|string == current_year|string %}
-      <a href="{{ url_for('edit_record', record_id=r.id) }}" 
-         class="btn btn-primary btn-sm py-0 px-2"
-         style="font-size: 0.75rem;">
-        Edit
-      </a>
-    {% endif %}
-  </div>
-</td>
+            {% if r.year|string == current_year|string %}
+              <a href="{{ url_for('edit_record', record_id=r.id) }}" class="btn btn-sm dart-btn">
+                <i class="fa-solid fa-pen" aria-hidden="true"></i> Edit
+              </a>
+            {% endif %}
+          </div>
+        </td>
       </tr>
       {% else %}
       <tr>
-      <td colspan="11" class="text-center">No records submitted yet.</td>
+        <td colspan="8" class="text-center py-4 rt-muted">No records submitted yet.</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -1181,6 +1143,11 @@ document.addEventListener('DOMContentLoaded', function () {
   {% else %}
     {{ r.sport | upper }} <i class="fa-solid fa-basketball" style="color: orangered;"></i>
   {% endif %}
+</div>
+{# Game date: below the sport, above team/opponent (styled in base.html). #}
+<div class="card-game-date text-center mb-3">
+  <i class="fa-regular fa-calendar-days"></i>
+  {{ r.game_date.strftime('%B %d, %Y') if r.game_date else 'Game date not recorded' }}
 </div>
 
           <!-- Stats Grid -->
@@ -1251,11 +1218,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             <div>
     <strong>
-        {{ r.competition_team_label or 'Club Division' }}
+        {{ r.competition_detail_label or 'Club Division' }}
         <i class="fa-solid fa-layer-group"></i> :
     </strong>
 
-    {{ r.club_division or r.competition_team or 'None' }}
+    {{ r.competition_detail or 'None' }}
 </div>
 
        {% if r.sport == 'Football' %}
@@ -1311,7 +1278,7 @@ document.addEventListener('DOMContentLoaded', function () {
     Rebounds
     <i class="fa-solid fa-basketball"></i> :
   </strong>
-  {{ r.rebound_type or 'None' }}
+  {{ r.rebounds_display }}
 </div>
 {% endif %}
           </div>
@@ -1319,11 +1286,11 @@ document.addEventListener('DOMContentLoaded', function () {
           <!-- Status -->
 <div class="d-flex justify-content-center align-items-center gap-2 mt-3 flex-wrap">
   {% if r.status == 'approved' %}
-    <span class="badge bg-success px-3 py-2">Approved</span>
+    <span class="badge dart-pill px-3 py-2">Approved</span>
   {% elif r.status == 'rejected' %}
-    <span class="badge bg-danger px-3 py-2">Rejected</span>
+    <span class="badge dart-status-rejected px-3 py-2">Rejected</span>
   {% else %}
-    <span class="badge bg-warning text-dark px-3 py-2">Pending</span>
+    <span class="badge dart-status-pending px-3 py-2">Pending</span>
   {% endif %}
 
  {% if r.status == 'rejected' %}
@@ -1336,22 +1303,27 @@ document.addEventListener('DOMContentLoaded', function () {
 >
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-    <button type="submit" class="btn btn-outline-danger btn-sm px-3">
+    <button type="submit" class="btn btn-outline-danger btn-sm px-3 dart-btn">
         Delete
     </button>
 </form>
 
-    <a href="{{ url_for('resubmit_record', record_id=r.id) }}" 
-       class="btn btn-warning btn-sm px-3"
-       onclick="return confirm('Resubmit this record?')">
+    <form
+        method="POST"
+        action="{{ url_for('resubmit_record', record_id=r.id) }}" 
+        style="display:inline;"
+        onsubmit="return confirm('Resubmit this record?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-warning btn-sm px-3 dart-btn">
         Resubmit
-    </a>
+      </button>
+    </form>
 
 {% endif %}
 
   {% if r.year|string == current_year|string %}
     <a href="{{ url_for('edit_record', record_id=r.id) }}" 
-       class="btn btn-primary btn-sm px-3">
+       class="btn btn-primary btn-sm px-3 dart-btn">
       Edit
     </a>
   {% endif %}
@@ -1381,3 +1353,4 @@ document.addEventListener('DOMContentLoaded', function () {
 </div>
 
 {% endblock %}
+

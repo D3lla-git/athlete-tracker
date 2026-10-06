@@ -1,0 +1,130 @@
+{# ==========================================================
+   SHARED RECORD TABLE CELLS
+   Used by the athlete's "My Submitted Records" table and the coach /
+   Super Admin record tables, so every record table looks the same.
+   Styles: .records-table / .rt-* in base.html.
+========================================================== #}
+
+{% macro record_cells(r) %}
+{% set sport_icon = {'Football': 'fa-futbol', 'Basketball': 'fa-basketball', 'Kickball': 'fa-baseball'}.get(r.sport, 'fa-medal') %}
+        <!-- Game: sport, date, season -->
+        <td>
+          <div class="rt-game">
+            <span class="rt-sport-icon rt-sport-{{ (r.sport or '') | lower }}" aria-hidden="true">
+              <i class="fa-solid {{ sport_icon }}"></i>
+            </span>
+            <div class="rt-game-text">
+              <div class="rt-strong">{{ r.sport }}</div>
+              <div class="rt-muted text-nowrap">
+                <i class="fa-regular fa-calendar-days" aria-hidden="true"></i>
+                {{ r.game_date.strftime('%b %d, %Y') if r.game_date else 'No date' }}
+              </div>
+              <div class="rt-muted">Season {{ r.year }}</div>
+              <div class="rt-position text-nowrap" title="Position · minutes played">
+                <i class="fa-solid fa-shirt" aria-hidden="true"></i>
+                <strong>{{ r.position or '-' }}</strong>
+                <span class="rt-muted">· <i class="fa-regular fa-clock" aria-hidden="true"></i> {{ r.match_minutes_played or 0 }} min</span>
+              </div>
+            </div>
+          </div>
+        </td>
+
+        <!-- Match: team vs opponent -->
+        <td class="rt-match">
+          <div class="rt-strong" title="{{ r.team or '' }}">
+            <i class="fa-solid fa-users rt-icon" aria-hidden="true"></i>{{ r.team or '-' }}
+          </div>
+          <div class="rt-muted" title="{{ r.team_played_against or '' }}">
+            <i class="fa-solid fa-shield-halved rt-icon text-danger" aria-hidden="true"></i>vs {{ r.team_played_against or '-' }}
+          </div>
+        </td>
+
+        <!-- Competition, division / team / age group, trophy -->
+        <td class="rt-competition">
+          <div class="rt-strong">{{ r.competition_category or '-' }}</div>
+          {% if r.competition_detail %}
+            <div class="rt-muted">{{ r.competition_detail_label }}: {{ r.competition_detail }}</div>
+          {% endif %}
+          <div class="rt-trophy" title="Trophy">
+            <i class="fa-solid fa-trophy" aria-hidden="true"></i>{{ r.trophy or 'None' }}
+          </div>
+        </td>
+
+        <!-- Awards -->
+        <td class="text-center">
+          <div class="rt-chips justify-content-center">
+            <span class="rt-chip{% if r.man_of_the_match %} rt-chip-gold{% endif %}" title="{{ 'QOTM' if r.sport == 'Kickball' else 'MOTM' }}">
+              <i class="fa-solid fa-medal" aria-hidden="true"></i>
+              {{ 'QOTM' if r.sport == 'Kickball' else 'MOTM' }} {{ r.man_of_the_match or 0 }}
+            </span>
+            <span class="rt-chip{% if r.mvp %} rt-chip-gold{% endif %}" title="MVP">
+              <i class="fa-solid fa-star" aria-hidden="true"></i>
+              MVP {{ r.mvp or 0 }}
+            </span>
+          </div>
+        </td>
+
+        <!-- Key stats for the sport -->
+        <td>
+          <div class="rt-stats-grid">
+            {% if r.sport == 'Football' %}
+              <span class="rt-stat" title="Goals"><i class="fa-solid fa-futbol" aria-hidden="true"></i><span class="rt-stat-label">Goals</span><strong class="rt-stat-value">{{ r.goals or 0 }}</strong></span>
+              <span class="rt-stat" title="Assists"><i class="fa-solid fa-handshake-angle" aria-hidden="true"></i><span class="rt-stat-label">Assists</span><strong class="rt-stat-value">{{ r.assists or 0 }}</strong></span>
+              <span class="rt-stat" title="Yellow cards"><i class="fa-solid fa-square" style="color:#FFCC00;" aria-hidden="true"></i><span class="rt-stat-label">Yellow</span><strong class="rt-stat-value">{{ r.yellow_cards or 0 }}</strong></span>
+              <span class="rt-stat" title="Red cards"><i class="fa-solid fa-square" style="color:#FF0000;" aria-hidden="true"></i><span class="rt-stat-label">Red</span><strong class="rt-stat-value">{{ r.red_cards or 0 }}</strong></span>
+              {% if r.position == 'GK' %}
+                <span class="rt-stat rt-stat-wide" title="Clean sheets"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span class="rt-stat-label">Clean sheets</span><strong class="rt-stat-value">{{ r.clean_sheets or 0 }}</strong></span>
+                <span class="rt-stat rt-stat-wide" title="Saves"><i class="fa-solid fa-hands-bubbles" aria-hidden="true"></i><span class="rt-stat-label">Saves</span><strong class="rt-stat-value">{{ r.saves or 0 }}</strong></span>
+              {% endif %}
+            {% elif r.sport == 'Kickball' %}
+              <span class="rt-stat" title="Home runs"><i class="fa-solid fa-baseball" aria-hidden="true"></i><span class="rt-stat-label">Home runs</span><strong class="rt-stat-value">{{ r.home_runs or 0 }}</strong></span>
+              <span class="rt-stat" title="Cut base"><i class="fa-solid fa-person-running" aria-hidden="true"></i><span class="rt-stat-label">Cut base</span><strong class="rt-stat-value">{{ r.cut_base or 0 }}</strong></span>
+              <span class="rt-stat" title="Fouls played"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i><span class="rt-stat-label">Fouls</span><strong class="rt-stat-value">{{ r.foul_played or 0 }}</strong></span>
+              <span class="rt-stat" title="Yellow cards"><i class="fa-solid fa-square" style="color:#FFCC00;" aria-hidden="true"></i><span class="rt-stat-label">Yellow</span><strong class="rt-stat-value">{{ r.kickball_yellow_cards or 0 }}</strong></span>
+              <span class="rt-stat" title="Red cards"><i class="fa-solid fa-square" style="color:#FF0000;" aria-hidden="true"></i><span class="rt-stat-label">Red</span><strong class="rt-stat-value">{{ r.kickball_red_cards or 0 }}</strong></span>
+            {% else %}
+              <span class="rt-stat" title="Points"><i class="fa-solid fa-basketball" style="color:orangered;" aria-hidden="true"></i><span class="rt-stat-label">Points</span><strong class="rt-stat-value">{{ r.points or 0 }}</strong></span>
+              <span class="rt-stat" title="Assists"><i class="fa-solid fa-handshake-angle" aria-hidden="true"></i><span class="rt-stat-label">Assists</span><strong class="rt-stat-value">{{ r.assists or 0 }}</strong></span>
+              <span class="rt-stat" title="Blocks"><i class="fa-regular fa-hand" aria-hidden="true"></i><span class="rt-stat-label">Blocks</span><strong class="rt-stat-value">{{ r.blocks or 0 }}</strong></span>
+              <span class="rt-stat" title="Sent off court"><i class="fa-solid fa-user-xmark" aria-hidden="true"></i><span class="rt-stat-label">Sent off</span><strong class="rt-stat-value">{{ r.sent_off or 0 }}</strong></span>
+              <span class="rt-stat" title="Offensive rebounds"><i class="fa-solid fa-arrow-up" aria-hidden="true"></i><span class="rt-stat-label">Off reb</span><strong class="rt-stat-value">{{ r.offensive_rebounds or 0 }}</strong></span>
+              <span class="rt-stat" title="Defensive rebounds"><i class="fa-solid fa-shield" aria-hidden="true"></i><span class="rt-stat-label">Def reb</span><strong class="rt-stat-value">{{ r.defensive_rebounds or 0 }}</strong></span>
+              {% if not r.total_rebounds and r.rebound_type %}
+                {# Older record: only the kind of rebound was recorded. #}
+                <span class="rt-stat rt-stat-wide" title="Rebound (recorded before counts)"><i class="fa-solid fa-rotate" aria-hidden="true"></i><span class="rt-stat-label">Rebound</span><strong class="rt-stat-value">{{ r.rebound_type }}</strong></span>
+              {% endif %}
+            {% endif %}
+          </div>
+        </td>
+{% endmacro %}
+
+
+{# Header cells matching record_cells(). #}
+{% macro record_header_cells() %}
+        <th scope="col">Game &amp; Position</th>
+        <th scope="col">Match</th>
+        <th scope="col">Competition &amp; Trophy</th>
+        <th scope="col" class="text-center">Awards</th>
+        <th scope="col">Key Stats</th>
+{% endmacro %}
+
+
+{# Athlete column for coach / admin tables. #}
+{% macro athlete_cell(r) %}
+        <td>
+          <div class="managed-athlete">
+            {% if r.user.profile_picture %}
+              <img class="managed-avatar" src="{{ url_for('profile_picture', filename=r.user.profile_picture) }}" alt="">
+            {% else %}
+              <span class="managed-avatar" aria-hidden="true">{{ (r.user.full_name or '?')[0] | upper }}</span>
+            {% endif %}
+            <div>
+              <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}"
+                 class="rt-strong text-decoration-none">{{ r.user.full_name }}</a>
+              <div class="rt-muted">
+                <i class="fa-solid fa-school" aria-hidden="true"></i> {{ r.user.school or '-' }}
+              </div>
+            </div>
+          </div>
+        </td>
+{% endmacro %}

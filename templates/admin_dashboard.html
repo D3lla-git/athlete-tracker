@@ -2,11 +2,11 @@
 {% block title %}Admin Dashboard{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">Admin / Coach Dashboard</h2>
+{% include '_admin_dashboard_overview.html' %}
 <!-- ========== PENDING VERIFICATIONS ========== -->
 {% if pending_coaches %}
 <div class="card mb-4 border-warning">
-  <div class="card-header bg-warning text-dark">
+  <div class="card-header dash-caution-header">
     <strong>Pending Coach Approvals (Super Admin Only)</strong>
   </div>
   <div class="card-body">
@@ -34,7 +34,7 @@
            value="{{ csrf_token() }}">
 
     <button type="submit"
-            class="btn btn-success btn-sm"
+            class="btn btn-success btn-sm dart-btn"
             onclick="return confirm('Approve this coach?')">
         <i class="fa-solid fa-check"></i>
         Approve Coach
@@ -55,7 +55,7 @@
 {% if current_user.role == 'System' %}
 <div class="card mb-4 border-info">
 
-  <div class="card-header bg-info text-dark">
+  <div class="card-header dash-caution-header">
     <strong>
       Pending Scout Approvals (Super Admin Only)
     </strong>
@@ -146,7 +146,7 @@
 
             <!-- Status -->
             <td>
-              <span class="badge bg-warning text-dark">
+              <span class="badge dart-status-pending">
                 Pending Verification
               </span>
             </td>
@@ -163,7 +163,7 @@
                        value="{{ csrf_token() }}">
 
                 <button type="submit"
-                        class="btn btn-success btn-sm"
+                        class="btn btn-success btn-sm dart-btn"
                         onclick="return confirm('Approve this Scout account?')">
 
                   <i class="fa-solid fa-check"></i>
@@ -226,7 +226,7 @@
                  value="{{ csrf_token() }}">
 
           <button type="submit"
-                  class="btn btn-success btn-sm"
+                  class="btn btn-success btn-sm dart-btn"
                   onclick="return confirm('Verify this athlete?')">
             <i class="fa-solid fa-check"></i>
             Verify Athlete
@@ -244,7 +244,7 @@
                  value="{{ csrf_token() }}">
 
           <button type="submit"
-                  class="btn btn-outline-danger btn-sm"
+                  class="btn btn-outline-danger btn-sm dart-btn"
                   onclick="return confirm('Reject this athlete registration? This will remove the pending account.')">
             <i class="fa-solid fa-xmark"></i>
             Reject
@@ -281,6 +281,11 @@
   {% else %}
     {{ r.sport | upper }} <i class="fa-solid fa-basketball" style="color:orangered;"></i>
   {% endif %}
+</div>
+{# Game date: below the sport, above team/opponent (styled in base.html). #}
+<div class="card-game-date text-center mb-3">
+  <i class="fa-regular fa-calendar-days"></i>
+  {{ r.game_date.strftime('%B %d, %Y') if r.game_date else 'Game date not recorded' }}
 </div>
 
             <div class="text-center mb-3">
@@ -339,20 +344,25 @@
 {% endif %}
             </div>
 
-            <!-- Action Buttons -->
+            <!-- Status + Action Buttons (approve/reject only while pending) -->
+            <div class="d-flex justify-content-center align-items-center flex-wrap gap-2 mt-3">
+            {% if r.status == 'pending' %}
             <form method="POST" action="{{ url_for('approve_record', record_id=r.id) }}" style="display:inline;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="btn btn-success">
+    <button type="submit" class="btn btn-success dart-btn">
         <i class="fa-solid fa-check"></i> Approve
     </button>
 </form>
               <form method="POST" action="{{ url_for('reject_record', record_id=r.id) }}" style="display:inline;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="btn btn-danger"
+    <button type="submit" class="btn btn-danger dart-btn"
             onclick="return confirm('Are you sure you want to reject this record?');">
         <i class="fa-solid fa-xmark"></i> Reject
     </button>
 </form>
+            {% else %}
+              <span class="badge dart-status-rejected px-3 py-2">Rejected</span>
+            {% endif %}
             </div>
 
           </div>
@@ -381,20 +391,21 @@
 
 
 <style>
-  /* Keep the desktop pending-record table comfortably inside the page width. */
- .admin-pending-table-heading {
-  width: 96%;
-  max-width: 1400px;
-  margin-left: auto;
-  margin-right: auto;
-}
+  /* Record tables: aligned with the page, and on wide windows they
+     grow up to 96% of the window (max 1400px), centred. */
+  .admin-pending-table-heading,
+  .admin-pending-table-wrap {
+    width: 100%;
+  }
 
-.admin-pending-table-wrap {
-  width: 96%;
-  max-width: 1400px;
-  margin-left: auto;
-  margin-right: auto;
-}
+  @media (min-width: 1200px) {
+    .admin-pending-table-wrap {
+      width: min(96vw, 1400px);
+      position: relative;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+  }
 
 .admin-pending-table-wrap .table {
   width: 100%;
@@ -402,177 +413,121 @@
 }
 </style>
 <!-- ==================== DESKTOP VIEW - PENDING RECORDS ==================== -->
+{% from '_record_table_macros.html' import record_cells, record_header_cells, athlete_cell with context %}
 <div class="d-none d-md-block">
 
   <div class="admin-pending-table-heading">
     <h4 class="mt-4 mb-3">
       Pending Sports Records
       <i class="fa-solid fa-hourglass-half"></i>
+      {% if pending_records %}<span class="badge dart-status-pending ms-1">{{ pending_records | length }}</span>{% endif %}
     </h4>
   </div>
 
   {% if pending_records %}
 
-  <div class="table-responsive admin-pending-table-wrap">
-    <table class="table table-bordered table-hover align-middle">
-      <thead class="table-dark">
+  <div class="records-table-wrap admin-pending-table-wrap">
+    <table class="table records-table records-table-wide align-middle mb-0">
+      <thead>
         <tr>
-          <th>Student <i class="fa-solid fa-user"></i></th>
-          <th><i class="fa-solid fa-futbol"></i> Sport <i class="fa-solid fa-basketball" style="color: orangered;"></i></th>
-          <th>Team <i class="fa-solid fa-users"></i></th>
-          <th>Opponet <i class="fa-solid fa-shield-halved"></i></th>
-          <th>Year <i class="fa-solid fa-calendar" style="color: lightgreen;"></i></th>
-          <th>Position <i class="fa-solid fa-shirt"></i></th>
-          <th>Games <i class="fa-solid fa-person-running"></i></th>
-          <th>MOTM/QOTM <i class="fa-solid fa-trophy" style="color: silver;"></i></th>
-          <th>MVP <i class="fa-solid fa-star" style="color: goldenrod"></i></th>
-          <th>Trophy <i class="fa-solid fa-trophy" style="color: goldenrod;"></i></th>
-          <th>Competition <i class="fa-solid fa-medal"></i></th>
-          <th>Stats <i class="fa-solid fa-chart-line"></i></th>
-          <th>Status <i class="bi bi-check2-circle"></i></th>
+          <th scope="col">Athlete</th>
+          {{ record_header_cells() }}
+          <th scope="col" class="text-center">Status &amp; Actions</th>
         </tr>
       </thead>
 
       <tbody>
         {% for r in pending_records %}
         <tr>
-          <!-- Student -->
-          <td>
-            <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}"
-               class="text-decoration-none">
-              <strong>{{ r.user.full_name }}</strong>
-            </a>
-          </td>
-
-          <!-- Sport -->
-          <td>
-            {% if r.sport == 'Football' %}
-              <strong>Football <i class="fa-solid fa-futbol"></i></strong>
-            {% elif r.sport == 'Kickball' %}
-              <strong>Kickball <i class="fa-solid fa-baseball"></i></strong>
-            {% else %}
-              <strong>Basketball <i class="fa-solid fa-basketball" style="color: orangered;"></i></strong>
-            {% endif %}
-          </td>
-
-          <!-- Team -->
-          <td>{{ r.team or r.user.school or '-' }}</td>
-
-          <!-- Team Played Against -->
-          <td>{{ r.team_played_against or '-' }}</td>
-
-          <!-- Year -->
-          <td>{{ r.year }}</td>
-
-          <!-- Position -->
-          <td>{{ r.position or '-' }}</td>
-
-          <!-- Games Played -->
-          <td>{{ r.games_played or 0 }}</td>
-
-          <!-- MOTM/QOTM -->
-          <td>{{ r.man_of_the_match or 0 }}</td>
-
-          <!-- MVP -->
-          <td>{{ r.mvp or 0 }}</td>
-
-          <!-- Trophy -->
-          <td>{{ r.trophy or '-' }}</td>
-
-          <!-- Competition -->
-          <td>
-            <span class="badge bg-info text-dark">
-              {{ r.competition_display or '-' }}
-            </span>
-          </td>
-
-          <!-- Stats -->
-          <td>
-            {% if r.sport == 'Football' %}
-              <div><strong>Goals <i class="fa-solid fa-futbol"></i>:</strong> {{ r.goals or 0 }}</div>
-              <div><strong>Assists <i class="fa-solid fa-handshake"></i>:</strong> {{ r.assists or 0 }}</div>
-              <div><strong>Yellow Cards <i class="fa-solid fa-circle" style="color: gold;"></i>:</strong> {{ r.yellow_cards or 0 }}</div>
-              <div><strong>Red Cards <i class="fa-solid fa-circle" style="color: red;"></i>:</strong> {{ r.red_cards or 0 }}</div>
-            {% elif r.sport == 'Kickball' %}
-              <div><strong>Home Runs <i class="fa-solid fa-baseball"></i>:</strong> {{ r.home_runs or 0 }}</div>
-              <div><strong>Red Cards <i class="fa-solid fa-circle" style="color: red;"></i>:</strong> {{ r.kickball_red_cards or 0 }}</div>
-              <div><strong>Yellow Cards <i class="fa-solid fa-circle" style="color: gold;"></i>:</strong> {{ r.kickball_yellow_cards or 0 }}</div>
-              <div><strong>Cut Base <i class="fa-solid fa-baseball"></i>:</strong> {{ r.cut_base or 0 }}</div>
-              <div><strong>Foul Played <i class="fa-solid fa-exclamation-triangle"></i>:</strong> {{ r.foul_played or 0 }}</div>
-            {% else %}
-              <div><strong>Points <i class="fa-solid fa-basketball"></i>:</strong> {{ r.points or 0 }}</div>
-              <div><strong>Assists <i class="fa-solid fa-handshake"></i>:</strong> {{ r.assists or 0 }}</div>
-              <div><strong>Blocks <i class="fa-solid fa-hand"></i>:</strong> {{ r.blocks or 0 }}</div>
-              <div><strong>Sent Off Court <i class="fa-solid fa-user-slash"></i>:</strong> {{ r.sent_off or 0 }}</div>
-            {% endif %}
-          </td>
+          {{ athlete_cell(r) }}
+          {{ record_cells(r) }}
 
           <!-- Status + Actions -->
-          <td>
-            <div class="d-flex flex-column gap-2 align-items-start">
+          <td class="text-center">
+            <div class="d-flex flex-column align-items-center gap-2">
               {% if r.status == 'approved' %}
-                <span class="badge bg-success">Approved</span>
+                <span class="badge dart-pill">Approved</span>
               {% elif r.status == 'rejected' %}
-                <span class="badge bg-danger">Rejected</span>
+                <span class="badge dart-status-rejected">Rejected</span>
               {% else %}
-                <span class="badge bg-warning text-dark">Pending</span>
+                <span class="badge dart-status-pending">Pending</span>
               {% endif %}
 
-                            {% if r.status == 'pending' %}
-                <div class="d-flex gap-2 flex-wrap">
-
-                  <!-- Approve Sports Record -->
-                  <form method="POST"
-                        action="{{ url_for('approve_record', record_id=r.id) }}"
-                        style="display:inline;">
-
-                    <input type="hidden"
-                           name="csrf_token"
-                           value="{{ csrf_token() }}">
-
+              {% if r.status == 'pending' %}
+                <div class="rt-actions justify-content-center">
+                  <form method="POST" action="{{ url_for('approve_record', record_id=r.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit"
-                            class="btn btn-success btn-sm"
+                            class="btn btn-sm dart-btn"
                             onclick="return confirm('Approve this sports record?')">
-                      <i class="fa-solid fa-check"></i>
-                      Approve
+                      <i class="fa-solid fa-check" aria-hidden="true"></i> Approve
                     </button>
-
                   </form>
 
-                  <!-- Reject Sports Record -->
-                  <form method="POST"
-                        action="{{ url_for('reject_record', record_id=r.id) }}"
-                        style="display:inline;">
-
-                    <input type="hidden"
-                           name="csrf_token"
-                           value="{{ csrf_token() }}">
-
+                  <form method="POST" action="{{ url_for('reject_record', record_id=r.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit"
-                            class="btn btn-outline-danger btn-sm"
+                            class="btn btn-sm dart-btn"
                             onclick="return confirm('Reject this sports record?')">
-                      <i class="fa-solid fa-xmark"></i>
-                      Reject
+                      <i class="fa-solid fa-xmark" aria-hidden="true"></i> Reject
                     </button>
-
                   </form>
-
                 </div>
               {% endif %}
             </div>
           </td>
         </tr>
-        {% else %}
-        <tr>
-          <td colspan="13" class="text-center">No records waiting for approval.</td>
-        </tr>
         {% endfor %}
       </tbody>
-      </table>
+    </table>
   </div>
   {% else %}
     <p class="text-muted text-center">No records waiting for approval.</p>
   {% endif %}
 </div>
+
+{% if current_user.role == 'Coach' %}
+<!-- ==================== APPROVED RECORDS (read-only) ==================== -->
+{# Coaches can review records they manage after approval, but approved
+   records can't be rejected or deleted, so there are no actions here. #}
+<div class="admin-pending-table-heading">
+  <h4 class="mt-5 mb-1">
+    Approved Records
+    <i class="fa-solid fa-circle-check text-success"></i>
+    {% if approved_records %}<span class="badge dart-pill ms-1">{{ approved_records | length }}</span>{% endif %}
+  </h4>
+  <p class="text-muted small mb-3">
+    <i class="fa-solid fa-lock"></i>
+    Read-only — approved records can't be rejected or deleted.
+  </p>
+</div>
+
+{% if approved_records %}
+  <div class="records-table-wrap admin-pending-table-wrap" id="approvedRecordsTable">
+    <table class="table records-table records-table-wide align-middle mb-0">
+      <thead>
+        <tr>
+          <th scope="col">Athlete</th>
+          {{ record_header_cells() }}
+          <th scope="col" class="text-center">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in approved_records %}
+        <tr>
+          {{ athlete_cell(r) }}
+          {{ record_cells(r) }}
+          <td class="text-center">
+            <span class="badge dart-pill"><i class="fa-solid fa-lock me-1" aria-hidden="true"></i>Approved</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p class="text-muted text-center">No approved records yet.</p>
+{% endif %}
+{% endif %}
 
 {% endblock %}

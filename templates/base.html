@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <!-- viewport-fit=cover exposes env(safe-area-inset-*) so the mobile tab bar
        clears the iPhone home indicator. -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="color-scheme" content="light dark">
   <!-- D.A.R.T. PROGRESSIVE WEB APP -->
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
@@ -281,6 +281,406 @@ html[data-theme="dark"] .record-card small,
 html[data-theme="dark"] .record-card span,
 html[data-theme="dark"] .record-card a {
   color: #ffffff !important;
+}
+
+/* ===== D.A.R.T. BUTTONS & PILLS ===== */
+/* The look of the "Register" button on the athlete registration form:
+   smooth rounded corners and the D.A.R.T. green gradient, with a black
+   border in both light and dark mode. */
+.dart-btn,
+.dart-pill {
+  background:
+    radial-gradient(
+      circle at 85% 30%,
+      rgba(57, 185, 114, 0.30),
+      transparent 30%
+    ),
+    linear-gradient(
+      135deg,
+      #071208,
+      #0d2413 55%,
+      #061008
+    ) !important;
+  color: #ffffff !important;
+  border: 2px solid #000000 !important;
+  border-radius: 2rem !important;
+}
+
+.dart-btn {
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+
+.dart-btn:hover,
+.dart-btn:focus-visible {
+  color: #ffffff !important;
+  filter: brightness(1.3);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  transform: translateY(-1px);
+}
+
+.dart-btn:active {
+  transform: translateY(0);
+}
+
+.dart-btn:disabled {
+  filter: grayscale(0.4);
+  transform: none;
+}
+
+/* Small headings / status labels (Approved, Verified Athlete, ...). */
+.dart-pill {
+  display: inline-block;
+  border-width: 1.5px !important;
+  padding: 0.4em 0.9em;
+  font-weight: 600;
+}
+
+/* "Save Changes" keeps its blue color. */
+.dart-btn.dart-btn-blue {
+  background: #0d6efd !important;
+}
+
+/* ===== GOOGLE SIGN-IN BUTTON (Google's standard white button) ===== */
+.google-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #ffffff !important;
+  color: #1f1f1f !important;
+  border: 1px solid #747775 !important;
+  border-radius: 2rem !important;
+  font-weight: 500;
+  padding: 0.55rem 1rem;
+}
+
+.google-btn:hover,
+.google-btn:focus-visible {
+  background: #f8faff !important;
+  box-shadow: 0 2px 6px rgba(60, 64, 67, 0.25);
+}
+
+.google-btn-logo {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+}
+
+.google-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted-text);
+  font-size: 0.85rem;
+}
+
+.google-divider::before,
+.google-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--surface-border);
+}
+
+/* ===== RECORD STATUS PILLS ===== */
+/* Approved keeps the D.A.R.T. gradient (.dart-pill); pending uses a
+   solid caution color and rejected a solid red, never the gradient. */
+.dart-status-pending,
+.dart-status-rejected {
+  display: inline-block;
+  padding: 0.4em 0.9em;
+  font-weight: 600;
+  border: 1.5px solid #000000 !important;
+  border-radius: 2rem !important;
+  background-image: none !important;
+}
+
+.dart-status-pending {
+  background-color: #ffc107 !important;
+  color: #212529 !important;
+}
+
+.dart-status-rejected {
+  background-color: #dc3545 !important;
+  color: #ffffff !important;
+}
+
+/* ===== MODERN RECORDS TABLE (desktop) ===== */
+.records-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--surface-border);
+  border-radius: 18px;
+  background: var(--surface-bg);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.06);
+}
+
+.records-table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--surface-text);
+  min-width: 980px;
+  font-size: 0.9rem;
+}
+
+.records-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #ffffff;
+  background: #212529;
+  border-bottom: 0;
+}
+
+.records-table tbody td {
+  padding: 12px 10px;
+  vertical-align: middle;
+  border-color: var(--surface-border);
+}
+
+.records-table tbody tr:hover > td {
+  background: rgba(25, 135, 84, 0.06);
+}
+
+.records-table tbody tr:last-child > td {
+  border-bottom: 0;
+}
+
+.rt-game {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rt-sport-icon {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  color: #ffffff;
+  background: #198754;
+}
+
+.rt-sport-basketball { background: #e8590c; }
+.rt-sport-kickball { background: #6f42c1; }
+
+.rt-strong {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.rt-muted {
+  font-size: 0.78rem;
+  color: var(--muted-text);
+  line-height: 1.35;
+}
+
+.rt-icon {
+  width: 1.1em;
+  margin-right: 6px;
+  text-align: center;
+  opacity: 0.8;
+}
+
+.rt-match > div,
+.rt-competition > div {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rt-trophy {
+  margin-top: 3px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #b8860b;
+}
+
+html[data-theme="dark"] .rt-trophy {
+  color: #e0b84c;
+}
+
+.rt-trophy i {
+  margin-right: 5px;
+}
+
+.rt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.rt-chip,
+.rt-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 2rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--page-bg);
+  border: 1px solid var(--surface-border);
+}
+
+/* Position + minutes under the game date. */
+.rt-position {
+  margin-top: 2px;
+  font-size: 0.8rem;
+}
+
+.rt-position > i {
+  width: 1.1em;
+  opacity: 0.8;
+}
+
+/* Coach / admin tables have an extra Athlete column. */
+.records-table.records-table-wide {
+  min-width: 1100px;
+}
+
+.records-table-wide td:first-child {
+  min-width: 170px;
+}
+
+/* Key stats: icon + label + value, two aligned columns. */
+.rt-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 5px;
+  min-width: 222px;
+}
+
+.rt-stats-grid .rt-stat {
+  display: flex;
+  min-width: 0;
+  padding: 3px 7px;
+}
+
+.rt-stats-grid .rt-stat > i {
+  flex: 0 0 1.1em;
+  text-align: center;
+}
+
+.rt-stat-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  color: var(--muted-text);
+}
+
+.rt-stat-value {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.rt-stats-grid .rt-stat-wide {
+  grid-column: 1 / -1;
+}
+
+.rt-chip-gold {
+  background: rgba(218, 165, 32, 0.16);
+  border-color: rgba(218, 165, 32, 0.55);
+}
+
+.rt-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.rt-actions form {
+  margin: 0;
+}
+
+.rt-actions .btn {
+  white-space: nowrap;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.7rem;
+}
+
+/* ===== PHONE KEYBOARD OPEN ===== */
+/* While typing on a phone, hide the tab bar so the keyboard and the
+   field being typed in get the whole screen. */
+@media (max-width: 991.98px) {
+  body.dart-keyboard-open .dart-tabbar {
+    display: none;
+  }
+
+  body.dart-keyboard-open {
+    padding-bottom: 0;
+  }
+}
+
+/* ===== RECORD CARD: GAME DATE (below the sport) ===== */
+/* Deep gray; a lighter gray in dark mode so it stays readable. */
+.record-card .card-game-date {
+  color: #3d4247 !important;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+html[data-theme="dark"] .record-card .card-game-date {
+  color: #9aa1a8 !important;
+}
+
+/* ===== RECORD CARD: CENTERED STAT TILES (mobile readability) ===== */
+/* Each "Label: value" cell becomes an equal-width, centered tile with the
+   label above the value, so text lines up evenly and long names wrap. */
+.record-card .card-grid {
+  align-items: stretch;
+}
+
+.record-card .card-grid > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border-radius: 12px;
+  background: rgba(25, 135, 84, 0.06);
+  text-align: center;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+.record-card .card-grid > div > strong {
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+html[data-theme="dark"] .record-card .card-grid > div {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+@media (max-width: 360px) {
+  .record-card {
+    padding: 18px 12px;
+  }
+
+  .record-card .card-grid {
+    gap: 8px;
+  }
 }
 
 /* ===== DARK MODE DROPDOWN TEXT ===== */
@@ -733,7 +1133,7 @@ html[data-theme="light"] .athlete-footer {
 </style>
 </head>
 
-<body class="bg-light">
+<body class="bg-light {% block body_class %}{% endblock %}">
   <!-- ========== NAVBAR ========== -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
     <div class="container">
@@ -938,6 +1338,7 @@ html[data-theme="light"] .athlete-footer {
 <!-- ================================
      ATHLETE TRACKER FOOTER
 ================================= -->
+{% block footer %}
 <footer class="athlete-footer">
 
   <div class="athlete-footer-container">
@@ -1173,6 +1574,7 @@ html[data-theme="light"] .athlete-footer {
   </div>
 
 </footer>
+{% endblock %}
 
 
 
@@ -1324,6 +1726,42 @@ html[data-theme="light"] .athlete-footer {
       </div>
     </div>
   </div>
+
+  <!-- ========== LAYOUT HELPERS ========== -->
+  <script>
+    (function () {
+      // Real navbar height for full-screen pages (e.g. chat): --dart-nav-h.
+      function setNavHeight() {
+        var nav = document.querySelector('nav.navbar');
+        if (nav) {
+          document.documentElement.style.setProperty(
+            '--dart-nav-h', nav.getBoundingClientRect().height + 'px'
+          );
+        }
+      }
+
+      setNavHeight();
+      window.addEventListener('resize', setNavHeight);
+
+      // Phone keyboard open while a text field has focus.
+      var typingFields = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=submit]):not([type=button]):not([type=hidden])';
+
+      document.addEventListener('focusin', function (event) {
+        if (event.target.matches && event.target.matches(typingFields)) {
+          document.body.classList.add('dart-keyboard-open');
+        }
+      });
+
+      document.addEventListener('focusout', function () {
+        setTimeout(function () {
+          var active = document.activeElement;
+          if (!active || !active.matches || !active.matches(typingFields)) {
+            document.body.classList.remove('dart-keyboard-open');
+          }
+        }, 120);
+      });
+    })();
+  </script>
 
   <!-- ========== D.A.R.T. PWA SERVICE WORKER ========== -->
   <script src="{{ url_for('static', filename='js/pwa.js') }}" defer></script>
