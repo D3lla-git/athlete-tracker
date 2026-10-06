@@ -2705,7 +2705,7 @@ def login():
 # Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (Google Cloud Console →
 # APIs & Services → Credentials → OAuth client ID, type "Web application").
 # Authorised redirect URI: https://<your-domain>/auth/google/callback
-# The Google buttons stay hidden until both variables are set.
+# Until both variables are set, the Google buttons show a "coming soon" message.
 #
 # - A Google account already linked to a D.A.R.T. account signs straight
 #   in, through the same rules as a password login (approval checks and
@@ -3564,7 +3564,7 @@ def scout_dashboard_data(scout):
         or datetime.now().year
     )
 
-    week_ago = datetime.utcnow() - timedelta(days=7)
+    week_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)
 
     kpis = {
         'athletes': User.query.filter_by(role='Athlete', is_verified=True).count(),
