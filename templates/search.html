@@ -77,8 +77,41 @@
   }
 
   .range-pair span {
+    flex: 0 0 auto;
     color: var(--muted-text);
     font-size: 0.8rem;
+  }
+
+  /* Min / max boxes share the row evenly and can shrink. */
+  .range-pair .form-control {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* Game date From / To: two columns when wide enough, else stacked. */
+  .date-range {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 8px;
+  }
+
+  .date-range-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .date-range-field > span {
+    flex: 0 0 2.6em;
+    font-size: 0.8rem;
+    color: var(--muted-text);
+  }
+
+  .date-range-field .form-control {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .stat-condition {
@@ -304,7 +337,7 @@
               {% endfor %}
             </select>
           </div>
-          <div class="col-6 col-md-3">
+          <div class="col-12 col-sm-6 col-md-3">
             <label class="form-label">Age (years)</label>
             <div class="range-pair">
               <input type="number" name="age_min" class="form-control" min="3" max="99" placeholder="Min" value="{{ filters.age_min if filters.age_min is not none }}" aria-label="Minimum age">
@@ -312,7 +345,7 @@
               <input type="number" name="age_max" class="form-control" min="3" max="99" placeholder="Max" value="{{ filters.age_max if filters.age_max is not none }}" aria-label="Maximum age">
             </div>
           </div>
-          <div class="col-6 col-md-3">
+          <div class="col-12 col-sm-6 col-md-3">
             <label class="form-label">Height (cm)</label>
             <div class="range-pair">
               <input type="number" name="height_min" class="form-control" min="0" step="0.1" placeholder="Min" value="{{ filters.height_min if filters.height_min is not none }}" aria-label="Minimum height">
@@ -320,7 +353,7 @@
               <input type="number" name="height_max" class="form-control" min="0" step="0.1" placeholder="Max" value="{{ filters.height_max if filters.height_max is not none }}" aria-label="Maximum height">
             </div>
           </div>
-          <div class="col-6 col-md-3">
+          <div class="col-12 col-sm-6 col-md-3">
             <label class="form-label">Weight (kg)</label>
             <div class="range-pair">
               <input type="number" name="weight_min" class="form-control" min="0" step="0.1" placeholder="Min" value="{{ filters.weight_min if filters.weight_min is not none }}" aria-label="Minimum weight">
@@ -334,7 +367,8 @@
       <!-- Competition & game -->
       <div class="filter-group">
         <div class="filter-group-title"><i class="fa-solid fa-trophy"></i> Competition &amp; Game</div>
-        <div class="row g-3">
+        {# Boxes line up along the bottom even when a label wraps. #}
+        <div class="row g-3 align-items-end">
           <div class="col-6 col-md-3">
             <label class="form-label" for="positionFilter">Position</label>
             <select name="position" id="positionFilter" class="form-select" data-selected="{{ filters.position }}">
@@ -379,6 +413,8 @@
               {% endfor %}
             </select>
           </div>
+        </div>
+        <div class="row g-3 mt-0">
           <div class="col-md-6">
             <label class="form-label" for="trophyFilter">Trophy / Competition Won</label>
             <select name="trophy" id="trophyFilter" class="form-select">
@@ -390,10 +426,16 @@
           </div>
           <div class="col-md-6">
             <label class="form-label">Game Date</label>
-            <div class="range-pair">
-              <input type="date" name="date_from" class="form-control" value="{{ filters.date_from }}" aria-label="Games from">
-              <span>to</span>
-              <input type="date" name="date_to" class="form-control" value="{{ filters.date_to }}" aria-label="Games to">
+            {# Side by side when there is room, stacked on narrow screens. #}
+            <div class="date-range">
+              <label class="date-range-field">
+                <span>From</span>
+                <input type="date" name="date_from" class="form-control" value="{{ filters.date_from }}" aria-label="Games from">
+              </label>
+              <label class="date-range-field">
+                <span>To</span>
+                <input type="date" name="date_to" class="form-control" value="{{ filters.date_to }}" aria-label="Games to">
+              </label>
             </div>
           </div>
         </div>
