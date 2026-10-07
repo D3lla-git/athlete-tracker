@@ -51,6 +51,7 @@ import qrcode
 import secrets
 from flask_mail import Mail, Message
 from sqlalchemy import or_, func, select
+from sqlalchemy.exc import OperationalError
 from authlib.integrations.flask_client import OAuth
 import time
 from flask import abort
@@ -343,6 +344,47 @@ login_manager.init_app(app)
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
+
+
+# The database cannot be reached (no internet on the server, DNS failure,
+# Supabase outage). Answer 503 instead of crashing with a 500: the service
+# worker treats 503 like "offline" and shows the saved athlete pages or the
+# offline page (with its record form); the offline record sync treats it as
+# "try again later" and keeps records on the device.
+@app.errorhandler(OperationalError)
+def database_unavailable(error):
+    app.logger.warning('Database unreachable on %s %s: %s', request.method, request.path, error.orig or error)
+
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+    db.session.remove()
+
+    headers = {'Retry-After': '30', 'Cache-Control': 'no-store', 'X-DART-Server-Unreachable': '1'}
+
+    wants_json = (
+        request.path.startswith('/api/')
+        or request.accept_mimetypes.best == 'application/json'
+    )
+    if wants_json:
+        return jsonify(
+            ok=False,
+            reason='unreachable',
+            error='The server cannot reach the database right now. Please try again shortly.'
+        ), 503, headers
+
+    # Rendered straight from the Jinja environment, so no context processor
+    # (current user, plan, admin counts) touches the database again.
+    try:
+        page = app.jinja_env.get_template('offline.html').render()
+    except Exception:
+        page = (
+            '<!doctype html><meta charset="utf-8"><title>D.A.R.T. - Temporarily unavailable</title>'
+            '<p style="font-family:sans-serif;padding:2rem">D.A.R.T. cannot reach its database right now. '
+            'Please check your connection and try again.</p>'
+        )
+    return page, 503, headers
 
 # ========== FILE UPLOAD Security HELPERS ==========
 def allowed_file(filename):

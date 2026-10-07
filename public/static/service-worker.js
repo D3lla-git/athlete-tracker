@@ -1,6 +1,6 @@
 // Bump this version whenever PRECACHE_URLS or caching behaviour changes.
 // Old 'dart-pwa-*' caches are deleted on activate.
-const CACHE_NAME = 'dart-pwa-v6';
+const CACHE_NAME = 'dart-pwa-v7';
 
 // Pages saved for offline use (the athlete dashboard). This name is
 // deliberately NOT versioned, so a service-worker update does not wipe an
@@ -31,6 +31,8 @@ let lastOfflinePageRefresh = 0;
 // per response with the X-DART-Offline-Cacheable header (only verified
 // athletes get it), so other roles' pages are never stored.
 const OFFLINE_CACHEABLE_PAGES = ['/student', '/student/record'];
+// Answers that mean "the server is up but cannot serve pages right now".
+const SERVER_UNAVAILABLE_STATUSES = [502, 503, 504];
 
 // CDN hosts whose URLs include a version number, so cache-first is safe.
 const CDN_HOSTS = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com'];
@@ -201,9 +203,19 @@ self.addEventListener('fetch', event => {
 
         event.respondWith(
             (async () => {
+                let liveResponse = null;
+
                 try {
                     const preloadResponse = await event.preloadResponse;
                     const response = preloadResponse || await fetch(request);
+                    liveResponse = response;
+
+                    // The server answered but cannot do its job (it cannot
+                    // reach the database, or a gateway/proxy is down): same
+                    // as being offline.
+                    if (SERVER_UNAVAILABLE_STATUSES.includes(response.status)) {
+                        throw new Error('Server unavailable: ' + response.status);
+                    }
 
                     if (isOfflineCacheable) {
                         event.waitUntil(
@@ -228,7 +240,7 @@ self.addEventListener('fetch', event => {
                     const cache = await caches.open(CACHE_NAME);
                     const offlineResponse = await cache.match(OFFLINE_URL);
 
-                    return offlineResponse || Response.error();
+                    return offlineResponse || liveResponse || Response.error();
                 }
             })()
         );
