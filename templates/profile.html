@@ -11,7 +11,11 @@
       <div class="mp-hero-head">
         <div>
           <div class="mp-eyebrow">My Profile</div>
-          <p class="mp-lead">This is your D.A.R.T. card. Share it, or download it as an image or PDF.</p>
+          <p class="mp-lead">This is your D.A.R.T. card, exactly as the public sees it. Share it, or download it as an image or PDF.
+            {% if current_user.personal_visibility != 'everyone' %}
+              <a href="#personalPrivacy" class="mp-privacy-link"><i class="fa-solid fa-user-lock"></i> Your personal details are hidden from the public. Change this</a>
+            {% endif %}
+          </p>
         </div>
       </div>
       {{ profile_hero(profile_card_info(current_user), can_edit=true, edit_href='#editProfile') }}
@@ -364,6 +368,42 @@
   .seo-option input:focus-visible + span { outline: 3px solid rgba(25, 135, 84, 0.35); outline-offset: 2px; }
 </style>
 
+{% endif %}
+
+{% if current_user.role in ('Athlete', 'Coach', 'Scout') %}
+{# Personal details are only shown with the user's permission. #}
+<div class="mb-3 pv-choice" id="personalPrivacy">
+  <span class="form-label d-block">Who can see my personal details <i class="fa-solid fa-user-lock"></i></span>
+  <div class="pv-options" role="radiogroup" aria-label="Who can see my personal details">
+    {% for value, (label, help) in personal_visibility_choices.items() %}
+      <label class="pv-option">
+        <input type="radio" name="personal_visibility" value="{{ value }}"
+               {% if (current_user.personal_visibility or 'private') == value %}checked{% endif %}>
+        <span><strong>{{ label }}</strong><small>{{ help }}</small></span>
+      </label>
+    {% endfor %}
+  </div>
+  <div class="form-text">
+    <i class="fa-solid fa-circle-info"></i> Personal details are your age, nationality, height, weight and preferred foot.
+    Your date of birth, email, phone and ID document are never shown to anyone.
+  </div>
+</div>
+<style>
+  .pv-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .pv-option { margin: 0; cursor: pointer; }
+  .pv-option input { position: absolute; opacity: 0; }
+  .pv-option span {
+    display: flex; flex-direction: column; gap: 2px; height: 100%; padding: 10px 12px;
+    border-radius: 12px; border: 1.5px solid var(--input-border, #dee2e6);
+  }
+  .pv-option strong { font-size: 0.88rem; }
+  .pv-option small { font-size: 0.75rem; color: var(--muted-text, #6c757d); line-height: 1.3; }
+  .pv-option input:checked + span { border-color: #198754; background: rgba(25, 135, 84, 0.1); }
+  .pv-option input:checked + span strong { color: #198754; }
+  .pv-option input:focus-visible + span { outline: 3px solid rgba(25, 135, 84, 0.35); outline-offset: 2px; }
+  html[data-theme="dark"] .pv-option input:checked + span strong { color: #4cd38a; }
+  @media (max-width: 575.98px) { .pv-options { grid-template-columns: 1fr; } }
+</style>
 {% endif %}
               <div class="mb-3">
                 <label class="form-label">Role <i class="fa-solid fa-id-badge"></i></label>
@@ -924,6 +964,10 @@ function confirmAccountDeletion() {
   .mp-hero-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
   .mp-eyebrow { font-size: 1.6rem; font-weight: 900; }
   .mp-lead { margin: 2px 0 0; color: var(--muted-text, #6c757d); font-size: 0.92rem; }
+  .mp-privacy-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; font-weight: 600; color: #198754; text-decoration: none; }
+  .mp-privacy-link:hover { text-decoration: underline; }
+  /* !important: the global dark-mode link colour would otherwise win. */
+  html[data-theme="dark"] .mp-privacy-link { color: #4cd38a !important; }
   .mp-edit { scroll-margin-top: 90px; }
   .mp-edit > .card-header h4 i { color: #198754; margin-right: 4px; }
 </style>

@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Safety Review · Super Admin{% endblock %}
+
+{% block content %}
+<div class="mr-page">
+  <h1 class="mr-title"><i class="fa-solid fa-shield-halved"></i> Media &amp; account safety</h1>
+  <p class="mr-lead">
+    Only football, basketball and kickball action is allowed. Photos must show the athlete in action
+    (no selfies or posed pictures); videos must be a direct highlight (no distracted clips). Nudity,
+    sexual, rude or violent content is never allowed. Nothing below is visible to anyone else until you approve it.
+  </p>
+
+  <div class="mr-ai {{ 'mr-ai-on' if ai_enabled else 'mr-ai-off' }}">
+    {% if ai_enabled %}
+      <i class="fa-solid fa-robot"></i> Automatic safety check is <strong>on</strong>: clearly unsafe uploads are refused before they reach this list.
+    {% else %}
+      <i class="fa-solid fa-triangle-exclamation"></i> Automatic safety check is <strong>off</strong> (no <code>ANTHROPIC_API_KEY</code>): every upload waits here for you.
+    {% endif %}
+  </div>
+
+  <h2 class="mr-sub">Waiting for review <span class="mr-badge">{{ waiting | length }}</span></h2>
+
+  {% if waiting %}
+    <div class="mr-grid">
+      {% for h in waiting %}
+        {% set url = highlight_url(h) %}
+        <article class="mr-card">
+          <div class="mr-media">
+            {% if h.is_video %}
+              <video src="{{ url }}" controls preload="metadata" playsinline></video>
+            {% else %}
+              <a href="{{ url }}" target="_blank" rel="noopener"><img src="{{ url }}" alt="Photo waiting for review" loading="lazy"></a>
+            {% endif %}
+          </div>
+          <div class="mr-body">
+            <div class="mr-who">
+              <a href="{{ url_for('user_profile', user_id=h.user_id) }}"><strong>{{ h.user.full_name if h.user else 'Athlete' }}</strong></a>
+              <span>{{ h.user.school if h.user else '' }}</span>
+            </div>
+            <div class="mr-meta">
+              <span><i class="fa-solid {{ 'fa-video' if h.is_video else 'fa-image' }}"></i> {{ 'Video ' ~ h.duration_label if h.is_video else 'Photo' }}</span>
+              <span><i class="fa-solid fa-medal"></i> {{ h.sport or 'Sport not given' }}</span>
+              <span><i class="fa-regular fa-clock"></i> {{ h.created_at.strftime('%b %d, %H:%M') }}</span>
+              {% if h.user and h.user.media_strikes %}<span class="mr-strikes"><i class="fa-solid fa-flag"></i> {{ h.user.media_strikes }} strike{{ 's' if h.user.media_strikes != 1 }}</span>{% endif %}
+            </div>
+            {% if h.caption %}<div class="mr-caption">“{{ h.caption }}”</div>{% endif %}
+            <div class="mr-check {{ 'mr-check-yes' if h.ai_checked else 'mr-check-no' }}">
+              {% if h.ai_checked %}<i class="fa-solid fa-robot"></i> AI: {{ h.ai_summary or 'No problems found.' }}
+              {% else %}<i class="fa-solid fa-eye"></i> Not checked automatically: look carefully.{% endif %}
+            </div>
+
+            <div class="mr-actions">
+              <form method="POST" action="{{ url_for('admin_highlight_action', highlight_id=h.id, action='approve') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-success mr-btn"><i class="fa-solid fa-circle-check me-1"></i> Approve</button>
+              </form>
+              <form method="POST" action="{{ url_for('admin_highlight_action', highlight_id=h.id, action='reject') }}" class="mr-reject">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <select name="reason" class="form-select form-select-sm" required aria-label="Reason">
+                  <option value="">Reject because…</option>
+                  <option value="not_action">{{ 'Selfie / posed / not in action' if not h.is_video else 'Not the athlete in action' }}</option>
+                  <option value="distracted">Distracted video, not a direct highlight</option>
+                  <option value="not_sport">Not football, basketball or kickball</option>
+                  <option value="offensive">Rude, offensive or violent</option>
+                  <option value="nudity">Nudity or sexual (blocks uploads)</option>
+                </select>
+                <input type="text" name="note" class="form-control form-control-sm" maxlength="150" placeholder="Note to the athlete (optional)">
+                <button type="submit" class="btn btn-outline-danger mr-btn"><i class="fa-solid fa-trash me-1"></i> Reject &amp; delete</button>
+              </form>
+            </div>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-muted">Nothing waiting. 🎉</p>
+  {% endif %}
+
+  <h2 class="mr-sub">Uploads blocked <span class="mr-badge">{{ blocked | length }}</span></h2>
+  {% if blocked %}
+    <ul class="mr-list">
+      {% for u in blocked %}
+        <li>
+          <span><strong>{{ u.full_name }}</strong> · {{ u.role }} · {{ u.media_strikes }} strike{{ 's' if u.media_strikes != 1 }}</span>
+          <form method="POST" action="{{ url_for('admin_media_restore', user_id=u.id) }}"
+                onsubmit="return confirm('Restore photo and video uploads for {{ u.full_name | e }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill">Restore uploads</button>
+          </form>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-muted">No one is blocked. Uploads are blocked at once for nudity, or after {{ strike_limit }} rejected uploads.</p>
+  {% endif %}
+
+  <h2 class="mr-sub" id="suspended">Suspended accounts <span class="mr-badge">{{ suspended | length }}</span></h2>
+  {% if suspended %}
+    <ul class="mr-list">
+      {% for u in suspended %}
+        <li>
+          <span><strong>{{ u.full_name }}</strong> · {{ u.school }} · {{ u.fake_record_strikes }} fake record{{ 's' if u.fake_record_strikes != 1 }}
+            <span class="text-muted small">· since {{ u.suspended_at.strftime('%b %d, %Y') if u.suspended_at else '-' }}</span></span>
+          <form method="POST" action="{{ url_for('admin_unsuspend', user_id=u.id) }}"
+                onsubmit="return confirm('Lift the suspension for {{ u.full_name | e }}? Their fake-record count starts again from 0.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill">Lift suspension</button>
+          </form>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-muted">No suspended accounts. Athletes are suspended automatically after {{ fake_record_suspend_at }} records are rejected as fake by coaches.</p>
+  {% endif %}
+
+  {% if warned %}
+    <h2 class="mr-sub">Fake-record warnings</h2>
+    <ul class="mr-list">
+      {% for u in warned %}
+        <li><span><strong>{{ u.full_name }}</strong> · {{ u.school }}</span>
+          <span class="mr-strikes">{{ u.fake_record_strikes }} of {{ fake_record_suspend_at }}</span></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if recent %}
+    <h2 class="mr-sub">Recent decisions</h2>
+    <ul class="mr-list">
+      {% for h in recent %}
+        <li>
+          <span>
+            <span class="mr-dot {{ 'mr-dot-ok' if h.status == 'approved' else 'mr-dot-no' }}"></span>
+            <strong>{{ h.user.full_name if h.user else 'Athlete' }}</strong> · {{ h.media_type }} · {{ h.status }}
+            {% if h.review_reason %}<span class="text-muted small">· {{ h.review_reason }}</span>{% endif %}
+          </span>
+          <span class="text-muted small">{{ h.reviewed_at.strftime('%b %d, %H:%M') }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>
+
+<style>
+  .mr-page { max-width: 1150px; margin: 0 auto; }
+  .mr-title { font-size: 1.6rem; font-weight: 800; }
+  .mr-title i { color: #198754; }
+  .mr-lead { color: var(--muted-text, #6c757d); max-width: 820px; }
+  .mr-ai { padding: 10px 14px; border-radius: 14px; font-size: 0.9rem; margin-bottom: 8px; }
+  .mr-ai-on { background: rgba(25, 135, 84, 0.1); border: 1px solid rgba(25, 135, 84, 0.35); }
+  .mr-ai-off { background: rgba(245, 197, 66, 0.16); border: 1px solid rgba(245, 197, 66, 0.5); }
+  .mr-sub { font-size: 1.15rem; font-weight: 800; margin: 24px 0 12px; }
+  .mr-badge { padding: 2px 10px; border-radius: 999px; font-size: 0.8rem; color: #8a6d00; background: rgba(245, 197, 66, 0.22); }
+
+  .mr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .mr-card {
+    display: flex;
+    flex-direction: column;
+    border-radius: 18px;
+    overflow: hidden;
+    background: var(--surface-bg, #fff);
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+  }
+  .mr-media { background: #000; aspect-ratio: 4 / 3; }
+  .mr-media img, .mr-media video { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .mr-body { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .mr-who { display: flex; flex-direction: column; }
+  .mr-who span { font-size: 0.8rem; color: var(--muted-text, #6c757d); }
+  .mr-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.8rem; color: var(--muted-text, #6c757d); }
+  .mr-strikes { color: #dc3545; font-weight: 700; }
+  .mr-caption { font-size: 0.88rem; font-style: italic; }
+  .mr-check { padding: 8px 10px; border-radius: 10px; font-size: 0.82rem; }
+  .mr-check-yes { background: rgba(25, 135, 84, 0.08); }
+  .mr-check-no { background: rgba(245, 197, 66, 0.16); }
+  .mr-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .mr-actions form { margin: 0; }
+  .mr-reject { display: grid; gap: 6px; }
+  .mr-btn { width: 100%; border-radius: 999px; font-weight: 700; }
+
+  .mr-list { list-style: none; padding: 0; margin: 0; }
+  .mr-list li {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--surface-border, rgba(0, 0, 0, 0.08));
+  }
+  .mr-list form { margin: 0; }
+  .mr-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+  .mr-dot-ok { background: #198754; }
+  .mr-dot-no { background: #dc3545; }
+
+  @media (max-width: 575.98px) {
+    .mr-grid { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}

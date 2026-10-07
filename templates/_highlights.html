@@ -23,8 +23,8 @@
         {% endif %}
       </div>
     </div>
-    <span class="hl-count" title="Highlights">
-      <i class="fa-solid fa-photo-film"></i> {{ highlights | length }}
+    <span class="hl-count" title="Approved highlights">
+      <i class="fa-solid fa-photo-film"></i> {{ highlights | selectattr('status', 'equalto', 'approved') | list | length }}
     </span>
   </div>
 
@@ -55,6 +55,13 @@
           <i class="fa-solid fa-lock"></i>
           Highlights unlock once your account is verified by a coach.
         </div>
+      {% elif current_user.media_blocked %}
+        <div class="hl-notice hl-notice-blocked" role="alert">
+          <i class="fa-solid fa-ban"></i>
+          Photo and video uploads are blocked on your account because of content that breaks the
+          <a href="{{ url_for('terms_page') }}#content-rules">D.A.R.T. content rules</a>.
+          Contact D.A.R.T. if you think this is a mistake.
+        </div>
       {% elif usage.active and photo_row.limit is not none and photo_row.used >= photo_row.limit
              and video_row.limit is not none and video_row.used >= video_row.limit %}
         <div class="hl-notice">
@@ -63,6 +70,31 @@
           {% if not my_plan %}<a href="{{ url_for('pricing') }}">Upgrade to Premium</a> for more.{% endif %}
         </div>
       {% else %}
+        {# ---------- Rules ---------- #}
+        <details class="hl-rules" open>
+          <summary><i class="fa-solid fa-shield-halved"></i> What D.A.R.T. accepts <span>Read before uploading</span></summary>
+          <div class="hl-rules-grid">
+            <div class="hl-rule hl-rule-yes">
+              <strong><i class="fa-solid fa-circle-check"></i> Allowed</strong>
+              <ul>
+                <li><b>Photos:</b> you <em>in action</em> on the pitch or court: kicking, shooting, dribbling, saving, defending.</li>
+                <li><b>Videos:</b> a <em>direct highlight</em> of you playing (goals, assists, saves, baskets, home runs). <b>Edit or trim it to the action before uploading.</b></li>
+                <li>Football, basketball or kickball only.</li>
+              </ul>
+            </div>
+            <div class="hl-rule hl-rule-no">
+              <strong><i class="fa-solid fa-circle-xmark"></i> Never allowed</strong>
+              <ul>
+                <li>Nudity, sexual, rude, offensive or violent content: <b>your uploads will be blocked.</b></li>
+                <li>Selfies, mirror pictures, posed or party pictures.</li>
+                <li>Distracted videos: vlogs, talking to the camera, crowds, long clips with little action.</li>
+                <li>Other sports or anything not about your play.</li>
+              </ul>
+            </div>
+          </div>
+          <p class="hl-rules-note"><i class="fa-solid fa-user-shield"></i> Every upload is safety-checked and only appears on your profile after it is approved. Breaking the rules adds a strike; {{ media_strike_limit }} strikes block uploads.</p>
+        </details>
+
         {# ---------- Uploader ---------- #}
         <div class="hl-uploader"
              data-upload-url="{{ url_for('highlight_upload_url') }}"
@@ -89,11 +121,25 @@
               <div class="hl-file-name"></div>
               <div class="hl-file-meta"></div>
 
+              <label class="form-label mt-2" for="highlightSport">
+                Sport <span class="text-danger">*</span> <i class="fa-solid fa-medal"></i>
+              </label>
+              <select id="highlightSport" class="form-select" required>
+                <option value="">Choose the sport</option>
+                {% for s in highlight_sports %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+              </select>
+
               <label class="form-label mt-2" for="highlightCaption">
                 Caption <span class="text-muted fw-normal">(optional)</span> <i class="fa-solid fa-pen"></i>
               </label>
               <input type="text" id="highlightCaption" class="form-control" maxlength="150"
                      placeholder="e.g. Free-kick winner vs Rival Academy">
+
+              <label class="hl-confirm mt-3" for="highlightConfirm">
+                <input type="checkbox" id="highlightConfirm" class="form-check-input">
+                <span>I confirm this is <b>me in action</b> playing football, basketball or kickball: no selfie,
+                  nothing rude, and videos are edited to the highlight.</span>
+              </label>
 
               <div class="progress hl-progress mt-3" hidden role="progressbar" aria-label="Upload progress"
                    aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
@@ -118,8 +164,35 @@
     {% if highlights %}
       <div class="hl-grid">
         {% for h in highlights %}
-          {% set url = highlight_url(h.storage_path) %}
-          <figure class="hl-tile">
+          {% if h.status == 'rejected' %}
+            {# Owner only: the file is already deleted; just the reason. #}
+            <figure class="hl-tile hl-tile-rejected">
+              <div class="hl-media hl-rejected-box">
+                <i class="fa-solid fa-ban" aria-hidden="true"></i>
+                <strong>Not accepted</strong>
+                <span>{{ h.review_reason or 'This upload broke the D.A.R.T. content rules.' }}</span>
+              </div>
+              {% if can_manage or is_admin %}
+                <form method="POST" action="{{ url_for('delete_highlight', highlight_id=h.id) }}" class="hl-delete">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="next" value="{{ request.path }}#highlights">
+                  <button type="submit" class="hl-delete-btn" aria-label="Dismiss" title="Dismiss">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </form>
+              {% endif %}
+              <figcaption>
+                <span class="hl-date"><i class="fa-solid {{ 'fa-video' if h.is_video else 'fa-image' }}"></i> {{ h.created_at.strftime('%b %d, %Y') }}</span>
+              </figcaption>
+            </figure>
+          {% else %}
+          {% set url = highlight_url(h) %}
+          <figure class="hl-tile{{ ' hl-tile-pending' if h.status == 'pending' }}">
+            {% if h.status == 'pending' %}
+              <span class="hl-status" title="Only you can see this until it is approved">
+                <i class="fa-solid fa-hourglass-half"></i> Under review
+              </span>
+            {% endif %}
             <button type="button" class="hl-media"
                     data-hl-type="{{ h.media_type }}" data-hl-src="{{ url }}"
                     data-hl-caption="{{ h.caption or '' }}"
@@ -148,10 +221,11 @@
               {% if h.caption %}<span class="hl-caption">{{ h.caption }}</span>{% endif %}
               <span class="hl-date">
                 <i class="fa-solid {{ 'fa-video' if h.is_video else 'fa-image' }}"></i>
-                {{ h.created_at.strftime('%b %d, %Y') }}
+                {% if h.sport %}{{ h.sport }} · {% endif %}{{ h.created_at.strftime('%b %d, %Y') }}
               </span>
             </figcaption>
           </figure>
+          {% endif %}
         {% endfor %}
       </div>
     {% elif not can_manage %}
@@ -241,6 +315,93 @@
     background: rgba(25, 135, 84, 0.08);
     border: 1px dashed rgba(25, 135, 84, 0.45);
   }
+
+  .hl-notice-blocked { color: #842029; background: rgba(220, 53, 69, 0.08); border-color: rgba(220, 53, 69, 0.45); }
+  html[data-theme="dark"] .hl-notice-blocked { color: #ffb3ba; }
+
+  /* Rules */
+  .hl-rules {
+    margin-bottom: 14px;
+    border-radius: 16px;
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    background: var(--surface-bg, #fff);
+    overflow: hidden;
+  }
+  .hl-rules summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    font-weight: 800;
+    cursor: pointer;
+    list-style: none;
+  }
+  .hl-rules summary::-webkit-details-marker { display: none; }
+  .hl-rules summary i { color: #198754; }
+  .hl-rules summary span { margin-left: auto; font-size: 0.75rem; font-weight: 600; color: var(--muted-text, #6c757d); }
+  .hl-rules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 14px; }
+  .hl-rule { padding: 12px 14px; border-radius: 12px; font-size: 0.86rem; }
+  .hl-rule strong { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .hl-rule ul { margin: 0; padding-left: 18px; }
+  .hl-rule li { margin-bottom: 4px; line-height: 1.4; }
+  .hl-rule-yes { background: rgba(25, 135, 84, 0.08); border: 1px solid rgba(25, 135, 84, 0.3); }
+  .hl-rule-yes strong { color: #198754; }
+  .hl-rule-no { background: rgba(220, 53, 69, 0.07); border: 1px solid rgba(220, 53, 69, 0.3); }
+  .hl-rule-no strong { color: #dc3545; }
+  html[data-theme="dark"] .hl-rule-yes strong { color: #4cd38a; }
+  html[data-theme="dark"] .hl-rule-no strong { color: #ff8a95; }
+  .hl-rules-note { margin: 10px 14px 12px; font-size: 0.8rem; color: var(--muted-text, #6c757d); }
+
+  @media (max-width: 767.98px) {
+    .hl-rules-grid { grid-template-columns: 1fr; }
+    .hl-rules summary span { display: none; }
+  }
+
+  .hl-confirm {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    cursor: pointer;
+    border: 1px solid rgba(25, 135, 84, 0.35);
+    background: rgba(25, 135, 84, 0.05);
+  }
+  .hl-confirm input { flex: 0 0 auto; margin-top: 2px; }
+
+  /* Review status */
+  .hl-status {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 1;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #3d2c00;
+    background: #f5c542;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+  }
+  .hl-tile-pending .hl-media { outline: 2px dashed #f5c542; outline-offset: -2px; }
+  .hl-rejected-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 14px;
+    text-align: center;
+    cursor: default;
+    color: #ffd0d5;
+    background: linear-gradient(145deg, #2a0c10, #160608) !important;
+  }
+  .hl-rejected-box i { font-size: 1.6rem; color: #ff6b78; }
+  .hl-rejected-box span { font-size: 0.75rem; line-height: 1.35; }
+  .hl-rejected-box:hover { transform: none; }
 
   /* Uploader */
   .hl-uploader { margin-bottom: 1.25rem; }
@@ -509,13 +670,22 @@
   var nameEl = box.querySelector('.hl-file-name');
   var metaEl = box.querySelector('.hl-file-meta');
   var caption = box.querySelector('#highlightCaption');
+  var sportSelect = box.querySelector('#highlightSport');
+  var confirmBox = box.querySelector('#highlightConfirm');
   var progress = box.querySelector('.hl-progress');
   var bar = progress.querySelector('.progress-bar');
   var uploadBtn = box.querySelector('.hl-upload-btn');
   var cancelBtn = box.querySelector('.hl-cancel-btn');
   var message = box.querySelector('.hl-message');
 
-  var file = null, duration = null, previewUrl = null, busy = false;
+  var file = null, duration = null, previewUrl = null, busy = false, durationReady = true;
+
+  // Upload only when a file, the sport and the confirmation are all there.
+  function refreshButton() {
+    uploadBtn.disabled = busy || !file || !durationReady || !sportSelect.value || !confirmBox.checked;
+  }
+  sportSelect.addEventListener('change', refreshButton);
+  confirmBox.addEventListener('change', refreshButton);
 
   function showError(text) { message.textContent = text; message.hidden = false; }
   function clearError() { message.hidden = true; message.textContent = ''; }
@@ -535,7 +705,7 @@
   function reset() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     file = null; duration = null; previewUrl = null;
-    input.value = ''; caption.value = '';
+    input.value = ''; caption.value = ''; sportSelect.value = ''; confirmBox.checked = false;
     preview.innerHTML = '';
     selected.hidden = true;
     progress.hidden = true;
@@ -583,19 +753,20 @@
 
     drop.hidden = true;
     selected.hidden = false;
-    uploadBtn.disabled = false;
+    durationReady = kind !== 'video';
+    refreshButton();
 
     if (kind === 'video') {
-      uploadBtn.disabled = true;
       videoDuration(previewUrl).then(function (seconds) {
         if (file !== f) return;
         duration = seconds;
         if (seconds && seconds > VIDEO_SECONDS + 0.5) {
           reset();
-          return showError('This video is ' + clock(seconds) + ' long. Videos can be 1 minute at most. Please trim it and try again.');
+          return showError('This video is ' + clock(seconds) + ' long. Videos can be 1 minute at most. Please trim it to the highlight and try again.');
         }
         if (seconds) metaEl.textContent = 'Video · ' + clock(seconds) + ' · ' + mb(f.size);
-        uploadBtn.disabled = false;
+        durationReady = true;
+        refreshButton();
       });
     }
   }
@@ -612,11 +783,51 @@
 
   cancelBtn.addEventListener('click', function () { if (!busy) { clearError(); reset(); } });
 
+  // A few still frames from the video for the safety check (the server
+  // can't decode video). Empty if this browser can't play the file.
+  function videoFrames(url) {
+    return new Promise(function (resolve) {
+      var v = document.createElement('video'), frames = [], done = false;
+      var finish = function () {
+        if (done) return; done = true;
+        v.removeAttribute('src'); v.load(); resolve(frames);
+      };
+      v.muted = true; v.playsInline = true; v.preload = 'auto';
+      setTimeout(finish, 20000);
+      v.onerror = finish;
+      v.onloadeddata = function () {
+        var d = v.duration;
+        if (!isFinite(d) || d <= 0 || !v.videoWidth) return finish();
+        var times = [0.08, 0.24, 0.4, 0.56, 0.72, 0.9].map(function (p) { return Math.min(d - 0.05, d * p); });
+        var canvas = document.createElement('canvas');
+        var scale = Math.min(1, 640 / Math.max(v.videoWidth, v.videoHeight));
+        canvas.width = Math.round(v.videoWidth * scale);
+        canvas.height = Math.round(v.videoHeight * scale);
+        var ctx = canvas.getContext('2d');
+        var next = function () {
+          if (!times.length) return finish();
+          v.currentTime = times.shift();
+        };
+        v.onseeked = function () {
+          try {
+            ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+            frames.push(canvas.toDataURL('image/jpeg', 0.72));
+          } catch (e) { /* skip this frame */ }
+          next();
+        };
+        next();
+      };
+      v.src = url;
+    });
+  }
+
   function setBusy(on) {
     busy = on;
     uploadBtn.disabled = on;
     cancelBtn.disabled = on;
     caption.disabled = on;
+    sportSelect.disabled = on;
+    confirmBox.disabled = on;
     uploadBtn.innerHTML = on
       ? '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span> Uploading…'
       : '<i class="fa-solid fa-upload me-1"></i> Upload Highlight';
@@ -660,22 +871,28 @@
     progress.hidden = false;
     bar.style.width = '0%'; bar.textContent = '0%';
 
+    var framesPromise = TYPES[file.dartType] === 'video' ? videoFrames(previewUrl) : Promise.resolve([]);
+
     postJson(box.dataset.uploadUrl, {
-      content_type: file.dartType, size: file.size, duration: duration, caption: caption.value.trim()
+      content_type: file.dartType, size: file.size, duration: duration, caption: caption.value.trim(),
+      sport: sportSelect.value, confirm: confirmBox.checked === true
     }).then(function (res) {
       if (!res.ok) throw new Error(res.error);
       return putFile(res.upload_url, file, file.dartType).then(function () { return res.path; }, function () {
         throw new Error('The upload failed. Please check your connection and try again.');
       });
     }).then(function (path) {
-      bar.textContent = 'Checking…';
-      return postJson(box.dataset.completeUrl, { path: path });
+      bar.textContent = 'Safety check…';
+      return framesPromise.then(function (frames) {
+        return postJson(box.dataset.completeUrl, { path: path, frames: frames });
+      });
     }).then(function (res) {
       if (!res.ok) throw new Error(res.error);
       window.location.hash = 'highlights';
       window.location.reload();
     }).catch(function (err) {
       setBusy(false);
+      refreshButton();
       progress.hidden = true;
       showError(err.message || 'Something went wrong. Please try again.');
     });

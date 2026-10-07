@@ -6,7 +6,8 @@
 {% block doc %}
 <div class="lg-summary">
   <strong>In short:</strong> we keep official sports records that coaches approve. We show sport information so athletes can be discovered,
-  never sell personal data, never show ID documents publicly, and let you control whether your profile appears on Google.
+  never sell personal data, never show ID documents publicly, and <strong>only show your personal details (age, nationality, height,
+  weight, preferred foot) to the people you choose</strong>. You also control whether your profile appears on Google.
 </div>
 
 <h2>1. Who we are</h2>
@@ -30,20 +31,30 @@
   <li>To process payments and prevent fraud.</li>
   <li>To keep the service secure, including two-factor authentication for coaches, scouts, organizations and administrators.</li>
   <li>To show ads to free users through Google AdSense (see the <a href="{{ url_for('cookies_page') }}">Cookie Policy</a>).</li>
+  <li>To keep D.A.R.T. safe: photos and videos are checked against our <a href="{{ url_for('terms_page') }}#content-rules">content rules</a> before anyone else can see them (see section 4a).</li>
 </ul>
 
 <h2>4. What others can see</h2>
 <ul>
-  <li><strong>Public:</strong> your name, team, approved records, highlights and sport profile (age, gender, nationality, physicals, preferred foot, shirt number). Free accounts show their latest approved record in search; Premium shows more.</li>
-  <li><strong>Never public:</strong> your email, password, ID document, date of birth, messages and payment details.</li>
-  <li><strong>Organizations</strong> with your team name on their verified roster see your sport profile, approved records and highlights. You can see which organizations list you on your profile.</li>
+  <li><strong>Sport information:</strong> your name, team, gender, shirt number, approved records and approved highlights. Free accounts show their latest approved record in search; Premium shows more.</li>
+  <li><strong>Personal details, only with your permission:</strong> your age, nationality, height, weight and preferred foot are shown only to the people you choose: <em>Everyone</em>, <em>Coaches, scouts &amp; organizations</em> (verified and signed in), or <em>Only me</em>. You choose when you accept these terms and can change it any time in My Profile. Until you choose, they are hidden. Searches by these details only find athletes who allow the person searching to see them.</li>
+  <li><strong>Never shown to other users:</strong> your email, password, ID document, date of birth, phone number, messages and payment details.</li>
+  <li><strong>Organizations</strong> with your team name on their verified roster see your sport information, approved records and approved highlights, and your personal details only if you allow coaches, scouts &amp; organizations to see them. You can see which organizations list you on your profile.</li>
+  <li><strong>Your records are safe:</strong> only approved records are shown to others, only coaches of your team can approve them, and every approval, payment and roster export is logged.</li>
+</ul>
+
+<h2 id="media-checks">4a. Photo and video safety checks</h2>
+<ul>
+  <li>New highlights are stored privately and are <strong>not visible to anyone else until approved</strong>. Rejected files are deleted straight away.</li>
+  <li>To spot content that breaks the rules (nudity, rude content, selfies, other sports), photos, profile pictures and still frames from videos may be checked automatically by an AI service (Anthropic). It receives only the image(s), the sport you chose and your caption, not your name or contact details, and is used only to run this check. A D.A.R.T. Super Admin then reviews highlights before they are published.</li>
+  <li>We keep a record of rejected uploads (the reason, not the file) to apply the strike rules in the Terms of Use.</li>
 </ul>
 
 <h2>5. Google and other search engines</h2>
 <p>Verified athletes aged 18 or over can appear in Google search unless they switch it off in My Profile. Athletes under 18 (or whose age is unknown) only appear if they switch it on. Switching it off removes your page from our sitemap and asks search engines not to show it; search engines may take some time to update.</p>
 
 <h2>6. Sharing</h2>
-<p>We do not sell personal data. We share it only with service providers that run D.A.R.T. (hosting, database and file storage, email, Google sign-in and Google AdSense), with mobile-money providers to confirm payments, or when the law requires it.</p>
+<p>We do not sell personal data. We share it only with service providers that run D.A.R.T. (hosting, database and file storage, email, Google sign-in, Google AdSense and the AI safety check described in section 4a), with mobile-money providers to confirm payments, or when the law requires it.</p>
 
 <h2>7. Security</h2>
 <p>We use encrypted connections (HTTPS), hashed passwords, two-factor authentication for privileged accounts, sign-in rate limits, access controls by role and audit logs. No system is perfectly secure; please use a strong, unique password and keep your authenticator safe.</p>
@@ -52,10 +63,10 @@
 <p>We keep your data while your account exists. When you delete your account in My Profile, we delete your account, records, registrations, highlights, profile picture and ID document. Payment and security records may be kept longer where the law requires.</p>
 
 <h2>9. Your rights</h2>
-<p>You can view and correct your profile at any time, delete your account, switch Google listing on or off, and ask us for a copy of your data or to correct anything you can't change yourself. Contact us at the address below.</p>
+<p>You can view and correct your profile at any time, choose who sees your personal details, delete your account, switch Google listing on or off, and ask us for a copy of your data or to correct anything you can't change yourself. Contact us at the address below.</p>
 
 <h2>10. Children</h2>
-<p>Many athletes are high-school students. Under-18s are not listed on Google unless they choose to be, and we only show sport information publicly. Parents or guardians may contact us about a minor's account.</p>
+<p>Many athletes are high-school students. Under-18s are not listed on Google unless they choose to be, their personal details are hidden unless they choose otherwise, and every photo and video is safety-checked before it is shown. Parents or guardians may contact us about a minor's account.</p>
 
 <h2>11. Changes</h2>
 <p>We will post updates here and change the date above. Important changes will be announced in the app.</p>

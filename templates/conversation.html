@@ -474,7 +474,7 @@
       <div class="conversation-header-info">
         <p class="conversation-header-name">
           {{ recipient.full_name }}
-          {% if recipient.nationality %}
+          {% if recipient.nationality and show_personal(recipient) %}
             <span class="ms-1">{{ country_flag(recipient.nationality) }}</span>
           {% endif %}
         </p>

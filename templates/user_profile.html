@@ -20,7 +20,7 @@
 
 {# ===== Profile card (same design as the shared card image + PDF) ===== #}
 {% if user.role in ('Athlete', 'Coach', 'Scout') %}
-  {{ profile_hero(profile_card_info(user)) }}
+  {{ profile_hero(profile_card_info(user, current_user)) }}
 {% else %}
   <section class="up-plain">
     <h1>{{ user.full_name }}</h1>
@@ -128,14 +128,18 @@
       ('fa-venus-mars', 'Gender', user.gender or 'Not provided'),
     ] %}
     {% if user.role == 'Athlete' %}
-      {% set tiles = tiles + [
-        ('fa-cake-candles', 'Age', (age ~ ' years') if age else 'Not provided'),
-        ('fa-flag', 'Nationality', ((country_flag(user.nationality) ~ ' ' ~ user.nationality) if user.nationality else 'Not provided')),
-        ('fa-ruler-vertical', 'Height', ((user.height_cm | float | round(1) ~ ' cm') | replace('.0 cm', ' cm')) if user.height_cm else 'Not provided'),
-        ('fa-weight-scale', 'Weight', ((user.weight_kg | float | round(1) ~ ' kg') | replace('.0 kg', ' kg')) if user.weight_kg else 'Not provided'),
-        ('fa-shoe-prints', 'Preferred foot', user.preferred_foot or 'Not provided'),
-        ('fa-shirt', 'Shirt #', ('#' ~ user.shirt_number) if user.shirt_number else 'Not provided'),
-      ] %}
+      {% if show_personal(user) %}
+        {% set tiles = tiles + [
+          ('fa-cake-candles', 'Age', (age ~ ' years') if age else 'Not provided'),
+          ('fa-flag', 'Nationality', ((country_flag(user.nationality) ~ ' ' ~ user.nationality) if user.nationality else 'Not provided')),
+          ('fa-ruler-vertical', 'Height', ((user.height_cm | float | round(1) ~ ' cm') | replace('.0 cm', ' cm')) if user.height_cm else 'Not provided'),
+          ('fa-weight-scale', 'Weight', ((user.weight_kg | float | round(1) ~ ' kg') | replace('.0 kg', ' kg')) if user.weight_kg else 'Not provided'),
+          ('fa-shoe-prints', 'Preferred foot', user.preferred_foot or 'Not provided'),
+        ] %}
+      {% else %}
+        {% set tiles = tiles + [('fa-lock', 'Personal details', 'Kept private by ' ~ user.full_name.split(' ')[0])] %}
+      {% endif %}
+      {% set tiles = tiles + [('fa-shirt', 'Shirt #', ('#' ~ user.shirt_number) if user.shirt_number else 'Not provided')] %}
     {% endif %}
     <div class="up-tiles">
       {% for icon, label, value in tiles %}

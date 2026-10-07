@@ -297,7 +297,8 @@ def monthly_usage(user, today=None):
 
     highlight_counts = dict(
         db.session.query(AthleteHighlight.media_type, func.count(AthleteHighlight.id))
-        .filter(AthleteHighlight.user_id == user.id, AthleteHighlight.created_at >= since)
+        .filter(AthleteHighlight.user_id == user.id, AthleteHighlight.created_at >= since,
+                AthleteHighlight.status != 'rejected')   # rejected uploads don't use up the month
         .group_by(AthleteHighlight.media_type)
         .all()
     )

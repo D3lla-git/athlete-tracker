@@ -46,6 +46,7 @@
 <!-- ==================== MY RECORDS TABLE ==================== -->
 <!-- ==================== MY SUBMITTED RECORDS ==================== -->
 <h4 class="mt-4 mb-3">My Submitted Records <i class="fa-solid fa-book"></i></h4>
+{% include '_record_warning.html' %}
 <!-- ===== DESKTOP TABLE (hidden on mobile) ===== -->
 {# Styles: .records-table in base.html #}
 {% from '_record_table_macros.html' import record_cells, record_header_cells with context %}
@@ -69,7 +70,7 @@
           {% if r.status == 'approved' %}
             <span class="badge dart-pill">Approved</span>
           {% elif r.status == 'rejected' %}
-            <span class="badge dart-status-rejected">Rejected</span>
+            <span class="badge dart-status-rejected">Rejected{% if r.rejection_reason in record_reject_reasons %} · {{ record_reject_reasons[r.rejection_reason][0] }}{% endif %}</span>
           {% else %}
             <span class="badge dart-status-pending">Pending</span>
           {% endif %}
@@ -281,7 +282,7 @@
   {% if r.status == 'approved' %}
     <span class="badge dart-pill px-3 py-2">Approved</span>
   {% elif r.status == 'rejected' %}
-    <span class="badge dart-status-rejected px-3 py-2">Rejected</span>
+    <span class="badge dart-status-rejected px-3 py-2">Rejected{% if r.rejection_reason in record_reject_reasons %} · {{ record_reject_reasons[r.rejection_reason][0] }}{% endif %}</span>
   {% else %}
     <span class="badge dart-status-pending px-3 py-2">Pending</span>
   {% endif %}

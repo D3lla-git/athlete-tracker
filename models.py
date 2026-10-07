@@ -48,6 +48,26 @@ class User(UserMixin, db.Model):
     profile_picture = db.Column(db.String(255), nullable=True)  # optional update
     is_verified = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Latest Terms of Use / Privacy Policy version this user accepted
+    # (every acceptance is also kept in TermsAcceptance).
+    terms_version = db.Column(db.String(20), nullable=True)
+    terms_accepted_at = db.Column(db.DateTime, nullable=True)
+    # Who may see age, nationality, height, weight and preferred foot:
+    # 'everyone', 'members' (signed-in coaches, scouts and organizations)
+    # or 'private'. None = not chosen yet = hidden.
+    personal_visibility = db.Column(db.String(10), nullable=True)
+    # Media safety: rejected uploads add strikes; nudity or too many strikes
+    # block photo/video uploads until a Super Admin restores them.
+    media_strikes = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+    media_blocked = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    # Records a coach rejected as FAKE (kept even if the athlete deletes the
+    # record). 1st = warning, 2nd = final warning, 3rd = account suspended.
+    fake_record_strikes = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+    # A suspended account can't sign in or use D.A.R.T. until the Super
+    # Admin lifts it.
+    is_suspended = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    suspended_at = db.Column(db.DateTime, nullable=True)
+    suspension_reason = db.Column(db.String(200), nullable=True)
 
     __table_args__ = (db.UniqueConstraint('full_name', 'school', name='unique_student_school'),)
 
@@ -56,6 +76,30 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+class TermsAcceptance(db.Model):
+    """Permanent record of each time a user ticked "I agree" to the Terms of
+    Use and Privacy Policy (one row per user per terms version)."""
+    __tablename__ = 'terms_acceptance'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    user_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    terms_version = db.Column(db.String(20), nullable=False)
+    # Role and name at the time of acceptance (kept even if they change later).
+    role = db.Column(db.String(20), nullable=False)
+    full_name = db.Column(db.String(150), nullable=False)
+    # Which documents were shown with the checkbox, e.g. "terms,privacy,cookies".
+    documents = db.Column(db.String(120), nullable=False)
+    accepted_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    ip_address = db.Column(db.String(64), nullable=True)
+    user_agent = db.Column(db.String(300), nullable=True)
+    # Who they allowed to see their personal details when accepting.
+    personal_visibility = db.Column(db.String(10), nullable=True)
+
+    user = db.relationship('User', backref=db.backref('terms_acceptances', lazy='dynamic', passive_deletes=True))
+
+    __table_args__ = (db.UniqueConstraint('user_id', 'terms_version', name='uq_terms_acceptance_user_version'),)
+
 
 class SportRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -118,6 +162,13 @@ class SportRecord(db.Model):
 
     status = db.Column(db.String(20), default='pending')  # pending / approved / rejected
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Why a coach rejected it: 'fake' or 'inaccurate' (see RECORD_REJECT_REASONS
+    # in app.py). Cleared when the record goes back to pending.
+    rejection_reason = db.Column(db.String(20), nullable=True)
+    rejection_note = db.Column(db.String(200), nullable=True)
+    rejected_by = db.Column(db.BigInteger, nullable=True)     # coach / Super Admin user id
+    rejected_at = db.Column(db.DateTime, nullable=True)
 
     user = db.relationship('User', backref='records')
 
@@ -217,6 +268,26 @@ class AthleteHighlight(db.Model):
     duration_seconds = db.Column(db.Numeric(6, 2), nullable=True)   # videos only
     caption = db.Column(db.String(150), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Content safety. Only 'approved' highlights are ever shown to others.
+    # 'pending' files sit in the private 'highlight-review' bucket until a
+    # Super Admin approves them (then they move to the public bucket);
+    # 'rejected' rows keep only the reason (the file is deleted).
+    sport = db.Column(db.String(20), nullable=True)          # Football / Basketball / Kickball
+    status = db.Column(db.String(12), nullable=False, default='pending', server_default='pending', index=True)
+    storage_bucket = db.Column(db.String(40), nullable=False, default='highlight-review', server_default='athlete-highlights')
+    ai_checked = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    ai_summary = db.Column(db.String(300), nullable=True)
+    ai_flags = db.Column(db.String(120), nullable=True)
+    review_reason = db.Column(db.String(300), nullable=True)
+    reviewed_by = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+
+    user = db.relationship('User', foreign_keys=[user_id])
+
+    @property
+    def is_approved(self):
+        return self.status == 'approved'
 
     @property
     def is_video(self):

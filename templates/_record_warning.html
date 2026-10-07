@@ -1,0 +1,95 @@
+{# Athlete dashboard: rejected records come back with the coach's reason and
+   a warning to upload only facts (fake records lead to suspension). #}
+{% set rejected_records = records | selectattr('status', 'equalto', 'rejected') | list %}
+{% set strikes = current_user.fake_record_strikes or 0 %}
+{% if rejected_records or strikes %}
+  {% set left = fake_record_suspend_at - strikes %}
+  <section class="rw {{ 'rw-final' if strikes >= fake_record_suspend_at - 1 else ('rw-fake' if strikes else '') }}" role="alert" aria-labelledby="rwTitle">
+    <div class="rw-head">
+      <span class="rw-icon" aria-hidden="true"><i class="fa-solid fa-triangle-exclamation"></i></span>
+      <div>
+        <h5 id="rwTitle">Upload only facts</h5>
+        <p>
+          Only submit games and statistics that really happened.
+          {% if strikes == 0 %}
+            Records rejected as <strong>fake</strong> count against your account: {{ fake_record_suspend_at }} fake records and your account is suspended.
+          {% elif left > 1 %}
+            <strong>Warning: {{ strikes }} of your records {{ 'was' if strikes == 1 else 'were' }} rejected as fake.</strong>
+            {{ left }} more and your account will be suspended.
+          {% else %}
+            <strong>Final warning: {{ strikes }} records were rejected as fake.</strong>
+            One more fake record and your D.A.R.T. account will be suspended.
+          {% endif %}
+        </p>
+      </div>
+      {% if strikes %}
+        <div class="rw-meter" aria-label="Fake records: {{ strikes }} of {{ fake_record_suspend_at }}">
+          {% for i in range(fake_record_suspend_at) %}<span class="{{ 'on' if i < strikes }}"></span>{% endfor %}
+          <small>{{ strikes }}/{{ fake_record_suspend_at }}</small>
+        </div>
+      {% endif %}
+    </div>
+
+    {% if rejected_records %}
+      <ul class="rw-list">
+        {% for r in rejected_records %}
+          {% set reason = record_reject_reasons.get(r.rejection_reason) %}
+          <li>
+            <span class="rw-tag rw-tag-{{ r.rejection_reason or 'none' }}">{{ reason[0] if reason else 'Rejected' }}</span>
+            <span class="rw-what">{{ r.sport }}{% if r.team_played_against %} vs {{ r.team_played_against }}{% endif %}{% if r.game_date %} · {{ r.game_date.strftime('%b %d, %Y') }}{% endif %}</span>
+            {% if r.rejection_reason == 'inaccurate' %}<span class="rw-help">Correct the details and resubmit it.</span>
+            {% elif r.rejection_reason == 'fake' %}<span class="rw-help">This counts as a fake record.</span>{% endif %}
+            {% if r.rejection_note %}<span class="rw-note">Coach: “{{ r.rejection_note }}”</span>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </section>
+
+  <style>
+    .rw {
+      margin: 0 0 16px;
+      padding: 16px 18px;
+      border-radius: 18px;
+      background: rgba(245, 197, 66, 0.12);
+      border: 1px solid rgba(245, 197, 66, 0.55);
+    }
+    .rw-fake { background: rgba(253, 126, 20, 0.1); border-color: rgba(253, 126, 20, 0.55); }
+    .rw-final { background: rgba(220, 53, 69, 0.1); border-color: rgba(220, 53, 69, 0.6); }
+    .rw-head { display: flex; gap: 12px; align-items: flex-start; }
+    .rw-icon {
+      flex: 0 0 40px; height: 40px; display: grid; place-items: center; border-radius: 12px;
+      color: #fff; background: #d39e00;
+    }
+    .rw-fake .rw-icon { background: #fd7e14; }
+    .rw-final .rw-icon { background: #dc3545; }
+    .rw-head h5 { margin: 0 0 4px; font-weight: 800; }
+    .rw-head p { margin: 0; font-size: 0.9rem; line-height: 1.45; }
+    .rw-head > div:nth-child(2) { flex: 1; min-width: 0; }
+    .rw-meter { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .rw-meter span { width: 14px; height: 14px; border-radius: 4px; background: rgba(0, 0, 0, 0.12); }
+    .rw-meter span.on { background: #dc3545; }
+    .rw-meter small { margin-left: 4px; font-weight: 800; }
+    html[data-theme="dark"] .rw-meter span { background: rgba(255, 255, 255, 0.18); }
+    html[data-theme="dark"] .rw-meter span.on,
+    .rw-meter span.on { background: #dc3545; }
+    .rw-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+    .rw-list li {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 9px 12px;
+      border-radius: 12px; font-size: 0.86rem; background: var(--surface-bg, #fff);
+      border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.08));
+    }
+    .rw-tag { padding: 2px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 800; color: #fff; background: #6c757d; }
+    .rw-tag-fake { background: #dc3545; }
+    .rw-tag-inaccurate { background: #fd7e14; }
+    .rw-what { font-weight: 700; }
+    .rw-help { color: var(--muted-text, #6c757d); }
+    .rw-note { flex-basis: 100%; font-style: italic; color: var(--muted-text, #6c757d); }
+    @media (max-width: 575.98px) {
+      .rw { padding: 14px; }
+      .rw-head { flex-wrap: wrap; }
+      .rw-head > div:nth-child(2) { flex: 1 1 calc(100% - 52px); }
+      .rw-meter { margin-left: 52px; }
+    }
+  </style>
+{% endif %}

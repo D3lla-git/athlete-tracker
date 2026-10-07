@@ -2,6 +2,8 @@
 {% block title %}Admin Dashboard{% endblock %}
 
 {% block content %}
+{% from '_record_reject.html' import reject_controls, rejection_badge, reject_styles with context %}
+{{ reject_styles() }}
 {% include '_admin_dashboard_overview.html' %}
 <!-- ========== PENDING VERIFICATIONS ========== -->
 {% if pending_coaches %}
@@ -353,15 +355,12 @@
         <i class="fa-solid fa-check"></i> Approve
     </button>
 </form>
-              <form method="POST" action="{{ url_for('reject_record', record_id=r.id) }}" style="display:inline;">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="btn btn-danger dart-btn"
-            onclick="return confirm('Are you sure you want to reject this record?');">
-        <i class="fa-solid fa-xmark"></i> Reject
-    </button>
-</form>
+              {{ reject_controls(r) }}
             {% else %}
-              <span class="badge dart-status-rejected px-3 py-2">Rejected</span>
+              <div class="d-flex flex-column align-items-center gap-2">
+                {{ rejection_badge(r) }}
+                {{ reject_controls(r) }}
+              </div>
             {% endif %}
             </div>
 
@@ -448,7 +447,8 @@
               {% if r.status == 'approved' %}
                 <span class="badge dart-pill">Approved</span>
               {% elif r.status == 'rejected' %}
-                <span class="badge dart-status-rejected">Rejected</span>
+                {{ rejection_badge(r) }}
+                {{ reject_controls(r) }}
               {% else %}
                 <span class="badge dart-status-pending">Pending</span>
               {% endif %}
@@ -464,14 +464,7 @@
                     </button>
                   </form>
 
-                  <form method="POST" action="{{ url_for('reject_record', record_id=r.id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit"
-                            class="btn btn-sm dart-btn"
-                            onclick="return confirm('Reject this sports record?')">
-                      <i class="fa-solid fa-xmark" aria-hidden="true"></i> Reject
-                    </button>
-                  </form>
+                  {{ reject_controls(r) }}
                 </div>
               {% endif %}
             </div>

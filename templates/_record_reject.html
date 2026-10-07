@@ -1,0 +1,78 @@
+{# Coach controls for a record's rejection.
+   reject_controls(r): pending -> "Reject" with a required reason;
+                       rejected -> the reason + "Mistakenly rejected (coach's error)". #}
+
+{% macro rejection_badge(r) %}
+  <span class="badge dart-status-rejected">Rejected{% if r.rejection_reason in record_reject_reasons %} · {{ record_reject_reasons[r.rejection_reason][0] }}{% endif %}</span>
+{% endmacro %}
+
+{% macro reject_controls(r) %}
+  {% if r.status == 'pending' %}
+    <details class="rj">
+      <summary class="btn btn-sm btn-danger dart-btn rj-toggle"><i class="fa-solid fa-xmark" aria-hidden="true"></i> Reject</summary>
+      <form method="POST" action="{{ url_for('reject_record', record_id=r.id) }}" class="rj-form"
+            onsubmit="var f=this.querySelector('input[name=reason]:checked'); if(!f){return false;} return confirm(f.value==='fake' ? 'Reject as FAKE? The athlete gets a warning; {{ fake_record_suspend_at }} fake records suspend their account.' : 'Reject as inaccurate? The athlete will be asked to correct it.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <fieldset>
+          <legend>Why are you rejecting this record?</legend>
+          {% for key in ('fake', 'inaccurate') %}
+            {% set label, help = record_reject_reasons[key] %}
+            <label class="rj-option rj-{{ key }}">
+              <input type="radio" name="reason" value="{{ key }}" required>
+              <span><strong>{{ label }}</strong><small>{{ help }}</small></span>
+            </label>
+          {% endfor %}
+        </fieldset>
+        <input type="text" name="note" class="form-control form-control-sm" maxlength="200"
+               placeholder="Note to the athlete (optional)" aria-label="Note to the athlete">
+        <button type="submit" class="btn btn-sm btn-danger rj-submit"><i class="fa-solid fa-xmark me-1"></i> Reject record</button>
+      </form>
+    </details>
+  {% elif r.status == 'rejected' %}
+    <form method="POST" action="{{ url_for('record_rejection_mistake', record_id=r.id) }}" class="rj-mistake"
+          onsubmit="return confirm('Mark as mistakenly rejected (your error)? The record goes back to Pending and any warning is removed.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm btn-outline-secondary rj-mistake-btn"
+              title="{{ record_reject_reasons['mistake'][1] }}">
+        <i class="fa-solid fa-rotate-left me-1" aria-hidden="true"></i> {{ record_reject_reasons['mistake'][0] }}
+      </button>
+    </form>
+  {% endif %}
+{% endmacro %}
+
+{% macro reject_styles() %}
+<style>
+  .rj { position: relative; text-align: center; }
+  .rj > summary { display: inline-flex; align-items: center; gap: 6px; }
+  .rj > summary { list-style: none; }
+  .rj > summary::-webkit-details-marker { display: none; }
+  .rj[open] > summary { opacity: 0.85; }
+  .rj-form {
+    display: grid;
+    gap: 8px;
+    width: min(320px, 82vw);
+    margin: 8px auto 0;
+    padding: 12px;
+    text-align: left;
+    border-radius: 14px;
+    background: var(--surface-bg, #fff);
+    border: 1px solid rgba(220, 53, 69, 0.4);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+  }
+  .rj-form fieldset { margin: 0; padding: 0; border: 0; min-width: 0; display: grid; gap: 6px; }
+  .rj-form legend { font-size: 0.85rem; font-weight: 800; margin-bottom: 4px; }
+  .rj-option { margin: 0; cursor: pointer; position: relative; }
+  .rj-option input { position: absolute; opacity: 0; }
+  .rj-option span {
+    display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 10px;
+    border: 1.5px solid var(--surface-border, rgba(0, 0, 0, 0.15)); white-space: normal;
+  }
+  .rj-option strong { font-size: 0.85rem; }
+  .rj-option small { font-size: 0.74rem; line-height: 1.3; color: var(--muted-text, #6c757d); }
+  .rj-option input:checked + span { border-color: #dc3545; background: rgba(220, 53, 69, 0.08); }
+  .rj-option input:focus-visible + span { box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.3); }
+  .rj-submit { border-radius: 999px; font-weight: 700; }
+  .rj-mistake { margin: 0; }
+  .rj-mistake-btn { border-radius: 999px; font-size: 0.78rem; white-space: normal; }
+</style>
+{% endmacro %}

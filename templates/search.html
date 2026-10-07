@@ -791,14 +791,18 @@
 
                 {% if a.role == 'Athlete' %}
                   <div class="rt-chips mt-2">
-                    <span class="rt-chip" title="Nationality">{{ country_flag(a.nationality) }} {{ a.nationality or 'Nationality not provided' }}</span>
+                    {% if show_personal(a) %}<span class="rt-chip" title="Nationality">{{ country_flag(a.nationality) }} {{ a.nationality or 'Nationality not provided' }}</span>{% endif %}
                     {% if a.gender %}
                       <span class="rt-chip" title="Gender"><i class="fa-solid {{ 'fa-mars' if a.gender == 'Male' else 'fa-venus' }}" aria-hidden="true"></i> {{ a.gender }}</span>
                     {% endif %}
+                    {% if show_personal(a) %}
                     <span class="rt-chip" title="Age"><i class="fa-solid fa-cake-candles" aria-hidden="true"></i> Age: {{ a.age or '-' }}</span>
                     <span class="rt-chip" title="Height"><i class="fa-solid fa-ruler-vertical" aria-hidden="true"></i> Height: {{ a.height_cm or '-' }} cm</span>
                     <span class="rt-chip" title="Weight"><i class="fa-solid fa-weight-scale" aria-hidden="true"></i> Weight: {{ a.weight_kg or '-' }} kg</span>
                     <span class="rt-chip" title="Preferred foot"><i class="fa-solid fa-shoe-prints" aria-hidden="true"></i> Preferred Foot: {{ a.preferred_foot or '-' }}</span>
+                    {% else %}
+                    <span class="rt-chip rt-chip-private" title="This athlete keeps age, nationality, height and weight private"><i class="fa-solid fa-lock" aria-hidden="true"></i> Personal details private</span>
+                    {% endif %}
                     <span class="rt-chip" title="Shirt number"><i class="fa-solid fa-shirt" aria-hidden="true"></i> Shirt #: {{ a.shirt_number or '-' }}</span>
                   </div>
                 {% endif %}
@@ -904,14 +908,18 @@
         {% set a = item.student %}
         {# Personal info, same as the desktop athlete header. #}
         <div class="rt-chips search-mobile-chips mb-3">
-          <span class="rt-chip" title="Nationality">{{ country_flag(a.nationality) }} {{ a.nationality or 'Nationality not provided' }}</span>
+          {% if show_personal(a) %}<span class="rt-chip" title="Nationality">{{ country_flag(a.nationality) }} {{ a.nationality or 'Nationality not provided' }}</span>{% endif %}
           {% if a.gender %}
             <span class="rt-chip" title="Gender"><i class="fa-solid {{ 'fa-mars' if a.gender == 'Male' else 'fa-venus' }}" aria-hidden="true"></i> {{ a.gender }}</span>
           {% endif %}
+          {% if show_personal(a) %}
           <span class="rt-chip" title="Age"><i class="fa-solid fa-cake-candles" aria-hidden="true"></i> Age: {{ a.age or '-' }}</span>
           <span class="rt-chip" title="Height"><i class="fa-solid fa-ruler-vertical" aria-hidden="true"></i> Height: {{ a.height_cm or '-' }} cm</span>
           <span class="rt-chip" title="Weight"><i class="fa-solid fa-weight-scale" aria-hidden="true"></i> Weight: {{ a.weight_kg or '-' }} kg</span>
           <span class="rt-chip" title="Preferred foot"><i class="fa-solid fa-shoe-prints" aria-hidden="true"></i> Preferred Foot: {{ a.preferred_foot or '-' }}</span>
+          {% else %}
+          <span class="rt-chip rt-chip-private" title="This athlete keeps age, nationality, height and weight private"><i class="fa-solid fa-lock" aria-hidden="true"></i> Personal details private</span>
+          {% endif %}
           <span class="rt-chip" title="Shirt number"><i class="fa-solid fa-shirt" aria-hidden="true"></i> Shirt #: {{ a.shirt_number or '-' }}</span>
         </div>
       {% endif %}

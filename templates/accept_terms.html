@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% block title %}Accept the Terms{% endblock %}
+
+{% block content %}
+<div class="tg-page">
+  <section class="tg-card" aria-labelledby="tgTitle">
+    <div class="tg-head">
+      <div class="tg-icon" aria-hidden="true"><i class="fa-solid fa-file-signature"></i></div>
+      <div class="tg-eyebrow">One last step</div>
+      <h1 id="tgTitle">Before you enter D.A.R.T.</h1>
+      <p class="tg-lead">
+        Welcome, <strong>{{ current_user.full_name }}</strong>. Please read and accept our terms to
+        continue as {{ 'an' if current_user.role in ('Athlete', 'Organization') else 'a' }}
+        <strong>{{ current_user.role }}</strong>.
+      </p>
+    </div>
+
+    <div class="tg-points" tabindex="0" aria-label="Key points of the terms">
+      <h2>The key points</h2>
+      <ul>
+        <li><i class="fa-solid fa-scale-balanced"></i><span><strong>Upload only facts.</strong> Only submit games and stats that really happened. Coaches mark false records as <em>fake</em>: the 1st is a warning, the 2nd a final warning, and the <strong>3rd suspends your account</strong>.</span></li>
+        <li><i class="fa-solid fa-lock"></i><span><strong>Keep your account safe.</strong> Keep your password{{ ' and authenticator' if current_user.role in ('Coach', 'Scout', 'Organization') }} private; you are responsible for activity on your account.</span></li>
+        <li><i class="fa-solid fa-user-shield"></i><span><strong>Respect people's data.</strong> No bulk copying or scraping, harassment, or using athlete data outside sport and education.</span></li>
+        {% if current_user.role == 'Scout' %}
+          <li><i class="fa-solid fa-child-reaching"></i><span><strong>Safeguarding.</strong> Use athlete information only for genuine recruitment, and contact minors through their school, club or guardian.</span></li>
+        {% elif current_user.role == 'Organization' %}
+          <li><i class="fa-solid fa-building-shield"></i><span><strong>Your roster.</strong> Use roster data only to manage and support your own athletes, as set out in the Organization Data Use Terms.</span></li>
+        {% elif current_user.role == 'Coach' %}
+          <li><i class="fa-solid fa-clipboard-check"></i><span><strong>Fair approvals.</strong> Only approve records you know to be accurate for your team.</span></li>
+        {% endif %}
+        <li><i class="fa-solid fa-photo-film"></i><span><strong>Photos &amp; videos: sport action only.</strong> Football, basketball or kickball, with you in action. No selfies, no distracted videos (edit them to the highlight first), and <strong>never</strong> nudity or rude content. Every upload is checked before anyone sees it; breaking the rules blocks your uploads. <a href="{{ url_for('terms_page') }}#content-rules" target="_blank" rel="noopener">Content rules</a></span></li>
+        <li><i class="fa-solid fa-user-lock"></i><span><strong>Your personal details are yours.</strong> Age, nationality, height, weight and preferred foot are only shown to the people you choose below. Your date of birth, email, phone and ID are never shown.</span></li>
+        <li><i class="fa-solid fa-money-bill-wave"></i><span><strong>Premium.</strong> Plans last 30 days and never renew automatically. Wrong or double payments are refunded if reported within 7 days.</span></li>
+        <li><i class="fa-solid fa-landmark"></i><span><strong>Law.</strong> These terms are governed by the laws of the Republic of Liberia.</span></li>
+      </ul>
+    </div>
+
+    <div class="tg-docs">
+      {% for key, label, endpoint, icon in documents %}
+        <a class="tg-doc" href="{{ url_for(endpoint) }}" target="_blank" rel="noopener">
+          <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
+          <span>{{ label }}</span>
+          <i class="fa-solid fa-arrow-up-right-from-square tg-doc-open" aria-hidden="true"></i>
+        </a>
+      {% endfor %}
+    </div>
+
+    {% if is_minor %}
+      <div class="tg-minor">
+        <i class="fa-solid fa-people-roof" aria-hidden="true"></i>
+        <span>You are under 18: please read these terms with a parent or guardian before you agree.</span>
+      </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('accept_terms') }}" class="tg-form" id="termsForm" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+
+      {% if asks_personal %}
+        <fieldset class="tg-personal" id="termsPersonal">
+          <legend><i class="fa-solid fa-user-lock"></i> Who can see my personal details?</legend>
+          <p class="tg-personal-help">Your age, nationality, height, weight and preferred foot. You can change this any time in My Profile.</p>
+          <div class="tg-personal-options">
+            {% for value, (label, help) in personal_visibility_choices.items() %}
+              <label class="tg-pv">
+                <input type="radio" name="personal_visibility" value="{{ value }}" required
+                       {% if personal_choice == value %}checked{% endif %}>
+                <span><strong>{{ label }}</strong><small>{{ help }}</small></span>
+              </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+      {% endif %}
+
+      <label class="tg-check {{ 'tg-check-error' if error }}" for="termsAgree">
+        <input type="checkbox" id="termsAgree" name="agree" value="yes" required
+               {% if error %}aria-invalid="true" aria-describedby="termsError"{% endif %}>
+        <span class="tg-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+        <span class="tg-check-text">
+          I have read and agree to the D.A.R.T.
+          {% for key, label, endpoint, icon in documents %}{% if not loop.first %}{{ ' and ' if loop.last else ', ' }}{% endif %}<a href="{{ url_for(endpoint) }}" target="_blank" rel="noopener">{{ label }}</a>{% endfor %}.
+        </span>
+      </label>
+
+      {% if error %}
+        <div class="tg-error" id="termsError" role="alert"><i class="fa-solid fa-circle-exclamation"></i> {{ error }}</div>
+      {% endif %}
+
+      <button type="submit" class="btn dart-btn tg-continue" id="termsContinue" disabled>
+        Agree and enter D.A.R.T. <i class="fa-solid fa-arrow-right ms-1"></i>
+      </button>
+    </form>
+
+    <form method="POST" action="{{ url_for('logout') }}" class="tg-decline" data-dart-logout>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-link">I don't agree, log me out</button>
+    </form>
+
+    <p class="tg-meta">Version {{ terms_version }} · Last updated {{ updated }} · Your acceptance is recorded with the date and time.</p>
+  </section>
+</div>
+
+<style>
+  .tg-page { max-width: 640px; margin: 0 auto; padding: 8px 0 24px; }
+
+  .tg-card {
+    padding: 28px 26px;
+    border-radius: 24px;
+    background: var(--surface-bg, #fff);
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.12);
+  }
+
+  .tg-head { text-align: center; }
+  .tg-icon {
+    display: grid;
+    place-items: center;
+    width: 60px;
+    height: 60px;
+    margin: 0 auto 10px;
+    border-radius: 18px;
+    font-size: 1.5rem;
+    color: #fff;
+    background: var(--dart-primary-gradient, linear-gradient(135deg, #0d2413, #198754));
+  }
+  .tg-eyebrow { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #198754; }
+  .tg-head h1 { font-size: 1.6rem; font-weight: 800; margin: 4px 0 8px; }
+  .tg-lead { color: var(--muted-text, #6c757d); margin-bottom: 18px; }
+
+  .tg-points {
+    max-height: 290px;
+    overflow-y: auto;
+    padding: 16px 18px;
+    border-radius: 16px;
+    background: rgba(25, 135, 84, 0.06);
+    border: 1px solid rgba(25, 135, 84, 0.2);
+  }
+  .tg-points:focus-visible { outline: 3px solid rgba(25, 135, 84, 0.45); outline-offset: 2px; }
+  .tg-points h2 { font-size: 1rem; font-weight: 800; margin-bottom: 10px; }
+  .tg-points ul { list-style: none; padding: 0; margin: 0; }
+  .tg-points li { display: flex; gap: 12px; padding: 7px 0; font-size: 0.92rem; line-height: 1.45; }
+  .tg-points li + li { border-top: 1px dashed rgba(25, 135, 84, 0.2); }
+  .tg-points li > i { flex: 0 0 18px; margin-top: 3px; color: #198754; text-align: center; }
+
+  .tg-docs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin: 16px 0; }
+  .tg-doc {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.12));
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+  .tg-doc:hover { border-color: #198754; transform: translateY(-1px); color: inherit; }
+  .tg-doc > i:first-child { color: #198754; }
+  .tg-doc span { flex: 1; min-width: 0; }
+  .tg-doc-open { font-size: 0.75rem; opacity: 0.6; }
+
+  .tg-minor {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    border-radius: 14px;
+    font-size: 0.9rem;
+    color: #7a5b00;
+    background: rgba(245, 197, 66, 0.18);
+    border: 1px solid rgba(245, 197, 66, 0.5);
+  }
+  .tg-minor i { margin-top: 3px; }
+
+  /* Nothing else opens until the terms are accepted, so the bottom tab bar
+     would only cover the checkbox on phones. */
+  .dart-tabbar { display: none !important; }
+
+  .tg-check {
+    position: relative;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 14px 16px;
+    border-radius: 16px;
+    cursor: pointer;
+    border: 2px solid var(--surface-border, rgba(0, 0, 0, 0.15));
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .tg-check input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .tg-box {
+    display: grid;
+    place-items: center;
+    flex: 0 0 26px;
+    height: 26px;
+    border-radius: 8px;
+    color: transparent;
+    border: 2px solid #198754;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .tg-check input:checked + .tg-box { background: #198754; color: #fff; }
+  .tg-check input:focus-visible + .tg-box { box-shadow: 0 0 0 4px rgba(25, 135, 84, 0.3); }
+  .tg-check:has(input:checked) { border-color: #198754; background: rgba(25, 135, 84, 0.07); }
+  .tg-check-error { border-color: #dc3545; }
+  .tg-check-text { font-size: 0.95rem; line-height: 1.5; }
+  .tg-check-text a { font-weight: 700; color: #198754; }
+
+  .tg-personal { margin: 0 0 14px; padding: 0; border: 0; min-width: 0; }
+  .tg-personal legend { font-size: 1rem; font-weight: 800; margin-bottom: 2px; }
+  .tg-personal legend i { color: #198754; }
+  .tg-personal-help { font-size: 0.85rem; color: var(--muted-text, #6c757d); margin-bottom: 10px; }
+  .tg-personal-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .tg-pv { margin: 0; cursor: pointer; position: relative; }
+  .tg-pv input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .tg-pv span {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    height: 100%;
+    padding: 11px 12px;
+    border-radius: 14px;
+    border: 2px solid var(--surface-border, rgba(0, 0, 0, 0.15));
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .tg-pv strong { font-size: 0.9rem; }
+  .tg-pv small { font-size: 0.76rem; line-height: 1.35; color: var(--muted-text, #6c757d); }
+  .tg-pv input:checked + span { border-color: #198754; background: rgba(25, 135, 84, 0.08); }
+  .tg-pv input:checked + span strong { color: #198754; }
+  .tg-pv input:focus-visible + span { box-shadow: 0 0 0 4px rgba(25, 135, 84, 0.3); }
+  html[data-theme="dark"] .tg-pv input:checked + span strong { color: #4cd38a; }
+
+  .tg-error { margin-top: 10px; font-size: 0.9rem; color: #dc3545; font-weight: 600; }
+
+  .tg-continue {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin-top: 16px;
+    padding: 13px 18px;
+    font-weight: 800;
+    color: #fff;
+  }
+  .tg-continue:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  .tg-decline { text-align: center; margin-top: 6px; }
+  .tg-decline .btn-link { font-size: 0.88rem; color: var(--muted-text, #6c757d); }
+  .tg-meta { margin: 8px 0 0; text-align: center; font-size: 0.75rem; color: var(--muted-text, #6c757d); }
+
+  html[data-theme="dark"] .tg-check-text a,
+  html[data-theme="dark"] .tg-eyebrow { color: #4cd38a; }
+  html[data-theme="dark"] .tg-minor { color: #ffd96b; }
+
+  @media (max-width: 575.98px) {
+    .tg-card { padding: 22px 16px; border-radius: 20px; }
+    .tg-head h1 { font-size: 1.35rem; }
+    .tg-points { max-height: 250px; padding: 14px; }
+    .tg-docs { grid-template-columns: 1fr; }
+    .tg-personal-options { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script>
+  (function () {
+    var form = document.getElementById('termsForm');
+    var box = document.getElementById('termsAgree');
+    var button = document.getElementById('termsContinue');
+    if (!form || !box || !button) return;
+    var personal = form.querySelectorAll('input[name="personal_visibility"]');
+    // Enter only after ticking the box and (if asked) choosing who sees personal details.
+    function sync() {
+      var chosen = !personal.length || Array.prototype.some.call(personal, function (r) { return r.checked; });
+      button.disabled = !(box.checked && chosen);
+    }
+    form.addEventListener('change', sync);
+    sync();
+  })();
+</script>
+{% endblock %}

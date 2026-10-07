@@ -6,12 +6,13 @@ from werkzeug.utils import secure_filename
 from werkzeug.datastructures import MultiDict
 from werkzeug.security import generate_password_hash, check_password_hash
 from pymongo import MongoClient
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
 from itsdangerous import URLSafeSerializer, BadSignature
 from record_pdf import build_record_pdf, build_profile_pdf
+import moderation
 from profile_card import CardData, render_card as render_profile_card
 from plans import (
     PLANS, PAYMENT_METHODS, MOMO_METHODS, FREE_ATHLETE_LIMITS, FREE_LIMITS_START,
@@ -55,8 +56,6 @@ from sqlalchemy.exc import OperationalError
 from authlib.integrations.flask_client import OAuth
 import time
 from flask import abort
-
-
 # ==========================================
 # RECOVERY CODE HELPERS
 # ==========================================
@@ -767,10 +766,16 @@ def suggest_names():
 # PWA: SERVICE WORKER
 # ==========================================================
 # Served from the site root (not /static/) so the worker's
-# scope covers the whole app.
+# scope covers the whole app. The file lives at public/service-worker.js:
+# on Vercel the CDN serves it straight from public/ (files there are not
+# bundled into the Python function, so Flask could not read them), and
+# locally this route serves the same file.
+PUBLIC_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'public')
+
+
 @app.route('/service-worker.js')
 def service_worker():
-    response = app.send_static_file('service-worker.js')
+    response = send_from_directory(PUBLIC_FOLDER, 'service-worker.js', max_age=0)
 
     response.headers['Content-Type'] = 'application/javascript'
     response.headers['Service-Worker-Allowed'] = '/'
@@ -1395,8 +1400,11 @@ def admin_reject_payment(payment_id):
 @app.context_processor
 def inject_admin_payment_count():
     if current_user.is_authenticated and current_user.role == 'System':
-        return {'payments_awaiting': Payment.query.filter_by(status='awaiting_review').count()}
-    return {'payments_awaiting': 0}
+        return {
+            'payments_awaiting': Payment.query.filter_by(status='awaiting_review').count(),
+            'media_awaiting': AthleteHighlight.query.filter_by(status='pending').count(),
+        }
+    return {'payments_awaiting': 0, 'media_awaiting': 0}
 
 
 # =================SEARCH ROUTE=========================================
@@ -1599,7 +1607,8 @@ def search():
                 User.role == 'Athlete',
                 User.is_verified == True,
                 User.nationality.isnot(None),
-                User.nationality != ''
+                User.nationality != '',
+                personal_visible_filter(current_user)
             )
             .distinct()
             .order_by(User.nationality)
@@ -1676,6 +1685,13 @@ def search():
         query = query.filter(User.gender == gender)
     else:
         gender = ''
+
+    # Filtering by personal details only finds athletes who let this viewer
+    # see them (otherwise the filter itself would reveal hidden details).
+    if (nationality or age_min is not None or age_max is not None or height_min is not None
+            or height_max is not None or weight_min is not None or weight_max is not None
+            or preferred_foot in ('Right', 'Left', 'Both')):
+        query = query.filter(personal_visible_filter(current_user))
 
     if nationality:
         query = query.filter(User.nationality == nationality)
@@ -2921,6 +2937,11 @@ def continue_login(user):
     # Make the authenticated session permanent
     session.permanent = True
 
+    # Suspended accounts (e.g. 3 fake records) can't sign in at all.
+    if user.is_suspended:
+        flash(SUSPENDED_MESSAGE, 'danger')
+        return redirect(url_for('login'))
+
     # Coaches/admins must be verified before continuing
     if user.role == 'Coach' and not user.is_verified:
         flash(
@@ -3825,8 +3846,8 @@ def message_recipients():
             'full_name': user.full_name,
             'role': user.role,
             'school': user.school or '',
-            'nationality': user.nationality or '',
-            'flag': country_flag(user.nationality)
+            'nationality': (user.nationality or '') if personal_visible(user, current_user) else '',
+            'flag': country_flag(user.nationality) if personal_visible(user, current_user) else ''
         })
 
     return jsonify(recipients)
@@ -3949,8 +3970,22 @@ def conversation(user_id):
 #
 # Free for verified athletes for now. When Premium starts, restrict
 # uploads in can_upload_highlights() (e.g. with has_entitlement()).
+#
+# CONTENT SAFETY: only football / basketball / kickball action is allowed.
+# New uploads go to the PRIVATE 'highlight-review' bucket. moderation.py
+# checks them (when ANTHROPIC_API_KEY is set) and clearly bad files are
+# deleted at once. Everything else waits for a Super Admin (/admin/highlights);
+# only approved files are moved to the public 'athlete-highlights' bucket
+# and shown to anyone. HIGHLIGHT_AUTO_APPROVE = 'photos' or 'all' lets
+# files the AI is confident about go live without waiting (default: off).
 
-HIGHLIGHTS_BUCKET = 'athlete-highlights'
+HIGHLIGHTS_BUCKET = 'athlete-highlights'          # public: approved only
+HIGHLIGHT_REVIEW_BUCKET = 'highlight-review'      # private: waiting for review
+HIGHLIGHT_SPORTS = ('Football', 'Basketball', 'Kickball')
+HIGHLIGHT_AUTO_APPROVE = (os.environ.get('HIGHLIGHT_AUTO_APPROVE') or 'off').strip().lower()
+# Rejected uploads add a strike; this many strikes blocks photo/video
+# uploads. Nudity blocks them at once.
+MEDIA_STRIKE_LIMIT = 3
 
 # content type -> (media type, file extension)
 HIGHLIGHT_TYPES = {
@@ -3987,13 +4022,23 @@ def can_upload_highlights(user):
     )
 
 
-def highlights_for(user_id):
-    return AthleteHighlight.query.filter_by(
-        user_id=user_id
-    ).order_by(
+def highlights_for(user_id, include_unpublished=False):
+    """
+    Approved highlights (what everyone sees). include_unpublished: also the
+    ones waiting for review and rejected ones (the athlete's own pages and
+    the Super Admin).
+    """
+    query = AthleteHighlight.query.filter_by(user_id=user_id)
+    if not include_unpublished:
+        query = query.filter(AthleteHighlight.status == 'approved')
+    return query.order_by(
         AthleteHighlight.created_at.desc(),
         AthleteHighlight.id.desc()
     ).all()
+
+
+def can_moderate_media(user):
+    return user.is_authenticated and user.role == 'System'
 
 
 def highlight_public_url(path):
@@ -4006,17 +4051,57 @@ def highlight_public_url(path):
     return (result or '').rstrip('?')
 
 
+# Short-lived links to files in the private review bucket.
+_review_url_cache = {}
+REVIEW_URL_SECONDS = 60 * 60
+
+
+def review_file_url(path):
+    cached = _review_url_cache.get(path)
+    if cached and cached[1] > time.time() + 60:
+        return cached[0]
+
+    result = supabase.storage.from_(HIGHLIGHT_REVIEW_BUCKET).create_signed_url(path, REVIEW_URL_SECONDS)
+    url = ''
+    if isinstance(result, dict):
+        url = result.get('signedURL') or result.get('signedUrl') or result.get('signed_url') or ''
+    elif isinstance(result, str):
+        url = result
+    if url.startswith('/'):
+        url = (os.environ.get('SUPABASE_URL') or '').rstrip('/') + '/storage/v1' + url
+
+    if url:
+        if len(_review_url_cache) > 500:
+            _review_url_cache.clear()
+        _review_url_cache[path] = (url, time.time() + REVIEW_URL_SECONDS)
+    return url
+
+
+def highlight_media_url(highlight):
+    """Where the browser loads a highlight from (private files: signed link)."""
+    try:
+        if highlight.storage_bucket == HIGHLIGHT_REVIEW_BUCKET:
+            return review_file_url(highlight.storage_path)
+        return highlight_public_url(highlight.storage_path)
+    except Exception as e:
+        app.logger.warning('Highlight link failed for %s: %s', highlight.storage_path, e)
+        return ''
+
+
 app.jinja_env.globals.update(
-    highlight_url=highlight_public_url,
+    highlight_url=highlight_media_url,
     highlight_photo_max_bytes=HIGHLIGHT_PHOTO_MAX_BYTES,
     highlight_video_max_bytes=HIGHLIGHT_VIDEO_MAX_BYTES,
     highlight_video_max_seconds=HIGHLIGHT_VIDEO_MAX_SECONDS,
+    highlight_sports=HIGHLIGHT_SPORTS,
+    media_reasons=moderation.REASONS,
+    media_strike_limit=MEDIA_STRIKE_LIMIT,
 )
 
 
 def storage_object_info(path):
-    """(size in bytes, content type) of a stored highlight, or None if missing."""
-    response = http_requests.head(highlight_public_url(path), timeout=10, allow_redirects=True)
+    """(size in bytes, content type) of a file waiting in the review bucket, or None."""
+    response = http_requests.head(review_file_url(path), timeout=10, allow_redirects=True)
 
     if response.status_code != 200:
         return None
@@ -4028,9 +4113,9 @@ def storage_object_info(path):
 
 
 def read_storage_range(path, start, length):
-    """Read `length` bytes from `start` of a stored highlight (HTTP Range)."""
+    """Read `length` bytes from `start` of a file in the review bucket (HTTP Range)."""
     response = http_requests.get(
-        highlight_public_url(path),
+        review_file_url(path),
         headers={'Range': f'bytes={start}-{start + length - 1}'},
         timeout=10,
         stream=True
@@ -4114,11 +4199,79 @@ def parse_mp4_duration(read_at, total_size):
     return None
 
 
-def remove_highlight_file(path):
+def remove_highlight_file(path, bucket=HIGHLIGHT_REVIEW_BUCKET):
     try:
-        supabase.storage.from_(HIGHLIGHTS_BUCKET).remove([path])
+        supabase.storage.from_(bucket).remove([path])
     except Exception as e:
-        app.logger.warning('Could not remove highlight file %s: %s', path, e)
+        app.logger.warning('Could not remove highlight file %s/%s: %s', bucket, path, e)
+    _review_url_cache.pop(path, None)
+
+
+def download_review_file(path, max_bytes):
+    """The whole file from the review bucket (photos only), or None."""
+    response = http_requests.get(review_file_url(path), timeout=15, stream=True)
+    try:
+        if response.status_code != 200:
+            return None
+        data = b''
+        for chunk in response.iter_content(256 * 1024):
+            data += chunk
+            if len(data) > max_bytes:
+                return None
+        return data
+    finally:
+        response.close()
+
+
+def publish_highlight_file(path):
+    """
+    Move an approved file from the private review bucket to the public
+    bucket (same path). Returns True when done.
+    """
+    base = (os.environ.get('SUPABASE_URL') or '').rstrip('/')
+    key = os.environ.get('SUPABASE_SERVICE_KEY') or ''
+    try:
+        response = http_requests.post(
+            f'{base}/storage/v1/object/move',
+            headers={'Authorization': f'Bearer {key}', 'apikey': key, 'Content-Type': 'application/json'},
+            json={'bucketId': HIGHLIGHT_REVIEW_BUCKET, 'sourceKey': path,
+                  'destinationBucket': HIGHLIGHTS_BUCKET, 'destinationKey': path},
+            timeout=20,
+        )
+        if response.status_code == 200:
+            _review_url_cache.pop(path, None)
+            return True
+        app.logger.warning('Highlight move failed (%s): %s', response.status_code, response.text[:200])
+    except Exception as e:
+        app.logger.warning('Highlight move failed: %s', e)
+    return False
+
+
+def record_media_violation(user, flags, source, detail=''):
+    """
+    A rejected photo/video: add a strike, or block uploads at once for
+    nudity. Returns True if the user is now blocked. Caller commits.
+    """
+    severe = any(flag in moderation.SEVERE_FLAGS for flag in flags)
+    user.media_strikes = (user.media_strikes or 0) + 1
+    if severe or user.media_strikes >= MEDIA_STRIKE_LIMIT:
+        user.media_blocked = True
+
+    create_audit_log(
+        action='media_rejected',
+        actor_user_id=current_user.id if current_user.is_authenticated else None,
+        target_type='User',
+        target_id=str(user.id),
+        details={'source': source, 'flags': list(flags), 'detail': detail[:300],
+                 'strikes': user.media_strikes, 'blocked': bool(user.media_blocked)}
+    )
+    return bool(user.media_blocked)
+
+
+MEDIA_BLOCKED_MESSAGE = (
+    'Photo and video uploads are blocked on your account because of content that breaks the '
+    'D.A.R.T. rules. Contact D.A.R.T. if you think this is a mistake.'
+)
 
 
 def highlight_error(message, status=400):
@@ -4134,8 +4287,21 @@ def highlight_upload_url():
             'Only verified athletes can upload highlights.', 403
         )
 
+    if current_user.media_blocked:
+        return highlight_error(MEDIA_BLOCKED_MESSAGE, 403)
+
     data = request.get_json(silent=True) or {}
     content_type = str(data.get('content_type') or '').lower()
+
+    sport = str(data.get('sport') or '')
+    if sport not in HIGHLIGHT_SPORTS:
+        return highlight_error('Choose the sport: football, basketball or kickball.')
+
+    if data.get('confirm') is not True:
+        return highlight_error(
+            'Please confirm this shows you in action playing football, basketball or kickball '
+            '(no selfies, nothing rude).'
+        )
 
     if content_type not in HIGHLIGHT_TYPES:
         return highlight_error(
@@ -4179,7 +4345,8 @@ def highlight_upload_url():
     path = f'{current_user.id}/{uuid.uuid4().hex}.{extension}'
 
     try:
-        signed = supabase.storage.from_(HIGHLIGHTS_BUCKET).create_signed_upload_url(path)
+        # Into the PRIVATE review bucket: nobody else can see it yet.
+        signed = supabase.storage.from_(HIGHLIGHT_REVIEW_BUCKET).create_signed_upload_url(path)
         upload_url = signed.get('signed_url') or signed.get('signedUrl')
     except Exception as e:
         app.logger.exception('Highlight upload URL error: %s', e)
@@ -4199,6 +4366,7 @@ def highlight_upload_url():
         'content_type': content_type,
         'caption': caption,
         'duration': duration,
+        'sport': sport,
         'at': now,
     }
     # Keep the session small.
@@ -4285,6 +4453,54 @@ def highlight_complete():
         remove_highlight_file(path)
         return highlight_error(limit_error)
 
+    if current_user.media_blocked:
+        remove_highlight_file(path)
+        return highlight_error(MEDIA_BLOCKED_MESSAGE, 403)
+
+    # ---------- Content safety ----------
+    sport = pending.get('sport') or ''
+    caption = pending.get('caption') or ''
+
+    if media_type == 'photo':
+        try:
+            raw = download_review_file(path, max_bytes)
+        except Exception as e:
+            app.logger.warning('Highlight download failed for %s: %s', path, e)
+            raw = None
+        try:
+            # Also proves the file really is an image (not a disguised file).
+            images = [moderation.prepare_image(raw)] if raw else []
+        except ValueError:
+            remove_highlight_file(path)
+            return highlight_error(moderation.REASONS['unreadable'])
+    else:
+        # Frames the browser took from the video (the server can't decode
+        # video). Faked frames can't sneak anything through: every video
+        # still needs a Super Admin's approval.
+        images = moderation.decode_frames(data.get('frames'))
+
+    check = (
+        moderation.check_images(images, media_type, caption, sport)
+        if images else
+        {'decision': 'review', 'flags': [], 'reason': 'Could not be checked automatically.',
+         'checked': False, 'summary': ''}
+    )
+
+    if check['decision'] == 'reject':
+        remove_highlight_file(path)
+        blocked = record_media_violation(current_user, check['flags'], 'highlight_ai', check['summary'])
+        db.session.commit()
+        message = 'Not accepted: ' + check['reason']
+        if blocked:
+            message += ' ' + MEDIA_BLOCKED_MESSAGE
+        return highlight_error(message, 422)
+
+    auto_ok = (
+        check['decision'] == 'approve'
+        and (HIGHLIGHT_AUTO_APPROVE == 'all' or (HIGHLIGHT_AUTO_APPROVE == 'photos' and media_type == 'photo'))
+    )
+    published = auto_ok and publish_highlight_file(path)
+
     highlight = AthleteHighlight(
         user_id=current_user.id,
         media_type=media_type,
@@ -4292,18 +4508,24 @@ def highlight_complete():
         content_type=content_type,
         size_bytes=size,
         duration_seconds=round(min(duration, HIGHLIGHT_VIDEO_MAX_SECONDS), 2) if duration else None,
-        caption=pending.get('caption') or None
+        caption=caption or None,
+        sport=sport or None,
+        status='approved' if published else 'pending',
+        storage_bucket=HIGHLIGHTS_BUCKET if published else HIGHLIGHT_REVIEW_BUCKET,
+        ai_checked=bool(check['checked']),
+        ai_summary=check['summary'] or None,
+        reviewed_at=datetime.utcnow() if published else None,
     )
     db.session.add(highlight)
     db.session.commit()
 
-    flash(
-        'Your video highlight is live! 🎬' if media_type == 'video'
-        else 'Your photo highlight is live! 📸',
-        'success'
-    )
+    if published:
+        flash('Your highlight passed the safety check and is live! 🎬' if media_type == 'video'
+              else 'Your photo passed the safety check and is live! 📸', 'success')
+    else:
+        flash('Thanks! Your highlight is being reviewed and will appear on your profile once it is approved.', 'info')
 
-    return jsonify({'ok': True, 'id': highlight.id})
+    return jsonify({'ok': True, 'id': highlight.id, 'status': highlight.status})
 
 
 @app.route('/highlights/<int:highlight_id>/delete', methods=['POST'])
@@ -4317,16 +4539,134 @@ def delete_highlight(highlight_id):
     ):
         abort(404)
 
-    remove_highlight_file(highlight.storage_path)
+    if highlight.status != 'rejected':      # rejected files are already gone
+        remove_highlight_file(highlight.storage_path, highlight.storage_bucket)
     db.session.delete(highlight)
     db.session.commit()
 
-    flash('Highlight deleted.', 'success')
+    flash('Highlight removed.' if highlight.status == 'rejected' else 'Highlight deleted.', 'success')
 
     return redirect(
         safe_next_url(request.form.get('next'))
         or url_for('student_dashboard')
     )
+
+
+# ---------- Super Admin: review photos and videos ----------
+@app.route('/admin/highlights')
+@login_required
+def admin_highlights():
+    require_super_admin()
+
+    waiting = (
+        AthleteHighlight.query.filter_by(status='pending')
+        .order_by(AthleteHighlight.created_at.asc(), AthleteHighlight.id.asc())
+        .limit(100).all()
+    )
+    recent = (
+        AthleteHighlight.query.filter(AthleteHighlight.status.in_(('approved', 'rejected')),
+                                      AthleteHighlight.reviewed_at.isnot(None))
+        .order_by(AthleteHighlight.reviewed_at.desc())
+        .limit(20).all()
+    )
+    blocked = User.query.filter(User.media_blocked.is_(True)).order_by(User.full_name).all()
+    suspended = User.query.filter(User.is_suspended.is_(True)).order_by(User.suspended_at.desc()).all()
+    warned = (User.query.filter(User.fake_record_strikes > 0, User.is_suspended.is_(False))
+              .order_by(User.fake_record_strikes.desc(), User.full_name).limit(50).all())
+
+    return render_template(
+        'admin_highlights.html',
+        waiting=waiting,
+        recent=recent,
+        blocked=blocked,
+        suspended=suspended,
+        warned=warned,
+        ai_enabled=moderation.enabled(),
+        strike_limit=MEDIA_STRIKE_LIMIT,
+    )
+
+
+@app.route('/admin/highlights/<int:highlight_id>/<action>', methods=['POST'])
+@login_required
+def admin_highlight_action(highlight_id, action):
+    require_super_admin()
+
+    highlight = db.session.get(AthleteHighlight, highlight_id)
+    if not highlight or highlight.status != 'pending' or action not in ('approve', 'reject'):
+        abort(404)
+
+    athlete = db.session.get(User, highlight.user_id)
+    now = datetime.utcnow()
+
+    if action == 'approve':
+        if highlight.storage_bucket == HIGHLIGHT_REVIEW_BUCKET and not publish_highlight_file(highlight.storage_path):
+            flash('Could not publish this file right now. Please try again.', 'danger')
+            return redirect(url_for('admin_highlights'))
+        highlight.storage_bucket = HIGHLIGHTS_BUCKET
+        highlight.status = 'approved'
+        highlight.reviewed_by = current_user.id
+        highlight.reviewed_at = now
+        create_audit_log(
+            action='highlight_approved', actor_user_id=current_user.id,
+            target_type='AthleteHighlight', target_id=str(highlight.id),
+            details={'athlete_id': highlight.user_id, 'media_type': highlight.media_type}
+        )
+        db.session.commit()
+        flash(f"Approved: {athlete.full_name if athlete else 'athlete'}'s {highlight.media_type} is now live.", 'success')
+        return redirect(url_for('admin_highlights'))
+
+    reason_key = request.form.get('reason', '')
+    if reason_key not in moderation.REASONS or reason_key == 'unreadable':
+        flash('Choose why this is rejected.', 'warning')
+        return redirect(url_for('admin_highlights'))
+    note = (request.form.get('note') or '').strip()[:150]
+
+    remove_highlight_file(highlight.storage_path, highlight.storage_bucket)
+    highlight.status = 'rejected'
+    highlight.review_reason = moderation.REASONS[reason_key] + (f' {note}' if note else '')
+    highlight.ai_flags = reason_key
+    highlight.reviewed_by = current_user.id
+    highlight.reviewed_at = now
+    blocked = record_media_violation(athlete, [reason_key], 'highlight_review', note) if athlete else False
+    db.session.commit()
+
+    flash('Rejected and deleted.' + (' Uploads are now blocked for this athlete.' if blocked else ''), 'success')
+    return redirect(url_for('admin_highlights'))
+
+
+@app.route('/admin/users/<int:user_id>/media-restore', methods=['POST'])
+@login_required
+def admin_media_restore(user_id):
+    require_super_admin()
+    user = db.session.get(User, user_id)
+    if not user:
+        abort(404)
+    user.media_blocked = False
+    user.media_strikes = 0
+    create_audit_log(action='media_uploads_restored', actor_user_id=current_user.id,
+                     target_type='User', target_id=str(user.id))
+    db.session.commit()
+    flash(f'Photo and video uploads restored for {user.full_name}.', 'success')
+    return redirect(url_for('admin_highlights'))
+
+
+@app.route('/admin/users/<int:user_id>/unsuspend', methods=['POST'])
+@login_required
+def admin_unsuspend(user_id):
+    require_super_admin()
+    user = db.session.get(User, user_id)
+    if not user:
+        abort(404)
+    user.is_suspended = False
+    user.suspended_at = None
+    user.suspension_reason = None
+    # A fresh start: the next fake record is a warning again.
+    user.fake_record_strikes = 0
+    create_audit_log(action='account_unsuspended', actor_user_id=current_user.id,
+                     target_type='User', target_id=str(user.id))
+    db.session.commit()
+    flash(f'Suspension lifted for {user.full_name}.', 'success')
+    return redirect(url_for('admin_highlights'))
 
 
 # ==========================================================
@@ -4456,20 +4796,25 @@ def require_organization():
 
 
 def athlete_sport_profile(athlete, records, highlight_counts):
-    """The only athlete data an organization ever receives."""
+    """
+    The only athlete data an organization ever receives. Personal details
+    are left out unless the athlete lets organizations see them.
+    """
     approved = [r for r in records if r.status == 'approved']
     last_game = max((r.game_date for r in approved if r.game_date), default=None)
+    show = personal_visible(athlete, current_user)
 
     return {
         'id': athlete.id,
         'name': athlete.full_name,
         'picture': athlete.profile_picture,
-        'age': athlete.age,
+        'personal_shown': show,
+        'age': athlete.age if show else None,
         'gender': athlete.gender,
-        'nationality': athlete.nationality,
-        'height_cm': athlete.height_cm,
-        'weight_kg': athlete.weight_kg,
-        'preferred_foot': athlete.preferred_foot,
+        'nationality': athlete.nationality if show else None,
+        'height_cm': athlete.height_cm if show else None,
+        'weight_kg': athlete.weight_kg if show else None,
+        'preferred_foot': athlete.preferred_foot if show else None,
         'shirt_number': athlete.shirt_number,
         'team': athlete.school,
         'sports': sorted({r.sport for r in approved}),
@@ -4503,7 +4848,7 @@ def organization_dashboard_data(org, full):
 
     highlight_counts = dict(
         db.session.query(AthleteHighlight.user_id, func.count(AthleteHighlight.id))
-        .filter(AthleteHighlight.user_id.in_(ids))
+        .filter(AthleteHighlight.user_id.in_(ids), AthleteHighlight.status == 'approved')
         .group_by(AthleteHighlight.user_id)
         .all()
     ) if ids else {}
@@ -4945,6 +5290,55 @@ ATHLETE_CATEGORY_SPORTS = ('Football', 'Basketball', 'Kickball')
 record_share_signer = URLSafeSerializer(app.config['SECRET_KEY'], salt='dart-record-share-v1')
 
 
+# ---------- Personal details: shown only with the user's permission ----------
+# Age, nationality, height, weight and preferred foot. Each user chooses
+# (on the terms page, and later in My Profile) who may see them. Until they
+# choose, nobody else does. Date of birth, email, phone and ID documents are
+# never shown to other users at all.
+PERSONAL_VISIBILITY_CHOICES = {
+    'everyone': ('Everyone', 'Anyone who opens my profile, including Google.'),
+    'members': ('Coaches, scouts & organizations', 'Only verified coaches, scouts and organizations signed in to D.A.R.T.'),
+    'private': ('Only me', 'Nobody else sees my personal details.'),
+}
+PERSONAL_RECRUITER_ROLES = ('Coach', 'Scout', 'Organization')
+
+
+def personal_visible(subject, viewer=None):
+    """May `viewer` (None = the public) see `subject`'s personal details?"""
+    if subject is None:
+        return False
+    if viewer is not None and getattr(viewer, 'is_authenticated', False):
+        if viewer.id == subject.id or viewer.role == 'System':
+            return True
+    choice = getattr(subject, 'personal_visibility', None)
+    if choice == 'everyone':
+        return True
+    if choice == 'members':
+        return bool(
+            viewer is not None and getattr(viewer, 'is_authenticated', False)
+            and viewer.role in PERSONAL_RECRUITER_ROLES and viewer.is_verified
+        )
+    return False
+
+
+def personal_visible_filter(viewer):
+    """SQL condition: users whose personal details `viewer` may see."""
+    if viewer is not None and getattr(viewer, 'is_authenticated', False):
+        if viewer.role == 'System':
+            return db.true()
+        allowed = ['everyone']
+        if viewer.role in PERSONAL_RECRUITER_ROLES and viewer.is_verified:
+            allowed.append('members')
+        return or_(User.personal_visibility.in_(allowed), User.id == viewer.id)
+    return User.personal_visibility == 'everyone'
+
+
+app.jinja_env.globals.update(
+    show_personal=lambda user: personal_visible(user, current_user),
+    personal_visibility_choices=PERSONAL_VISIBILITY_CHOICES,
+)
+
+
 def athlete_age(user):
     if user.date_of_birth:
         today = utc_today()
@@ -5047,7 +5441,9 @@ def athlete_seo(athlete, records):
         else:
             parts.append(f"{s['games']} kickball games, {s['home_runs']} home runs")
 
-    where = ', '.join(x for x in (athlete.school, athlete.nationality) if x)
+    # Google sees personal details only if the athlete shows them to everyone.
+    public_nationality = athlete.nationality if personal_visible(athlete, None) else None
+    where = ', '.join(x for x in (athlete.school, public_nationality) if x)
     description = (
         f"Verified {sport_names.lower()} record of {athlete.full_name}"
         + (f" ({where})" if where else '')
@@ -5064,8 +5460,8 @@ def athlete_seo(athlete, records):
     }
     if athlete.profile_picture:
         person['image'] = site_url(url_for('profile_picture', filename=athlete.profile_picture))
-    if athlete.nationality:
-        person['nationality'] = athlete.nationality
+    if public_nationality:
+        person['nationality'] = public_nationality
     if athlete.school:
         person['affiliation'] = {'@type': 'SportsTeam', 'name': athlete.school}
     if sports:
@@ -5218,7 +5614,7 @@ def sitemap_xml():
 
 
 # ---------- Legal pages ----------
-LEGAL_UPDATED = 'October 6, 2026'
+LEGAL_UPDATED = 'October 7, 2026'
 
 
 @app.route('/privacy')
@@ -5244,6 +5640,224 @@ def legal_page():
 @app.route('/legal/organizations')
 def organization_terms():
     return render_template('legal/organizations.html', updated=LEGAL_UPDATED, version=ORG_TERMS_VERSION)
+
+
+# ---------- Mandatory Terms acceptance ----------
+# Every athlete, coach, scout and organization must tick "I agree" to the
+# current Terms of Use + Privacy Policy before using D.A.R.T. (right after
+# registering, or on their next login for existing accounts). Raise
+# TERMS_VERSION when the terms change: everyone is asked again, and each
+# acceptance is stored in TermsAcceptance as a permanent record.
+TERMS_VERSION = '2026-10-07'
+
+# The Super Admin runs the platform and is not asked.
+TERMS_EXEMPT_ROLES = ('System',)
+
+# Pages that stay open before acceptance: the terms themselves, logging out,
+# and files/pages that never show user data.
+TERMS_OPEN_ENDPOINTS = {
+    'accept_terms', 'logout', 'static', 'service_worker', 'offline',
+    'privacy_page', 'terms_page', 'cookies_page', 'legal_page', 'organization_terms',
+    'robots_txt', 'sitemap_xml', 'profile_picture', 'record_sync_status',
+}
+
+TERMS_DOCUMENTS = {
+    'terms': ('Terms of Use', 'terms_page', 'fa-file-contract'),
+    'privacy': ('Privacy Policy', 'privacy_page', 'fa-user-shield'),
+    'cookies': ('Cookie Policy', 'cookies_page', 'fa-cookie-bite'),
+    'organizations': ('Organization Data Use Terms', 'organization_terms', 'fa-building-shield'),
+}
+
+
+def needs_terms_acceptance(user):
+    return (
+        user.is_authenticated
+        and user.role not in TERMS_EXEMPT_ROLES
+        and user.terms_version != TERMS_VERSION
+    )
+
+
+def terms_documents_for(user):
+    keys = ['terms', 'privacy', 'cookies']
+    if user.role == 'Organization':
+        keys.append('organizations')
+    return keys
+
+
+SUSPENDED_MESSAGE = (
+    'Your D.A.R.T. account is suspended because records you uploaded were rejected as fake. '
+    'Contact D.A.R.T. if you think this is a mistake.'
+)
+
+# Files and pages that never show user data (checked without the database).
+NO_ACCOUNT_ENDPOINTS = {'static', 'service_worker', 'offline', 'robots_txt', 'sitemap_xml'}
+
+
+@app.before_request
+def require_terms_acceptance():
+    # Checked before touching current_user, so these never hit the database.
+    if request.endpoint is None or request.endpoint in NO_ACCOUNT_ENDPOINTS:
+        return None
+
+    # Suspended accounts are signed out everywhere, at once.
+    if current_user.is_authenticated and current_user.is_suspended:
+        logout_user()
+        if request.path.startswith('/api/'):
+            return _no_store_json({'ok': False, 'reason': 'suspended', 'error': SUSPENDED_MESSAGE}, 403)
+        flash(SUSPENDED_MESSAGE, 'danger')
+        return redirect(url_for('login'))
+
+    if request.endpoint in TERMS_OPEN_ENDPOINTS:
+        return None
+
+    if not needs_terms_acceptance(current_user):
+        return None
+
+    if request.path.startswith('/api/'):
+        return _no_store_json({
+            'ok': False,
+            'reason': 'terms_required',
+            'error': 'Please accept the D.A.R.T. Terms of Use and Privacy Policy first.'
+        }, 403)
+
+    next_url = request.full_path.rstrip('?') if request.method == 'GET' else None
+    return redirect(url_for('accept_terms', next=next_url))
+
+
+@app.route('/accept-terms', methods=['GET', 'POST'])
+@login_required
+def accept_terms():
+    next_url = safe_next_url(request.values.get('next'))
+    if next_url and next_url.startswith('/accept-terms'):
+        next_url = None
+
+    if not needs_terms_acceptance(current_user):
+        return redirect(next_url or url_for(dashboard_endpoint_for(current_user)))
+
+    documents = terms_documents_for(current_user)
+    asks_personal = current_user.role in ('Athlete', 'Coach', 'Scout')
+    error = None
+    personal_choice = current_user.personal_visibility
+
+    if request.method == 'POST':
+        personal_choice = request.form.get('personal_visibility') or None
+        if asks_personal and personal_choice not in PERSONAL_VISIBILITY_CHOICES:
+            error = 'Please choose who can see your personal details.'
+        elif request.form.get('agree') != 'yes':
+            error = 'Please tick the box to confirm you have read and agree to the terms.'
+        else:
+            now = datetime.utcnow()
+            acceptance = TermsAcceptance.query.filter_by(
+                user_id=current_user.id, terms_version=TERMS_VERSION
+            ).first()
+
+            if acceptance is None:
+                acceptance = TermsAcceptance(user_id=current_user.id, terms_version=TERMS_VERSION)
+                db.session.add(acceptance)
+
+            acceptance.role = current_user.role or 'Athlete'
+            acceptance.full_name = current_user.full_name
+            acceptance.documents = ','.join(documents)
+            acceptance.accepted_at = now
+            acceptance.ip_address = get_client_ip()[:64]
+            acceptance.user_agent = (request.headers.get('User-Agent') or '')[:300]
+            acceptance.personal_visibility = personal_choice if asks_personal else None
+
+            current_user.terms_version = TERMS_VERSION
+            current_user.terms_accepted_at = now
+            if asks_personal:
+                current_user.personal_visibility = personal_choice
+
+            create_audit_log(
+                action='terms_accepted',
+                actor_user_id=current_user.id,
+                target_type='User',
+                target_id=str(current_user.id),
+                details={'terms_version': TERMS_VERSION, 'documents': documents,
+                         'personal_visibility': personal_choice if asks_personal else None}
+            )
+            db.session.commit()
+
+            return redirect(next_url or url_for(dashboard_endpoint_for(current_user)))
+
+    return render_template(
+        'accept_terms.html',
+        documents=[(key,) + TERMS_DOCUMENTS[key] for key in documents],
+        next_url=next_url,
+        error=error,
+        terms_version=TERMS_VERSION,
+        updated=LEGAL_UPDATED,
+        is_minor=(current_user.role == 'Athlete' and (athlete_age(current_user) or 99) < 18),
+        asks_personal=asks_personal,
+        personal_choice=personal_choice,
+        hide_celebration=True,
+    ), (400 if error else 200)
+
+
+def _terms_acceptance_query(role_filter, q):
+    query = TermsAcceptance.query
+    if role_filter in ('Athlete', 'Coach', 'Scout', 'Organization'):
+        query = query.filter(TermsAcceptance.role == role_filter)
+    if q:
+        query = query.filter(TermsAcceptance.full_name.ilike(f'%{q}%'))
+    return query.order_by(TermsAcceptance.accepted_at.desc())
+
+
+@app.route('/admin/terms-acceptances')
+@login_required
+def admin_terms_acceptances():
+    require_super_admin()
+
+    role_filter = request.args.get('role', '')
+    q = request.args.get('q', '').strip()[:100]
+
+    rows = _terms_acceptance_query(role_filter, q).limit(500).all()
+
+    summary = []
+    for role in ('Athlete', 'Coach', 'Scout', 'Organization'):
+        total = User.query.filter(User.role == role).count()
+        accepted = User.query.filter(User.role == role, User.terms_version == TERMS_VERSION).count()
+        summary.append({'role': role, 'total': total, 'accepted': accepted, 'waiting': total - accepted})
+
+    return render_template(
+        'admin_terms.html',
+        rows=rows,
+        summary=summary,
+        role_filter=role_filter,
+        q=q,
+        terms_version=TERMS_VERSION,
+    )
+
+
+@app.route('/admin/terms-acceptances.csv')
+@login_required
+def admin_terms_acceptances_csv():
+    require_super_admin()
+
+    rows = _terms_acceptance_query(request.args.get('role', ''), request.args.get('q', '').strip()[:100]).all()
+
+    def safe(value):
+        # Stop spreadsheet formula injection.
+        text = '' if value is None else str(value)
+        return "'" + text if text[:1] in ('=', '+', '-', '@') else text
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['User ID', 'Name', 'Role', 'Email', 'Terms version', 'Documents accepted',
+                     'Personal details shown to', 'Accepted at (UTC)', 'IP address', 'Device / browser'])
+    for row in rows:
+        writer.writerow([safe(v) for v in (
+            row.user_id, row.full_name, row.role, row.user.email if row.user else '',
+            row.terms_version, row.documents.replace(',', ', '),
+            PERSONAL_VISIBILITY_CHOICES.get(row.personal_visibility, ('-',))[0],
+            row.accepted_at.strftime('%Y-%m-%d %H:%M:%S'), row.ip_address, row.user_agent,
+        )])
+
+    response = make_response('﻿' + output.getvalue())
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    response.headers['Content-Disposition'] = f'attachment; filename="dart-terms-acceptances-{utc_today().isoformat()}.csv"'
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 # ==========================================================
@@ -5272,18 +5886,25 @@ def profile_share_path(user):
     return url_for('user_profile', user_id=user.id)
 
 
-def profile_card_info(user):
-    """Everything the card shows, as plain data (template + image + PDF)."""
+def profile_card_info(user, viewer=None):
+    """
+    Everything the card shows, as plain data (template + image + PDF).
+    viewer: who is looking (None = the public, e.g. the shared card image).
+    Personal details only appear if the user allows that viewer to see them.
+    """
     approved = SportRecord.query.filter_by(user_id=user.id, status='approved').all() if user.role == 'Athlete' else []
+    show = personal_visible(user, viewer)
+    nationality = (user.nationality or '') if show else ''
     info = {
         'id': user.id,
         'name': user.full_name,
         'role': user.role,
         'verified': bool(user.is_verified),
         'picture': user.profile_picture,
-        'nationality': user.nationality or '',
-        'flag': country_flag(user.nationality) if user.nationality else '',
-        'code': country_code(user.nationality) if user.nationality else '',
+        'personal_shown': show,
+        'nationality': nationality,
+        'flag': country_flag(nationality) if nationality else '',
+        'code': country_code(nationality) if nationality else '',
         'stats': [],
         'extra': [],
     }
@@ -5309,6 +5930,11 @@ def profile_card_info(user):
                 ('Age', f'{age} yrs' if age is not None else '—'),
                 ('Weight', f'{float(user.weight_kg):g} kg' if user.weight_kg else '—'),
                 ('Height', f'{float(user.height_cm):g} cm' if user.height_cm else '—'),
+            ] if show else [
+                # Personal details are private: sport facts instead.
+                ('Sport', ' · '.join(sports) or '—'),
+                ('Position', main_position or '—'),
+                ('Shirt', f'#{user.shirt_number}' if user.shirt_number else '—'),
             ],
             'extra': [('Team', user.school)] if user.school else [],
             'career': career_summary(public_records_for(user, current_user)),
@@ -5524,7 +6150,7 @@ def student_dashboard():
         current_year=current_year,
         registered_categories=registered_categories,
         allowed_competitions=athlete_allowed_competitions(current_user, current_year),
-        highlights=highlights_for(current_user.id)
+        highlights=highlights_for(current_user.id, include_unpublished=True)
     ))
 
     # PWA: let the service worker keep a copy of this page on the athlete's
@@ -6181,7 +6807,10 @@ def record_sync_status():
         'user_id': current_user.id,
         'can_submit_records': (
             current_user.role == 'Athlete' and bool(current_user.is_verified)
+            and not needs_terms_acceptance(current_user)
         ),
+        # Records saved on the device stay there until the terms are accepted.
+        'terms_required': needs_terms_acceptance(current_user),
         'csrf_token': generate_csrf()
     })
 
@@ -6283,6 +6912,9 @@ def resubmit_record(record_id):
         flash('Only rejected records can be resubmitted.', 'danger')
         return redirect(url_for('student_dashboard'))
 
+    # The reason goes; a fake-record strike stays on the account.
+    record.rejection_reason = None
+    record.rejection_note = None
     record.status = 'pending'
     db.session.commit()
     flash('Record resubmitted successfully. Waiting for coach approval.', 'success')
@@ -7412,7 +8044,7 @@ def profile():
     pinned_records=pinned_records,
     approved_records=approved_records,
     recruitment_highlights=recruitment_highlights,
-    highlights=highlights_for(current_user.id) if current_user.role == 'Athlete' else [],
+    highlights=highlights_for(current_user.id, include_unpublished=True) if current_user.role == 'Athlete' else [],
     listed_by=organizations_listing(current_user) if current_user.role == 'Athlete' else []
 )
 
@@ -7498,7 +8130,7 @@ def render_user_profile(user):
     premium_profile=premium_profile,
     pinned_records=pinned_records,
     recruitment_highlights=recruitment_highlights,
-    highlights=highlights_for(user.id) if user.role == 'Athlete' else [],
+    highlights=highlights_for(user.id, include_unpublished=(current_user.is_authenticated and (current_user.id == user.id or current_user.role == "System"))) if user.role == 'Athlete' else [],
     public_records=public_records,
     career=career_summary(public_records),
     seo=athlete_seo(user, public_records) if user.role == 'Athlete' else None,
@@ -7679,6 +8311,14 @@ def update_profile():
     current_user.preferred_foot = (
         new_preferred_foot or None
     )
+
+    # ---------- WHO SEES MY PERSONAL DETAILS ----------
+    if current_user.role in ('Athlete', 'Coach', 'Scout') and 'personal_visibility' in request.form:
+        choice = request.form.get('personal_visibility', '')
+        if choice not in PERSONAL_VISIBILITY_CHOICES:
+            flash('Invalid personal details choice.', 'danger')
+            return redirect(url_for('profile'))
+        current_user.personal_visibility = choice
 
     # ---------- GOOGLE LISTING (athletes) ----------
     if current_user.role == 'Athlete' and 'search_visibility' in request.form:
@@ -7864,6 +8504,29 @@ def update_profile():
                 flash('The uploaded image is not a valid JPEG file.', 'danger')
                 return redirect(url_for('profile'))
 
+            # ---------- Content safety (see moderation.py) ----------
+            if current_user.media_blocked:
+                flash(MEDIA_BLOCKED_MESSAGE, 'danger')
+                return redirect(url_for('profile'))
+
+            file.stream.seek(0)
+            raw_picture = file.read()
+            file.stream.seek(0)
+            try:
+                small_picture = moderation.prepare_image(raw_picture)
+            except ValueError:
+                flash('The uploaded profile picture is not a valid image.', 'danger')
+                return redirect(url_for('profile'))
+
+            if moderation.enabled():
+                check = moderation.check_images([small_picture], 'profile')
+                if check['decision'] == 'reject':
+                    blocked = record_media_violation(current_user, check['flags'], 'profile_picture_ai', check['summary'])
+                    db.session.commit()
+                    flash('Profile picture not accepted: ' + check['reason']
+                          + (' ' + MEDIA_BLOCKED_MESSAGE if blocked else ''), 'danger')
+                    return redirect(url_for('profile'))
+
             filename = secure_filename(file.filename)
             old_profile_picture_path = current_user.profile_picture
             storage_path = f"profiles/{current_user.id}_{uuid.uuid4().hex}_{filename}"
@@ -7963,10 +8626,10 @@ def delete_account():
     profile_picture_path = current_user.profile_picture
     id_document_path = current_user.id_document
     user_id = current_user.id
-    highlight_paths = [
-        h.storage_path
-        for h in AthleteHighlight.query.filter_by(user_id=user_id).all()
-    ]
+    highlight_files = {}
+    for h in AthleteHighlight.query.filter(AthleteHighlight.user_id == user_id,
+                                           AthleteHighlight.status != 'rejected').all():
+        highlight_files.setdefault(h.storage_bucket or HIGHLIGHTS_BUCKET, []).append(h.storage_path)
 
     # Remove associated Storage objects before deleting database data.
     # If Storage reports an error, keep the account intact.
@@ -7977,8 +8640,8 @@ def delete_account():
         if id_document_path:
             supabase.storage.from_('id-documents').remove([id_document_path])
 
-        if highlight_paths:
-            supabase.storage.from_(HIGHLIGHTS_BUCKET).remove(highlight_paths)
+        for bucket, paths in highlight_files.items():
+            supabase.storage.from_(bucket).remove(paths)
 
     except Exception as e:
         print('ACCOUNT STORAGE DELETION ERROR:', e)
@@ -8047,6 +8710,68 @@ def verify_user(user_id):
     return redirect(url_for('admin_dashboard'))
 
 
+# ---------- Why a coach rejected a record ----------
+# Coaches must choose a reason. The athlete sees it with a warning to upload
+# only facts. FAKE records count against the athlete's account (even if they
+# delete the record): 1st = warning, 2nd = final warning, 3rd = suspended.
+RECORD_REJECT_REASONS = {
+    'fake': (
+        'Fake record',
+        "The game or stats didn't happen. 1st time: warning. "
+        "After 2 more, the athlete's account is suspended.",
+    ),
+    'inaccurate': (
+        'Inaccurate record',
+        'Real game, wrong details. Warning only: the athlete corrects and resubmits it.',
+    ),
+    'mistake': (
+        "Mistakenly rejected (coach's error)",
+        'Undo a rejection: the record goes back to Pending and any warning it caused is removed.',
+    ),
+}
+FAKE_RECORD_SUSPEND_AT = 3
+FAKE_RECORD_SUSPENSION_REASON = 'Suspended after 3 records were rejected as fake by coaches.'
+
+app.jinja_env.globals.update(
+    record_reject_reasons=RECORD_REJECT_REASONS,
+    fake_record_suspend_at=FAKE_RECORD_SUSPEND_AT,
+)
+
+
+def add_fake_record_strike(athlete, record):
+    """Count a fake record; returns 'warning', 'final_warning' or 'suspended'. Caller commits."""
+    athlete.fake_record_strikes = (athlete.fake_record_strikes or 0) + 1
+    if athlete.fake_record_strikes >= FAKE_RECORD_SUSPEND_AT:
+        if not athlete.is_suspended:
+            athlete.is_suspended = True
+            athlete.suspended_at = datetime.utcnow()
+            athlete.suspension_reason = FAKE_RECORD_SUSPENSION_REASON
+            create_audit_log(
+                action='account_suspended',
+                actor_user_id=current_user.id if current_user.is_authenticated else None,
+                target_type='User', target_id=str(athlete.id),
+                details={'reason': 'fake_records', 'fake_strikes': athlete.fake_record_strikes,
+                         'last_record_id': record.id}
+            )
+        return 'suspended'
+    return 'final_warning' if athlete.fake_record_strikes == FAKE_RECORD_SUSPEND_AT - 1 else 'warning'
+
+
+def remove_fake_record_strike(athlete):
+    """
+    Take back a fake-record strike (coach's error). Lifts a suspension that
+    came from fake records once below the limit. Returns True if lifted.
+    """
+    athlete.fake_record_strikes = max(0, (athlete.fake_record_strikes or 0) - 1)
+    if (athlete.is_suspended and athlete.suspension_reason == FAKE_RECORD_SUSPENSION_REASON
+            and athlete.fake_record_strikes < FAKE_RECORD_SUSPEND_AT):
+        athlete.is_suspended = False
+        athlete.suspended_at = None
+        athlete.suspension_reason = None
+        return True
+    return False
+
+
 @app.route('/approve_record/<int:record_id>', methods=['POST'])
 @login_required
 def approve_record(record_id):
@@ -8112,10 +8837,97 @@ def reject_record(record_id):
             flash("Approved records can't be rejected.", 'warning')
             return redirect(url_for('admin_dashboard'))
 
+    if record.status == 'rejected':
+        flash('This record is already rejected.', 'info')
+        return redirect(url_for('admin_dashboard'))
+
+    reason = request.form.get('reason', '')
+    if reason not in ('fake', 'inaccurate'):
+        flash('Choose why you are rejecting this record: Fake record or Inaccurate record.', 'warning')
+        return redirect(url_for('admin_dashboard'))
+
     record.status = 'rejected'
+    record.rejection_reason = reason
+    record.rejection_note = (request.form.get('note') or '').strip()[:200] or None
+    record.rejected_by = current_user.id
+    record.rejected_at = datetime.utcnow()
+
+    athlete = db.session.get(User, record.user_id)
+    outcome = None
+    if reason == 'fake' and athlete:
+        outcome = add_fake_record_strike(athlete, record)
+
+    create_audit_log(
+        action='record_rejected',
+        actor_user_id=current_user.id,
+        target_type='sport_record',
+        target_id=str(record.id),
+        details={'athlete_id': record.user_id, 'reason': reason, 'note': record.rejection_note,
+                 'fake_strikes': athlete.fake_record_strikes if athlete else None, 'outcome': outcome}
+    )
     db.session.commit()
 
-    flash('Record rejected.', 'info')
+    if outcome == 'suspended':
+        flash(f"Record rejected as fake. This is {athlete.full_name}'s "
+              f"{FAKE_RECORD_SUSPEND_AT}rd fake record: their account is now suspended.", 'warning')
+    elif reason == 'fake':
+        flash(f'Record rejected as fake. {athlete.full_name} has been warned '
+              f'({athlete.fake_record_strikes} of {FAKE_RECORD_SUSPEND_AT}).', 'info')
+    else:
+        flash('Record rejected as inaccurate. The athlete has been asked to correct it.', 'info')
+    return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/records/<int:record_id>/rejection-mistake', methods=['POST'])
+@login_required
+def record_rejection_mistake(record_id):
+    """
+    "Mistakenly rejected (coach's error)": the record goes back to pending,
+    and any warning / fake-record strike it caused is taken back (lifting
+    a suspension it caused).
+    """
+    if current_user.role not in ('Coach', 'System'):
+        return redirect(url_for('index'))
+
+    record = SportRecord.query.get_or_404(record_id)
+
+    if current_user.role != 'System':
+        if current_user.school.strip().casefold() != (record.team or '').strip().casefold():
+            flash('You can only manage records from your own school/team.', 'danger')
+            return redirect(url_for('admin_dashboard'))
+        if not coach_can_manage_competition(current_user.coach_category, record.competition_category):
+            flash('You are not authorized to manage records from this competition category.', 'danger')
+            return redirect(url_for('admin_dashboard'))
+
+    if record.status != 'rejected':
+        flash('Only rejected records can be marked as mistakenly rejected.', 'warning')
+        return redirect(url_for('admin_dashboard'))
+
+    athlete = db.session.get(User, record.user_id)
+    previous = record.rejection_reason
+    lifted = False
+    if previous == 'fake' and athlete:
+        lifted = remove_fake_record_strike(athlete)
+
+    record.status = 'pending'
+    record.rejection_reason = None
+    record.rejection_note = None
+    record.rejected_by = None
+    record.rejected_at = None
+
+    create_audit_log(
+        action='record_rejection_mistake',
+        actor_user_id=current_user.id,
+        target_type='sport_record',
+        target_id=str(record.id),
+        details={'athlete_id': record.user_id, 'previous_reason': previous,
+                 'fake_strikes': athlete.fake_record_strikes if athlete else None, 'suspension_lifted': lifted}
+    )
+    db.session.commit()
+
+    flash('Marked as mistakenly rejected: the record is back in Pending'
+          + (', the warning was removed' if previous == 'fake' else '')
+          + (' and the suspension was lifted' if lifted else '') + '.', 'success')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/reject_user/<int:user_id>', methods=['POST'])

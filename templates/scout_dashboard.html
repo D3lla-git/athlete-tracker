@@ -628,10 +628,10 @@
                 {{ avatar(row.athlete, 'sm') }}
                 <div class="sd-person">
                   <a href="{{ url_for('user_profile', user_id=row.athlete.id) }}">{{ row.athlete.full_name }}</a>
-                  {% if row.athlete.nationality %}<span class="ms-1">{{ country_flag(row.athlete.nationality) }}</span>{% endif %}
+                  {% if row.athlete.nationality and show_personal(row.athlete) %}<span class="ms-1">{{ country_flag(row.athlete.nationality) }}</span>{% endif %}
                   <div class="sd-sub">
                     <i class="fa-solid fa-school"></i> {{ row.athlete.school }}
-                    {% if row.athlete.age %} · {{ row.athlete.age }} yrs{% endif %}
+                    {% if row.athlete.age and show_personal(row.athlete) %} · {{ row.athlete.age }} yrs{% endif %}
                     · {{ row.games }} game{{ 's' if row.games != 1 }}
                   </div>
                 </div>
@@ -778,7 +778,7 @@
           {{ avatar(row.athlete, 'sm') }}
           <div class="sd-person">
             <a href="{{ url_for('user_profile', user_id=row.athlete.id) }}">{{ row.athlete.full_name }}</a>
-            <div class="sd-sub">{{ row.athlete.age }} yrs · {{ row.games }} game{{ 's' if row.games != 1 }}</div>
+            <div class="sd-sub">{% if row.athlete.age and show_personal(row.athlete) %}{{ row.athlete.age }} yrs · {% endif %}{{ row.games }} game{{ 's' if row.games != 1 }}</div>
           </div>
           <div class="sd-metric">
             <strong>{{ row.awards }}</strong>
@@ -825,13 +825,19 @@
 {% include '_ad_slot.html' %}
 
 <style>
+  /* Preview and card share one grid cell, so the section always grows to
+     fit the card (an absolutely positioned card got cut off on phones). */
   .sd-locked {
     position: relative;
+    display: grid;
     margin-top: 6px;
     border-radius: 22px;
     overflow: hidden;
     border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
   }
+
+  .sd-locked > .sd-locked-preview,
+  .sd-locked > .sd-locked-card { grid-area: 1 / 1; }
 
   .sd-locked-preview {
     display: grid;
@@ -852,11 +858,11 @@
   }
 
   .sd-locked-card {
-    position: absolute;
-    inset: 0;
-    margin: auto;
+    position: relative;
+    align-self: center;
+    justify-self: center;
+    margin: 18px 0;
     width: min(460px, calc(100% - 32px));
-    height: fit-content;
     padding: 26px 22px;
     text-align: center;
     color: #fff;
@@ -891,6 +897,11 @@
   @media (max-width: 767.98px) {
     .sd-locked-preview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .sd-locked-tile { height: 90px; }
+    .sd-locked-card { width: calc(100% - 24px); padding: 22px 16px; }
+    .sd-locked-card h2 { font-size: 1.15rem; }
+    .sd-locked-price { font-size: 1.55rem; }
+    .sd-locked-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; max-width: 100%; white-space: normal; }
+    .sd-locked-methods { line-height: 1.5; }
   }
 </style>
 {% endif %}

@@ -28,7 +28,7 @@
           </h1>
           <div class="rs-sub">
             {{ record.team or athlete.school }}
-            {% if athlete.nationality %} · {{ country_flag(athlete.nationality) }} {{ athlete.nationality }}{% endif %}
+            {% if athlete.nationality and show_personal(athlete) %} · {{ country_flag(athlete.nationality) }} {{ athlete.nationality }}{% endif %}
             {% if record.position %} · {{ record.position }}{% endif %}
           </div>
         </div>

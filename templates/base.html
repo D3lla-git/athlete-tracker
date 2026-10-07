@@ -190,6 +190,39 @@
   margin: 0 2px;
 }
 
+/* Icon always beside its label (never wrapped underneath), with badges
+   (unread, awaiting) on the same line too. */
+nav.navbar .navbar-nav .nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  white-space: nowrap;
+}
+
+nav.navbar .navbar-nav .nav-link > i,
+nav.navbar .navbar-nav .nav-link > .badge {
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+nav.navbar .navbar-nav .nav-link > .badge { margin-left: 0 !important; }
+
+/* Personal details the user keeps private. */
+.rt-chip-private { font-style: italic; opacity: 0.85; }
+
+/* Super Admin "Review" menu: icon, label, waiting count in one row. */
+.dart-review-menu .dropdown-item { display: flex; align-items: center; gap: 10px; }
+.dart-review-menu .dropdown-item i { width: 18px; text-align: center; color: #198754; }
+.dart-review-menu .dropdown-item .badge { margin-left: auto; }
+
+/* Laptops: a little tighter so a full menu still fits on one row. */
+@media (min-width: 992px) and (max-width: 1399.98px) {
+  nav.navbar .navbar-nav .nav-link {
+    padding: 8px 9px !important;
+    font-size: 0.95rem;
+  }
+}
+
 .navbar-nav .nav-link:hover {
     background:
         radial-gradient(
@@ -363,6 +396,33 @@ html[data-theme="dark"] .record-card a {
 .dart-btn:disabled {
   filter: grayscale(0.4);
   transform: none;
+}
+
+/* Premium (crown) buttons and labels: crown and text stay centred on one
+   line, and the text shrinks on narrow phones instead of breaking apart. */
+.btn:has(> .fa-crown),
+.premium-chip,
+.hl-premium-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45em;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.btn:has(> .fa-crown) > .fa-crown {
+  margin: 0 !important;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+@media (max-width: 400px) {
+  .btn:has(> .fa-crown) {
+    font-size: clamp(0.8rem, 3.9vw, 0.95rem);
+    padding-left: 14px;
+    padding-right: 14px;
+  }
 }
 
 /* Small headings / status labels (Approved, Verified Athlete, ...). */
@@ -1140,6 +1200,29 @@ html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item):not(.dart
 .theme-toggle .theme-label,
 .pwa-install-btn .pwa-install-label {
   font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+/* Never squeezed by a long menu. */
+.theme-toggle,
+.pwa-install-btn {
+  flex-shrink: 0;
+}
+
+/* Super Admin / Scout bar between 992px and 1199px (hamburger menu there): keep
+   the Light / Install buttons beside the logo, menu button on the right. */
+@media (min-width: 992px) and (max-width: 1199.98px) {
+  nav.dart-nav-wide > .container { justify-content: flex-start; }
+  nav.dart-nav-wide .navbar-brand { margin-right: 18px; }
+  nav.dart-nav-wide .navbar-toggler { margin-left: auto; }
+  nav.dart-nav-wide .navbar-collapse .navbar-nav { padding-top: 6px; }
+}
+
+/* Super Admin / Scout bar on smaller laptops: icon-only Light / Install
+   buttons so all their links fit on one row (title + aria-label still name them). */
+@media (min-width: 1200px) and (max-width: 1365.98px) {
+  nav.dart-nav-wide .theme-label,
+  nav.dart-nav-wide .pwa-install-label { display: none !important; }
 }
 
 /* ===== PWA INSTALL BUTTON ===== */
@@ -1497,7 +1580,9 @@ html[data-theme="light"] .dart-tabbar {
 
 <body class="bg-light {% block body_class %}{% endblock %}">
   <!-- ========== NAVBAR ========== -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+  {# Super Admin and Scout menus have the most links: they open out from
+     1200px and use the hamburger menu below that, so nothing gets squeezed. #}
+  <nav class="navbar {{ 'navbar-expand-xl dart-nav-wide' if current_user.is_authenticated and current_user.role in ('System', 'Scout') else 'navbar-expand-lg' }} navbar-dark bg-dark sticky-top">
     <div class="container">
       <!-- Brand -->
  <a class="navbar-brand fw-bold d-flex align-items-center"
@@ -1589,17 +1674,26 @@ html[data-theme="light"] .dart-tabbar {
               </li>
             {% endif %}
             {% if current_user.role == 'System' %}
-              <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('admin_payments') }}" style="color: white;">
-                  Payments <i class="fa-solid fa-money-check-dollar"></i>
-                  {% if payments_awaiting %}<span class="badge bg-warning text-dark ms-1">{{ payments_awaiting }}</span>{% endif %}
+              {% set review_total = (payments_awaiting or 0) + (organizations_awaiting or 0) + (media_awaiting or 0) %}
+              <li class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle" href="#" id="reviewDropdown" role="button"
+                   data-bs-toggle="dropdown" aria-expanded="false" style="color: white;">
+                  Review <i class="fa-solid fa-list-check"></i>
+                  {% if review_total %}<span class="badge bg-warning text-dark">{{ review_total }}</span>{% endif %}
                 </a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('admin_organizations') }}" style="color: white;">
-                  Organizations <i class="fa-solid fa-building-shield"></i>
-                  {% if organizations_awaiting %}<span class="badge bg-warning text-dark ms-1">{{ organizations_awaiting }}</span>{% endif %}
-                </a>
+                <ul class="dropdown-menu dropdown-menu-end dart-review-menu" aria-labelledby="reviewDropdown">
+                  <li><a class="dropdown-item" href="{{ url_for('admin_highlights') }}">
+                    <i class="fa-solid fa-photo-film"></i> Media review
+                    {% if media_awaiting %}<span class="badge bg-warning text-dark">{{ media_awaiting }}</span>{% endif %}</a></li>
+                  <li><a class="dropdown-item" href="{{ url_for('admin_payments') }}">
+                    <i class="fa-solid fa-money-check-dollar"></i> Payments
+                    {% if payments_awaiting %}<span class="badge bg-warning text-dark">{{ payments_awaiting }}</span>{% endif %}</a></li>
+                  <li><a class="dropdown-item" href="{{ url_for('admin_organizations') }}">
+                    <i class="fa-solid fa-building-shield"></i> Organizations
+                    {% if organizations_awaiting %}<span class="badge bg-warning text-dark">{{ organizations_awaiting }}</span>{% endif %}</a></li>
+                  <li><a class="dropdown-item" href="{{ url_for('admin_terms_acceptances') }}">
+                    <i class="fa-solid fa-file-signature"></i> Agreements</a></li>
+                </ul>
               </li>
             {% endif %}
 
@@ -2328,7 +2422,7 @@ html[data-theme="light"] .dart-tabbar {
     })();
   </script>
 
-  {% include '_celebration.html' %}
+  {% if not hide_celebration %}{% include '_celebration.html' %}{% endif %}
 
   {% from '_share.html' import share_modal %}
   {{ share_modal() }}

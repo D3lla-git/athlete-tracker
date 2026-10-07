@@ -341,7 +341,7 @@
                   {{ other_user.role }}
                 </span>
 
-                {% if other_user.nationality %}
+                {% if other_user.nationality and show_personal(other_user) %}
                   <span class="ms-1">
                     {{ country_flag(other_user.nationality) }}
                   </span>

@@ -115,7 +115,7 @@
           </div>
         {% endif %}
 
-        {% if user.nationality %}
+        {% if user.nationality and show_personal(user) %}
           <div class="col-md-4">
             <strong>Nationality</strong>
             <div>
@@ -125,28 +125,28 @@
           </div>
         {% endif %}
 
-        {% if user.age %}
+        {% if user.age and show_personal(user) %}
           <div class="col-md-4">
             <strong>Age</strong>
             <div>{{ user.age }}</div>
           </div>
         {% endif %}
 
-        {% if user.height_cm %}
+        {% if user.height_cm and show_personal(user) %}
           <div class="col-md-4">
             <strong>Height</strong>
             <div>{{ user.height_cm }} cm</div>
           </div>
         {% endif %}
 
-        {% if user.weight_kg %}
+        {% if user.weight_kg and show_personal(user) %}
           <div class="col-md-4">
             <strong>Weight</strong>
             <div>{{ user.weight_kg }} kg</div>
           </div>
         {% endif %}
 
-        {% if user.preferred_foot %}
+        {% if user.preferred_foot and show_personal(user) %}
           <div class="col-md-4">
             <strong>Preferred Foot</strong>
             <div>{{ user.preferred_foot }}</div>
