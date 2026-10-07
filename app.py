@@ -5725,6 +5725,7 @@ def game_date_future_error(game_date):
 
 app.jinja_env.globals['today_iso'] = lambda: utc_today().isoformat()
 app.jinja_env.globals.update(athlete_categories=ATHLETE_CATEGORIES, coach_categories=COACH_CATEGORIES)
+app.jinja_env.globals['athlete_allowed_competitions'] = lambda user: athlete_allowed_competitions(user)
 
 
 SHIRT_NUMBER_PATTERN = re.compile(r'^\d{1,2}$')

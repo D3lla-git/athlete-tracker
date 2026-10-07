@@ -236,6 +236,14 @@
   .pc-brand-name span { color: #4cd38a; }
   .pc-brand-tag { margin-top: 4px; font-size: 0.72rem; letter-spacing: 0.32em; text-transform: uppercase; color: #cfe9da; }
 
+  /* Wider screens: the bottom row uses the same 3 columns as the stats,
+     with the D.A.R.T. mark in the last column. */
+  @media (min-width: 576px) {
+    .pc-bottom { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
+    .pc-facts { display: contents; }
+    .pc-brand { grid-column: 3; justify-self: end; }
+  }
+
   .pc-career-title { margin: 6px 0 16px; font-size: 1.3rem; font-weight: 800; }
   .pc-career-grid { display: grid; gap: 12px; }
   .pc-career-item { padding: 12px 14px; border-radius: 16px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); }

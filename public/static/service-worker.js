@@ -1,6 +1,6 @@
 // Bump this version whenever PRECACHE_URLS or caching behaviour changes.
 // Old 'dart-pwa-*' caches are deleted on activate.
-const CACHE_NAME = 'dart-pwa-v5';
+const CACHE_NAME = 'dart-pwa-v6';
 
 // Pages saved for offline use (the athlete dashboard). This name is
 // deliberately NOT versioned, so a service-worker update does not wipe an

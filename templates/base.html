@@ -2342,6 +2342,14 @@ html[data-theme="light"] .dart-tabbar {
     {{ {'user_id': current_user.id, 'can_submit_records': true if current_user.is_verified else false}|tojson }}
   </script>
   <script src="{{ url_for('static', filename='js/offline-records.js') }}" defer></script>
+  {% if current_user.is_verified %}
+  <!-- Remembered on this device by pwa.js so the offline page can offer
+       this athlete's record form (their categories only) with no internet. -->
+  <script id="dartOfflineAthlete" type="application/json">
+    {{ {'user_id': current_user.id, 'name': current_user.full_name, 'shirt_number': current_user.shirt_number or '',
+        'competitions': athlete_allowed_competitions(current_user), 'today': today_iso()} | tojson }}
+  </script>
+  {% endif %}
   {% endif %}
 </body>
 </html>

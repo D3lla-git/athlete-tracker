@@ -87,7 +87,7 @@ class _RecordPDF(FPDF):
         self.cell(
             0, 5,
             pdf_text('D.A.R.T. (D3ll Athlete Records Tracker) - official records, approved by coaches. '
-                     'Scan the QR code or open the link to verify this record online.'),
+                     'Scan the QR code or open the link to check it online.'),
             align='C'
         )
 

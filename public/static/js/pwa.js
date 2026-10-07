@@ -214,10 +214,28 @@
 
     var PAGES_CACHE = 'dart-pages-v1';
     var OWNER_STORAGE_KEY = 'dartOfflinePagesOwner';
+    // The verified athlete whose record form the offline page may show
+    // (offline.html reads it). Same lifetime as the saved pages.
+    var OFFLINE_ATHLETE_KEY = 'dartOfflineAthlete';
+
+    function rememberOfflineAthlete() {
+        var element = document.getElementById('dartOfflineAthlete');
+        var currentUser = (document.querySelector('meta[name="dart-user"]') || {}).content || '';
+
+        try {
+            if (element) {
+                window.localStorage.setItem(OFFLINE_ATHLETE_KEY, element.textContent.trim());
+            } else if (currentUser) {
+                // Signed in as someone who can't record games: forget it.
+                window.localStorage.removeItem(OFFLINE_ATHLETE_KEY);
+            }
+        } catch (e) {}
+    }
 
     function clearOfflinePages() {
         try {
             window.localStorage.removeItem(OWNER_STORAGE_KEY);
+            window.localStorage.removeItem(OFFLINE_ATHLETE_KEY);
         } catch (e) {}
 
         if (!('caches' in window)) {
@@ -264,6 +282,7 @@
     function onReady() {
         setUpInstallButton();
         protectOfflinePages();
+        rememberOfflineAthlete();
     }
 
     if (document.readyState === 'loading') {

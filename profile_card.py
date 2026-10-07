@@ -43,7 +43,19 @@ def _font(size, bold=False):
     return font
 
 
+# Characters the built-in font can't draw -> plain equivalents.
+_SAFE = {'—': '-', '–': '-', '’': "'", '‘': "'", '“': '"', '”': '"'}
+
+
+def _clean(text):
+    text = str(text)
+    for bad, good in _SAFE.items():
+        text = text.replace(bad, good)
+    return text
+
+
 def _text(draw, xy, text, size, fill, bold=False, spacing=0, anchor='la'):
+    text = _clean(text)
     font = _font(size)
     stroke = max(1, size // 28) if bold else 0
     if spacing:
@@ -57,6 +69,7 @@ def _text(draw, xy, text, size, fill, bold=False, spacing=0, anchor='la'):
 
 
 def _fit(draw, text, max_width, size, min_size=26):
+    text = _clean(text)
     while size > min_size and draw.textlength(text, font=_font(size)) > max_width:
         size -= 2
     while draw.textlength(text, font=_font(size)) > max_width and len(text) > 4:

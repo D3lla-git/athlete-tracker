@@ -422,6 +422,7 @@ def form_rules():
         'teamLabels': dict(COMPETITION_TEAM_LABELS),
         'detailFields': dict(DETAIL_FIELDS),
         'ageGroups': list(AGE_GROUPS),
+        'clubDivisions': list(CLUB_DIVISIONS),
     }
 
 
