@@ -1,6 +1,6 @@
 // Bump this version whenever PRECACHE_URLS or caching behaviour changes.
 // Old 'dart-pwa-*' caches are deleted on activate.
-const CACHE_NAME = 'dart-pwa-v4';
+const CACHE_NAME = 'dart-pwa-v5';
 
 // Pages saved for offline use (the athlete dashboard). This name is
 // deliberately NOT versioned, so a service-worker update does not wipe an
@@ -16,13 +16,21 @@ const OFFLINE_URL = '/offline';
 const PRECACHE_URLS = [
     OFFLINE_URL,
     '/static/images/dartlogo.png',
-    '/static/images/icons/favicon-32.png'
+    '/static/images/icons/favicon-32.png',
+    // Needed by the saved record form when there's no internet.
+    '/static/js/pwa.js',
+    '/static/js/offline-records.js'
 ];
+
+// The offline page is re-downloaded in the background at most this often
+// while online, so changes to it reach devices without a new worker.
+const OFFLINE_PAGE_REFRESH_MS = 60 * 60 * 1000;
+let lastOfflinePageRefresh = 0;
 
 // Pages that may be stored on the device. The server must also opt in
 // per response with the X-DART-Offline-Cacheable header (only verified
 // athletes get it), so other roles' pages are never stored.
-const OFFLINE_CACHEABLE_PAGES = ['/student'];
+const OFFLINE_CACHEABLE_PAGES = ['/student', '/student/record'];
 
 // CDN hosts whose URLs include a version number, so cache-first is safe.
 const CDN_HOSTS = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com'];
@@ -96,6 +104,46 @@ async function storeOfflinePage(pathname, response) {
     );
 }
 
+// Keep the offline page up to date (it is otherwise only stored at install).
+async function refreshOfflinePage() {
+    if (Date.now() - lastOfflinePageRefresh < OFFLINE_PAGE_REFRESH_MS) {
+        return;
+    }
+
+    lastOfflinePageRefresh = Date.now();
+
+    const response = await fetch(OFFLINE_URL, { cache: 'reload' });
+
+    if (response.ok) {
+        const cache = await caches.open(CACHE_NAME);
+        await cache.put(OFFLINE_URL, response);
+    }
+}
+
+// Save the athlete's offline pages (record form + dashboard) in the
+// background, so they work offline even if the athlete never opened them.
+// The server decides per response whether a page may be stored.
+async function saveOfflinePages() {
+    await Promise.all(OFFLINE_CACHEABLE_PAGES.map(async pathname => {
+        try {
+            const response = await fetch(pathname, {
+                credentials: 'same-origin',
+                cache: 'no-store',
+                redirect: 'follow'
+            });
+            await storeOfflinePage(pathname, response);
+        } catch (error) {
+            // Offline right now; the pages already saved stay as they are.
+        }
+    }));
+}
+
+self.addEventListener('message', event => {
+    if (event.data && event.data.type === 'dart-save-offline-pages') {
+        event.waitUntil(saveOfflinePages());
+    }
+});
+
 self.addEventListener('fetch', event => {
     const request = event.request;
 
@@ -163,6 +211,8 @@ self.addEventListener('fetch', event => {
                                 .catch(() => {})
                         );
                     }
+
+                    event.waitUntil(refreshOfflinePage().catch(() => {}));
 
                     return response;
                 } catch (error) {

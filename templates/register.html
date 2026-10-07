@@ -16,22 +16,8 @@
         <p class="reg-tagline">Build your Sport(s) CV with <strong><span style="color: darkgreen;">D</span>.A.R.T!</strong></p>
       </div>
       <div class="card-body">
-      <div class="mb-3">
-        <div class="dropdown">
-          <button class="btn dropdown-toggle w-100 category-dropdown-btn dart-btn" type="button"
-        data-bs-toggle="dropdown" aria-expanded="false">
-  {{ selected_category or 'All Athlete' }} — Choose Athlete Category
-</button>
-          <ul class="dropdown-menu w-100">
-            <li><a class="dropdown-item" href="{{ url_for('register', registration_category='all-athlete') }}">All Athlete</a></li>
-            <li><a class="dropdown-item" href="{{ url_for('register', registration_category='county-meet') }}">County Meet Athlete</a></li>
-            <li><a class="dropdown-item" href="{{ url_for('register', registration_category='club-league') }}">Club League Athlete</a></li>
-            <li><a class="dropdown-item" href="{{ url_for('register', registration_category='university') }}">University Athlete</a></li>
-            <li><a class="dropdown-item" href="{{ url_for('register', registration_category='community-league') }}">Community/Area League Athlete</a></li>
-            <li><a class="dropdown-item" href="{{ url_for('register', registration_category='high-school') }}">High School Athlete</a></li>
-          </ul>
-        </div>
-      </div>
+      {% from '_category_picker.html' import category_picker %}
+      {{ category_picker(athlete_categories, selected_category or 'All Athlete', 'register', 'Athlete') }}
  
 {% include '_google_signup_notice.html' %}
 {% if not google_signup %}

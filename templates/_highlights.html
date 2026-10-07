@@ -10,7 +10,10 @@
     <div>
       <h5 class="mb-1" id="highlightsTitle">
         <i class="fa-solid fa-clapperboard"></i> Highlights
-        {% if can_manage %}<span class="hl-free-badge">Free</span>{% endif %}
+        {% if can_manage %}
+          {% if my_plan %}<span class="hl-free-badge hl-premium-badge"><i class="fa-solid fa-crown"></i> Premium</span>
+          {% else %}<span class="hl-free-badge">Free</span>{% endif %}
+        {% endif %}
       </h5>
       <div class="hl-subtitle">
         {% if can_manage %}
@@ -21,22 +24,43 @@
       </div>
     </div>
     <span class="hl-count" title="Highlights">
-      <i class="fa-solid fa-photo-film"></i> {{ highlights | length }}{% if can_manage %}/{{ highlight_limit }}{% endif %}
+      <i class="fa-solid fa-photo-film"></i> {{ highlights | length }}
     </span>
   </div>
 
   <div class="card-body">
 
     {% if can_manage %}
+      {% set usage = upload_usage() %}
+      {% set photo_row, video_row = usage.rows[1], usage.rows[2] %}
+      {% if current_user.is_verified %}
+        <div class="hl-usage" aria-label="Uploads this month">
+          {% for row in [photo_row, video_row] %}
+            <span class="hl-usage-item">
+              <i class="fa-solid {{ 'fa-image' if loop.first else 'fa-video' }}"></i>
+              {{ row.label }} this month:
+              <strong>{% if row.limit is none or not usage.active %}Unlimited{% else %}{{ row.used }}/{{ row.limit }}{% endif %}</strong>
+            </span>
+          {% endfor %}
+          {% if not usage.active %}
+            <span class="hl-usage-note">Monthly limits start {{ usage.starts.strftime('%B %d, %Y') }}.</span>
+          {% elif not my_plan %}
+            <a href="{{ url_for('pricing') }}" class="hl-usage-upgrade"><i class="fa-solid fa-crown"></i> Upgrade for more</a>
+          {% endif %}
+        </div>
+      {% endif %}
+
       {% if not current_user.is_verified %}
         <div class="hl-notice">
           <i class="fa-solid fa-lock"></i>
           Highlights unlock once your account is verified by a coach.
         </div>
-      {% elif highlights | length >= highlight_limit %}
+      {% elif usage.active and photo_row.limit is not none and photo_row.used >= photo_row.limit
+             and video_row.limit is not none and video_row.used >= video_row.limit %}
         <div class="hl-notice">
           <i class="fa-solid fa-circle-info"></i>
-          You have {{ highlight_limit }} highlights, the maximum. Delete one to add another.
+          You've used this month's photo and video uploads. They reset on {{ usage.resets.strftime('%B %d') }}.
+          {% if not my_plan %}<a href="{{ url_for('pricing') }}">Upgrade to Premium</a> for more.{% endif %}
         </div>
       {% else %}
         {# ---------- Uploader ---------- #}
@@ -180,6 +204,22 @@
     color: #ffffff;
     background: linear-gradient(135deg, #198754, #39b972);
   }
+
+  .hl-premium-badge { color: #3d2c00; background: linear-gradient(135deg, #f5c542, #ffd96b); }
+
+  .hl-usage {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    margin-bottom: 14px;
+    font-size: 0.85rem;
+  }
+
+  .hl-usage-item i { color: #198754; margin-right: 2px; }
+  .hl-usage-note { color: var(--muted-text, #6c757d); }
+  .hl-usage-upgrade { font-weight: 700; color: #b8860b; text-decoration: none; }
+  .hl-usage-upgrade:hover { text-decoration: underline; }
 
   .hl-count {
     flex: 0 0 auto;

@@ -163,6 +163,62 @@
   .search-summary .rt-chip {
     font-size: 0.85rem;
   }
+
+  /* ===== Premium-only advanced filters ===== */
+  .premium-chip {
+    margin-left: 8px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #3d2c00;
+    background: linear-gradient(135deg, #f5c542, #ffd96b);
+  }
+
+  .adv-fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .adv-locked {
+    opacity: 0.5;
+    filter: grayscale(0.6);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .adv-upgrade {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 4px 0 16px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(245, 197, 66, 0.55);
+    background: linear-gradient(135deg, rgba(245, 197, 66, 0.14), rgba(25, 135, 84, 0.08));
+  }
+
+  .adv-upgrade-icon {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    color: #3d2c00;
+    background: linear-gradient(135deg, #f5c542, #ffd96b);
+  }
+
+  .adv-upgrade-text { flex: 1 1 auto; min-width: 0; font-size: 0.9rem; }
+  .adv-upgrade-text strong { display: block; }
+  .adv-upgrade-btn { flex: 0 0 auto; border-radius: 999px; border: 2px solid #000 !important; color: #fff; }
+
+  @media (max-width: 575.98px) {
+    .adv-upgrade { flex-wrap: wrap; }
+    .adv-upgrade-btn { width: 100%; }
+  }
 </style>
 
 <form method="GET" action="{{ url_for('search') }}" class="mb-4" id="searchForm">
@@ -289,23 +345,43 @@
     </div>
 
     <!-- ================= ADVANCED FILTERS ================= -->
-    {# Advanced filters (ADVANCED_SEARCH_FILTERS in app.py) — to be limited
-       to paid scout subscribers later. #}
+    {# Advanced filters (ADVANCED_SEARCH_FILTERS in app.py): Premium plans,
+       coaches and the Super Admin (plans.can_use_advanced_search). Free
+       users see them disabled with an upgrade prompt. #}
     <button
         class="filter-toggle"
         type="button"
         data-bs-toggle="collapse"
         data-bs-target="#advancedSearchFilters"
-        aria-expanded="{{ 'true' if advanced_count else 'false' }}"
+        aria-expanded="{{ 'true' if advanced_count or advanced_locked_used else 'false' }}"
         aria-controls="advancedSearchFilters">
       <span>
         <i class="fa-solid fa-sliders me-2"></i>Advanced Filters
         {% if advanced_count %}<span class="filter-count">{{ advanced_count }} active</span>{% endif %}
+        {% if not advanced_allowed %}<span class="premium-chip"><i class="fa-solid fa-crown"></i> Premium</span>{% endif %}
       </span>
       <i class="fa-solid fa-chevron-down chevron" aria-hidden="true"></i>
     </button>
 
-    <div class="collapse {% if advanced_count %}show{% endif %}" id="advancedSearchFilters">
+    <div class="collapse {% if advanced_count or advanced_locked_used %}show{% endif %}" id="advancedSearchFilters">
+
+    {% if not advanced_allowed %}
+      <div class="adv-upgrade" role="note">
+        <div class="adv-upgrade-icon" aria-hidden="true"><i class="fa-solid fa-lock"></i></div>
+        <div class="adv-upgrade-text">
+          <strong>Advanced filters are a Premium feature.</strong>
+          <span>
+            {% if advanced_locked_used %}Your advanced filters were not applied. {% endif %}
+            Filter by age, physicals, position, awards and custom stat queries with Scout Pro or an athlete Premium plan.
+          </span>
+        </div>
+        <a href="{{ url_for('pricing') }}" class="btn dart-btn adv-upgrade-btn">
+          <i class="fa-solid fa-crown me-1"></i> See plans
+        </a>
+      </div>
+    {% endif %}
+
+    <fieldset class="adv-fieldset {% if not advanced_allowed %}adv-locked{% endif %}" {% if not advanced_allowed %}disabled aria-disabled="true"{% endif %}>
 
       <!-- Athlete profile -->
       <div class="filter-group">
@@ -430,11 +506,11 @@
             <div class="date-range">
               <label class="date-range-field">
                 <span>From</span>
-                <input type="date" name="date_from" class="form-control" value="{{ filters.date_from }}" aria-label="Games from">
+                <input type="date" name="date_from" class="form-control" value="{{ filters.date_from }}" max="{{ today_iso() }}" data-no-future aria-label="Games from">
               </label>
               <label class="date-range-field">
                 <span>To</span>
-                <input type="date" name="date_to" class="form-control" value="{{ filters.date_to }}" aria-label="Games to">
+                <input type="date" name="date_to" class="form-control" value="{{ filters.date_to }}" max="{{ today_iso() }}" data-no-future aria-label="Games to">
               </label>
             </div>
           </div>
@@ -502,6 +578,7 @@
 
         <script id="searchStatsData" type="application/json">{{ search_stats | tojson }}</script>
       </div>
+    </fieldset>
     </div>
 
     <!-- ================= BUTTONS ================= -->
@@ -689,6 +766,7 @@
 
       <!-- DESKTOP TABLE -->
       {% from '_record_table_macros.html' import record_cells, record_header_cells with context %}
+      {% from '_share.html' import share_button %}
       <div class="d-none d-md-block">
         {% for item in results %}
           {% set a = item.student %}
@@ -863,6 +941,7 @@
   <i class="fa-regular fa-calendar-days"></i>
   {{ r.game_date.strftime('%B %d, %Y') if r.game_date else 'Game date not recorded' }}
 </div>
+{% if r.status == 'approved' %}<div class="text-center mb-3">{{ share_button(r) }}</div>{% endif %}
 
                    <div class="text-center mb-3">
               <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}" class="text-decoration-none"><strong>{{ r.user.full_name }}</strong></a><br>
@@ -881,7 +960,7 @@
                       <div><strong>Points <i class="fa-solid fa-basketball" style="color:orangered;"></i> :</strong> {{ r.points or 0 }}</div>
                     {% endif %}
 
-                    <div><strong>Position <i class="fa-solid fa-shirt"></i> :</strong> {{ r.position or '-' }}</div>
+                    <div><strong>Position <i class="fa-solid fa-shirt"></i> :</strong> {{ r.position or '-' }}{% if r.shirt_number %} <span class="rt-shirt">#{{ r.shirt_number }}</span>{% endif %}</div>
                     <div><strong>Assist <i class="fa-solid fa-handshake-angle"></i> :</strong> {{ r.assists or 0 }}</div>
                     <div><strong>Games <i class="fa-solid fa-person-running"></i>:</strong> {{ r.games_played or 0 }}</div>
 
@@ -971,6 +1050,8 @@
     {% endif %}
   {% endif %}
 </div>
+
+{% include '_ad_slot.html' %}
 
 <script>
 const nameInput = document.getElementById('nameInput');

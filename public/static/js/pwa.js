@@ -52,6 +52,8 @@
                         registration.scope
                     );
 
+                    saveOfflinePagesSoon();
+
                     var lastUpdateCheck = Date.now();
 
                     document.addEventListener('visibilitychange', function () {
@@ -76,6 +78,43 @@
                         error
                     );
                 });
+        });
+    }
+
+    // ==========================================================
+    // OFFLINE RECORD FORM (verified athletes)
+    // ==========================================================
+    // Ask the service worker to keep the record form and dashboard on the
+    // device, so athletes can record games even if they have never opened
+    // the form online. At most every 10 minutes per tab session.
+    var OFFLINE_PAGES_INTERVAL_MS = 10 * 60 * 1000;
+    var OFFLINE_PAGES_KEY = 'dartOfflinePagesSavedAt';
+
+    function saveOfflinePagesSoon() {
+        if (!document.querySelector('meta[name="dart-offline-athlete"]') || !navigator.onLine) {
+            return;
+        }
+
+        var last = 0;
+
+        try {
+            last = parseInt(window.sessionStorage.getItem(OFFLINE_PAGES_KEY) || '0', 10);
+        } catch (e) {}
+
+        if (Date.now() - last < OFFLINE_PAGES_INTERVAL_MS) {
+            return;
+        }
+
+        navigator.serviceWorker.ready.then(function (registration) {
+            if (!registration.active) {
+                return;
+            }
+
+            registration.active.postMessage({ type: 'dart-save-offline-pages' });
+
+            try {
+                window.sessionStorage.setItem(OFFLINE_PAGES_KEY, String(Date.now()));
+            } catch (e) {}
         });
     }
 

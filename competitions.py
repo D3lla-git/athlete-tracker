@@ -423,3 +423,114 @@ def form_rules():
         'detailFields': dict(DETAIL_FIELDS),
         'ageGroups': list(AGE_GROUPS),
     }
+
+
+# ==========================================================
+# REGISTRATION CATEGORIES (shown when athletes / coaches register)
+# ==========================================================
+# Each single-competition category matches one competition (see
+# athlete_can_submit_competition / coach_can_manage_competition in app.py);
+# "All" categories cover every competition.
+
+def _category(slug, name, icon, summary, detail, competitions):
+    return {
+        'slug': slug,
+        'name': name,
+        'icon': icon,
+        'summary': summary,
+        'detail': detail,
+        'competitions': list(competitions),
+    }
+
+
+ATHLETE_CATEGORIES = [
+    _category(
+        'all-athlete', 'All Athlete', 'fa-layer-group',
+        'You play in more than one competition.',
+        'This category means you can play high school ball and club or community '
+        'league at the same time. Records from every competition are stored, '
+        'including grassroots and national-team (AFCON, WAFU, World Cup) games.',
+        ALL_COMPETITIONS,
+    ),
+    _category(
+        'county-meet', 'County Meet Athlete', 'fa-map-location-dot',
+        'You only play for your county.',
+        'This category means you are only playing for your county in the County '
+        'Meet, therefore only County Meet records will be stored.',
+        ['County Meet'],
+    ),
+    _category(
+        'club-league', 'Club League Athlete', 'fa-shield-halved',
+        'You only play club league (1st–3rd Division).',
+        'This category means you are only playing for a club in the 1st, 2nd or 3rd '
+        'Division, therefore only Club League records will be stored.',
+        ['Club League'],
+    ),
+    _category(
+        'university', 'University Athlete', 'fa-graduation-cap',
+        'You only play university sports.',
+        'This category means you are only playing for your university, therefore '
+        'only University League records will be stored.',
+        ['University League'],
+    ),
+    _category(
+        'community-league', 'Community/Area League Athlete', 'fa-people-group',
+        'You only play community or area league.',
+        'This category means you are only playing in a community or area league, '
+        'therefore only Community/Area League records will be stored.',
+        ['Community/Area League'],
+    ),
+    _category(
+        'high-school', 'High School Athlete', 'fa-school',
+        'You only play high school ball.',
+        'This category means you are only playing high school ball, therefore only '
+        'High School records will be stored.',
+        ['High School'],
+    ),
+]
+
+COACH_CATEGORIES = [
+    _category(
+        'all-coach', 'All Coach', 'fa-layer-group',
+        'You coach teams in more than one competition.',
+        'This category means you can coach or manage a high school team and a club '
+        'or community side at the same time. You review and approve your athletes\' '
+        'records from every competition, including grassroots and national-team games.',
+        ALL_COMPETITIONS,
+    ),
+    _category(
+        'county-meet', 'County Meet Coach', 'fa-map-location-dot',
+        'You only coach a county team.',
+        'This category means you only coach a county team in the County Meet, '
+        'therefore you review and approve only County Meet records.',
+        ['County Meet'],
+    ),
+    _category(
+        'club-league', 'Club League Coach', 'fa-shield-halved',
+        'You only coach a club (1st–3rd Division).',
+        'This category means you only coach a club in the 1st, 2nd or 3rd Division, '
+        'therefore you review and approve only Club League records.',
+        ['Club League'],
+    ),
+    _category(
+        'university', 'University Coach', 'fa-graduation-cap',
+        'You only coach a university team.',
+        'This category means you only coach a university team, therefore you review '
+        'and approve only University League records.',
+        ['University League'],
+    ),
+    _category(
+        'community-league', 'Community/Area League Coach', 'fa-people-group',
+        'You only coach a community or area team.',
+        'This category means you only coach in a community or area league, therefore '
+        'you review and approve only Community/Area League records.',
+        ['Community/Area League'],
+    ),
+    _category(
+        'high-school', 'High School Coach', 'fa-school',
+        'You only coach high school ball.',
+        'This category means you only coach a high school team, therefore you review '
+        'and approve only High School records.',
+        ['High School'],
+    ),
+]

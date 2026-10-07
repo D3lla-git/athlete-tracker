@@ -18,7 +18,7 @@
 
             <span class="dart-action-text">
                 <strong>Search Athletes</strong>
-                <small>Explore verified athlete records</small>
+                <small title="Explore verified athlete records">Explore verified athlete records</small>
             </span>
 
             <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
@@ -35,7 +35,7 @@
 
             <span class="dart-action-text">
                 <strong>Register as Athlete</strong>
-                <small>Create your sports CV/profile</small>
+                <small title="Create your sports CV/profile">Create your sports CV/profile</small>
             </span>
 
             <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
@@ -52,7 +52,7 @@
 
             <span class="dart-action-text">
                 <strong>Register as Coach/Admin</strong>
-                <small>Manage athletes &amp; records</small>
+                <small title="Manage athletes &amp; records">Manage athletes &amp; records</small>
             </span>
 
             <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
@@ -69,7 +69,24 @@
 
             <span class="dart-action-text">
                 <strong>Register as Scout</strong>
-                <small>Discover and evaluate talent</small>
+                <small title="Discover and evaluate talent">Discover and evaluate talent</small>
+            </span>
+
+            <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
+
+        </a>
+
+
+        <a href="{{ url_for('register_organization') }}"
+           class="dart-action-btn dart-action-org">
+
+            <span class="dart-action-icon">
+                <i class="fa-solid fa-building-shield"></i>
+            </span>
+
+            <span class="dart-action-text">
+                <strong>Register as Organization</strong>
+                <small title="Club · Academy · School · Enterprise">Club · Academy · School · Enterprise</small>
             </span>
 
             <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
@@ -516,11 +533,90 @@
     max-width: 1400px;
     margin: 0 auto;
 
+    /* 5 tiles as 3 + 2: a 6-column grid where the first row's tiles
+       span 2 columns and the second row's span 3. */
     display: grid;
     grid-template-columns:
-        repeat(4, minmax(0, 1fr));
+        repeat(6, minmax(0, 1fr));
 
-    gap: 20px;
+    gap: 18px;
+}
+
+.dart-action-container > .dart-action-btn {
+    grid-column: span 2;
+}
+
+.dart-action-container > .dart-action-scout,
+.dart-action-container > .dart-action-org {
+    grid-column: span 3;
+}
+
+/* Desktop: one compact row of 5 — icon on top, text centred below.
+   Scoped to the container so it wins over the base tile styles below. */
+@media (min-width: 992px) {
+
+    .dart-action-section {
+        padding: 24px 0;
+    }
+
+    .dart-action-container {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+        max-width: 1320px;
+    }
+
+    .dart-action-container > .dart-action-btn,
+    .dart-action-container > .dart-action-scout,
+    .dart-action-container > .dart-action-org {
+        grid-column: auto;
+    }
+
+    .dart-action-container .dart-action-btn {
+        flex-direction: column;
+        justify-content: center;
+        gap: 7px;
+        min-height: 0;
+        padding: 12px 10px;
+        border-radius: 16px;
+        text-align: center;
+    }
+
+    .dart-action-container .dart-action-icon {
+        width: 36px;
+        height: 36px;
+        flex: 0 0 36px;
+        border-radius: 11px;
+        font-size: 0.95rem;
+    }
+
+    .dart-action-container .dart-action-text {
+        width: 100%;
+    }
+
+    .dart-action-container .dart-action-text strong {
+        font-size: 0.85rem;
+        line-height: 1.25;
+    }
+
+    .dart-action-container .dart-action-text small {
+        margin-top: 2px;
+        font-size: 0.7rem;
+    }
+
+    /* The whole tile is the link; the arrow isn't needed in a tile. */
+    .dart-action-container .dart-action-arrow {
+        display: none;
+    }
+}
+
+/* Wide enough for one-line subtitles (small desktops let them wrap). */
+@media (min-width: 1200px) {
+
+    .dart-action-container .dart-action-text small {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 }
 
 .dart-action-btn {
@@ -601,6 +697,10 @@
     background: rgba(111,66,193,0.40);
 }
 
+.dart-action-org .dart-action-icon {
+    background: rgba(13,202,240,0.30);
+}
+
 .dart-action-text {
     flex: 1;
     min-width: 0;
@@ -632,18 +732,17 @@
     transform: translateX(4px);
 }
 
-@media (max-width: 1199px) {
-
-    .dart-action-container {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-@media (max-width: 991px) {
+@media (max-width: 767px) {
 
     .dart-action-container {
         grid-template-columns: 1fr;
         gap: 13px;
+    }
+
+    .dart-action-container > .dart-action-btn,
+    .dart-action-container > .dart-action-scout,
+    .dart-action-container > .dart-action-org {
+        grid-column: auto;
     }
 
     .dart-action-btn {

@@ -1,0 +1,496 @@
+{% extends "base.html" %}
+{% block title %}Pricing: Athlete, Scout & Organization Plans | D.A.R.T.{% endblock %}
+{% block meta_description %}D.A.R.T. plans: free athlete profiles, High School Premium from $2.50/month, unlimited athlete Premium, Scout Pro and Organization Pro for academies, schools and clubs. Pay with Orange Money or MTN MoMo.{% endblock %}
+
+{# One "plan action" button, consistent everywhere on the page. #}
+{% macro plan_action(plan) %}
+  {% set sub_plan = my_plan %}
+  {% if not current_user.is_authenticated %}
+    {% set reg = {'athlete': 'register', 'scout': 'register_scout', 'organization': 'register_organization'}[plan.audience] %}
+    <a href="{{ url_for(reg) }}" class="btn dart-btn pr-btn">Create account to upgrade</a>
+  {% elif sub_plan and sub_plan.code == plan.code %}
+    <a href="{{ url_for('checkout', plan_code=plan.code) }}" class="btn pr-btn pr-btn-current">
+      <i class="fa-solid fa-circle-check me-1"></i> Current plan · Extend 30 days
+    </a>
+  {% else %}
+    {% set error = eligibility_error(current_user, plan) %}
+    {% if error %}
+      <button type="button" class="btn pr-btn pr-btn-disabled" disabled>Not available for your account</button>
+      <div class="pr-why">{{ error }}</div>
+    {% else %}
+      <a href="{{ url_for('checkout', plan_code=plan.code) }}" class="btn dart-btn pr-btn">
+        <i class="fa-solid fa-crown me-1"></i> Upgrade · {{ plan.price_label }}/month
+      </a>
+    {% endif %}
+  {% endif %}
+{% endmacro %}
+
+{% macro methods(plan) %}
+  <div class="pr-methods">
+    {% for m in plan.methods %}
+      <span class="pr-method pr-method-{{ m }}">
+        {% if m == 'card' %}<i class="fa-brands fa-cc-visa"></i> Card <em>soon</em>
+        {% elif m == 'orange_money' %}<i class="fa-solid fa-mobile-screen"></i> Orange Money
+        {% else %}<i class="fa-solid fa-mobile-screen"></i> MTN MoMo{% endif %}
+      </span>
+    {% endfor %}
+  </div>
+{% endmacro %}
+
+{% block content %}
+<div class="pr-page">
+
+  <!-- ===================== HERO ===================== -->
+  <section class="pr-hero">
+    <div class="pr-eyebrow"><i class="fa-solid fa-tags"></i> D.A.R.T. Ecosystem</div>
+    <h1>Plans for every level of the game</h1>
+    <p>Start free. Upgrade when you're ready to be seen by premium scouts, unlock advanced search, or manage your whole roster.</p>
+    <nav class="pr-jump" aria-label="Plan groups">
+      <a href="#athletes"><i class="fa-solid fa-person-running"></i> Athletes · Local</a>
+      <a href="#scouts"><i class="fa-solid fa-binoculars"></i> Scouts · Global</a>
+      <a href="#organizations"><i class="fa-solid fa-building-shield"></i> Organizations</a>
+    </nav>
+  </section>
+
+  {% if awaiting %}
+    <div class="pr-awaiting">
+      <i class="fa-solid fa-hourglass-half"></i>
+      You have {{ awaiting | length }} payment{{ 's' if awaiting | length != 1 }} waiting for confirmation.
+      <a href="{{ url_for('billing') }}">View billing</a>
+    </div>
+  {% endif %}
+
+  <!-- ===================== ATHLETES ===================== -->
+  <section id="athletes" class="pr-section" aria-labelledby="athletesTitle">
+    <div class="pr-section-head">
+      <h2 id="athletesTitle"><i class="fa-solid fa-person-running"></i> Athlete Tier <span>Local</span></h2>
+      <p>Premium prices depend on your registration category. Only verified athletes can upgrade.</p>
+    </div>
+
+    <div class="pr-grid" data-pr-slider aria-label="Athlete plans">
+      <!-- Free -->
+      <article class="pr-card">
+        <div class="pr-card-name">Basic Profile</div>
+        <div class="pr-price">Free</div>
+        <div class="pr-price-note">Forever</div>
+        <ul class="pr-features">
+          <li><i class="fa-solid fa-check"></i> Basic D.A.R.T. profile & dashboard</li>
+          <li><i class="fa-solid fa-check"></i> {{ free_limits.records }} sports record uploads a month</li>
+          <li><i class="fa-solid fa-check"></i> {{ free_limits.photos + free_limits.videos }} highlights a month ({{ free_limits.photos }} photos, {{ free_limits.videos }} video)</li>
+          <li><i class="fa-solid fa-check"></i> Your latest record is shown to scouts</li>
+          <li class="pr-no"><i class="fa-solid fa-xmark"></i> Advanced search filters</li>
+          <li class="pr-no"><i class="fa-solid fa-rectangle-ad"></i> Includes ads</li>
+        </ul>
+        {% if not current_user.is_authenticated %}
+          <a href="{{ url_for('register') }}" class="btn btn-outline-success pr-btn">Create free account</a>
+        {% elif current_user.role == 'Athlete' and not my_plan %}
+          <button class="btn pr-btn pr-btn-current" disabled><i class="fa-solid fa-circle-check me-1"></i> Current plan</button>
+        {% endif %}
+      </article>
+
+      <!-- High School Premium -->
+      <article class="pr-card">
+        <div class="pr-card-name">{{ high_school_plan.name }}</div>
+        <div class="pr-price">{{ high_school_plan.price_label }}<span>/month</span></div>
+        <div class="pr-price-note">For verified High School Athletes</div>
+        <ul class="pr-features">
+          {% for f in high_school_plan.features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
+        </ul>
+        {{ methods(high_school_plan) }}
+        {{ plan_action(high_school_plan) }}
+      </article>
+
+      <!-- Unlimited Premium by category -->
+      <article class="pr-card pr-card-featured">
+        <div class="pr-ribbon">Unlimited</div>
+        <div class="pr-card-name">Athlete Premium</div>
+        <div class="pr-price">from {{ pro_from_price }}<span>/month</span></div>
+        <div class="pr-price-note">Price by your category</div>
+        <ul class="pr-features">
+          {% for f in pro_athlete_plans[0].features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
+        </ul>
+
+        <div class="pr-category-table" role="table" aria-label="Athlete Premium price by category">
+          {% for p in pro_athlete_plans %}
+            {% set mine = current_user.is_authenticated and current_user.role == 'Athlete' and current_user.athlete_category == p.category %}
+            <div class="pr-category-row {% if mine %}is-mine{% endif %}" role="row">
+              <span role="cell">{{ p.category }}{% if mine %} <em>(you)</em>{% endif %}</span>
+              <strong role="cell">{{ p.price_label }}</strong>
+            </div>
+          {% endfor %}
+        </div>
+
+        {{ methods(pro_athlete_plans[0]) }}
+        {% if current_user.is_authenticated and current_user.role == 'Athlete' and my_eligible and my_eligible.code != high_school_plan.code %}
+          {{ plan_action(my_eligible) }}
+        {% elif not current_user.is_authenticated %}
+          <a href="{{ url_for('register') }}" class="btn dart-btn pr-btn">Create account to upgrade</a>
+        {% endif %}
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== SCOUTS ===================== -->
+  <section id="scouts" class="pr-section" aria-labelledby="scoutsTitle">
+    <div class="pr-section-head">
+      <h2 id="scoutsTitle"><i class="fa-solid fa-binoculars"></i> B2B Scout Tier <span>Global</span></h2>
+      <p>Find verified talent with the full scouting toolkit.</p>
+    </div>
+
+    <div class="pr-grid pr-grid-2" data-pr-slider aria-label="Scout plans">
+      <article class="pr-card">
+        <div class="pr-card-name">Basic Scout</div>
+        <div class="pr-price">Free</div>
+        <div class="pr-price-note">Forever</div>
+        <ul class="pr-features">
+          <li><i class="fa-solid fa-check"></i> Scout dashboard basics & quick search</li>
+          <li><i class="fa-solid fa-check"></i> Basic search filters</li>
+          <li class="pr-no"><i class="fa-solid fa-xmark"></i> Advanced filters & custom queries</li>
+          <li class="pr-no"><i class="fa-solid fa-xmark"></i> Season leaders, rising talent, saved searches on dashboard</li>
+          <li class="pr-no"><i class="fa-solid fa-rectangle-ad"></i> Includes ads</li>
+        </ul>
+        {% if not current_user.is_authenticated %}
+          <a href="{{ url_for('register_scout') }}" class="btn btn-outline-success pr-btn">Create free scout account</a>
+        {% elif current_user.role == 'Scout' and not my_plan %}
+          <button class="btn pr-btn pr-btn-current" disabled><i class="fa-solid fa-circle-check me-1"></i> Current plan</button>
+        {% endif %}
+      </article>
+
+      <article class="pr-card pr-card-featured">
+        <div class="pr-ribbon">SaaS</div>
+        <div class="pr-card-name">{{ scout_plan.name }}</div>
+        <div class="pr-price">{{ scout_plan.price_label }}<span>/month</span></div>
+        <div class="pr-price-note">Billed monthly · no auto-renewal</div>
+        <ul class="pr-features">
+          {% for f in scout_plan.features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
+        </ul>
+        {{ methods(scout_plan) }}
+        {{ plan_action(scout_plan) }}
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== ORGANIZATIONS ===================== -->
+  <section id="organizations" class="pr-section" aria-labelledby="orgsTitle">
+    <div class="pr-section-head">
+      <h2 id="orgsTitle"><i class="fa-solid fa-building-shield"></i> Enterprise · Institution · Academy</h2>
+      <p>Schools, universities, clubs, academies and community teams: your roster builds itself from athletes registered under your name.</p>
+    </div>
+
+    <div class="pr-grid pr-grid-2" data-pr-slider aria-label="Organization plans">
+      <article class="pr-card">
+        <div class="pr-card-name">Organization Free</div>
+        <div class="pr-price">Free</div>
+        <div class="pr-price-note">After verification</div>
+        <ul class="pr-features">
+          <li><i class="fa-solid fa-check"></i> Verified organization page & dashboard</li>
+          <li><i class="fa-solid fa-check"></i> Roster size + preview of {{ free_org_preview }} athletes</li>
+          <li class="pr-no"><i class="fa-solid fa-xmark"></i> Full roster, records & team leaders</li>
+          <li class="pr-no"><i class="fa-solid fa-xmark"></i> Roster export</li>
+          <li class="pr-no"><i class="fa-solid fa-rectangle-ad"></i> Includes ads</li>
+        </ul>
+        {% if not current_user.is_authenticated %}
+          <a href="{{ url_for('register_organization') }}" class="btn btn-outline-success pr-btn">Register your organization</a>
+        {% endif %}
+      </article>
+
+      <article class="pr-card pr-card-featured">
+        <div class="pr-ribbon">Teams</div>
+        <div class="pr-card-name">{{ organization_plan.name }}</div>
+        <div class="pr-price">{{ organization_plan.price_label }}<span>/month</span></div>
+        <div class="pr-price-note">Billed monthly · no auto-renewal</div>
+        <ul class="pr-features">
+          {% for f in organization_plan.features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
+        </ul>
+        {{ methods(organization_plan) }}
+        {{ plan_action(organization_plan) }}
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== FAQ ===================== -->
+  <section class="pr-section" aria-labelledby="faqTitle">
+    <div class="pr-section-head">
+      <h2 id="faqTitle"><i class="fa-solid fa-circle-question"></i> Questions</h2>
+    </div>
+    <div class="accordion pr-faq" id="pricingFaq">
+      {% for q, a in [
+        ('How do I pay?', 'Choose a plan and send the amount with Orange Money or MTN MoMo to the D.A.R.T. number shown at checkout, using your unique reference. Then enter the transaction ID from your SMS. Card payments are coming soon.'),
+        ('When does Premium start?', 'As soon as D.A.R.T. confirms your payment, usually within 24 hours. Your plan then runs for 30 days.'),
+        ('Will I be charged automatically?', 'No. Nothing renews automatically. When your 30 days end you return to the free plan and keep all your records. Pay again any time to extend.'),
+        ('Why does my price depend on my category?', 'Athlete Premium is priced for the level you compete at, from High School to All-Athletes. You can only buy the plan for the category on your verified profile.'),
+        ('Is my data safe?', 'Records are approved by coaches before anyone sees them. Organizations only see sport information, never your email, ID document or date of birth, and every roster export is logged. See our Privacy Policy.'),
+        ('Refunds?', 'If a payment was made in error or Premium could not be activated, contact us within 7 days. See the Terms of Use for details.'),
+      ] %}
+        <div class="accordion-item">
+          <h3 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq{{ loop.index }}" aria-expanded="false" aria-controls="faq{{ loop.index }}">{{ q }}</button>
+          </h3>
+          <div id="faq{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#pricingFaq">
+            <div class="accordion-body">{{ a }}</div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<style>
+  .pr-page { max-width: 1140px; margin: 0 auto; }
+
+  .pr-hero {
+    position: relative;
+    padding: 34px 26px;
+    border-radius: 26px;
+    color: #fff;
+    text-align: center;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 85% 20%, rgba(245, 197, 66, 0.25), transparent 35%),
+      radial-gradient(circle at 10% 90%, rgba(57, 185, 114, 0.35), transparent 40%),
+      linear-gradient(145deg, #071208, #0d2413 55%, #061008);
+  }
+
+  .pr-eyebrow { font-size: 0.78rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #4cd38a; }
+  .pr-hero h1 { font-weight: 900; font-size: clamp(1.7rem, 4vw, 2.6rem); margin: 8px 0; }
+  .pr-hero p { color: #cfe9da; max-width: 640px; margin: 0 auto 18px; }
+
+  .pr-jump { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .pr-jump a {
+    padding: 8px 16px;
+    border-radius: 999px;
+    color: #fff;
+    text-decoration: none;
+    font-size: 0.88rem;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .pr-jump a:hover { background: rgba(255, 255, 255, 0.14); }
+
+  .pr-awaiting {
+    margin: 18px 0 0;
+    padding: 12px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(245, 197, 66, 0.55);
+    background: rgba(245, 197, 66, 0.12);
+  }
+
+  .pr-section { margin-top: 42px; scroll-margin-top: 80px; }
+  .pr-section-head h2 { font-size: 1.45rem; font-weight: 800; }
+  .pr-section-head h2 i { color: #198754; }
+  .pr-section-head h2 span {
+    margin-left: 6px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    vertical-align: middle;
+    color: #fff;
+    background: #198754;
+  }
+  .pr-section-head p { color: var(--muted-text, #6c757d); }
+
+  .pr-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: stretch; }
+  .pr-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 820px; }
+
+  .pr-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 22px;
+    border-radius: 22px;
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    background: var(--surface-bg, #fff);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.06);
+  }
+
+  .pr-card-featured {
+    border: 2px solid #f5c542;
+    box-shadow: 0 18px 40px rgba(245, 197, 66, 0.18);
+  }
+
+  .pr-ribbon {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #3d2c00;
+    background: linear-gradient(135deg, #f5c542, #ffd96b);
+  }
+
+  .pr-card-name { font-weight: 800; font-size: 1.05rem; }
+  .pr-price { font-size: 2.2rem; font-weight: 900; line-height: 1.1; margin-top: 8px; }
+  .pr-price span { font-size: 0.95rem; font-weight: 600; color: var(--muted-text, #6c757d); }
+  .pr-price-note { font-size: 0.82rem; color: var(--muted-text, #6c757d); margin-bottom: 14px; }
+
+  .pr-features { list-style: none; padding: 0; margin: 0 0 16px; flex: 1 1 auto; }
+  .pr-features li { display: flex; gap: 8px; padding: 5px 0; font-size: 0.92rem; }
+  .pr-features li i { margin-top: 4px; color: #198754; flex: 0 0 auto; }
+  .pr-features li.pr-no { color: var(--muted-text, #6c757d); }
+  .pr-features li.pr-no i { color: #adb5bd; }
+
+  .pr-category-table { margin-bottom: 14px; border-radius: 12px; overflow: hidden; border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1)); }
+  .pr-category-row { display: flex; justify-content: space-between; gap: 8px; padding: 7px 12px; font-size: 0.86rem; }
+  .pr-category-row + .pr-category-row { border-top: 1px solid var(--surface-border, rgba(0, 0, 0, 0.08)); }
+  .pr-category-row.is-mine { background: rgba(245, 197, 66, 0.18); font-weight: 700; }
+  .pr-category-row em { font-style: normal; color: #b8860b; }
+
+  .pr-methods { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .pr-method {
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.12));
+  }
+  .pr-method-orange_money { color: #c45a00; border-color: rgba(255, 121, 0, 0.45); }
+  .pr-method-mtn_momo { color: #8a6d00; border-color: rgba(255, 204, 0, 0.7); }
+  .pr-method em { font-style: normal; font-weight: 600; opacity: 0.7; }
+
+  .pr-btn { width: 100%; border-radius: 999px; padding: 10px 14px; font-weight: 700; }
+  .pr-btn.dart-btn { border: 2px solid #000 !important; color: #fff; }
+  .pr-btn-current { border: 2px solid #198754 !important; color: #198754; background: rgba(25, 135, 84, 0.08); }
+  .pr-btn-disabled { border: 1px solid var(--surface-border, #dee2e6) !important; color: var(--muted-text, #6c757d); }
+  .pr-why { margin-top: 6px; font-size: 0.78rem; color: var(--muted-text, #6c757d); text-align: center; }
+
+  .pr-faq .accordion-item { border-radius: 14px; overflow: hidden; margin-bottom: 8px; border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1)); }
+  .pr-faq .accordion-item,
+  .pr-faq .accordion-button,
+  .pr-faq .accordion-body { background: var(--surface-bg, #fff); color: var(--surface-text, inherit); }
+  .pr-faq .accordion-button { font-weight: 700; box-shadow: none; }
+  .pr-faq .accordion-button:not(.collapsed) { color: #198754; }
+  html[data-theme="dark"] .pr-faq .accordion-button::after { filter: invert(1); }
+
+  /* ===== Phones & tablets: each tier is a swipe slider (like the
+     dashboard record cards), with dots and arrows underneath. ===== */
+  .pr-slider-nav { display: none; }
+
+  @media (max-width: 991.98px) {
+    .pr-grid,
+    .pr-grid-2 {
+      display: flex;
+      gap: 14px;
+      max-width: none;
+      /* Bleed to the screen edges (Bootstrap container gutter). */
+      margin: 0 calc(var(--bs-gutter-x, 1.5rem) * -0.5);
+      padding: 14px calc(var(--bs-gutter-x, 1.5rem) * 0.5) 18px;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      scroll-padding: 0 calc(var(--bs-gutter-x, 1.5rem) * 0.5);
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      overscroll-behavior-x: contain;
+    }
+    .pr-grid::-webkit-scrollbar { display: none; }
+
+    .pr-grid > .pr-card {
+      flex: 0 0 min(86%, 420px);
+      scroll-snap-align: center;
+    }
+
+    .pr-slider-nav {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-top: 2px;
+    }
+
+    .pr-slider-arrow {
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid var(--surface-border, #dee2e6);
+      background: var(--surface-bg, #fff);
+      color: #198754;
+    }
+    .pr-slider-arrow:disabled { opacity: 0.35; }
+
+    .pr-dots { display: flex; gap: 8px; }
+    .pr-dot {
+      width: 9px;
+      height: 9px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background-color: #adb5bd;
+      transition: width 0.2s, background-color 0.2s;
+    }
+    .pr-dot.active { width: 22px; border-radius: 999px; background-color: #198754; }
+  }
+</style>
+
+<script>
+(function () {
+  // One slider per tier: dots + arrows follow the swipe position.
+  document.querySelectorAll('[data-pr-slider]').forEach(function (track) {
+    var cards = Array.prototype.slice.call(track.querySelectorAll(':scope > .pr-card'));
+    if (cards.length < 2) return;
+
+    var nav = document.createElement('div');
+    nav.className = 'pr-slider-nav';
+    nav.innerHTML =
+      '<button type="button" class="pr-slider-arrow" data-dir="-1" aria-label="Previous plan"><i class="fa-solid fa-chevron-left"></i></button>' +
+      '<div class="pr-dots" role="tablist"></div>' +
+      '<button type="button" class="pr-slider-arrow" data-dir="1" aria-label="Next plan"><i class="fa-solid fa-chevron-right"></i></button>';
+    track.after(nav);
+
+    var dotsBox = nav.querySelector('.pr-dots');
+    var prev = nav.querySelector('[data-dir="-1"]');
+    var next = nav.querySelector('[data-dir="1"]');
+    var current = 0;
+
+    var dots = cards.map(function (card, i) {
+      var name = (card.querySelector('.pr-card-name') || {}).textContent || 'Plan ' + (i + 1);
+      var dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = 'pr-dot';
+      dot.setAttribute('role', 'tab');
+      dot.setAttribute('aria-label', name.trim());
+      dot.addEventListener('click', function () { go(i); });
+      dotsBox.appendChild(dot);
+      return dot;
+    });
+
+    function go(i) {
+      i = Math.max(0, Math.min(cards.length - 1, i));
+      var c = cards[i].getBoundingClientRect(), t = track.getBoundingClientRect();
+      track.scrollTo({ left: track.scrollLeft + (c.left - t.left) - (track.clientWidth - c.width) / 2, behavior: 'smooth' });
+    }
+
+    function update() {
+      var box = track.getBoundingClientRect(), center = box.left + box.width / 2, best = 0, bestDist = Infinity;
+      cards.forEach(function (card, i) {
+        var r = card.getBoundingClientRect();
+        var d = Math.abs(r.left + r.width / 2 - center);
+        if (d < bestDist) { bestDist = d; best = i; }
+      });
+      current = best;
+      dots.forEach(function (dot, i) {
+        dot.classList.toggle('active', i === best);
+        dot.setAttribute('aria-selected', i === best ? 'true' : 'false');
+      });
+      prev.disabled = best === 0;
+      next.disabled = best === cards.length - 1;
+    }
+
+    prev.addEventListener('click', function () { go(current - 1); });
+    next.addEventListener('click', function () { go(current + 1); });
+
+    var raf;
+    track.addEventListener('scroll', function () {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(update);
+    }, { passive: true });
+    window.addEventListener('resize', update);
+    update();
+  });
+})();
+</script>
+{% endblock %}

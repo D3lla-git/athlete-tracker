@@ -2,11 +2,24 @@
 {% block title %}My Profile{% endblock %}
 
 {% block content %}
+{% from '_profile_card.html' import profile_hero %}
 <div class="row justify-content-center">
-  <div class="col-md-8 col-lg-6">
-    <div class="card shadow">
+  <div class="col-lg-10 col-xl-9">
+
+    {# ===== My card: what others see when you share your profile ===== #}
+    {% if current_user.role in ('Athlete', 'Coach', 'Scout') %}
+      <div class="mp-hero-head">
+        <div>
+          <div class="mp-eyebrow">My Profile</div>
+          <p class="mp-lead">This is your D.A.R.T. card. Share it, or download it as an image or PDF.</p>
+        </div>
+      </div>
+      {{ profile_hero(profile_card_info(current_user), can_edit=true, edit_href='#editProfile') }}
+    {% endif %}
+
+    <div class="card shadow mp-edit" id="editProfile">
       <div class="card-header d-flex justify-content-between align-items-center">
-        <h4 class="mb-0">My Profile</h4>
+        <h4 class="mb-0"><i class="fa-solid fa-user-pen"></i> Edit profile</h4>
         {% if current_user.is_verified %}
           <span class="badge">Verified <i class="fa-solid fa-user-check"></i></span>
         {% else %}
@@ -318,6 +331,38 @@
   </div>
 
 </div>
+
+{# Google listing: adults listed by default, under-18s only if they choose. #}
+{% set listed = seo_indexable(current_user) %}
+<div class="mb-3 seo-choice">
+  <span class="form-label d-block">Show my profile on Google <i class="fa-brands fa-google"></i></span>
+  <div class="seo-options" role="radiogroup" aria-label="Show my profile on Google">
+    {% for value, label in [('default', 'Automatic'), ('on', 'Show me'), ('off', "Don't show me")] %}
+      <label class="seo-option">
+        <input type="radio" name="search_visibility" value="{{ value }}"
+               {% if (current_user.search_visibility or 'default') == value %}checked{% endif %}>
+        <span>{{ label }}</span>
+      </label>
+    {% endfor %}
+  </div>
+  <div class="form-text">
+    {% if listed %}<i class="fa-solid fa-circle-check text-success"></i> Your public profile can appear in Google search.
+    {% else %}<i class="fa-solid fa-eye-slash"></i> Your public profile is hidden from Google.{% endif %}
+    Automatic: shown if you're 18 or older, hidden if you're under 18. Only verified athletes are listed, and only sport information is public.
+  </div>
+</div>
+<style>
+  .seo-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .seo-option { margin: 0; cursor: pointer; }
+  .seo-option input { position: absolute; opacity: 0; }
+  .seo-option span {
+    display: flex; align-items: center; justify-content: center; min-height: 46px; padding: 0 8px;
+    border-radius: 12px; font-weight: 600; font-size: 0.88rem; text-align: center;
+    border: 1.5px solid var(--input-border, #dee2e6);
+  }
+  .seo-option input:checked + span { border-color: #198754; background: rgba(25, 135, 84, 0.1); color: #198754; }
+  .seo-option input:focus-visible + span { outline: 3px solid rgba(25, 135, 84, 0.35); outline-offset: 2px; }
+</style>
 
 {% endif %}
               <div class="mb-3">
@@ -814,6 +859,30 @@ function toggleChangePassword() {
 {% if current_user.role == 'Athlete' %}
   {% from '_highlights.html' import highlights_section with context %}
   {{ highlights_section(highlights, owner=current_user, can_manage=true) }}
+
+  {# Transparency: verified organizations whose roster lists this athlete. #}
+  <section class="card shadow mt-4 listed-by" aria-labelledby="listedByTitle">
+    <div class="card-header"><h5 class="mb-0" id="listedByTitle"><i class="fa-solid fa-building-shield"></i> Organizations listing you</h5></div>
+    <div class="card-body">
+      {% for org in listed_by %}
+        <div class="listed-by-row">
+          <span><strong>{{ org.org_name }}</strong> <small class="text-muted">· {{ org.org_type }}{% if org.city %} · {{ org.city }}{% endif %}</small></span>
+          <span class="listed-by-badge"><i class="fa-solid fa-circle-check"></i> Verified</span>
+        </div>
+      {% else %}
+        <p class="text-muted mb-0">No organization lists you yet.</p>
+      {% endfor %}
+      <p class="small text-muted mt-3 mb-0">
+        Verified organizations with your team name (<strong>{{ current_user.school }}</strong>) see your sport profile, approved records and highlights,
+        never your email, ID document or date of birth. If you don't play for one of them, contact D.A.R.T. and we'll fix it.
+      </p>
+    </div>
+  </section>
+  <style>
+    .listed-by-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--surface-border, #dee2e6); }
+    .listed-by-badge { font-size: 0.78rem; font-weight: 700; color: #146c43; white-space: nowrap; }
+    .listed-by .card-header i { color: #198754; }
+  </style>
 {% endif %}
 
 <!-- Danger Zone -->
@@ -851,4 +920,11 @@ function confirmAccountDeletion() {
 
 {% endif %}
 
+<style>
+  .mp-hero-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .mp-eyebrow { font-size: 1.6rem; font-weight: 900; }
+  .mp-lead { margin: 2px 0 0; color: var(--muted-text, #6c757d); font-size: 0.92rem; }
+  .mp-edit { scroll-margin-top: 90px; }
+  .mp-edit > .card-header h4 i { color: #198754; margin-right: 4px; }
+</style>
 {% endblock %}

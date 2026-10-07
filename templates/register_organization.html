@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}Register your School, Club or Academy | D.A.R.T.{% endblock %}
+{% block meta_description %}Schools, universities, clubs, academies and community teams: register on D.A.R.T. to see every verified athlete who plays for you, with coach-approved records and highlights.{% endblock %}
+
+{% block content %}
+<div class="ro-page">
+
+  <section class="ro-hero">
+    <div class="ro-hero-icon" aria-hidden="true"><i class="fa-solid fa-building-shield"></i></div>
+    <h1>Register your Organization</h1>
+    <p>Enterprise · Institution · Academy · Club. Your roster builds itself from athletes registered under your name.</p>
+    <div class="ro-hero-points">
+      <span><i class="fa-solid fa-users"></i> Automatic roster</span>
+      <span><i class="fa-solid fa-shield-halved"></i> 2-factor security</span>
+      <span><i class="fa-solid fa-file-shield"></i> Verified by D.A.R.T.</span>
+    </div>
+  </section>
+
+  <div class="card shadow ro-card">
+    <div class="card-body p-4 p-md-5">
+
+      <div class="ro-info">
+        <i class="fa-solid fa-circle-info"></i>
+        <div>
+          <strong>Free to register.</strong> We verify every organization against an official document
+          before its roster is shown. Upgrade to <a href="{{ url_for('pricing') }}#organizations">Organization Pro</a>
+          ({{ plans['organization_pro'].price_label }}/month) for the full roster, records and exports.
+        </div>
+      </div>
+
+      {% include '_google_signup_notice.html' %}
+
+      <form method="POST" enctype="multipart/form-data" novalidate class="needs-validation" id="orgForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <!-- ===== Organization ===== -->
+        <h2 class="ro-section"><i class="fa-solid fa-building"></i> Organization</h2>
+
+        <div class="mb-3">
+          <label class="form-label" for="orgName">Organization name <span class="text-danger">*</span> <i class="fa-solid fa-signature"></i></label>
+          <input type="text" class="form-control" id="orgName" name="org_name" required maxlength="150"
+                 value="{{ form.get('org_name', '') }}" placeholder="e.g. LPRC Oilers / St. John's High School">
+          <div class="form-text">Use the exact name your athletes register with. You'll log in with this name.</div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label" for="orgType">Type <span class="text-danger">*</span> <i class="fa-solid fa-sitemap"></i></label>
+            <select class="form-select" id="orgType" name="org_type" required>
+              <option value="">Select type</option>
+              {% for t in org_types %}<option value="{{ t }}" {% if form.get('org_type') == t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <span class="form-label d-block">Sports <span class="text-danger">*</span> <i class="fa-solid fa-futbol"></i></span>
+            <div class="ro-sports">
+              {% for s in org_sports %}
+                <label class="ro-sport">
+                  <input type="checkbox" name="sports" value="{{ s }}" {% if s in selected_sports %}checked{% endif %}>
+                  <span><i class="fa-solid {{ {'Football': 'fa-futbol', 'Basketball': 'fa-basketball', 'Kickball': 'fa-baseball'}[s] }}"></i> {{ s }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label" for="orgCountry">Country <span class="text-danger">*</span> <i class="fa-solid fa-globe"></i></label>
+            <input type="text" class="form-control" id="orgCountry" name="country" required maxlength="100"
+                   value="{{ form.get('country', '') }}" placeholder="e.g. Liberia">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="orgCity">City <i class="fa-solid fa-city"></i></label>
+            <input type="text" class="form-control" id="orgCity" name="city" maxlength="100"
+                   value="{{ form.get('city', '') }}" placeholder="e.g. Monrovia">
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" for="orgWebsite">Website <i class="fa-solid fa-link"></i></label>
+          <input type="url" class="form-control" id="orgWebsite" name="website" maxlength="255"
+                 value="{{ form.get('website', '') }}" placeholder="https://">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" for="orgAliases">Other names athletes use for your team <i class="fa-solid fa-tags"></i></label>
+          <textarea class="form-control" id="orgAliases" name="aliases" rows="3" maxlength="1600"
+                    placeholder="One per line, e.g.&#10;LPRC&#10;L.P.R.C. Oilers">{{ form.get('aliases', '') }}</textarea>
+          <div class="form-text">Optional. D.A.R.T. approves these during verification, so your roster only includes your athletes.</div>
+        </div>
+
+        <!-- ===== Contact ===== -->
+        <h2 class="ro-section"><i class="fa-solid fa-user-tie"></i> Authorized contact</h2>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label" for="contactName">Full name <span class="text-danger">*</span> <i class="fa-solid fa-user"></i></label>
+            <input type="text" class="form-control" id="contactName" name="contact_name" required maxlength="150"
+                   value="{{ form.get('contact_name', '') or (google_signup.name if google_signup else '') }}" placeholder="e.g. John Brown">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="contactTitle">Title / role <span class="text-danger">*</span> <i class="fa-solid fa-id-badge"></i></label>
+            <input type="text" class="form-control" id="contactTitle" name="contact_title" required maxlength="100"
+                   value="{{ form.get('contact_title', '') }}" placeholder="e.g. Athletic Director">
+          </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label" for="orgEmail">Official email <span class="text-danger">*</span> <i class="fa-solid fa-envelope"></i></label>
+            <input type="email" class="form-control" id="orgEmail" name="email" required maxlength="255" autocomplete="email"
+                   value="{{ google_signup.email if google_signup else form.get('email', '') }}"
+                   {% if google_signup %}readonly{% endif %} placeholder="e.g. sports@yourschool.edu.lr">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="orgPhone">Phone <span class="text-danger">*</span> <i class="fa-solid fa-phone"></i></label>
+            <input type="tel" class="form-control" id="orgPhone" name="contact_phone" required maxlength="20" inputmode="tel"
+                   pattern="\+?[0-9][0-9 ]{6,19}" value="{{ form.get('contact_phone', '') }}" placeholder="e.g. +231 77 000 0000">
+          </div>
+        </div>
+
+        <!-- ===== Verification ===== -->
+        <h2 class="ro-section"><i class="fa-solid fa-file-shield"></i> Verification</h2>
+
+        <div class="mb-3">
+          <label class="form-label" for="orgDocument">Official document (PNG/JPG/PDF, max 5 MB) <span class="text-danger">*</span> <i class="fa-solid fa-id-card"></i></label>
+          <input type="file" class="form-control" id="orgDocument" name="document" required accept=".png,.jpg,.jpeg,.pdf">
+          <div class="form-text">Registration certificate, accreditation, or a signed letter on your organization's letterhead. Only D.A.R.T. administrators can see it.</div>
+        </div>
+
+        <!-- ===== Security ===== -->
+        <h2 class="ro-section"><i class="fa-solid fa-lock"></i> Account security</h2>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label" for="orgPassword">Password <span class="text-danger">*</span> <i class="fa-solid fa-key"></i></label>
+            <input type="password" class="form-control" id="orgPassword" name="password" required autocomplete="new-password" placeholder="Example: @Xxxxx1">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="orgPassword2">Confirm password <span class="text-danger">*</span> <i class="fa-solid fa-key"></i></label>
+            <input type="password" class="form-control" id="orgPassword2" name="confirm_password" required autocomplete="new-password" placeholder="Repeat password">
+          </div>
+        </div>
+        <div class="form-text mb-3">At least 8 characters with upper and lower case letters, a number and a symbol. You'll also set up two-factor authentication on first login.</div>
+
+        <div class="ro-consent">
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="orgAuthorized" name="authorized" value="yes" required>
+            <label class="form-check-label" for="orgAuthorized">
+              I am authorized to register this organization and the information above is true.
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="orgTerms" name="accept_terms" value="yes" required>
+            <label class="form-check-label" for="orgTerms">
+              I accept the <a href="{{ url_for('organization_terms') }}" target="_blank">Organization Data Use Terms</a>,
+              <a href="{{ url_for('terms_page') }}" target="_blank">Terms of Use</a> and
+              <a href="{{ url_for('privacy_page') }}" target="_blank">Privacy Policy</a>. I will use athlete information only for
+              managing and developing our athletes, never sell or share it, and keep our account secure.
+            </label>
+          </div>
+        </div>
+
+        <button type="submit" class="btn dart-btn ro-submit">
+          <i class="fa-solid fa-building-circle-check me-1"></i> Register Organization
+        </button>
+        <p class="text-center small mt-3 mb-0">Already registered? <a href="{{ url_for('login') }}">Log in</a></p>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+  .ro-page { max-width: 860px; margin: 0 auto; }
+
+  .ro-hero {
+    padding: 30px 24px;
+    border-radius: 24px;
+    text-align: center;
+    color: #fff;
+    background:
+      radial-gradient(circle at 85% 15%, rgba(57, 185, 114, 0.35), transparent 40%),
+      linear-gradient(145deg, #071208, #0d2413 55%, #061008);
+  }
+  .ro-hero-icon {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 10px;
+    border-radius: 18px;
+    font-size: 1.7rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .ro-hero h1 { font-size: clamp(1.5rem, 3.5vw, 2.1rem); font-weight: 900; margin-bottom: 6px; }
+  .ro-hero p { color: #cfe9da; margin-bottom: 14px; }
+  .ro-hero-points { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .ro-hero-points span { padding: 5px 12px; border-radius: 999px; font-size: 0.82rem; background: rgba(255, 255, 255, 0.08); }
+
+  .ro-card { margin-top: -14px; border-radius: 24px; }
+  .ro-info {
+    display: flex;
+    gap: 12px;
+    padding: 14px 16px;
+    margin-bottom: 22px;
+    border-radius: 14px;
+    font-size: 0.9rem;
+    background: rgba(25, 135, 84, 0.08);
+    border: 1px solid rgba(25, 135, 84, 0.25);
+  }
+  .ro-info i { color: #198754; margin-top: 3px; }
+
+  .ro-section { font-size: 1.05rem; font-weight: 800; margin: 26px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--surface-border, #dee2e6); }
+  .ro-section i { color: #198754; margin-right: 6px; }
+
+  .ro-sports { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ro-sport { cursor: pointer; margin: 0; }
+  .ro-sport input { position: absolute; opacity: 0; }
+  .ro-sport span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 46px;
+    padding: 0 14px;
+    border-radius: 12px;
+    font-weight: 600;
+    border: 1.5px solid var(--input-border, #dee2e6);
+  }
+  .ro-sport input:checked + span { border-color: #198754; background: rgba(25, 135, 84, 0.1); color: #198754; }
+  .ro-sport input:focus-visible + span { outline: 3px solid rgba(25, 135, 84, 0.35); outline-offset: 2px; }
+
+  .ro-consent { padding: 14px 16px; border-radius: 14px; margin-bottom: 18px; border: 1px solid var(--surface-border, #dee2e6); font-size: 0.9rem; }
+  .ro-submit { width: 100%; padding: 12px; border-radius: 999px; font-weight: 700; border: 2px solid #000 !important; color: #fff; }
+</style>
+
+<script>
+  // Browser checks first (the server checks everything again).
+  document.getElementById('orgForm').addEventListener('submit', function (event) {
+    var form = event.target;
+    var sportsChosen = form.querySelectorAll('input[name=sports]:checked').length > 0;
+    var p1 = form.password.value, p2 = form.confirm_password.value;
+    form.confirm_password.setCustomValidity(p1 && p1 !== p2 ? 'Passwords do not match.' : '');
+    if (!sportsChosen || !form.checkValidity()) {
+      event.preventDefault();
+      form.classList.add('was-validated');
+      if (!sportsChosen) alert('Please choose at least one sport.');
+      form.reportValidity();
+    }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Record a Game{% endblock %}
+
+{% block content %}
+<div class="rf-page">
+
+  <section class="rf-hero">
+    <div>
+      <div class="rf-eyebrow"><i class="fa-solid fa-clipboard-list"></i> Record a game</div>
+      <h1>Submit a Sports Record</h1>
+      <p>Your form shows the competitions your category allows. It also works without internet.</p>
+    </div>
+    <a href="{{ url_for('student_dashboard') }}" class="btn rf-back"><i class="fa-solid fa-book me-1"></i> My Records</a>
+  </section>
+
+  {# Online / offline status (updated live below). #}
+  <div class="rf-status" id="rfStatus" role="status" aria-live="polite">
+    <span class="rf-status-dot" aria-hidden="true"></span>
+    <span class="rf-status-text"></span>
+  </div>
+
+  {% if current_user.is_verified %}
+    {% include '_record_form.html' %}
+  {% else %}
+    <div class="alert alert-warning">
+      Your Athlete ID is still pending verification. You cannot submit records yet.
+    </div>
+  {% endif %}
+</div>
+
+<style>
+  .rf-page { max-width: 1240px; margin: 0 auto; }
+
+  .rf-hero {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 24px 24px;
+    margin-bottom: 14px;
+    border-radius: 24px;
+    color: #fff;
+    background:
+      radial-gradient(circle at 88% 15%, rgba(57, 185, 114, 0.35), transparent 38%),
+      linear-gradient(145deg, #071208, #0d2413 55%, #061008);
+  }
+  .rf-eyebrow { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #4cd38a; }
+  .rf-hero h1 { font-size: clamp(1.4rem, 3.2vw, 2rem); font-weight: 900; margin: 6px 0 4px; }
+  .rf-hero p { margin: 0; color: #cfe9da; font-size: 0.92rem; }
+  .rf-back { border-radius: 999px; color: #fff; border: 1px solid rgba(255, 255, 255, 0.35); font-weight: 700; }
+  .rf-back:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+
+  .rf-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    border-radius: 14px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border: 1px solid rgba(25, 135, 84, 0.35);
+    background: rgba(25, 135, 84, 0.08);
+  }
+  .rf-status-dot { width: 10px; height: 10px; border-radius: 50%; background: #198754; box-shadow: 0 0 0 4px rgba(25, 135, 84, 0.2); }
+  .rf-status.is-offline { border-color: rgba(245, 197, 66, 0.6); background: rgba(245, 197, 66, 0.14); }
+  .rf-status.is-offline .rf-status-dot { background: #e0a800; box-shadow: 0 0 0 4px rgba(245, 197, 66, 0.25); }
+</style>
+
+<script>
+(function () {
+  var box = document.getElementById('rfStatus');
+  var text = box.querySelector('.rf-status-text');
+
+  function update() {
+    var offline = !navigator.onLine;
+    box.classList.toggle('is-offline', offline);
+    text.textContent = offline
+      ? "You're offline. Fill in the form as usual: your record is saved on this device and uploads automatically when you're back online."
+      : "You're online. Records are sent for coach approval straight away.";
+  }
+
+  window.addEventListener('online', update);
+  window.addEventListener('offline', update);
+  update();
+})();
+</script>
+{% endblock %}

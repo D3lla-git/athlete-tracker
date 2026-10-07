@@ -34,11 +34,16 @@
             <i class="fa-solid fa-binoculars me-2"></i>
             I'm a Scout
           </a>
+
+          <a href="{{ url_for('register_organization') }}" class="btn btn-lg dart-btn">
+            <i class="fa-solid fa-building-shield me-2"></i>
+            We're an Organization / Club / Academy
+          </a>
         </div>
 
         <p class="text-center small text-muted mt-4 mb-0">
-          Athlete IDs, coaches and scouts are still verified by D.A.R.T.
-          administrators before full access.
+          Athlete IDs, coaches, scouts and organizations are still verified by
+          D.A.R.T. administrators before full access.
           <br>
           <a href="{{ url_for('google_signup_cancel') }}">Not you? Cancel Google sign-up</a>
         </p>

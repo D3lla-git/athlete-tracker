@@ -1,0 +1,26 @@
+{# Google AdSense unit for free users and visitors (see ADSENSE_* in app.py).
+   With ADSENSE_SLOT_ID set, a responsive ad unit is placed here; without
+   it, Google Auto ads (enabled in AdSense) choose the placements. #}
+{% if show_ads and adsense_slot %}
+<aside class="dart-ad" aria-label="Advertisement">
+  <div class="dart-ad-label">Advertisement · <a href="{{ url_for('pricing') }}">Go ad-free with Premium</a></div>
+  <ins class="adsbygoogle"
+       style="display:block"
+       data-ad-client="{{ adsense_client }}"
+       data-ad-slot="{{ adsense_slot }}"
+       data-ad-format="auto"
+       data-full-width-responsive="true"></ins>
+  <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+</aside>
+<style>
+  .dart-ad {
+    margin: 24px 0;
+    padding: 10px;
+    border-radius: 14px;
+    border: 1px dashed var(--surface-border, rgba(0, 0, 0, 0.15));
+    min-height: 120px;
+  }
+  .dart-ad-label { font-size: 0.72rem; color: var(--muted-text, #6c757d); margin-bottom: 6px; }
+  .dart-ad-label a { color: inherit; }
+</style>
+{% endif %}

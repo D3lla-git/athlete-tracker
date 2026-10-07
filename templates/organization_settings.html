@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Settings · {{ org.org_name }}{% endblock %}
+
+{% block content %}
+<div class="os-page">
+  <a href="{{ url_for('organization_dashboard') }}" class="os-back"><i class="fa-solid fa-arrow-left"></i> Team HQ</a>
+  <h1 class="os-title"><i class="fa-solid fa-gear"></i> Organization settings</h1>
+
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <div class="card shadow">
+        <div class="card-header"><h2 class="h5 mb-0">Details</h2></div>
+        <div class="card-body">
+          <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="mb-3">
+              <label class="form-label">Organization name <i class="fa-solid fa-signature"></i></label>
+              <div class="form-control bg-light">{{ org.org_name }}</div>
+              <div class="form-text">To change your verified name, contact D.A.R.T.</div>
+            </div>
+
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label class="form-label" for="osContact">Contact person <i class="fa-solid fa-user-tie"></i></label>
+                <input type="text" class="form-control" id="osContact" name="contact_name" required maxlength="150" value="{{ org.contact_name }}">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="osTitle">Title / role <i class="fa-solid fa-id-badge"></i></label>
+                <input type="text" class="form-control" id="osTitle" name="contact_title" required maxlength="100" value="{{ org.contact_title or '' }}">
+              </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label class="form-label" for="osPhone">Phone <i class="fa-solid fa-phone"></i></label>
+                <input type="tel" class="form-control" id="osPhone" name="contact_phone" required maxlength="20" value="{{ org.contact_phone or '' }}">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="osWebsite">Website <i class="fa-solid fa-link"></i></label>
+                <input type="url" class="form-control" id="osWebsite" name="website" maxlength="255" value="{{ org.website or '' }}" placeholder="https://">
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label" for="osAliases">Other team names <i class="fa-solid fa-tags"></i></label>
+              <textarea class="form-control" id="osAliases" name="aliases" rows="4" placeholder="One per line">{{ org.requested_aliases if org.requested_aliases is not none else (org.approved_aliases or '') }}</textarea>
+              <div class="form-text">
+                Athletes registered with these names join your roster. Changes are reviewed by D.A.R.T. first.
+                {% if org.requested_aliases is not none %}<br><strong class="text-warning"><i class="fa-solid fa-hourglass-half"></i> Changes waiting for approval.</strong>{% endif %}
+              </div>
+            </div>
+
+            <button type="submit" class="btn dart-btn os-save"><i class="fa-solid fa-floppy-disk me-1"></i> Save</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card shadow">
+        <div class="card-header"><h2 class="h5 mb-0">Removed from roster</h2></div>
+        <div class="card-body">
+          {% for a in removed %}
+            <div class="os-removed">
+              <span>{{ a.full_name }} <small class="text-muted">· {{ a.school }}</small></span>
+              <form method="POST" action="{{ url_for('organization_restore_athlete', athlete_id=a.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-success rounded-pill"><i class="fa-solid fa-rotate-left me-1"></i> Restore</button>
+              </form>
+            </div>
+          {% else %}
+            <p class="text-muted mb-0">No one removed.</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="card shadow mt-3">
+        <div class="card-header"><h2 class="h5 mb-0">Security & plan</h2></div>
+        <div class="card-body os-links">
+          <a href="{{ url_for('setup_2fa') }}"><i class="fa-solid fa-shield-halved"></i> Two-factor authentication</a>
+          <a href="{{ url_for('billing') }}"><i class="fa-solid fa-receipt"></i> Billing</a>
+          <a href="{{ url_for('organization_terms') }}"><i class="fa-solid fa-file-contract"></i> Data Use Terms (accepted {{ org.terms_accepted_at.strftime('%b %d, %Y') if org.terms_accepted_at else '' }})</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .os-page { max-width: 1100px; margin: 0 auto; }
+  .os-back { display: inline-block; margin-bottom: 10px; text-decoration: none; font-weight: 600; color: #198754; }
+  .os-title { font-size: 1.5rem; font-weight: 800; margin-bottom: 16px; }
+  .os-title i { color: #198754; }
+  .os-save { border-radius: 999px; border: 2px solid #000 !important; color: #fff; padding: 8px 22px; }
+  .os-removed { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--surface-border, #dee2e6); }
+  .os-removed form { margin: 0; }
+  .os-links { display: grid; gap: 10px; }
+  .os-links a { text-decoration: none; font-weight: 600; }
+  .os-links i { color: #198754; width: 1.3em; }
+</style>
+{% endblock %}

@@ -1,0 +1,318 @@
+{# D.A.R.T. profile card (My Profile + public profile).
+   profile_hero(info, can_edit=false, edit_href='#')
+     info - profile_card_info(user): the same data as the shared card image
+            and the profile PDF, so all three always match.
+   Slide 1 is the profile card; athletes with approved games get a
+   Career slide. Only public sport information is shown (age, not DOB). #}
+{% from '_share.html' import profile_share_button %}
+
+{% macro profile_hero(info, can_edit=false, edit_href='#') %}
+{% set has_career = info.role == 'Athlete' and info.career %}
+<section class="pc-hero" aria-label="{{ info.eyebrow }}">
+  <div class="pc-track" data-pc-track tabindex="0" aria-label="Profile cards">
+
+    {# ===== Slide 1: profile card ===== #}
+    <article class="pc-card" aria-labelledby="pcName{{ info.id }}">
+      <div class="pc-tools">
+        {% if can_edit %}
+          <a href="{{ edit_href }}" class="pc-tool" aria-label="Edit profile" title="Edit profile"><i class="fa-solid fa-pen"></i></a>
+        {% endif %}
+        {{ profile_share_button(info, label='', extra_class='pc-tool pc-tool-share') }}
+      </div>
+
+      <div class="pc-top">
+        {% if info.picture %}
+          <img src="{{ url_for('profile_picture', filename=info.picture) }}" alt="{{ info.name }}" class="pc-photo">
+        {% else %}
+          <span class="pc-photo pc-photo-initials" aria-hidden="true">{{ info.name.split()[:2] | map('first') | join('') | upper }}</span>
+        {% endif %}
+
+        <div class="pc-head">
+          <div class="pc-eyebrow">{{ info.eyebrow }}</div>
+          <h1 class="pc-name" id="pcName{{ info.id }}">
+            {{ info.name }}
+            {% if info.verified %}<i class="fa-solid fa-circle-check pc-badge" title="Verified by D.A.R.T." aria-label="Verified"></i>{% endif %}
+          </h1>
+          <div class="pc-sub">{{ info.subtitle }}</div>
+          {% if info.pill %}<span class="pc-pill">{{ info.pill }}</span>{% endif %}
+        </div>
+      </div>
+
+      {% if info.stats %}
+        <div class="pc-stats">
+          {% for label, value in info.stats %}
+            <div class="pc-stat"><span>{{ label }}</span><strong>{{ value }}</strong></div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="pc-bottom">
+        <div class="pc-facts">
+          {% if info.nationality %}
+            <div class="pc-stat"><span>Nationality</span><strong>{{ info.flag }} {{ info.nationality }}</strong></div>
+          {% endif %}
+          {% for label, value in info.extra %}
+            <div class="pc-stat"><span>{{ label }}</span><strong>{{ value }}</strong></div>
+          {% endfor %}
+        </div>
+        <div class="pc-brand" aria-label="D.A.R.T. {{ 'verified' if info.verified else 'profile' }}">
+          <div class="pc-brand-name"><span>D</span>.A.R.T.</div>
+          <div class="pc-brand-tag">{{ 'Verified' if info.verified else 'Profile' }}</div>
+        </div>
+      </div>
+    </article>
+
+    {# ===== Slide 2: career (athletes with approved games) ===== #}
+    {% if has_career %}
+      <article class="pc-card pc-card-career" aria-label="Career on D.A.R.T.">
+        <div class="pc-eyebrow">Career on D.A.R.T.</div>
+        <h2 class="pc-career-title">Official, coach-approved games</h2>
+        <div class="pc-career-grid">
+          {% for c in info.career %}
+            <div class="pc-career-item">
+              <div class="pc-career-sport"><i class="fa-solid {{ {'Football': 'fa-futbol', 'Basketball': 'fa-basketball', 'Kickball': 'fa-baseball'}[c.sport] }}"></i> {{ c.sport }}</div>
+              <div class="pc-career-numbers">
+                <span><strong>{{ c.games }}</strong> games</span>
+                {% if c.sport == 'Football' %}<span><strong>{{ c.goals }}</strong> goals</span><span><strong>{{ c.assists }}</strong> assists</span>
+                {% elif c.sport == 'Basketball' %}<span><strong>{{ c.points }}</strong> pts</span><span><strong>{{ c.rebounds }}</strong> reb</span>
+                {% else %}<span><strong>{{ c.home_runs }}</strong> HR</span>{% endif %}
+                <span><strong>{{ c.awards }}</strong> awards</span>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="pc-bottom">
+          <div></div>
+          <div class="pc-brand"><div class="pc-brand-name"><span>D</span>.A.R.T.</div><div class="pc-brand-tag">{{ 'Verified' if info.verified else 'Profile' }}</div></div>
+        </div>
+      </article>
+    {% endif %}
+  </div>
+
+  {% if has_career %}
+    <div class="pc-dots" role="tablist" aria-label="Choose card">
+      <button type="button" class="pc-dot active" role="tab" aria-label="Profile card" aria-selected="true"></button>
+      <button type="button" class="pc-dot" role="tab" aria-label="Career card" aria-selected="false"></button>
+    </div>
+  {% endif %}
+
+  <div class="pc-actions">
+    {{ profile_share_button(info, label='Share profile', extra_class='pc-action pc-action-primary') }}
+    <a href="{{ url_for('profile_card_pdf', user_id=info.id) }}" class="pc-action pc-action-pdf" download>
+      <i class="fa-solid fa-file-pdf"></i> PDF
+    </a>
+    <a href="{{ url_for('profile_card_image', user_id=info.id) }}?download=1" class="pc-action" download>
+      <i class="fa-solid fa-image"></i> Card
+    </a>
+  </div>
+</section>
+
+<style>
+  .pc-hero { margin-bottom: 22px; }
+
+  .pc-track {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 28px;
+  }
+  .pc-track::-webkit-scrollbar { display: none; }
+  .pc-track:focus-visible { outline: 3px solid rgba(76, 211, 138, 0.5); outline-offset: 3px; }
+
+  .pc-card {
+    position: relative;
+    flex: 0 0 100%;
+    scroll-snap-align: center;
+    overflow: hidden;
+    padding: 24px;
+    border-radius: 28px;
+    color: #fff;
+    background:
+      radial-gradient(circle at 85% 12%, rgba(57, 185, 114, 0.30), transparent 38%),
+      radial-gradient(circle at 10% 110%, rgba(57, 185, 114, 0.16), transparent 40%),
+      linear-gradient(135deg, #071208, #0d2413 55%, #061008);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: 0 22px 50px rgba(0, 0, 0, 0.35);
+    isolation: isolate;
+  }
+
+  /* Watermark emblem, like a stamped badge */
+  .pc-card::before,
+  .pc-card::after {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    right: -40px;
+    top: 50%;
+    width: 340px;
+    height: 340px;
+    transform: translateY(-45%);
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.06);
+  }
+  .pc-card::after {
+    content: 'D';
+    display: grid;
+    place-items: center;
+    width: 250px;
+    height: 250px;
+    right: 6px;
+    border-width: 2px;
+    font: 900 170px/1 "Arial Black", Arial, sans-serif;
+    color: rgba(255, 255, 255, 0.05);
+  }
+
+  .pc-tools { position: absolute; top: 18px; right: 18px; display: flex; gap: 8px; z-index: 2; }
+  .pc-tool,
+  .pc-hero .dart-share-btn.pc-tool {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    margin: 0;
+    padding: 0;
+    border-radius: 12px;
+    font-size: 1.05rem;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    text-decoration: none;
+  }
+  .pc-tool:hover,
+  .pc-hero .dart-share-btn.pc-tool:hover { color: #071208; background: #4cd38a; }
+
+  .pc-top { display: flex; gap: 20px; align-items: center; padding-right: 96px; }
+  .pc-photo {
+    flex: 0 0 auto;
+    width: 128px;
+    height: 128px;
+    border-radius: 24px;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.22);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  }
+  .pc-photo-initials {
+    display: grid;
+    place-items: center;
+    font-size: 2.6rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, #198754, #39b972);
+  }
+
+  .pc-head { min-width: 0; }
+  .pc-eyebrow { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #a3b8ac; }
+  .pc-name {
+    margin: 4px 0 2px;
+    font-size: clamp(1.4rem, 3.4vw, 2.1rem);
+    font-weight: 900;
+    line-height: 1.15;
+    color: #fff;
+    overflow-wrap: anywhere;
+  }
+  .pc-badge { margin-left: 6px; font-size: 0.75em; color: #4cd38a; vertical-align: 0.05em; }
+  .pc-sub { font-size: 1.05rem; color: #e1ebe5; }
+  .pc-pill {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 4px 12px;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #fff;
+    background: #198754;
+  }
+
+  .pc-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+  .pc-stat span { display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #8aa094; }
+  .pc-stat strong { display: block; margin-top: 3px; font-size: 1.2rem; font-weight: 600; overflow-wrap: anywhere; }
+
+  .pc-bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-top: 20px; }
+  .pc-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; flex: 1 1 auto; min-width: 0; }
+  .pc-brand { flex: 0 0 auto; text-align: right; }
+  .pc-brand-name { font-size: 1.6rem; font-weight: 900; font-style: italic; line-height: 1; letter-spacing: 0.02em; }
+  .pc-brand-name span { color: #4cd38a; }
+  .pc-brand-tag { margin-top: 4px; font-size: 0.72rem; letter-spacing: 0.32em; text-transform: uppercase; color: #cfe9da; }
+
+  .pc-career-title { margin: 6px 0 16px; font-size: 1.3rem; font-weight: 800; }
+  .pc-career-grid { display: grid; gap: 12px; }
+  .pc-career-item { padding: 12px 14px; border-radius: 16px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); }
+  .pc-career-sport { font-weight: 800; margin-bottom: 6px; }
+  .pc-career-sport i { color: #4cd38a; }
+  .pc-career-numbers { display: flex; flex-wrap: wrap; gap: 6px 16px; color: #cfe9da; }
+  .pc-career-numbers strong { color: #fff; font-size: 1.15rem; }
+
+  .pc-dots { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
+  .pc-dot { width: 9px; height: 9px; padding: 0; border: 0; border-radius: 999px; background: #adb5bd; transition: width 0.2s, background-color 0.2s; }
+  .pc-dot.active { width: 26px; background: #198754; }
+
+  .pc-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 14px; }
+  .pc-action,
+  .pc-hero .dart-share-btn.pc-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 9px 18px;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-decoration: none;
+    color: var(--surface-text, #212529);
+    background: var(--surface-bg, #fff);
+    border: 1px solid var(--surface-border, #dee2e6);
+  }
+  .pc-action:hover { border-color: #198754; color: #198754; }
+  .pc-hero .dart-share-btn.pc-action-primary {
+    color: #fff;
+    border: 2px solid #000;
+    background:
+      radial-gradient(circle at 85% 30%, rgba(57, 185, 114, 0.30), transparent 30%),
+      linear-gradient(135deg, #071208, #0d2413 55%, #061008);
+  }
+  .pc-action-pdf i { color: #b02a37; }
+
+  @media (max-width: 575.98px) {
+    .pc-card { padding: 18px; border-radius: 24px; }
+    .pc-top { gap: 14px; padding-right: 0; align-items: flex-start; }
+    .pc-tools { top: 12px; right: 12px; }
+    .pc-photo { width: 92px; height: 92px; border-radius: 18px; }
+    .pc-head { padding-top: 34px; }
+    .pc-stats { gap: 8px; margin-top: 18px; }
+    .pc-stat strong { font-size: 1rem; }
+    .pc-bottom { flex-direction: column; align-items: stretch; }
+    .pc-brand { align-self: flex-end; }
+    .pc-card::after { font-size: 120px; width: 180px; height: 180px; }
+    .pc-card::before { width: 240px; height: 240px; }
+  }
+</style>
+
+<script>
+(function () {
+  document.querySelectorAll('.pc-hero').forEach(function (hero) {
+    if (hero.dataset.ready) return;
+    hero.dataset.ready = '1';
+    var track = hero.querySelector('[data-pc-track]');
+    var dots = Array.prototype.slice.call(hero.querySelectorAll('.pc-dot'));
+    if (!track || !dots.length) return;
+    var cards = Array.prototype.slice.call(track.children);
+
+    function update() {
+      var i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+      dots.forEach(function (d, n) {
+        d.classList.toggle('active', n === i);
+        d.setAttribute('aria-selected', n === i ? 'true' : 'false');
+      });
+    }
+    dots.forEach(function (dot, n) {
+      dot.addEventListener('click', function () {
+        track.scrollTo({ left: cards[n].offsetLeft - cards[0].offsetLeft, behavior: 'smooth' });
+      });
+    });
+    track.addEventListener('scroll', function () { requestAnimationFrame(update); }, { passive: true });
+  });
+})();
+</script>
+{% endmacro %}

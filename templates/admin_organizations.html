@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Organizations · Super Admin{% endblock %}
+
+{% macro org_facts(org) %}
+  <dl class="ao-facts">
+    <div><dt>Type</dt><dd>{{ org.org_type }}</dd></div>
+    <div><dt>Sports</dt><dd>{{ org.sports or '-' }}</dd></div>
+    <div><dt>Location</dt><dd>{{ org.city ~ ', ' if org.city }}{{ org.country or '-' }}</dd></div>
+    <div><dt>Contact</dt><dd>{{ org.contact_name }}{% if org.contact_title %} · {{ org.contact_title }}{% endif %}</dd></div>
+    <div><dt>Email</dt><dd>{{ org.user.email }}</dd></div>
+    <div><dt>Phone</dt><dd>{{ org.contact_phone or '-' }}</dd></div>
+    <div><dt>Website</dt><dd>{% if org.website %}<a href="{{ org.website }}" target="_blank" rel="noopener noreferrer nofollow">{{ org.website }}</a>{% else %}-{% endif %}</dd></div>
+    <div><dt>Terms</dt><dd>v{{ org.terms_version }} · {{ org.terms_accepted_at.strftime('%b %d, %Y') if org.terms_accepted_at else '-' }}</dd></div>
+  </dl>
+{% endmacro %}
+
+{% block content %}
+<div class="ao-page">
+  <h1 class="ao-title"><i class="fa-solid fa-building-shield"></i> Organizations</h1>
+  <p class="ao-lead">Verify each organization against its official document before approving. Approved team names decide which athletes appear on its roster, so only approve names that clearly belong to this organization.</p>
+
+  <h2 class="ao-sub">Waiting for verification <span class="ao-badge">{{ pending | length }}</span></h2>
+  {% for org in pending %}
+    <article class="ao-card">
+      <div class="ao-card-main">
+        <h3>{{ org.org_name }}</h3>
+        {{ org_facts(org) }}
+        {% if org.requested_aliases %}
+          <div class="ao-aliases"><strong>Other team names requested:</strong> {{ org.requested_aliases.splitlines() | join(' · ') }}</div>
+        {% endif %}
+        <a class="btn btn-sm btn-outline-primary rounded-pill mt-2" href="{{ url_for('id_document', filename=org.document_path) }}" target="_blank" rel="noopener">
+          <i class="fa-solid fa-file-shield me-1"></i> Open official document
+        </a>
+      </div>
+      <div class="ao-actions">
+        <form method="POST" action="{{ url_for('admin_organization_action', org_id=org.id, action='verify') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% if org.requested_aliases %}
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" name="approve_aliases" value="yes" id="alias{{ org.id }}">
+              <label class="form-check-label small" for="alias{{ org.id }}">Also approve the requested team names</label>
+            </div>
+          {% endif %}
+          <button type="submit" class="btn btn-success ao-btn"><i class="fa-solid fa-circle-check me-1"></i> Verify</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin_organization_action', org_id=org.id, action='reject') }}"
+              onsubmit="return confirm('Reject {{ org.org_name | e }}?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline-danger ao-btn"><i class="fa-solid fa-circle-xmark me-1"></i> Reject</button>
+        </form>
+      </div>
+    </article>
+  {% else %}
+    <p class="text-muted">No organizations waiting.</p>
+  {% endfor %}
+
+  <h2 class="ao-sub">Team name changes <span class="ao-badge">{{ alias_requests | length }}</span></h2>
+  {% for org in alias_requests %}
+    <article class="ao-card">
+      <div class="ao-card-main">
+        <h3>{{ org.org_name }}</h3>
+        <div class="ao-aliases"><strong>Now:</strong> {{ (org.approved_aliases or '').splitlines() | join(' · ') or 'none' }}</div>
+        <div class="ao-aliases"><strong>Requested:</strong> {{ (org.requested_aliases or '').splitlines() | join(' · ') or 'remove all' }}</div>
+      </div>
+      <div class="ao-actions">
+        <form method="POST" action="{{ url_for('admin_organization_action', org_id=org.id, action='approve_aliases') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-success ao-btn">Approve</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin_organization_action', org_id=org.id, action='decline_aliases') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline-danger ao-btn">Decline</button>
+        </form>
+      </div>
+    </article>
+  {% else %}
+    <p class="text-muted">No changes waiting.</p>
+  {% endfor %}
+
+  <h2 class="ao-sub">Verified <span class="ao-badge">{{ verified | length }}</span></h2>
+  {% if verified %}
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead><tr><th>Organization</th><th>Type</th><th>Team names</th><th>Roster</th><th>Verified</th></tr></thead>
+        <tbody>
+          {% for org in verified %}
+            <tr>
+              <td><strong>{{ org.org_name }}</strong></td>
+              <td>{{ org.org_type }}</td>
+              <td class="small">{{ (org.approved_aliases or '').splitlines() | join(', ') or '-' }}</td>
+              <td>{{ roster_size(org) }}</td>
+              <td>{{ org.verified_at.strftime('%b %d, %Y') if org.verified_at else '-' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="text-muted">None yet.</p>
+  {% endif %}
+</div>
+
+<style>
+  .ao-page { max-width: 1100px; margin: 0 auto; }
+  .ao-title { font-size: 1.6rem; font-weight: 800; }
+  .ao-title i { color: #198754; }
+  .ao-lead { color: var(--muted-text, #6c757d); max-width: 760px; }
+  .ao-sub { font-size: 1.15rem; font-weight: 800; margin: 26px 0 12px; }
+  .ao-badge { padding: 2px 10px; border-radius: 999px; font-size: 0.8rem; color: #8a6d00; background: rgba(245, 197, 66, 0.22); }
+  .ao-card {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px;
+    margin-bottom: 12px;
+    border-radius: 18px;
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    border-left: 5px solid #198754;
+    background: var(--surface-bg, #fff);
+  }
+  .ao-card-main { flex: 1 1 520px; min-width: 0; }
+  .ao-card h3 { font-size: 1.1rem; font-weight: 800; }
+  .ao-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 16px; margin: 8px 0 0; }
+  .ao-facts dt { font-size: 0.72rem; text-transform: uppercase; color: var(--muted-text, #6c757d); font-weight: 700; }
+  .ao-facts dd { margin: 0; overflow-wrap: anywhere; }
+  .ao-aliases { margin-top: 8px; font-size: 0.9rem; }
+  .ao-actions { display: flex; flex-direction: column; gap: 10px; flex: 0 1 240px; }
+  .ao-actions form { margin: 0; }
+  .ao-btn { width: 100%; border-radius: 999px; font-weight: 700; }
+</style>
+{% endblock %}

@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Billing{% endblock %}
+
+{% block content %}
+<div class="bl-page">
+  <h1 class="bl-title"><i class="fa-solid fa-receipt"></i> Billing</h1>
+
+  <section class="bl-plan {% if plan %}is-premium{% endif %}" aria-label="Current plan">
+    <div>
+      <div class="bl-eyebrow">Current plan</div>
+      <div class="bl-plan-name">
+        {% if plan %}<i class="fa-solid fa-crown"></i> {{ plan.name }}{% else %}Free{% endif %}
+      </div>
+      {% if subscription %}
+        <div class="bl-plan-sub">Active until {{ subscription.current_period_end.strftime('%B %d, %Y') }} · no automatic renewal</div>
+      {% else %}
+        <div class="bl-plan-sub">You're on the free plan.</div>
+      {% endif %}
+    </div>
+    {% if plan %}
+      <a href="{{ url_for('checkout', plan_code=plan.code) }}" class="btn dart-btn bl-btn"><i class="fa-solid fa-calendar-plus me-1"></i> Extend 30 days</a>
+    {% elif eligible_plan %}
+      <a href="{{ url_for('pricing') }}" class="btn dart-btn bl-btn"><i class="fa-solid fa-crown me-1"></i> Upgrade</a>
+    {% endif %}
+  </section>
+
+  <section class="card shadow mt-4" aria-labelledby="blHistory">
+    <div class="card-header"><h2 class="h5 mb-0" id="blHistory">Payments</h2></div>
+    <div class="card-body p-0">
+      {% if payments %}
+        <div class="table-responsive">
+          <table class="table bl-table mb-0 align-middle">
+            <thead>
+              <tr><th>Date</th><th>Plan</th><th>Amount</th><th>Method</th><th>Reference</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              {% for p in payments %}
+                <tr>
+                  <td data-label="Date">{{ p.created_at.strftime('%b %d, %Y') }}</td>
+                  <td data-label="Plan">{{ plans[p.plan_code].name if p.plan_code in plans else (p.description or '-') }}</td>
+                  <td data-label="Amount">${{ '%.2f' | format(p.amount) }}</td>
+                  <td data-label="Method">{{ payment_methods.get(p.payment_method, '-') }}</td>
+                  <td data-label="Reference"><code>{{ p.payment_reference }}</code></td>
+                  <td data-label="Status">
+                    {% if p.status == 'awaiting_review' %}
+                      <span class="bl-status bl-wait"><i class="fa-solid fa-hourglass-half"></i> Awaiting confirmation</span>
+                    {% elif p.status == 'succeeded' %}
+                      <span class="bl-status bl-ok"><i class="fa-solid fa-circle-check"></i> Confirmed</span>
+                    {% elif p.status == 'failed' %}
+                      <span class="bl-status bl-bad"><i class="fa-solid fa-circle-xmark"></i> Not confirmed</span>
+                      {% if p.failure_reason %}<div class="bl-reason">{{ p.failure_reason }}</div>{% endif %}
+                    {% else %}
+                      <span class="bl-status">{{ p.status | replace('_', ' ') | title }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="bl-empty"><i class="fa-solid fa-receipt"></i> No payments yet.</div>
+      {% endif %}
+    </div>
+  </section>
+</div>
+
+<style>
+  .bl-page { max-width: 960px; margin: 0 auto; }
+  .bl-title { font-size: 1.6rem; font-weight: 800; margin-bottom: 16px; }
+  .bl-title i { color: #198754; }
+
+  .bl-plan {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 22px;
+    border-radius: 22px;
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    background: var(--surface-bg, #fff);
+  }
+  .bl-plan.is-premium {
+    color: #fff;
+    border-color: rgba(245, 197, 66, 0.5);
+    background:
+      radial-gradient(circle at 90% 10%, rgba(245, 197, 66, 0.28), transparent 40%),
+      linear-gradient(145deg, #071208, #0d2413 55%, #061008);
+  }
+  .bl-eyebrow { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #198754; }
+  .is-premium .bl-eyebrow, .is-premium .bl-plan-name i { color: #f5c542; }
+  .bl-plan-name { font-size: 1.5rem; font-weight: 900; }
+  .bl-plan-sub { font-size: 0.88rem; opacity: 0.8; }
+  .bl-btn { border-radius: 999px; border: 2px solid #000 !important; color: #fff; }
+
+  .bl-table th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-text, #6c757d); }
+  .bl-status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; }
+  .bl-wait { color: #8a6d00; background: rgba(245, 197, 66, 0.2); }
+  .bl-ok { color: #146c43; background: rgba(25, 135, 84, 0.14); }
+  .bl-bad { color: #b02a37; background: rgba(220, 53, 69, 0.12); }
+  .bl-reason { font-size: 0.78rem; color: var(--muted-text, #6c757d); margin-top: 4px; }
+  .bl-empty { padding: 30px; text-align: center; color: var(--muted-text, #6c757d); }
+
+  @media (max-width: 767.98px) {
+    .bl-table thead { display: none; }
+    .bl-table tr { display: block; padding: 10px 14px; border-bottom: 1px solid var(--surface-border, #dee2e6); }
+    .bl-table td { display: flex; justify-content: space-between; gap: 10px; border: 0; padding: 4px 0; }
+    .bl-table td::before { content: attr(data-label); font-weight: 600; color: var(--muted-text, #6c757d); }
+  }
+</style>
+{% endblock %}

@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Checkout · {{ plan.name }}{% endblock %}
+
+{% block content %}
+<div class="co-page">
+  <a href="{{ url_for('pricing') }}" class="co-back"><i class="fa-solid fa-arrow-left"></i> All plans</a>
+
+  <div class="co-grid">
+    <!-- ===================== SUMMARY ===================== -->
+    <aside class="co-summary" aria-labelledby="coPlanTitle">
+      <div class="co-eyebrow"><i class="fa-solid fa-crown"></i> You're upgrading to</div>
+      <h1 id="coPlanTitle">{{ plan.name }}</h1>
+      <div class="co-price">{{ plan.price_label }} <span>USD / 30 days</span></div>
+      <ul class="co-features">
+        {% for f in plan.features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
+      </ul>
+      <div class="co-note">
+        <i class="fa-solid fa-rotate"></i> No automatic renewal. When 30 days end you return to the free plan and keep all your data.
+      </div>
+      {% if my_plan and my_plan.code == plan.code and my_subscription %}
+        <div class="co-note co-note-gold">
+          <i class="fa-solid fa-calendar-plus"></i> Your plan is active until
+          {{ my_subscription.current_period_end.strftime('%B %d, %Y') }}. Paying now adds 30 days.
+        </div>
+      {% endif %}
+    </aside>
+
+    <!-- ===================== PAYMENT ===================== -->
+    <section class="co-pay card shadow" aria-labelledby="coPayTitle">
+      <div class="card-body">
+        <h2 id="coPayTitle" class="co-title">Pay with mobile money</h2>
+
+        {% if open_count >= max_open_payments %}
+          <div class="alert alert-warning">
+            You already have {{ open_count }} payments waiting for confirmation. Please wait until they are reviewed.
+            <a href="{{ url_for('billing') }}">View billing</a>
+          </div>
+        {% endif %}
+
+        <ol class="co-steps">
+          <li>
+            <strong>Choose how you'll pay</strong>
+            <div class="co-methods" role="radiogroup" aria-label="Payment method">
+              {% for m in plan.methods %}
+                {% set ready = m != 'card' and payment_accounts.get(m) %}
+                <label class="co-method {% if not ready %}is-disabled{% endif %}">
+                  <input type="radio" name="payment_method" value="{{ m }}" form="checkoutForm"
+                         {% if not ready %}disabled{% endif %} required
+                         data-number="{{ payment_accounts.get(m, '') }}">
+                  <span class="co-method-body co-method-{{ m }}">
+                    <i class="fa-solid {{ 'fa-credit-card' if m == 'card' else 'fa-mobile-screen-button' }}"></i>
+                    <span>{{ payment_methods[m] }}</span>
+                    {% if m == 'card' %}<em>Coming soon</em>{% elif not ready %}<em>Not available yet</em>{% endif %}
+                  </span>
+                </label>
+              {% endfor %}
+            </div>
+          </li>
+
+          <li>
+            <strong>Send exactly {{ plan.price_label }} USD</strong>
+            <div class="co-transfer">
+              <div class="co-transfer-row">
+                <span>To</span>
+                <strong id="coNumber">Choose a method above</strong>
+              </div>
+              <div class="co-transfer-row">
+                <span>Name</span>
+                <strong>{{ payment_account_name }}</strong>
+              </div>
+              <div class="co-transfer-row">
+                <span>Reference / note</span>
+                <strong class="co-ref">
+                  <code id="coReference">{{ payment.payment_reference }}</code>
+                  <button type="button" class="co-copy" data-copy="#coReference" aria-label="Copy reference"><i class="fa-regular fa-copy"></i></button>
+                </strong>
+              </div>
+            </div>
+            <div class="form-text">Put the reference in the payment note so we can match your payment.</div>
+          </li>
+
+          <li>
+            <strong>Tell us about your payment</strong>
+            <form method="POST" id="checkoutForm" class="mt-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+              <div class="mb-3">
+                <label class="form-label" for="payerPhone">Phone number you paid from <i class="fa-solid fa-phone"></i></label>
+                <input type="tel" class="form-control" id="payerPhone" name="payer_phone" required
+                       inputmode="tel" autocomplete="tel" maxlength="20"
+                       pattern="\+?[0-9][0-9 ]{6,19}" placeholder="e.g. +231 77 000 0000">
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label" for="transactionId">Transaction ID (from your SMS) <i class="fa-solid fa-receipt"></i></label>
+                <input type="text" class="form-control" id="transactionId" name="transaction_id" required
+                       maxlength="40" pattern="[A-Za-z0-9.\-]{5,40}" autocomplete="off"
+                       placeholder="e.g. MP240612.1530.A12345" style="text-transform: uppercase;">
+              </div>
+
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="coConsent" required>
+                <label class="form-check-label" for="coConsent">
+                  I made this payment myself and agree to the <a href="{{ url_for('terms_page') }}" target="_blank">Terms of Use</a>.
+                </label>
+              </div>
+
+              <button type="submit" class="btn dart-btn co-submit" {% if open_count >= max_open_payments %}disabled{% endif %}>
+                <i class="fa-solid fa-paper-plane me-1"></i> Submit payment for confirmation
+              </button>
+              <div class="co-secure"><i class="fa-solid fa-lock"></i> We never ask for your PIN. D.A.R.T. staff will never call you for it.</div>
+            </form>
+          </li>
+        </ol>
+      </div>
+    </section>
+  </div>
+</div>
+
+<style>
+  .co-page { max-width: 1080px; margin: 0 auto; }
+  .co-back { display: inline-block; margin-bottom: 14px; text-decoration: none; font-weight: 600; color: #198754; }
+
+  .co-grid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr); gap: 22px; align-items: start; }
+
+  .co-summary {
+    position: sticky;
+    top: 90px;
+    padding: 26px 22px;
+    border-radius: 24px;
+    color: #fff;
+    background:
+      radial-gradient(circle at 85% 15%, rgba(245, 197, 66, 0.28), transparent 40%),
+      linear-gradient(145deg, #071208, #0d2413 55%, #061008);
+  }
+
+  .co-eyebrow { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #f5c542; }
+  .co-summary h1 { font-size: 1.6rem; font-weight: 900; margin: 6px 0; }
+  .co-price { font-size: 2.2rem; font-weight: 900; color: #f5c542; }
+  .co-price span { font-size: 0.85rem; color: #cfe9da; font-weight: 600; }
+  .co-features { list-style: none; padding: 0; margin: 14px 0; }
+  .co-features li { display: flex; gap: 8px; padding: 4px 0; font-size: 0.9rem; color: #e3f3ea; }
+  .co-features i { color: #4cd38a; margin-top: 4px; }
+  .co-note { font-size: 0.82rem; color: #cfe9da; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); margin-top: 8px; }
+  .co-note-gold { border: 1px solid rgba(245, 197, 66, 0.5); }
+
+  .co-pay { border-radius: 24px; }
+  .co-title { font-size: 1.3rem; font-weight: 800; margin-bottom: 14px; }
+
+  .co-steps { padding-left: 1.2rem; margin: 0; }
+  .co-steps > li { padding: 4px 0 18px 6px; }
+  .co-steps > li::marker { font-weight: 800; color: #198754; }
+
+  .co-methods { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
+  .co-method { position: relative; cursor: pointer; margin: 0; }
+  .co-method input { position: absolute; opacity: 0; }
+  .co-method-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 14px 10px;
+    border-radius: 16px;
+    text-align: center;
+    font-weight: 700;
+    border: 2px solid var(--input-border, #dee2e6);
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .co-method-body i { font-size: 1.4rem; }
+  .co-method-body em { font-style: normal; font-size: 0.72rem; font-weight: 600; opacity: 0.7; }
+  .co-method-orange_money i { color: #ff7900; }
+  .co-method-mtn_momo i { color: #e6b800; }
+  .co-method input:checked + .co-method-body { border-color: #198754; background: rgba(25, 135, 84, 0.08); }
+  .co-method input:focus-visible + .co-method-body { outline: 3px solid rgba(25, 135, 84, 0.4); outline-offset: 2px; }
+  .co-method.is-disabled { cursor: not-allowed; opacity: 0.55; }
+
+  .co-transfer { margin-top: 10px; border-radius: 14px; border: 1px solid var(--input-border, #dee2e6); overflow: hidden; }
+  .co-transfer-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px; font-size: 0.9rem; }
+  .co-transfer-row + .co-transfer-row { border-top: 1px solid var(--input-border, #dee2e6); }
+  .co-transfer-row span { color: var(--muted-text, #6c757d); }
+  .co-ref { display: inline-flex; align-items: center; gap: 8px; }
+  .co-ref code { font-size: 1rem; font-weight: 800; color: #198754; letter-spacing: 0.04em; }
+  .co-copy { border: 0; background: rgba(25, 135, 84, 0.12); color: #198754; border-radius: 8px; width: 32px; height: 32px; }
+
+  .co-submit { width: 100%; border-radius: 999px; padding: 12px; font-weight: 700; border: 2px solid #000 !important; color: #fff; }
+  .co-secure { margin-top: 10px; text-align: center; font-size: 0.8rem; color: var(--muted-text, #6c757d); }
+
+  @media (max-width: 767.98px) {
+    .co-grid { grid-template-columns: 1fr; }
+    .co-summary { position: static; }
+  }
+</style>
+
+<script>
+(function () {
+  var number = document.getElementById('coNumber');
+  document.querySelectorAll('input[name=payment_method]').forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      number.textContent = radio.dataset.number || 'Not available';
+    });
+  });
+
+  document.querySelectorAll('[data-copy]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var text = document.querySelector(btn.dataset.copy).textContent.trim();
+      var done = function () {
+        btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+        setTimeout(function () { btn.innerHTML = '<i class="fa-regular fa-copy"></i>'; }, 1500);
+      };
+      if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {});
+    });
+  });
+})();
+</script>
+{% endblock %}

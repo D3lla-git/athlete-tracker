@@ -1,0 +1,102 @@
+{# Athlete dashboard: current plan + this month's uploads (plans.usage_summary). #}
+{% set usage = upload_usage() %}
+<section class="plan-card {% if my_plan %}plan-card-premium{% endif %}" aria-labelledby="planCardTitle">
+  <div class="plan-card-head">
+    <div>
+      <div class="plan-card-eyebrow">My Plan</div>
+      <h2 class="plan-card-title" id="planCardTitle">
+        {% if my_plan %}
+          <i class="fa-solid fa-crown"></i> {{ my_plan.name }}
+        {% else %}
+          Free
+        {% endif %}
+      </h2>
+      <div class="plan-card-sub">
+        {% if my_plan %}
+          Active until {{ my_subscription.current_period_end.strftime('%B %d, %Y') if my_subscription else '' }}
+        {% elif usage.active %}
+          Limits reset on {{ usage.resets.strftime('%B %d') }}
+        {% else %}
+          Monthly upload limits start {{ usage.starts.strftime('%B %d, %Y') }}
+        {% endif %}
+      </div>
+    </div>
+    {% if my_plan %}
+      <a href="{{ url_for('billing') }}" class="btn btn-outline-light plan-card-btn"><i class="fa-solid fa-receipt me-1"></i> Billing</a>
+    {% else %}
+      <a href="{{ url_for('pricing') }}" class="btn dart-btn plan-card-btn"><i class="fa-solid fa-crown me-1"></i> Upgrade</a>
+    {% endif %}
+  </div>
+
+  <div class="plan-meters">
+    {% for row in usage.rows %}
+      <div class="plan-meter">
+        <div class="plan-meter-label">
+          <span>{{ row.label }} this month</span>
+          <strong>{% if row.limit is none or not usage.active %}{{ row.used }} · Unlimited{% else %}{{ row.used }}/{{ row.limit }}{% endif %}</strong>
+        </div>
+        {% if row.limit is not none and usage.active %}
+          <div class="progress plan-meter-bar" role="progressbar" aria-label="{{ row.label }} used"
+               aria-valuenow="{{ row.percent }}" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-bar {% if row.percent >= 100 %}bg-danger{% elif row.percent >= 67 %}bg-warning{% endif %}"
+                 style="--progress: {{ row.percent }}%; width: var(--progress);"></div>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if not my_plan %}
+    <div class="plan-card-note">
+      Free athletes show their latest approved record to scouts.
+      <a href="{{ url_for('pricing') }}">Premium</a> shows your full record history{% if my_eligible_plan %} ({{ my_eligible_plan.price_label }}/month for {{ my_eligible_plan.category }}s){% endif %}.
+    </div>
+  {% endif %}
+</section>
+
+<style>
+  .plan-card {
+    margin: 20px 0;
+    padding: 18px 20px;
+    border-radius: 20px;
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    background: var(--surface-bg, #fff);
+  }
+
+  .plan-card-premium {
+    color: #fff;
+    border-color: rgba(245, 197, 66, 0.5);
+    background:
+      radial-gradient(circle at 90% 10%, rgba(245, 197, 66, 0.28), transparent 40%),
+      linear-gradient(145deg, #071208, #0d2413 55%, #061008);
+  }
+
+  .plan-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .plan-card-eyebrow { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #198754; }
+  .plan-card-premium .plan-card-eyebrow { color: #f5c542; }
+  .plan-card-title { font-size: 1.35rem; font-weight: 800; margin: 2px 0; }
+  .plan-card-premium .plan-card-title i { color: #f5c542; }
+  .plan-card-sub { font-size: 0.85rem; opacity: 0.8; }
+  .plan-card-btn { border-radius: 999px; white-space: nowrap; }
+  .plan-card-btn.dart-btn { border: 2px solid #000 !important; color: #fff; }
+
+  .plan-meters {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 16px;
+  }
+
+  .plan-meter-label { display: flex; justify-content: space-between; gap: 8px; font-size: 0.82rem; margin-bottom: 6px; }
+  .plan-meter-bar { height: 8px; border-radius: 999px; }
+  .plan-meter-bar .progress-bar { background-color: #198754; }
+  .plan-meter-bar .progress-bar.bg-warning { background-color: #f5c542 !important; }
+  .plan-meter-bar .progress-bar.bg-danger { background-color: #dc3545 !important; }
+
+  .plan-card-note { margin-top: 14px; font-size: 0.82rem; opacity: 0.85; }
+
+  @media (max-width: 767.98px) {
+    .plan-meters { grid-template-columns: 1fr; gap: 10px; }
+    .plan-card-head { flex-wrap: wrap; }
+  }
+</style>

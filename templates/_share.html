@@ -1,0 +1,360 @@
+{# Share an approved record or a profile: social apps, copy link, PDF,
+   and for profiles the D.A.R.T. card image (share / download).
+   share_button(record) / profile_share_button(info) render the buttons;
+   share_modal() is included once in base.html and handles every button. #}
+
+{% macro share_button(r, compact=false) %}
+  {% if r.status == 'approved' and r.user and r.user.role == 'Athlete' and r.user.is_verified %}
+    {% set path = record_share_path(r) %}
+    <button type="button"
+            class="dart-share-btn{% if compact %} is-compact{% endif %}"
+            data-share-url="{{ site_url(path) }}"
+            data-share-pdf="{{ path }}.pdf"
+            data-share-title="{{ r.user.full_name }}: {{ record_headline(r) }}"
+            data-share-sub="{{ r.sport }} · {{ r.competition_display }}{% if r.game_date %} · {{ r.game_date.strftime('%b %d, %Y') }}{% endif %}"
+            aria-label="Share this record">
+      <i class="fa-solid fa-share-nodes" aria-hidden="true"></i>{% if not compact %}<span>Share</span>{% endif %}
+    </button>
+  {% endif %}
+{% endmacro %}
+
+{# info = profile_card_info(user) #}
+{% macro profile_share_button(info, label='Share profile', extra_class='') %}
+  <button type="button"
+          class="dart-share-btn {{ extra_class }}"
+          data-share-kind="profile"
+          data-share-url="{{ site_url(info.share_path) }}"
+          data-share-pdf="{{ url_for('profile_card_pdf', user_id=info.id) }}"
+          data-share-image="{{ url_for('profile_card_image', user_id=info.id) }}"
+          data-share-title="{{ info.name }} · {{ info.eyebrow }}"
+          data-share-sub="{{ info.subtitle }}{% if info.pill %} · {{ info.pill }}{% endif %}"
+          aria-label="{{ label }}">
+    <i class="fa-solid fa-share-nodes" aria-hidden="true"></i>{% if label %}<span>{{ label }}</span>{% endif %}
+  </button>
+{% endmacro %}
+
+{% macro share_modal() %}
+<div class="modal fade" id="dartShareModal" tabindex="-1" aria-labelledby="dartShareTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content dart-share-modal">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title h5" id="dartShareTitle"><i class="fa-solid fa-share-nodes"></i> <span data-share-field="heading">Share record</span></h2>
+          <div class="dart-share-preview">
+            <strong data-share-field="title"></strong>
+            <span data-share-field="sub"></span>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        {# Profile shares: the card itself, as an image #}
+        <div class="dart-share-card" hidden>
+          <img alt="D.A.R.T. profile card" data-share-field="image" loading="lazy">
+          <div class="dart-share-card-actions">
+            <button type="button" class="btn dart-btn dart-share-card-send">
+              <i class="fa-solid fa-image"></i> Share card
+            </button>
+            <a class="btn btn-outline-success dart-share-card-download" data-share-field="image-download" download>
+              <i class="fa-solid fa-download"></i> Download card
+            </a>
+          </div>
+        </div>
+
+        <button type="button" class="dart-share-native" hidden>
+          <i class="fa-solid fa-mobile-screen-button"></i> Share via your phone…
+        </button>
+
+        <div class="dart-share-grid">
+          <a class="dart-share-app is-whatsapp" data-share-to="whatsapp" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i><span>WhatsApp</span></a>
+          <a class="dart-share-app is-facebook" data-share-to="facebook" target="_blank" rel="noopener"><i class="fa-brands fa-facebook-f"></i><span>Facebook</span></a>
+          {# Instagram has no web share link: phones use the share sheet (Instagram
+             is in it); elsewhere the link is copied and Instagram opens. #}
+          <button type="button" class="dart-share-app is-instagram" data-share-instagram><i class="fa-brands fa-instagram"></i><span>Instagram</span></button>
+          <a class="dart-share-app is-x" data-share-to="x" target="_blank" rel="noopener"><i class="fa-brands fa-x-twitter"></i><span>X</span></a>
+          <a class="dart-share-app is-linkedin" data-share-to="linkedin" target="_blank" rel="noopener"><i class="fa-brands fa-linkedin-in"></i><span>LinkedIn</span></a>
+          <a class="dart-share-app is-telegram" data-share-to="telegram" target="_blank" rel="noopener"><i class="fa-brands fa-telegram"></i><span>Telegram</span></a>
+          <a class="dart-share-app is-email" data-share-to="email"><i class="fa-solid fa-envelope"></i><span>Email</span></a>
+        </div>
+        <div class="dart-share-hint" role="status" hidden>
+          <i class="fa-solid fa-circle-check"></i> Link copied: paste it in your Instagram story, post or DM.
+        </div>
+
+        <div class="dart-share-link">
+          <input type="text" class="form-control" readonly aria-label="Link" data-share-field="url">
+          <button type="button" class="btn dart-btn dart-share-copy"><i class="fa-regular fa-copy"></i> <span>Copy</span></button>
+        </div>
+
+        <div class="dart-share-actions">
+          <a class="btn dart-share-pdf" data-share-field="pdf" download>
+            <i class="fa-solid fa-file-pdf"></i> Download PDF
+          </a>
+          <a class="btn btn-outline-success dart-share-open" data-share-field="open" target="_blank" rel="noopener">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> <span data-share-field="open-label">Open record page</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .dart-share-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: #146c43;
+    background: rgba(25, 135, 84, 0.1);
+    border: 1px solid rgba(25, 135, 84, 0.35);
+    transition: background 0.2s, color 0.2s;
+    white-space: nowrap;
+  }
+  .dart-share-btn:hover, .dart-share-btn:focus-visible { color: #fff; background: #198754; }
+  .dart-share-btn.is-compact { width: 34px; height: 34px; padding: 0; justify-content: center; margin: 0; }
+  html[data-theme="dark"] .dart-share-btn { color: #4cd38a; background: rgba(76, 211, 138, 0.12); border-color: rgba(76, 211, 138, 0.35); }
+  html[data-theme="dark"] .dart-share-btn:hover { color: #071208; background: #4cd38a; }
+
+  .dart-share-modal { border-radius: 22px; }
+  .dart-share-modal .modal-title i { color: #198754; }
+  .dart-share-preview { margin-top: 4px; font-size: 0.85rem; }
+  .dart-share-preview strong { display: block; }
+  .dart-share-preview span { color: var(--muted-text, #6c757d); font-size: 0.8rem; }
+
+  .dart-share-native {
+    width: 100%;
+    margin-bottom: 14px;
+    padding: 12px;
+    border: 0;
+    border-radius: 14px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #0d2413, #198754);
+  }
+  .dart-share-native[hidden] { display: none; }
+
+  .dart-share-card { margin-bottom: 14px; }
+  .dart-share-card[hidden] { display: none; }
+  .dart-share-card img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1200 / 630;
+    border-radius: 16px;
+    background: #0d2413;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+  }
+  .dart-share-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .dart-share-card-actions .btn { border-radius: 999px; font-weight: 700; }
+  .dart-share-card-send { border: 2px solid #000 !important; color: #fff; }
+
+  /* 4 per row; the last row is centred. */
+  .dart-share-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .dart-share-grid > .dart-share-app { flex: 0 0 calc((100% - 30px) / 4); min-width: 0; }
+  .dart-share-app {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 6px;
+    border-radius: 14px;
+    text-decoration: none;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: inherit;
+    background: transparent;
+    border: 1px solid var(--surface-border, #dee2e6);
+    cursor: pointer;
+  }
+  .dart-share-app span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Same label colour for links and the Instagram button. */
+  #dartShareModal .dart-share-grid .dart-share-app,
+  #dartShareModal .dart-share-grid .dart-share-app:hover { color: var(--surface-text, #212529); text-decoration: none; }
+  .dart-share-app i {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    color: #fff;
+  }
+  .dart-share-app:hover { border-color: #198754; }
+  .is-whatsapp i { background: #25d366; }
+  .is-facebook i { background: #1877f2; }
+  .is-instagram i { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285aeb 90%); }
+
+  .dart-share-hint {
+    margin-top: 12px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    color: #146c43;
+    background: rgba(25, 135, 84, 0.1);
+  }
+  .dart-share-hint[hidden] { display: none; }
+  html[data-theme="dark"] .dart-share-hint { color: #4cd38a; }
+  .is-x i { background: #000; }
+  .is-linkedin i { background: #0a66c2; }
+  .is-telegram i { background: #229ed9; }
+  .is-email i { background: #6c757d; }
+
+  .dart-share-link { display: flex; gap: 8px; margin-top: 16px; }
+  .dart-share-link .form-control { font-size: 0.85rem; }
+  .dart-share-copy { flex: 0 0 auto; border-radius: 12px; border: 2px solid #000 !important; color: #fff; }
+
+  .dart-share-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .dart-share-actions .btn { border-radius: 999px; font-weight: 700; }
+  .dart-share-pdf { color: #fff; background: #b02a37; border: 0; }
+  .dart-share-pdf:hover { color: #fff; background: #8f1f2b; }
+
+  @media (max-width: 400px) {
+    .dart-share-actions { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script>
+(function () {
+  var modalEl = document.getElementById('dartShareModal');
+  if (!modalEl || modalEl.dataset.ready) return;
+  modalEl.dataset.ready = '1';
+
+  var field = function (name) { return modalEl.querySelector('[data-share-field="' + name + '"]'); };
+  var current = null;
+  var native = modalEl.querySelector('.dart-share-native');
+  var copyBtn = modalEl.querySelector('.dart-share-copy');
+  var instaBtn = modalEl.querySelector('[data-share-instagram]');
+  var hint = modalEl.querySelector('.dart-share-hint');
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+    var input = field('url');
+    input.select();
+    document.execCommand('copy');
+    return Promise.resolve();
+  }
+
+  var cardBox = modalEl.querySelector('.dart-share-card');
+  var cardSend = modalEl.querySelector('.dart-share-card-send');
+
+  function tagline() {
+    return current && current.kind === 'profile' ? ' | D.A.R.T. verified profile' : ' | D.A.R.T. official record';
+  }
+
+  // The card as a file, for apps that take images (WhatsApp, Instagram...).
+  function cardFile() {
+    return fetch(current.image, { credentials: 'same-origin' })
+      .then(function (r) { return r.blob(); })
+      .then(function (blob) { return new File([blob], 'DART-profile-card.png', { type: 'image/png' }); });
+  }
+
+  function shareCard() {
+    if (!current || !current.image) return Promise.resolve(false);
+    return cardFile().then(function (file) {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        return navigator.share({ files: [file], title: current.title, text: current.title + tagline() + ' ' + current.url })
+          .then(function () { return true; }, function () { return true; });
+      }
+      return false;
+    }).catch(function () { return false; });
+  }
+
+  function links(url, title) {
+    var u = encodeURIComponent(url), t = encodeURIComponent(title + tagline());
+    return {
+      whatsapp: 'https://wa.me/?text=' + t + '%20' + u,
+      facebook: 'https://www.facebook.com/sharer/sharer.php?u=' + u,
+      x: 'https://twitter.com/intent/tweet?url=' + u + '&text=' + t,
+      linkedin: 'https://www.linkedin.com/sharing/share-offsite/?url=' + u,
+      telegram: 'https://t.me/share/url?url=' + u + '&text=' + t,
+      email: 'mailto:?subject=' + t + '&body=' + t + '%0A%0A' + u
+    };
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.dart-share-btn');
+    if (!btn) return;
+    e.preventDefault();
+    current = {
+      kind: btn.dataset.shareKind || 'record',
+      url: btn.dataset.shareUrl, title: btn.dataset.shareTitle, sub: btn.dataset.shareSub,
+      pdf: btn.dataset.sharePdf, image: btn.dataset.shareImage || ''
+    };
+    var isProfile = current.kind === 'profile';
+
+    field('heading').textContent = isProfile ? 'Share profile' : 'Share record';
+    field('open-label').textContent = isProfile ? 'Open profile page' : 'Open record page';
+    cardBox.hidden = !current.image;
+    if (current.image) {
+      field('image').src = current.image;
+      field('image-download').href = current.image + '?download=1';
+    }
+
+    field('title').textContent = current.title;
+    field('sub').textContent = current.sub || '';
+    field('url').value = current.url;
+    field('pdf').href = current.pdf;
+    field('open').href = current.url;
+
+    var hrefs = links(current.url, current.title);
+    modalEl.querySelectorAll('[data-share-to]').forEach(function (a) { a.href = hrefs[a.dataset.shareTo]; });
+
+    native.hidden = !navigator.share;
+    hint.hidden = true;
+    copyBtn.querySelector('span').textContent = 'Copy';
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  });
+
+  native.addEventListener('click', function () {
+    if (!current || !navigator.share) return;
+    navigator.share({ title: current.title, text: current.title + tagline(), url: current.url }).catch(function () {});
+  });
+
+  cardSend.addEventListener('click', function () {
+    shareCard().then(function (shared) {
+      // No image sharing here (most computers): save the card instead.
+      if (!shared) field('image-download').click();
+    });
+  });
+
+  instaBtn.addEventListener('click', function () {
+    if (!current) return;
+    var text = current.title + tagline();
+
+    // Phones: the share sheet lists the Instagram app. Profiles send the
+    // card image (Instagram posts images, not links).
+    if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+      if (current.image) {
+        shareCard().then(function (shared) {
+          if (!shared) navigator.share({ title: current.title, text: text, url: current.url }).catch(function () {});
+        });
+      } else {
+        navigator.share({ title: current.title, text: text, url: current.url }).catch(function () {});
+      }
+      return;
+    }
+
+    // Elsewhere: copy the link, then open Instagram to paste it.
+    copyText(current.url).then(function () {
+      hint.hidden = false;
+    }, function () {});
+    window.open('https://www.instagram.com/', '_blank', 'noopener');
+  });
+
+  copyBtn.addEventListener('click', function () {
+    var input = field('url');
+    var done = function () { copyBtn.querySelector('span').textContent = 'Copied!'; };
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(input.value).then(done, function () { input.select(); document.execCommand('copy'); done(); });
+    } else {
+      input.select(); document.execCommand('copy'); done();
+    }
+  });
+})();
+</script>
+{% endmacro %}

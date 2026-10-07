@@ -1,0 +1,437 @@
+{% extends "base.html" %}
+{% block title %}Team HQ · {{ org.org_name }}{% endblock %}
+
+{% macro avatar(item, size='md') %}
+  {% if item.picture %}
+    <img src="{{ url_for('profile_picture', filename=item.picture) }}" alt="" class="oh-avatar oh-avatar-{{ size }}" loading="lazy">
+  {% else %}
+    <span class="oh-avatar oh-avatar-{{ size }}" aria-hidden="true">{{ (item.name or '?')[0] | upper }}</span>
+  {% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="oh-page">
+
+  <!-- ===================== HERO ===================== -->
+  <section class="oh-hero">
+    <div class="oh-hero-main">
+      <div class="oh-eyebrow"><i class="fa-solid fa-building-shield"></i> Team HQ</div>
+      <h1>{{ org.org_name }}</h1>
+      <div class="oh-meta">
+        <span class="oh-verified"><i class="fa-solid fa-circle-check"></i> Verified organization</span>
+        <span><i class="fa-solid fa-sitemap"></i> {{ org.org_type }}</span>
+        <span><i class="fa-solid fa-location-dot"></i> {{ org.city ~ ', ' if org.city }}{{ org.country }}</span>
+        {% if org.sports %}<span><i class="fa-solid fa-futbol"></i> {{ org.sports }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="oh-hero-actions">
+      <span class="oh-plan {% if data.full %}is-pro{% endif %}">
+        {% if data.full %}<i class="fa-solid fa-crown"></i> {{ my_plan.name }}{% else %}Free plan{% endif %}
+      </span>
+      {% if data.full %}
+        <a href="{{ url_for('organization_roster_export') }}" class="btn oh-btn oh-btn-light"><i class="fa-solid fa-file-csv me-1"></i> Export roster</a>
+      {% else %}
+        <a href="{{ url_for('pricing') }}#organizations" class="btn dart-btn oh-btn"><i class="fa-solid fa-crown me-1"></i> Upgrade</a>
+      {% endif %}
+      <a href="{{ url_for('organization_settings') }}" class="btn oh-btn oh-btn-ghost"><i class="fa-solid fa-gear me-1"></i> Settings</a>
+    </div>
+  </section>
+
+  {% if data.full %}
+  <!-- ===================== KPIs ===================== -->
+  <div class="oh-kpis">
+    {% for value, label, icon, tone in [
+      (data.kpis.athletes, 'Roster Athletes', 'fa-users', 'green'),
+      (data.kpis.records, 'Approved Records', 'fa-clipboard-check', 'blue'),
+      (data.kpis.season_records, data.season ~ ' Season Records', 'fa-calendar-check', 'gold'),
+      (data.kpis.highlights, 'Highlights', 'fa-photo-film', 'purple'),
+    ] %}
+      <div class="oh-kpi oh-tone-{{ tone }}">
+        <div class="oh-kpi-icon" aria-hidden="true"><i class="fa-solid {{ icon }}"></i></div>
+        <div><div class="oh-kpi-value">{{ value }}</div><div class="oh-kpi-label">{{ label }}</div></div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="row g-3">
+    <!-- ===================== ROSTER ===================== -->
+    <div class="col-xl-8">
+      <section class="oh-panel" id="roster" aria-labelledby="ohRosterTitle">
+        <div class="oh-panel-head">
+          <div>
+            <h2 class="oh-panel-title" id="ohRosterTitle"><i class="fa-solid fa-users"></i> Roster</h2>
+            <div class="oh-panel-sub">Verified athletes registered under {{ org.org_name }}{% if org.approved_aliases %} or its approved team names{% endif %}</div>
+          </div>
+          <span class="oh-count" id="ohRosterCount">{{ data.roster | length }}</span>
+        </div>
+
+        {% if data.roster %}
+          <div class="oh-filters" role="search">
+            <input type="search" class="form-control" id="ohSearch" placeholder="Search athletes…" aria-label="Search roster">
+            <select class="form-select" id="ohSport" aria-label="Filter by sport">
+              <option value="">All sports</option>
+              {% for s in data.sports if s.athletes %}<option>{{ s.name }}</option>{% endfor %}
+            </select>
+            <select class="form-select" id="ohPosition" aria-label="Filter by position">
+              <option value="">All positions</option>
+              {% for p in data.positions %}<option>{{ p }}</option>{% endfor %}
+            </select>
+          </div>
+
+          <div class="oh-roster" id="ohRoster">
+            {% for a in data.roster %}
+              <article class="oh-athlete" data-name="{{ a.name | lower }}" data-sports="{{ a.sports | join('|') }}" data-positions="{{ a.positions | join('|') }}">
+                <a href="{{ url_for('user_profile', user_id=a.id) }}" class="oh-athlete-main">
+                  {{ avatar(a) }}
+                  <div class="oh-athlete-text">
+                    <div class="oh-athlete-name">
+                      {{ a.name }}
+                      {% if a.shirt_number %}<span class="rt-shirt">#{{ a.shirt_number }}</span>{% endif %}
+                    </div>
+                    <div class="oh-athlete-sub">
+                      {% if a.positions %}{{ a.positions | join(', ') }}{% else %}No position yet{% endif %}
+                      {% if a.age %} · {{ a.age }} yrs{% endif %}
+                      {% if a.gender %} · {{ a.gender }}{% endif %}
+                    </div>
+                  </div>
+                </a>
+                <div class="oh-athlete-stats">
+                  <span title="Approved records"><i class="fa-solid fa-clipboard-check"></i> {{ a.records }}</span>
+                  {% if a.goals %}<span title="Goals"><i class="fa-solid fa-futbol"></i> {{ a.goals }}</span>{% endif %}
+                  {% if a.points %}<span title="Points"><i class="fa-solid fa-basketball"></i> {{ a.points }}</span>{% endif %}
+                  {% if a.home_runs %}<span title="Home runs"><i class="fa-solid fa-baseball"></i> {{ a.home_runs }}</span>{% endif %}
+                  {% if a.awards %}<span title="MOTM + MVP awards"><i class="fa-solid fa-medal"></i> {{ a.awards }}</span>{% endif %}
+                  {% if a.highlights %}<span title="Highlights"><i class="fa-solid fa-photo-film"></i> {{ a.highlights }}</span>{% endif %}
+                </div>
+                <div class="oh-athlete-actions">
+                  <span class="oh-last" title="Last game">{% if a.last_game %}<i class="fa-regular fa-calendar"></i> {{ a.last_game.strftime('%b %d, %Y') }}{% endif %}</span>
+                  <form method="POST" action="{{ url_for('organization_remove_athlete', athlete_id=a.id) }}"
+                        onsubmit="return confirm('Remove {{ a.name | e }} from your roster? Use this only if they don\'t play for you. You can restore them in Settings.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="oh-remove" aria-label="Remove {{ a.name }} from roster" title="Not our athlete"><i class="fa-solid fa-user-minus"></i></button>
+                  </form>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+          <div class="oh-empty" id="ohNoMatch" hidden><i class="fa-solid fa-magnifying-glass"></i> No athletes match these filters.</div>
+        {% else %}
+          <div class="oh-empty">
+            <i class="fa-solid fa-user-plus"></i>
+            <div>No athletes yet. Athletes appear here when they register with the team name <strong>{{ org.org_name }}</strong>
+              {% if org.approved_aliases %}or an approved team name{% endif %}.</div>
+          </div>
+        {% endif %}
+      </section>
+
+      <!-- Recent performances -->
+      <section class="oh-panel" aria-labelledby="ohRecentTitle">
+        <div class="oh-panel-head">
+          <h2 class="oh-panel-title" id="ohRecentTitle"><i class="fa-solid fa-fire"></i> Recent Performances</h2>
+        </div>
+        {% for r in data.recent %}
+          <div class="oh-feed-row">
+            <div class="oh-feed-main">
+              <a href="{{ url_for('user_profile', user_id=r.user.id) }}" class="oh-feed-name">{{ r.user.full_name }}</a>
+              <span class="oh-sport-chip">{{ r.sport }}</span>
+              <div class="oh-feed-sub">
+                vs {{ r.team_played_against or '-' }} · {{ r.competition_display }}
+                {% if r.game_date %} · {{ r.game_date.strftime('%b %d, %Y') }}{% endif %}
+              </div>
+            </div>
+            <div class="oh-feed-stat">
+              {% if r.sport == 'Football' %}{{ r.goals or 0 }} G · {{ r.assists or 0 }} A
+              {% elif r.sport == 'Basketball' %}{{ r.points or 0 }} PTS · {{ r.total_rebounds }} REB
+              {% else %}{{ r.home_runs or 0 }} HR{% endif %}
+            </div>
+          </div>
+        {% else %}
+          <div class="oh-empty"><i class="fa-solid fa-clipboard"></i> No approved records yet.</div>
+        {% endfor %}
+      </section>
+    </div>
+
+    <!-- ===================== SIDE ===================== -->
+    <div class="col-xl-4">
+      <section class="oh-panel" aria-labelledby="ohLeadersTitle">
+        <div class="oh-panel-head">
+          <div>
+            <h2 class="oh-panel-title" id="ohLeadersTitle"><i class="fa-solid fa-ranking-star"></i> Team Leaders</h2>
+            <div class="oh-panel-sub">{{ data.season }} season</div>
+          </div>
+        </div>
+        {% for board in data.leaders %}
+          <div class="oh-board">
+            <div class="oh-board-title"><i class="fa-solid {{ board.icon }}"></i> {{ board.sport }} · {{ board.label }}</div>
+            {% for row in board.rows %}
+              <div class="oh-board-row">
+                <span class="oh-rank oh-rank-{{ loop.index }}">{{ loop.index }}</span>
+                <a href="{{ url_for('user_profile', user_id=row.athlete.id) }}">{{ row.athlete.full_name }}</a>
+                <strong>{{ row.total }}</strong>
+              </div>
+            {% else %}
+              <div class="oh-board-empty">No {{ board.label | lower }} recorded yet.</div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </section>
+
+      <section class="oh-panel" aria-labelledby="ohSportsTitle">
+        <div class="oh-panel-head"><h2 class="oh-panel-title" id="ohSportsTitle"><i class="fa-solid fa-chart-pie"></i> By Sport</h2></div>
+        {% set max_records = (data.sports | map(attribute='records') | max) or 1 %}
+        {% for s in data.sports %}
+          <div class="oh-sport-row">
+            <div class="oh-sport-label"><span><i class="fa-solid {{ s.icon }}"></i> {{ s.name }}</span><span>{{ s.athletes }} athletes · {{ s.records }} records</span></div>
+            <div class="oh-sport-bar"><span style="width: {{ (s.records * 100 / max_records) | round | int }}%"></span></div>
+          </div>
+        {% endfor %}
+      </section>
+
+      <section class="oh-panel oh-privacy" aria-labelledby="ohPrivacyTitle">
+        <h2 class="oh-panel-title" id="ohPrivacyTitle"><i class="fa-solid fa-user-shield"></i> Data protection</h2>
+        <p>You see sport information only. Athletes can see that your organization lists them, and every roster view and export is logged. Use this data only to manage and develop your athletes. <a href="{{ url_for('organization_terms') }}">Data Use Terms</a></p>
+      </section>
+    </div>
+  </div>
+
+  {% else %}
+  <!-- ===================== FREE PLAN ===================== -->
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <section class="oh-panel">
+        <div class="oh-panel-head">
+          <div>
+            <h2 class="oh-panel-title"><i class="fa-solid fa-users"></i> Your roster</h2>
+            <div class="oh-panel-sub">Verified athletes registered under {{ org.org_name }}</div>
+          </div>
+          <span class="oh-count">{{ data.roster_size }}</span>
+        </div>
+        {% for a in data.preview %}
+          <div class="oh-preview-row">
+            {{ avatar(a, 'sm') }} <span>{{ a.name }}</span>
+          </div>
+        {% else %}
+          <div class="oh-empty"><i class="fa-solid fa-user-plus"></i>
+            <div>No athletes yet. They appear here when they register with the team name <strong>{{ org.org_name }}</strong>.</div>
+          </div>
+        {% endfor %}
+        {% if data.roster_size > data.preview | length %}
+          <div class="oh-more"><i class="fa-solid fa-lock"></i> {{ data.roster_size - data.preview | length }} more athlete{{ 's' if data.roster_size - data.preview | length != 1 }} with Organization Pro</div>
+        {% endif %}
+      </section>
+    </div>
+    <div class="col-lg-5">
+      <section class="oh-upgrade">
+        <div class="oh-upgrade-crown" aria-hidden="true"><i class="fa-solid fa-crown"></i></div>
+        <h2>Organization Pro</h2>
+        <div class="oh-upgrade-price">{{ plans['organization_pro'].price_label }}<span>/month</span></div>
+        <ul>
+          {% for f in plans['organization_pro'].features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
+        </ul>
+        <a href="{{ url_for('checkout', plan_code='organization_pro') }}" class="btn dart-btn oh-btn w-100"><i class="fa-solid fa-crown me-1"></i> Upgrade now</a>
+        <div class="oh-upgrade-methods">Orange Money · MTN MoMo · Card (coming soon)</div>
+      </section>
+    </div>
+  </div>
+
+  {% include '_ad_slot.html' %}
+  {% endif %}
+</div>
+
+<style>
+  .oh-page { max-width: 1240px; margin: 0 auto; }
+
+  .oh-hero {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 18px;
+    padding: 28px 26px;
+    margin-bottom: 18px;
+    border-radius: 26px;
+    color: #fff;
+    background:
+      radial-gradient(circle at 88% 12%, rgba(57, 185, 114, 0.38), transparent 38%),
+      radial-gradient(circle at 5% 100%, rgba(245, 197, 66, 0.16), transparent 40%),
+      linear-gradient(145deg, #071208, #0d2413 55%, #061008);
+  }
+  .oh-eyebrow { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #4cd38a; }
+  .oh-hero h1 { font-size: clamp(1.6rem, 3.5vw, 2.4rem); font-weight: 900; margin: 6px 0 10px; overflow-wrap: anywhere; }
+  .oh-meta { display: flex; flex-wrap: wrap; gap: 8px; }
+  .oh-meta span { padding: 4px 11px; border-radius: 999px; font-size: 0.8rem; background: rgba(255, 255, 255, 0.08); }
+  .oh-meta .oh-verified { background: rgba(76, 211, 138, 0.2); color: #b9f0d1; font-weight: 700; }
+  .oh-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .oh-plan { padding: 6px 12px; border-radius: 999px; font-size: 0.8rem; font-weight: 800; background: rgba(255, 255, 255, 0.12); }
+  .oh-plan.is-pro { color: #3d2c00; background: linear-gradient(135deg, #f5c542, #ffd96b); }
+  .oh-btn { border-radius: 999px; font-weight: 700; }
+  .oh-btn.dart-btn { border: 2px solid #000 !important; color: #fff; }
+  .oh-btn-light { background: #fff; color: #0d2413; border: 0; }
+  .oh-btn-ghost { color: #fff; border: 1px solid rgba(255, 255, 255, 0.35); }
+  .oh-btn-ghost:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+
+  .oh-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .oh-kpi {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 18px;
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    background: var(--surface-bg, #fff);
+  }
+  .oh-kpi-icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; font-size: 1.1rem; }
+  .oh-kpi-value { font-size: 1.6rem; font-weight: 900; line-height: 1; }
+  .oh-kpi-label { font-size: 0.8rem; color: var(--muted-text, #6c757d); margin-top: 4px; }
+  .oh-tone-green .oh-kpi-icon { background: rgba(25, 135, 84, 0.14); color: #198754; }
+  .oh-tone-blue .oh-kpi-icon { background: rgba(13, 110, 253, 0.12); color: #0d6efd; }
+  .oh-tone-gold .oh-kpi-icon { background: rgba(218, 165, 32, 0.18); color: #b8860b; }
+  .oh-tone-purple .oh-kpi-icon { background: rgba(111, 66, 193, 0.14); color: #6f42c1; }
+
+  .oh-panel {
+    padding: 18px;
+    margin-bottom: 16px;
+    border-radius: 20px;
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    background: var(--surface-bg, #fff);
+  }
+  .oh-panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+  .oh-panel-title { font-size: 1.1rem; font-weight: 800; margin: 0; }
+  .oh-panel-title i { color: #198754; margin-right: 4px; }
+  .oh-panel-sub { font-size: 0.8rem; color: var(--muted-text, #6c757d); }
+  .oh-count { padding: 4px 12px; border-radius: 999px; font-weight: 800; color: #146c43; background: rgba(25, 135, 84, 0.12); }
+
+  .oh-filters { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+
+  .oh-roster { display: grid; gap: 8px; }
+  .oh-athlete {
+    display: grid;
+    grid-template-columns: minmax(0, 2.2fr) minmax(0, 2fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.08));
+    transition: background 0.2s;
+  }
+  .oh-athlete:hover { background: rgba(25, 135, 84, 0.05); }
+  .oh-athlete[hidden], .oh-empty[hidden] { display: none; }
+  .oh-athlete-main { display: flex; align-items: center; gap: 10px; min-width: 0; text-decoration: none; color: inherit; }
+  .oh-athlete-text { min-width: 0; }
+  .oh-athlete-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .oh-athlete-sub { font-size: 0.78rem; color: var(--muted-text, #6c757d); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .oh-athlete-stats { display: flex; flex-wrap: wrap; gap: 6px; }
+  .oh-athlete-stats span { padding: 2px 8px; border-radius: 999px; font-size: 0.76rem; font-weight: 700; background: rgba(25, 135, 84, 0.08); }
+  .oh-athlete-stats i { color: #198754; }
+  .oh-athlete-actions { display: flex; align-items: center; gap: 10px; }
+  .oh-athlete-actions form { margin: 0; }
+  .oh-last { font-size: 0.75rem; color: var(--muted-text, #6c757d); white-space: nowrap; }
+  .oh-remove { width: 32px; height: 32px; border: 0; border-radius: 50%; color: var(--muted-text, #6c757d); background: transparent; }
+  .oh-remove:hover, .oh-remove:focus-visible { color: #fff; background: #dc3545; }
+
+  .oh-avatar {
+    flex: 0 0 auto;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 50%;
+    object-fit: cover;
+    font-weight: 800;
+    color: #fff;
+    background: linear-gradient(135deg, #0d2413, #198754);
+  }
+  .oh-avatar-md { width: 42px; height: 42px; }
+  .oh-avatar-sm { width: 32px; height: 32px; font-size: 0.85rem; }
+
+  .oh-feed-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--surface-border, rgba(0, 0, 0, 0.06)); }
+  .oh-feed-row:last-child { border-bottom: 0; }
+  .oh-feed-name { font-weight: 700; text-decoration: none; }
+  .oh-sport-chip { margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; color: #fff; background: #198754; }
+  .oh-feed-sub { font-size: 0.78rem; color: var(--muted-text, #6c757d); }
+  .oh-feed-stat { font-weight: 800; white-space: nowrap; }
+
+  .oh-board + .oh-board { margin-top: 14px; }
+  .oh-board-title { font-size: 0.85rem; font-weight: 800; margin-bottom: 6px; }
+  .oh-board-title i { color: #198754; }
+  .oh-board-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 5px 0; font-size: 0.9rem; }
+  .oh-board-row a { text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .oh-board-empty { font-size: 0.8rem; color: var(--muted-text, #6c757d); }
+  .oh-rank { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 0.75rem; font-weight: 800; background: rgba(0, 0, 0, 0.06); }
+  .oh-rank-1 { background: #f5c542; color: #3d2c00; }
+  .oh-rank-2 { background: #cfd4da; color: #333; }
+  .oh-rank-3 { background: #d79a63; color: #3b1f00; }
+
+  .oh-sport-row + .oh-sport-row { margin-top: 12px; }
+  .oh-sport-label { display: flex; justify-content: space-between; gap: 8px; font-size: 0.82rem; margin-bottom: 4px; }
+  .oh-sport-label span:first-child { font-weight: 700; }
+  .oh-sport-bar { height: 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.06); overflow: hidden; }
+  .oh-sport-bar span { display: block; height: 100%; background: linear-gradient(90deg, #198754, #4cd38a); }
+
+  .oh-privacy p { font-size: 0.82rem; color: var(--muted-text, #6c757d); margin: 8px 0 0; }
+
+  .oh-empty { padding: 24px 10px; text-align: center; color: var(--muted-text, #6c757d); }
+  .oh-empty i { font-size: 1.5rem; margin-bottom: 6px; opacity: 0.6; }
+
+  .oh-preview-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--surface-border, rgba(0, 0, 0, 0.06)); }
+  .oh-more { margin-top: 12px; padding: 10px; border-radius: 12px; text-align: center; font-weight: 700; color: #8a6d00; background: rgba(245, 197, 66, 0.15); }
+
+  .oh-upgrade {
+    padding: 24px 22px;
+    border-radius: 22px;
+    color: #fff;
+    border: 1px solid rgba(245, 197, 66, 0.5);
+    background:
+      radial-gradient(circle at 85% 15%, rgba(245, 197, 66, 0.28), transparent 40%),
+      linear-gradient(145deg, #071208, #0d2413 55%, #061008);
+  }
+  .oh-upgrade-crown { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; color: #3d2c00; background: linear-gradient(135deg, #f5c542, #ffd96b); font-size: 1.3rem; }
+  .oh-upgrade h2 { font-size: 1.3rem; font-weight: 800; margin: 10px 0 4px; }
+  .oh-upgrade-price { font-size: 1.9rem; font-weight: 900; color: #f5c542; }
+  .oh-upgrade-price span { font-size: 0.9rem; color: #cfe9da; }
+  .oh-upgrade ul { list-style: none; padding: 0; margin: 12px 0 16px; }
+  .oh-upgrade li { display: flex; gap: 8px; padding: 3px 0; font-size: 0.88rem; color: #e3f3ea; }
+  .oh-upgrade li i { color: #4cd38a; margin-top: 4px; }
+  .oh-upgrade-methods { margin-top: 10px; text-align: center; font-size: 0.78rem; color: #a7c9b6; }
+
+  @media (max-width: 991.98px) {
+    .oh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .oh-athlete { grid-template-columns: 1fr; }
+    .oh-athlete-actions { justify-content: space-between; }
+  }
+  @media (max-width: 575.98px) {
+    .oh-filters { grid-template-columns: 1fr 1fr; }
+    .oh-filters input { grid-column: 1 / -1; }
+    .oh-hero { padding: 22px 18px; }
+    .oh-kpi { padding: 12px; gap: 10px; }
+    .oh-kpi-icon { width: 38px; height: 38px; }
+    .oh-kpi-value { font-size: 1.3rem; }
+  }
+</style>
+
+<script>
+(function () {
+  var list = document.getElementById('ohRoster');
+  if (!list) return;
+  var search = document.getElementById('ohSearch');
+  var sport = document.getElementById('ohSport');
+  var position = document.getElementById('ohPosition');
+  var count = document.getElementById('ohRosterCount');
+  var none = document.getElementById('ohNoMatch');
+  var rows = Array.prototype.slice.call(list.querySelectorAll('.oh-athlete'));
+
+  function apply() {
+    var q = search.value.trim().toLowerCase(), s = sport.value, p = position.value, shown = 0;
+    rows.forEach(function (row) {
+      var ok = (!q || row.dataset.name.indexOf(q) !== -1)
+        && (!s || row.dataset.sports.split('|').indexOf(s) !== -1)
+        && (!p || row.dataset.positions.split('|').indexOf(p) !== -1);
+      row.hidden = !ok;
+      if (ok) shown++;
+    });
+    count.textContent = shown;
+    none.hidden = shown !== 0;
+  }
+
+  [search, sport, position].forEach(function (el) { el.addEventListener('input', apply); });
+})();
+</script>
+{% endblock %}

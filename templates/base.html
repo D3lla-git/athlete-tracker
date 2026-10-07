@@ -8,11 +8,13 @@
   <meta name="color-scheme" content="light dark">
   <!-- D.A.R.T. PROGRESSIVE WEB APP -->
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-  <meta name="theme-color" content="#212529">
+  <meta name="theme-color" content="#0d2413">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="application-name" content="D.A.R.T.">
   <!-- Used by public/static/js/pwa.js to clear another user's offline data on shared devices. -->
   <meta name="dart-user" content="{{ current_user.id if current_user.is_authenticated else '' }}">
+  <!-- Verified athletes: pwa.js asks the service worker to keep the record form on the device. -->
+  {% if current_user.is_authenticated and current_user.role == 'Athlete' and current_user.is_verified %}<meta name="dart-offline-athlete" content="1">{% endif %}
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="D.A.R.T.">
@@ -27,6 +29,31 @@
     });
   </script>
   <title>{% block title %}Athlete Tracker{% endblock %}</title>
+
+  <!-- ========== SEO ========== -->
+  {# Pages override these blocks (e.g. public athlete profiles). Anything
+     private or personal stays out of search engines by default. #}
+  <meta name="description" content="{% block meta_description %}D.A.R.T. (D3ll Athlete Records Tracker) is Liberia's verified sports records network: official, coach-approved football, basketball and kickball records for athletes, scouts and teams.{% endblock %}">
+  {% block robots %}
+    <meta name="robots" content="{{ 'index, follow' if request.endpoint in seo_index_endpoints else 'noindex, nofollow' }}">
+  {% endblock %}
+  <link rel="canonical" href="{% block canonical %}{{ site_url(request.path) }}{% endblock %}">
+  <meta property="og:site_name" content="D.A.R.T.">
+  <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+  <meta property="og:title" content="{{ self.title() | trim }}">
+  <meta property="og:description" content="{{ self.meta_description() | trim }}">
+  <meta property="og:url" content="{{ self.canonical() | trim }}">
+  <meta property="og:image" content="{% block og_image %}{{ site_url(url_for('static', filename='images/icons/icon-512.png')) }}{% endblock %}">
+  <meta name="twitter:card" content="{% block twitter_card %}summary{% endblock %}">
+  <meta name="twitter:title" content="{{ self.title() | trim }}">
+  <meta name="twitter:description" content="{{ self.meta_description() | trim }}">
+  {% if google_site_verification %}<meta name="google-site-verification" content="{{ google_site_verification }}">{% endif %}
+  {% block structured_data %}{% endblock %}
+
+  {% if show_ads %}
+  <!-- Google AdSense (free plans and visitors only) -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ adsense_client }}" crossorigin="anonymous"></script>
+  {% endif %}
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.0/css/all.min.css">
@@ -177,6 +204,14 @@
             #061008
         ) !important;
   color: #ffffff !important;
+}
+
+/* The bar itself now uses that gradient, so hovered links get a light
+   glass highlight to stay visible. */
+nav.navbar.sticky-top .navbar-nav .nav-link:hover,
+nav.navbar.sticky-top .navbar-nav .nav-link:focus-visible {
+  background: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: inset 0 0 0 1px rgba(76, 211, 138, 0.35);
 }
 /* Custom button styles
 .btn-custom-search {
@@ -447,6 +482,116 @@ textarea.form-control {
 .form-check-input:focus {
   border-color: #198754;
   box-shadow: 0 0 0 4px rgba(25, 135, 84, 0.16);
+}
+
+/* ===== Modern file picker (enhanceFileInputs() below) =====
+   The real <input type=file> stays inside, invisible, covering the whole
+   box: click, tap or drop a file anywhere on it; forms and "required"
+   checks work as before. */
+.dart-file {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1.5px dashed var(--input-border, #ced4da);
+  background: var(--input-bg, #fff);
+  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
+}
+
+.dart-file:hover,
+.dart-file.is-dragging { border-color: #198754; background-color: rgba(25, 135, 84, 0.06); }
+.dart-file:focus-within { border-color: #198754; box-shadow: 0 0 0 4px rgba(25, 135, 84, 0.16); }
+.dart-file.has-file { border-style: solid; border-color: rgba(25, 135, 84, 0.55); }
+.dart-file.is-invalid { border-color: #dc3545; }
+
+.dart-file > input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.dart-file-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 1.1rem;
+  color: #fff;
+  background: linear-gradient(135deg, #0d2413, #198754);
+}
+
+.dart-file-icon img { width: 100%; height: 100%; object-fit: cover; }
+
+.dart-file-text { flex: 1 1 auto; min-width: 0; line-height: 1.3; }
+
+.dart-file-name {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--surface-text, inherit);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dart-file-hint {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--muted-text, #6c757d);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dart-file-browse {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fff;
+  background: #198754;
+  pointer-events: none;
+}
+
+.dart-file.has-file .dart-file-browse { display: none; }
+
+.dart-file-clear {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  display: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted-text, #6c757d);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.dart-file.has-file .dart-file-clear { display: grid; }
+.dart-file-clear:hover,
+.dart-file-clear:focus-visible { color: #fff; background: #dc3545; }
+
+html[data-theme="dark"] .dart-file-clear { background: rgba(255, 255, 255, 0.08); }
+
+@media (max-width: 400px) {
+  .dart-file-browse { display: none; }
 }
 
 /* Auth / form cards: softer corners and a cleaner header. */
@@ -1307,6 +1452,39 @@ html[data-theme="light"] .athlete-footer {
   z-index: 1030;
   width: 100%;
 }
+
+/* ===== D.A.R.T. primary gradient on the menu bars (light + dark) =====
+   Same gradient as the app's primary buttons and cards. */
+:root {
+  --dart-primary-gradient:
+    radial-gradient(circle at 85% 30%, rgba(57, 185, 114, 0.30), transparent 30%),
+    linear-gradient(135deg, #071208, #0d2413 55%, #061008);
+}
+
+nav.navbar.sticky-top,
+html[data-theme="dark"] nav.navbar.sticky-top,
+html[data-theme="light"] nav.navbar.sticky-top {
+  background-image: var(--dart-primary-gradient) !important;
+  background-color: #0d2413 !important;
+  border-bottom: 1px solid rgba(57, 185, 114, 0.35);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.dart-tabbar,
+html[data-theme="dark"] .dart-tabbar,
+html[data-theme="light"] .dart-tabbar {
+  background: var(--dart-primary-gradient);
+  background-color: #0d2413;
+  border-top: 1px solid rgba(57, 185, 114, 0.35);
+}
+
+/* Mobile menu panel (opened from the hamburger) uses the same look. */
+@media (max-width: 991.98px) {
+  nav.navbar.sticky-top .navbar-collapse .dropdown-menu {
+    background: #0d2413;
+    border-color: rgba(57, 185, 114, 0.35);
+  }
+}
 .dart-logo {
     height: 50px;
     width: auto;
@@ -1370,6 +1548,14 @@ html[data-theme="light"] .athlete-footer {
   <a class="nav-link" href="{{ url_for('search') }}"style="color: white;">Search <i class="bi bi-search"></i></a>
 </li>
 
+{% if not current_user.is_authenticated or current_user.role in ('Athlete', 'Scout', 'Organization') %}
+<li class="nav-item">
+  <a class="nav-link" href="{{ url_for('pricing') }}" style="color: white;">
+    {% if my_plan %}Premium <i class="fa-solid fa-crown" style="color: #f5c542;"></i>{% else %}Pricing <i class="fa-solid fa-tags"></i>{% endif %}
+  </a>
+</li>
+{% endif %}
+
 <li class="nav-item">
   <a class="nav-link" href="{{ url_for('profile') }}"style="color: white;">My Profile <i class="bi bi-person-circle"></i></a>
 </li>
@@ -1395,10 +1581,24 @@ html[data-theme="light"] .athlete-footer {
                 <a class="nav-link" href="{{ url_for(dashboard_nav.endpoint) }}" style="color: white;">{{ dashboard_nav.label }} <i class="{{ dashboard_nav.icon }}"></i></a>
               </li>
             {% endif %}
-            {% if current_user.role in ('Coach', 'System', 'Scout') %}
+            {% if current_user.role in ('Coach', 'System', 'Scout', 'Organization') %}
               <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('setup_2fa') }}" style="color: white;">
                   2FA Security <i class="fa-solid fa-shield-halved"></i>
+                </a>
+              </li>
+            {% endif %}
+            {% if current_user.role == 'System' %}
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('admin_payments') }}" style="color: white;">
+                  Payments <i class="fa-solid fa-money-check-dollar"></i>
+                  {% if payments_awaiting %}<span class="badge bg-warning text-dark ms-1">{{ payments_awaiting }}</span>{% endif %}
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('admin_organizations') }}" style="color: white;">
+                  Organizations <i class="fa-solid fa-building-shield"></i>
+                  {% if organizations_awaiting %}<span class="badge bg-warning text-dark ms-1">{{ organizations_awaiting }}</span>{% endif %}
                 </a>
               </li>
             {% endif %}
@@ -1442,6 +1642,11 @@ html[data-theme="light"] .athlete-footer {
         <li>
       <a class="dropdown-item" href="{{ url_for('register_scout') }}">
         Register as Scout
+      </a>
+    </li>
+    <li>
+      <a class="dropdown-item" href="{{ url_for('register_organization') }}">
+        Register as Organization / Club / Academy
       </a>
     </li>
   </ul>
@@ -1964,6 +2169,145 @@ html[data-theme="light"] .athlete-footer {
         addPasswordToggles();
       }
 
+      // ===== Modern file pickers =====
+      // Wraps every file input (except ones with their own uploader) in a
+      // drop zone that shows the allowed types and the chosen file.
+      function enhanceFileInputs() {
+        var TYPE_NAMES = { jpeg: 'JPG', jpg: 'JPG', png: 'PNG', pdf: 'PDF', webp: 'WEBP', gif: 'GIF', mp4: 'MP4', mov: 'MOV' };
+
+        function allowedTypes(input) {
+          var names = [];
+          (input.getAttribute('accept') || '').split(',').forEach(function (part) {
+            var key = part.trim().replace(/^\./, '').split('/').pop().toLowerCase();
+            var name = TYPE_NAMES[key] || (key && key !== '*' ? key.toUpperCase() : '');
+            if (name && names.indexOf(name) === -1) names.push(name);
+          });
+          return names.length ? names.join(', ') : 'Any file';
+        }
+
+        function sizeLabel(bytes) {
+          return bytes < 1048576 ? Math.max(1, Math.round(bytes / 1024)) + ' KB' : (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        document.querySelectorAll('input[type=file]').forEach(function (input) {
+          if (input.closest('.dart-file') || input.closest('.hl-uploader') ||
+              input.classList.contains('visually-hidden') || input.hasAttribute('data-no-enhance')) {
+            return;
+          }
+
+          var box = document.createElement('div');
+          box.className = 'dart-file';
+          var hint = allowedTypes(input) + (input.required ? ' · required' : ' · optional');
+
+          box.innerHTML =
+            '<span class="dart-file-icon" aria-hidden="true"><i class="fa-solid fa-cloud-arrow-up"></i></span>' +
+            '<span class="dart-file-text">' +
+              '<span class="dart-file-name"></span>' +
+              '<span class="dart-file-hint"></span>' +
+            '</span>' +
+            '<span class="dart-file-browse" aria-hidden="true">Browse</span>' +
+            '<button type="button" class="dart-file-clear" aria-label="Remove file"><i class="fa-solid fa-xmark"></i></button>';
+
+          input.parentNode.insertBefore(box, input);
+          box.insertBefore(input, box.firstChild);
+          input.classList.remove('form-control');
+
+          var nameEl = box.querySelector('.dart-file-name');
+          var hintEl = box.querySelector('.dart-file-hint');
+          var iconEl = box.querySelector('.dart-file-icon');
+          var emptyName = (input.multiple ? 'Choose files' : 'Choose a file') + ' or drag it here';
+          var preview = null;
+
+          function render() {
+            if (preview) { URL.revokeObjectURL(preview); preview = null; }
+            var files = input.files;
+            var chosen = !!(files && files.length);
+            box.classList.toggle('has-file', chosen);
+            box.classList.remove('is-invalid');
+
+            if (!chosen) {
+              nameEl.textContent = emptyName;
+              hintEl.textContent = hint;
+              iconEl.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i>';
+              return;
+            }
+
+            var file = files[0];
+            nameEl.textContent = files.length > 1 ? files.length + ' files selected' : file.name;
+            hintEl.textContent = sizeLabel(file.size) + ' · ready to upload';
+
+            if (/^image\//.test(file.type)) {
+              preview = URL.createObjectURL(file);
+              iconEl.innerHTML = '<img alt="">';
+              iconEl.firstChild.src = preview;
+            } else {
+              iconEl.innerHTML = '<i class="fa-solid ' + (/pdf/.test(file.type) ? 'fa-file-pdf' : 'fa-file-circle-check') + '"></i>';
+            }
+          }
+
+          input.addEventListener('change', render);
+          input.addEventListener('invalid', function () { box.classList.add('is-invalid'); });
+          ['dragenter', 'dragover'].forEach(function (ev) {
+            input.addEventListener(ev, function () { box.classList.add('is-dragging'); });
+          });
+          ['dragleave', 'drop'].forEach(function (ev) {
+            input.addEventListener(ev, function () { box.classList.remove('is-dragging'); });
+          });
+          box.querySelector('.dart-file-clear').addEventListener('click', function () {
+            input.value = '';
+            render();
+            input.focus();
+          });
+
+          // A form reset clears the picker too.
+          if (input.form) {
+            input.form.addEventListener('reset', function () { setTimeout(render, 0); });
+          }
+
+          render();
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', enhanceFileInputs);
+      } else {
+        enhanceFileInputs();
+      }
+
+      // Game dates can't be in the future. The page may come from the
+      // offline cache, so the limit is refreshed to today on this device
+      // (the server checks it again).
+      function limitFutureDates() {
+        var now = new Date();
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        var today = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+
+        document.querySelectorAll('input[type=date][data-no-future]').forEach(function (input) {
+          if (!input.max || input.max > today) input.max = today;
+
+          var check = function () {
+            input.setCustomValidity(
+              input.value && input.value > input.max
+                ? "The game date can't be in the future. Choose the day the game was played (today or earlier)."
+                : ''
+            );
+          };
+          input.addEventListener('input', check);
+          input.addEventListener('change', check);
+          check();
+        });
+
+        document.querySelectorAll('input[data-no-future-year]').forEach(function (input) {
+          input.max = String(now.getFullYear());
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', limitFutureDates);
+      } else {
+        limitFutureDates();
+      }
+
       // Phone keyboard open while a text field has focus.
       var typingFields = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=submit]):not([type=button]):not([type=hidden])';
 
@@ -1985,6 +2329,9 @@ html[data-theme="light"] .athlete-footer {
   </script>
 
   {% include '_celebration.html' %}
+
+  {% from '_share.html' import share_modal %}
+  {{ share_modal() }}
 
   <!-- ========== D.A.R.T. PWA SERVICE WORKER ========== -->
   <script src="{{ url_for('static', filename='js/pwa.js') }}" defer></script>

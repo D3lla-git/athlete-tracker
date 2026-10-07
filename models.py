@@ -25,6 +25,9 @@ class User(UserMixin, db.Model):
     preferred_foot = db.Column(db.String(20), nullable=True)
     # Current shirt number (optional, "0"-"99"; text so "00" is kept).
     shirt_number = db.Column(db.String(2), nullable=True)
+    # Google search listing: None = default (adults listed, under-18s not),
+    # 'on' = athlete chose to be listed, 'off' = athlete chose not to be.
+    search_visibility = db.Column(db.String(10), nullable=True)
     email = db.Column(db.String(255), nullable=True, unique=True)
 
         # Password reset security fields
@@ -226,6 +229,83 @@ class AthleteHighlight(db.Model):
             return ''
         seconds = int(round(float(self.duration_seconds)))
         return f'{seconds // 60}:{seconds % 60:02d}'
+
+
+class OrganizationProfile(db.Model):
+    """
+    An Enterprise / Institution / Academy / Club account (User.role =
+    'Organization'). Its roster lists every verified athlete whose team
+    name matches the organization's name or one of its approved aliases.
+    Nothing is shown until the Super Admin verifies the organization.
+    """
+    __tablename__ = 'organization_profile'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    user_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+        unique=True,
+        index=True
+    )
+    org_name = db.Column(db.String(150), nullable=False)
+    org_type = db.Column(db.String(50), nullable=False)
+    sports = db.Column(db.String(200), nullable=True)
+    country = db.Column(db.String(100), nullable=True)
+    city = db.Column(db.String(100), nullable=True)
+    website = db.Column(db.String(255), nullable=True)
+    contact_name = db.Column(db.String(150), nullable=False)
+    contact_title = db.Column(db.String(100), nullable=True)
+    contact_phone = db.Column(db.String(30), nullable=True)
+    # Registration certificate / letterhead (Supabase 'id-documents' bucket).
+    document_path = db.Column(db.String(255), nullable=True)
+    # Other names athletes use for this team, one per line. Only approved
+    # aliases are used for the roster; changes wait for the Super Admin.
+    approved_aliases = db.Column(db.Text, nullable=True)
+    requested_aliases = db.Column(db.Text, nullable=True)
+    verification_status = db.Column(db.String(20), nullable=False, default='pending')  # pending / verified / rejected
+    verified_at = db.Column(db.DateTime, nullable=True)
+    terms_version = db.Column(db.String(20), nullable=True)
+    terms_accepted_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship(
+        'User',
+        backref=db.backref('organization_profile', uselist=False, cascade='all, delete-orphan')
+    )
+
+    @staticmethod
+    def split_names(text):
+        return [line.strip() for line in (text or '').splitlines() if line.strip()]
+
+    @property
+    def roster_names(self):
+        """Names that put an athlete on this roster."""
+        return [self.org_name] + self.split_names(self.approved_aliases)
+
+
+class OrganizationRosterExclusion(db.Model):
+    """An athlete an organization removed from its roster (wrong match)."""
+    __tablename__ = 'organization_roster_exclusion'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    organization_user_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    athlete_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey('user.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('organization_user_id', 'athlete_id', name='uq_org_roster_exclusion'),
+    )
 
 
 class LoginAttempt(db.Model):
@@ -576,6 +656,18 @@ class Payment(db.Model):
         nullable=True
     )
 
+    # Plan bought (see plans.PLANS) and, for manual mobile-money payments,
+    # what the payer told us. Reviewed by the Super Admin.
+    plan_code = db.Column(db.String(80), nullable=True, index=True)
+    payment_method = db.Column(db.String(30), nullable=True)    # orange_money / mtn_momo / card
+    payer_phone = db.Column(db.String(30), nullable=True)
+    reviewed_by = db.Column(
+        db.BigInteger,
+        db.ForeignKey('user.id', ondelete='SET NULL'),
+        nullable=True
+    )
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+
     failure_reason = db.Column(
         db.String(255),
         nullable=True
@@ -601,11 +693,14 @@ class Payment(db.Model):
 
     user = db.relationship(
         'User',
+        foreign_keys=[user_id],
         backref=db.backref(
             'payments',
             lazy=True
         )
     )
+
+    reviewer = db.relationship('User', foreign_keys=[reviewed_by])
 
     subscription = db.relationship(
         'Subscription',

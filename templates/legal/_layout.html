@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="lg-page">
+  <nav class="lg-nav" aria-label="Legal pages">
+    {% for endpoint, label, icon in [
+      ('privacy_page', 'Privacy Policy', 'fa-shield-halved'),
+      ('terms_page', 'Terms of Use', 'fa-file-contract'),
+      ('cookies_page', 'Cookie Policy', 'fa-cookie-bite'),
+      ('organization_terms', 'Organization Data Use Terms', 'fa-building-shield'),
+      ('legal_page', 'Legal Information', 'fa-gavel'),
+    ] %}
+      <a href="{{ url_for(endpoint) }}" class="{% if request.endpoint == endpoint %}is-active{% endif %}"
+         {% if request.endpoint == endpoint %}aria-current="page"{% endif %}>
+        <i class="fa-solid {{ icon }}"></i> {{ label }}
+      </a>
+    {% endfor %}
+  </nav>
+
+  <article class="lg-doc">
+    <header>
+      <h1>{% block doc_title %}{% endblock %}</h1>
+      <p class="lg-updated">Last updated: {{ updated }}</p>
+    </header>
+    {% block doc %}{% endblock %}
+    <footer class="lg-contact">
+      Questions? Contact D.A.R.T. at <a href="mailto:athletetrackerlr@gmail.com">athletetrackerlr@gmail.com</a>
+      · Monrovia, Liberia.
+    </footer>
+  </article>
+</div>
+
+<style>
+  .lg-page { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 24px; max-width: 1100px; margin: 0 auto; align-items: start; }
+  .lg-nav { position: sticky; top: 90px; display: grid; gap: 4px; }
+  .lg-nav a { padding: 9px 12px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 0.9rem; color: inherit; }
+  .lg-nav a i { color: #198754; width: 1.3em; }
+  .lg-nav a:hover { background: rgba(25, 135, 84, 0.08); }
+  .lg-nav a.is-active { background: rgba(25, 135, 84, 0.14); color: #146c43; }
+  html[data-theme="dark"] .lg-nav a.is-active { color: #4cd38a; }
+
+  .lg-doc {
+    padding: 30px;
+    border-radius: 22px;
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    background: var(--surface-bg, #fff);
+    line-height: 1.7;
+  }
+  .lg-doc h1 { font-size: 1.8rem; font-weight: 900; margin-bottom: 4px; }
+  .lg-updated { color: var(--muted-text, #6c757d); font-size: 0.85rem; }
+  .lg-doc h2 { font-size: 1.15rem; font-weight: 800; margin-top: 26px; }
+  .lg-doc li { margin-bottom: 4px; }
+  .lg-summary { padding: 14px 18px; border-radius: 14px; background: rgba(25, 135, 84, 0.08); border: 1px solid rgba(25, 135, 84, 0.25); }
+  .lg-contact { margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--surface-border, #dee2e6); font-size: 0.9rem; color: var(--muted-text, #6c757d); }
+
+  @media (max-width: 767.98px) {
+    .lg-page { grid-template-columns: 1fr; }
+    .lg-nav { position: static; grid-auto-flow: column; overflow-x: auto; }
+    .lg-nav a { white-space: nowrap; }
+    .lg-doc { padding: 20px; }
+  }
+</style>
+{% endblock %}

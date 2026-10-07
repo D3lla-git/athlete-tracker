@@ -1,0 +1,51 @@
+{% extends "legal/_layout.html" %}
+{% block title %}Terms of Use | D.A.R.T.{% endblock %}
+{% block meta_description %}The rules for using D.A.R.T.: accounts, honest records, Premium plans and payments, acceptable use and liability.{% endblock %}
+{% block doc_title %}Terms of Use{% endblock %}
+
+{% block doc %}
+<div class="lg-summary">
+  <strong>In short:</strong> be honest, keep your account secure, respect other people's data, and only upload records and media that are true and yours to share.
+</div>
+
+<h2>1. Accepting these terms</h2>
+<p>By creating an account or using D.A.R.T. you agree to these Terms and the <a href="{{ url_for('privacy_page') }}">Privacy Policy</a>. If you are under 18, a parent or guardian should review them with you.</p>
+
+<h2>2. Accounts</h2>
+<ul>
+  <li>Give true information and keep it up to date. One person or organization per account.</li>
+  <li>Keep your password and authenticator private. You are responsible for activity on your account.</li>
+  <li>Coaches, scouts, organizations and administrators must use two-factor authentication.</li>
+</ul>
+
+<h2>3. Records, photos and videos</h2>
+<ul>
+  <li>Only submit statistics that really happened. Records are reviewed and approved by coaches; false records may be removed and accounts suspended.</li>
+  <li>Only upload photos and videos you have the right to share, that show sport, and that respect the people in them.</li>
+  <li>You keep ownership of your content and give D.A.R.T. permission to store and display it on the service and in shared links.</li>
+</ul>
+
+<h2>4. Premium plans and payments</h2>
+<ul>
+  <li>Prices are shown in US dollars on the <a href="{{ url_for('pricing') }}">Pricing page</a>. Athlete prices depend on your verified registration category.</li>
+  <li>Each payment gives 30 days. Plans do not renew automatically; you return to the free plan when they end and keep your records.</li>
+  <li>Mobile-money payments start when D.A.R.T. confirms the transaction. Submitting false payment details is fraud and leads to suspension.</li>
+  <li>While a Premium athlete plan is active, your category can't be changed, because prices depend on it.</li>
+  <li><strong>Refunds:</strong> if you paid by mistake, paid twice, or Premium could not be activated, contact us within 7 days and we will refund or correct it.</li>
+</ul>
+
+<h2>5. Acceptable use</h2>
+<p>Don't: copy or scrape data in bulk, contact athletes for anything other than legitimate sport or education purposes, harass anyone, impersonate others, try to break security, or use data from D.A.R.T. to sell, advertise to, or profile athletes outside sport.</p>
+
+<h2>6. Organizations and scouts</h2>
+<p>Organizations also agree to the <a href="{{ url_for('organization_terms') }}">Organization Data Use Terms</a>. Scouts must use athlete information only for genuine recruitment and must follow child-safeguarding practices when contacting minors (for example, through their school, club or guardian).</p>
+
+<h2>7. Suspension</h2>
+<p>We may suspend or close accounts that break these Terms or put others at risk, and remove content that is false or inappropriate.</p>
+
+<h2>8. Liability</h2>
+<p>We work hard to keep records accurate and the service available, but records come from athletes and coaches, and the service is provided "as is". To the extent the law allows, D.A.R.T. is not liable for indirect losses, or for decisions others make based on records.</p>
+
+<h2>9. Law</h2>
+<p>These Terms are governed by the laws of the Republic of Liberia. We will try to resolve any dispute informally first; contact us below.</p>
+{% endblock %}

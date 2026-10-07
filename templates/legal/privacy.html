@@ -1,0 +1,62 @@
+{% extends "legal/_layout.html" %}
+{% block title %}Privacy Policy | D.A.R.T.{% endblock %}
+{% block meta_description %}How D.A.R.T. collects, uses, protects and shares athlete, scout and organization data, and the choices you have.{% endblock %}
+{% block doc_title %}Privacy Policy{% endblock %}
+
+{% block doc %}
+<div class="lg-summary">
+  <strong>In short:</strong> we keep official sports records that coaches approve. We show sport information so athletes can be discovered,
+  never sell personal data, never show ID documents publicly, and let you control whether your profile appears on Google.
+</div>
+
+<h2>1. Who we are</h2>
+<p>D.A.R.T. (D3ll Athlete Records Tracker) is a sports-records platform based in Monrovia, Liberia. We are responsible for the personal data described here.</p>
+
+<h2>2. What we collect</h2>
+<ul>
+  <li><strong>Account details:</strong> name, team/school, email, password (stored only as a secure hash), role and registration category.</li>
+  <li><strong>Athlete profile:</strong> gender, age, date of birth, nationality, height, weight, preferred foot, shirt number and profile picture.</li>
+  <li><strong>Identity verification:</strong> the ID or passport you upload, seen only by coaches of your team and the D.A.R.T. Super Admin.</li>
+  <li><strong>Sports records and highlights:</strong> game statistics, photos and videos you upload.</li>
+  <li><strong>Organizations:</strong> organization details, contact person and an official document for verification.</li>
+  <li><strong>Payments:</strong> plan, amount, mobile-money phone number and transaction ID. We never ask for or store your mobile-money PIN or card numbers.</li>
+  <li><strong>Security logs:</strong> sign-in attempts, IP address and important actions (approvals, payments, roster exports) to protect accounts.</li>
+</ul>
+
+<h2>3. How we use it</h2>
+<ul>
+  <li>To run your account and verify identities (coaches approve athletes and records; the Super Admin verifies scouts and organizations).</li>
+  <li>To show approved records to scouts, organizations and visitors, according to your plan.</li>
+  <li>To process payments and prevent fraud.</li>
+  <li>To keep the service secure, including two-factor authentication for coaches, scouts, organizations and administrators.</li>
+  <li>To show ads to free users through Google AdSense (see the <a href="{{ url_for('cookies_page') }}">Cookie Policy</a>).</li>
+</ul>
+
+<h2>4. What others can see</h2>
+<ul>
+  <li><strong>Public:</strong> your name, team, approved records, highlights and sport profile (age, gender, nationality, physicals, preferred foot, shirt number). Free accounts show their latest approved record in search; Premium shows more.</li>
+  <li><strong>Never public:</strong> your email, password, ID document, date of birth, messages and payment details.</li>
+  <li><strong>Organizations</strong> with your team name on their verified roster see your sport profile, approved records and highlights. You can see which organizations list you on your profile.</li>
+</ul>
+
+<h2>5. Google and other search engines</h2>
+<p>Verified athletes aged 18 or over can appear in Google search unless they switch it off in My Profile. Athletes under 18 (or whose age is unknown) only appear if they switch it on. Switching it off removes your page from our sitemap and asks search engines not to show it; search engines may take some time to update.</p>
+
+<h2>6. Sharing</h2>
+<p>We do not sell personal data. We share it only with service providers that run D.A.R.T. (hosting, database and file storage, email, Google sign-in and Google AdSense), with mobile-money providers to confirm payments, or when the law requires it.</p>
+
+<h2>7. Security</h2>
+<p>We use encrypted connections (HTTPS), hashed passwords, two-factor authentication for privileged accounts, sign-in rate limits, access controls by role and audit logs. No system is perfectly secure; please use a strong, unique password and keep your authenticator safe.</p>
+
+<h2>8. How long we keep data</h2>
+<p>We keep your data while your account exists. When you delete your account in My Profile, we delete your account, records, registrations, highlights, profile picture and ID document. Payment and security records may be kept longer where the law requires.</p>
+
+<h2>9. Your rights</h2>
+<p>You can view and correct your profile at any time, delete your account, switch Google listing on or off, and ask us for a copy of your data or to correct anything you can't change yourself. Contact us at the address below.</p>
+
+<h2>10. Children</h2>
+<p>Many athletes are high-school students. Under-18s are not listed on Google unless they choose to be, and we only show sport information publicly. Parents or guardians may contact us about a minor's account.</p>
+
+<h2>11. Changes</h2>
+<p>We will post updates here and change the date above. Important changes will be announced in the app.</p>
+{% endblock %}

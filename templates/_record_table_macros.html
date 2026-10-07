@@ -5,6 +5,8 @@
    Styles: .records-table / .rt-* in base.html.
 ========================================================== #}
 
+{% from '_share.html' import share_button %}
+
 {% macro record_cells(r) %}
 {% set sport_icon = {'Football': 'fa-futbol', 'Basketball': 'fa-basketball', 'Kickball': 'fa-baseball'}.get(r.sport, 'fa-medal') %}
         <!-- Game: sport, date, season -->
@@ -26,6 +28,7 @@
                 {%- if r.shirt_number %} <span class="rt-shirt">#{{ r.shirt_number }}</span>{% endif %}
                 <span class="rt-muted">· <i class="fa-regular fa-clock" aria-hidden="true"></i> {{ r.match_minutes_played or 0 }} min</span>
               </div>
+              {{ share_button(r) }}
             </div>
           </div>
         </td>

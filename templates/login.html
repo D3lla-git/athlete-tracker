@@ -11,6 +11,7 @@
           <div class="mb-3">
             <label>Full Name <i class="fa-solid fa-user"></i></label>
             <input type="text" name="full_name" placeholder="Example: John Brown" class="form-control" required>
+            <div class="form-text">Organizations: use your organization name.</div>
           </div>
         <div class="mb-3">
   <label class="form-label">Password <i class="fa-solid fa-key"></i></label>
@@ -42,8 +43,46 @@
 }
 </style>
         </form>
+
+        <div class="login-register" id="loginRegister">
+          <div class="login-register-title">New to D.A.R.T.? Create an account</div>
+          <div class="login-register-grid">
+            <a href="{{ url_for('register') }}"><i class="fa-solid fa-person-running"></i> Athlete</a>
+            <a href="{{ url_for('register_coach') }}"><i class="fa-solid fa-user-shield"></i> Coach</a>
+            <a href="{{ url_for('register_scout') }}"><i class="fa-solid fa-binoculars"></i> Scout</a>
+            <a href="{{ url_for('register_organization') }}"><i class="fa-solid fa-building-shield"></i> Organization</a>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </div>
+
+<style>
+  .login-register {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--surface-border, #dee2e6);
+    text-align: center;
+  }
+  .login-register-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 10px; }
+  .login-register-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  #loginRegister .login-register-grid a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 42px;
+    padding: 0 8px;
+    border-radius: 12px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    text-decoration: none;
+    color: #146c43;
+    border: 1.5px solid rgba(25, 135, 84, 0.35);
+    background: rgba(25, 135, 84, 0.06);
+  }
+  #loginRegister .login-register-grid a:hover { background: rgba(25, 135, 84, 0.14); }
+  html[data-theme="dark"] #loginRegister .login-register-grid a { color: #4cd38a; border-color: rgba(76, 211, 138, 0.35); }
+</style>
 {% endblock %}

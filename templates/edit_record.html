@@ -123,9 +123,10 @@
         class="form-control"
         value="{{ record.game_date.strftime('%Y-%m-%d') if record.game_date else '' }}"
         min="{{ record.year }}-01-01"
-        max="{{ record.year }}-12-31"
+        max="{{ [record.year ~ '-12-31', today_iso()] | min }}"
+        data-no-future
         required>
-    <div class="form-text">Must be in the {{ record.year }} season.</div>
+    <div class="form-text">Must be in the {{ record.year }} season, and not after today.</div>
   </div>
 
   <div class="col-md-6">

@@ -2,212 +2,335 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <meta
-        name="theme-color"
-        content="#212529"
-    >
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#071208">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="color-scheme" content="dark light">
     <title>D.A.R.T. - Offline</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/icons/favicon-32.png') }}">
 
-    <link
-        rel="icon"
-        type="image/png"
-        href="{{ url_for('static', filename='images/icons/favicon-32.png') }}"
-    >
-
+    {# Self-contained on purpose: this page is stored by the service worker
+       and shown with no internet, so it uses no external CSS, fonts or icons. #}
     <style>
         :root {
-            --dart-green: darkgreen;
-            --dart-dark: #121212;
-            --dart-surface: #212529;
-            --dart-text: #ffffff;
-            --dart-muted: #adb5bd;
+            --bg: #050a06;
+            --card: rgba(18, 24, 20, 0.92);
+            --border: rgba(255, 255, 255, 0.10);
+            --text: #f1f5f2;
+            --muted: #a9b7ae;
+            --green: #198754;
+            --green-light: #4cd38a;
+            --gold: #f5c542;
         }
 
-        * {
-            box-sizing: border-box;
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg: #eef4f0;
+                --card: #ffffff;
+                --border: rgba(0, 0, 0, 0.10);
+                --text: #15211a;
+                --muted: #5b6b61;
+                --green-light: #198754;
+            }
         }
+
+        * { box-sizing: border-box; }
 
         body {
             margin: 0;
             min-height: 100vh;
+            min-height: 100dvh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 24px;
+            padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+            color: var(--text);
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
             background:
-                radial-gradient(
-                    circle at top,
-                    #17351f 0%,
-                    #121212 55%
-                );
-            color: var(--dart-text);
-            font-family:
-                Arial,
-                Helvetica,
-                sans-serif;
+                radial-gradient(circle at 50% -10%, rgba(57, 185, 114, 0.30), transparent 55%),
+                var(--bg);
         }
 
-        .offline-container {
-            width: 100%;
-            max-width: 480px;
+        .wrap { width: 100%; max-width: 520px; }
+
+        .card {
+            padding: 30px 24px 24px;
+            border-radius: 26px;
             text-align: center;
+            background: var(--card);
+            border: 1px solid var(--border);
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
         }
 
-        .offline-card {
-            background: rgba(33, 37, 41, 0.96);
-            border: 1px solid #3a3a3a;
-            border-radius: 24px;
-            padding: 40px 28px;
-            box-shadow:
-                0 20px 50px rgba(0, 0, 0, 0.35);
+        .logo { width: 92px; height: auto; margin-bottom: 14px; }
+
+        .signal {
+            display: grid;
+            place-items: center;
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 14px;
+            border-radius: 20px;
+            color: var(--gold);
+            background: rgba(245, 197, 66, 0.14);
+            border: 1px solid rgba(245, 197, 66, 0.35);
         }
 
-        .dart-logo {
-            width: 120px;
-            height: 120px;
-            object-fit: contain;
-            margin-bottom: 24px;
+        .signal.is-online { color: var(--green-light); background: rgba(25, 135, 84, 0.16); border-color: rgba(25, 135, 84, 0.4); }
+
+        h1 { margin: 0 0 8px; font-size: 1.7rem; font-weight: 900; }
+        .lead { margin: 0 0 20px; color: var(--muted); line-height: 1.6; }
+
+        /* ===== Record a game offline (athletes) ===== */
+        .record-card {
+            margin: 0 0 16px;
+            padding: 18px;
+            border-radius: 20px;
+            text-align: left;
+            color: #fff;
+            background:
+                radial-gradient(circle at 90% 10%, rgba(57, 185, 114, 0.40), transparent 45%),
+                linear-gradient(145deg, #071208, #0d2413 55%, #061008);
+            border: 1px solid rgba(76, 211, 138, 0.35);
         }
 
-        .offline-icon {
-            font-size: 3rem;
-            margin-bottom: 16px;
+        .record-card[hidden] { display: none; }
+
+        .record-head { display: flex; align-items: center; gap: 12px; }
+
+        .record-icon {
+            flex: 0 0 auto;
+            display: grid;
+            place-items: center;
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+            color: #fff;
+            background: linear-gradient(135deg, #198754, #39b972);
         }
 
-        h1 {
-            margin-bottom: 12px;
-            font-size: 2rem;
-        }
+        .record-title { font-size: 1.1rem; font-weight: 800; }
+        .record-text { margin: 10px 0 14px; font-size: 0.9rem; line-height: 1.55; color: #cfe9da; }
 
-        p {
-            color: var(--dart-muted);
-            line-height: 1.7;
-            margin-bottom: 24px;
-        }
-
-        .retry-button {
-            border: 2px solid var(--dart-green);
-            background: var(--dart-green);
-            color: white;
-            border-radius: 12px;
-            padding: 12px 24px;
-            font-weight: 700;
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            min-height: 50px;
+            padding: 12px 18px;
+            border-radius: 999px;
+            font: inherit;
+            font-weight: 800;
+            text-decoration: none;
             cursor: pointer;
         }
 
-        .retry-button:hover {
-            background: #000000;
-        }
+        .btn-primary { color: #fff; background: linear-gradient(135deg, #198754, #39b972); border: 2px solid #000; }
+        .btn-primary:hover { filter: brightness(1.08); }
 
-        .offline-records-text {
-            margin: 24px 0 14px;
-            font-size: 0.92rem;
-        }
+        .btn-ghost { margin-top: 10px; color: #fff; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.25); }
 
-        .offline-records-button {
-            display: inline-block;
-            text-decoration: none;
-            background: transparent;
-        }
+        .btn-retry { color: var(--text); background: transparent; border: 1.5px solid var(--border); }
+        .btn-retry:hover { border-color: var(--green-light); color: var(--green-light); }
 
-        .status {
-            margin-top: 18px;
+        .pending {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            padding: 9px 12px;
+            border-radius: 12px;
             font-size: 0.85rem;
-            color: var(--dart-muted);
+            font-weight: 600;
+            color: #3d2c00;
+            background: linear-gradient(135deg, #f5c542, #ffd96b);
         }
+
+        .pending[hidden] { display: none; }
+
+        .steps { margin: 14px 0 0; padding: 0; list-style: none; text-align: left; }
+        .steps li { display: flex; gap: 10px; padding: 6px 0; font-size: 0.86rem; color: #cfe9da; }
+        .steps b {
+            flex: 0 0 auto;
+            display: grid;
+            place-items: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            font-size: 0.75rem;
+            color: #0d2413;
+            background: var(--green-light);
+        }
+
+        .status { margin-top: 16px; font-size: 0.84rem; color: var(--muted); }
+        .brand { margin-top: 8px; font-size: 0.76rem; color: var(--muted); opacity: 0.8; }
+
+        svg { display: block; }
     </style>
 </head>
 
 <body>
+<main class="wrap">
+    <div class="card">
 
-<div class="offline-container">
+        <img src="{{ url_for('static', filename='images/dartlogo.png') }}" alt="D.A.R.T." class="logo">
 
-    <div class="offline-card">
-
-        <img
-            src="{{ url_for('static', filename='images/dartlogo.png') }}"
-            alt="D.A.R.T. Logo"
-            class="dart-logo"
-        >
-
-        <div class="offline-icon">
-            📡
+        <div class="signal" id="signalIcon" aria-hidden="true">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 1l22 22"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/>
+                <path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><path d="M12 20h.01"/>
+            </svg>
         </div>
 
-        <h1>
-            You're Offline
-        </h1>
-
-        <p>
-            D.A.R.T. could not connect to the server.
-            Please check your internet connection and try again.
+        <h1 id="offlineTitle">You're offline</h1>
+        <p class="lead" id="offlineLead">
+            D.A.R.T. can't reach the internet right now. Check your data or Wi-Fi.
         </p>
 
-        <button
-            type="button"
-            class="retry-button"
-            onclick="window.location.reload()"
-        >
-            Try Again
+        <!-- Athletes whose record form is saved on this device -->
+        <section class="record-card" id="recordCard" hidden aria-labelledby="recordTitle">
+            <div class="record-head">
+                <div class="record-icon" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+                        <rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/>
+                    </svg>
+                </div>
+                <div class="record-title" id="recordTitle">Record a game without internet</div>
+            </div>
+            <p class="record-text">
+                Your record form works offline, with the competitions your category allows.
+                Fill it in as usual: the record is saved on this device and sent for coach
+                approval automatically when you're back online.
+            </p>
+
+            <a href="/student/record" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Record a game
+            </a>
+            <a href="/student" class="btn btn-ghost" id="dashboardLink" hidden>My Records</a>
+
+            <div class="pending" id="pendingInfo" role="status" hidden>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M20 16v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3"/></svg>
+                <span id="pendingText"></span>
+            </div>
+
+            <ol class="steps">
+                <li><b>1</b> Fill in the game: sport, teams, date and stats.</li>
+                <li><b>2</b> Tap Submit Record: it's saved on this phone.</li>
+                <li><b>3</b> Back online? It uploads for approval by itself.</li>
+            </ol>
+        </section>
+
+        <button type="button" class="btn btn-retry" id="retryButton" onclick="window.location.reload()">
+            Try again
         </button>
 
-        <!-- Shown only when the athlete dashboard is saved on this device. -->
-        <div id="offlineRecordsLink" hidden>
-            <p class="offline-records-text">
-                Athletes can still save new records. They upload for
-                approval when you're back online.
-            </p>
-            <a href="/student" class="retry-button offline-records-button">
-                Open My Records
-            </a>
-        </div>
-
         <div class="status" id="connectionStatus" role="status">
-            This page will reload automatically when you're back online.
+            This page reloads automatically when you're back online.
         </div>
-
-        <div class="status">
-            D.A.R.T. — D3ll Athlete Records Tracker
-        </div>
-
+        <div class="brand">D.A.R.T. · D3ll Athlete Records Tracker</div>
     </div>
-
-</div>
+</main>
 
 <script>
-    // This page is shown in place of the page the user asked for,
-    // so reloading returns them to that page once the network is back.
+(function () {
+    // This page stands in for the page the user asked for, so reloading
+    // returns them there once the network is back.
+    // Browsers can fire 'online' without a real connection (e.g. while the
+    // user is opening a saved page), so check the server answers first.
+    var leaving = false;
+    window.addEventListener('pagehide', function () { leaving = true; });
+    window.addEventListener('beforeunload', function () { leaving = true; });
+
     window.addEventListener('online', function () {
-        var status = document.getElementById('connectionStatus');
+        setTimeout(function () {
+            if (leaving) {
+                return;
+            }
 
-        if (status) {
-            status.textContent = 'Back online. Reloading…';
-        }
-
-        window.location.reload();
+            fetch('/offline?ping=' + Date.now(), { cache: 'no-store' }).then(function (response) {
+                if (!response.ok || leaving) {
+                    return;
+                }
+                document.getElementById('connectionStatus').textContent = 'Back online. Reloading…';
+                document.getElementById('signalIcon').classList.add('is-online');
+                window.location.reload();
+            }).catch(function () {
+                // Still no connection: stay on this page.
+            });
+        }, 600);
     });
 
-    // 'dart-pages-v1' is the service worker's offline-pages cache.
-    if ('caches' in window) {
-        caches.open('dart-pages-v1')
-            .then(function (cache) {
-                return cache.match('/student');
-            })
-            .then(function (savedPage) {
-                if (savedPage) {
-                    document.getElementById('offlineRecordsLink').hidden = false;
-                }
-            })
-            .catch(function () {});
+    if (!('caches' in window)) {
+        return;
     }
-</script>
 
+    // 'dart-pages-v1' is the service worker's cache of pages saved for
+    // offline use (only verified athletes' record form and dashboard).
+    caches.open('dart-pages-v1').then(function (cache) {
+        return Promise.all([cache.match('/student/record'), cache.match('/student')]);
+    }).then(function (pages) {
+        var formSaved = !!pages[0];
+        var dashboardSaved = !!pages[1];
+
+        if (!formSaved && !dashboardSaved) {
+            return;
+        }
+
+        var card = document.getElementById('recordCard');
+        card.hidden = false;
+
+        // Older devices may only have the dashboard (which has the form too).
+        if (!formSaved) {
+            card.querySelector('.btn-primary').setAttribute('href', '/student#recordForm');
+        }
+
+        document.getElementById('dashboardLink').hidden = !dashboardSaved || !formSaved;
+        document.getElementById('offlineLead').textContent =
+            "No internet right now, but you can still record your games.";
+
+        showPendingCount();
+    }).catch(function () {});
+
+    // Records already saved on this device and waiting to upload
+    // (same database as public/static/js/offline-records.js).
+    function showPendingCount() {
+        if (!('indexedDB' in window)) {
+            return;
+        }
+
+        var request = indexedDB.open('dart-offline', 1);
+
+        request.onupgradeneeded = function () {
+            var db = request.result;
+            if (!db.objectStoreNames.contains('pendingRecords')) {
+                var store = db.createObjectStore('pendingRecords', { keyPath: 'id' });
+                store.createIndex('userId', 'userId', { unique: false });
+            }
+        };
+
+        request.onsuccess = function () {
+            var db = request.result;
+            try {
+                var countRequest = db.transaction('pendingRecords', 'readonly').objectStore('pendingRecords').count();
+                countRequest.onsuccess = function () {
+                    var n = countRequest.result;
+                    if (n > 0) {
+                        document.getElementById('pendingText').textContent =
+                            n + (n === 1 ? ' record is' : ' records are') + ' saved on this device, waiting to upload.';
+                        document.getElementById('pendingInfo').hidden = false;
+                    }
+                    db.close();
+                };
+            } catch (e) {
+                db.close();
+            }
+        };
+    }
+})();
+</script>
 </body>
 </html>

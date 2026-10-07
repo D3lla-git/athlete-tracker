@@ -585,6 +585,7 @@
   </div>
 </div>
 
+{% if dash.full %}
 <div class="row g-3">
 
   <!-- ===================== MAIN COLUMN ===================== -->
@@ -793,5 +794,105 @@
     </section>
   </div>
 </div>
+{% else %}
+{# Free scout accounts: Season Leaders and everything below are Scout Pro. #}
+<section class="sd-locked" aria-labelledby="sdLockedTitle">
+  <div class="sd-locked-preview" aria-hidden="true">
+    {% for title, icon in [('Season Leaders', 'fa-ranking-star'), ('Recent Performances', 'fa-fire'),
+                           ('Saved Searches', 'fa-bookmark'), ('Discover by Sport', 'fa-compass'),
+                           ('Quick Filters', 'fa-filter'), ('Rising Talent', 'fa-seedling')] %}
+      <div class="sd-locked-tile"><i class="fa-solid {{ icon }}"></i> {{ title }}</div>
+    {% endfor %}
+  </div>
+
+  <div class="sd-locked-card">
+    <div class="sd-locked-crown" aria-hidden="true"><i class="fa-solid fa-crown"></i></div>
+    <h2 id="sdLockedTitle">Unlock the full Scouting HQ</h2>
+    <p>
+      Season leaders, rising talent, recent performances, saved searches, advanced
+      filters and multi-metric queries are part of <strong>Scout Pro</strong>.
+    </p>
+    <div class="sd-locked-price">{{ plans['scout_pro'].price_label }} <span>/ month</span></div>
+    <a href="{{ url_for('pricing') }}#scouts" class="btn dart-btn sd-locked-btn">
+      <i class="fa-solid fa-crown me-1"></i> Upgrade to Scout Pro
+    </a>
+    <div class="sd-locked-methods">
+      <i class="fa-brands fa-cc-visa"></i> Card (coming soon) · Orange Money · MTN MoMo
+    </div>
+  </div>
+</section>
+
+{% include '_ad_slot.html' %}
+
+<style>
+  .sd-locked {
+    position: relative;
+    margin-top: 6px;
+    border-radius: 22px;
+    overflow: hidden;
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+  }
+
+  .sd-locked-preview {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding: 18px;
+    filter: blur(3px);
+    opacity: 0.55;
+  }
+
+  .sd-locked-tile {
+    height: 120px;
+    padding: 14px;
+    border-radius: 16px;
+    font-weight: 700;
+    background: var(--surface-bg, rgba(0, 0, 0, 0.04));
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.08));
+  }
+
+  .sd-locked-card {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: min(460px, calc(100% - 32px));
+    height: fit-content;
+    padding: 26px 22px;
+    text-align: center;
+    color: #fff;
+    border-radius: 22px;
+    background:
+      radial-gradient(circle at 85% 15%, rgba(245, 197, 66, 0.30), transparent 40%),
+      linear-gradient(145deg, #071208, #0d2413 55%, #061008);
+    border: 1px solid rgba(245, 197, 66, 0.5);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  }
+
+  .sd-locked-card h2 { font-size: 1.3rem; font-weight: 800; margin: 10px 0 8px; }
+  .sd-locked-card p { color: #cfe9da; font-size: 0.92rem; margin-bottom: 12px; }
+
+  .sd-locked-crown {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto;
+    border-radius: 50%;
+    font-size: 1.4rem;
+    color: #3d2c00;
+    background: linear-gradient(135deg, #f5c542, #ffd96b);
+  }
+
+  .sd-locked-price { font-size: 1.8rem; font-weight: 800; color: #f5c542; margin-bottom: 12px; }
+  .sd-locked-price span { font-size: 0.9rem; color: #cfe9da; font-weight: 600; }
+  .sd-locked-btn { border-radius: 999px; border: 2px solid #000 !important; color: #fff; padding: 10px 22px; }
+  .sd-locked-methods { margin-top: 10px; font-size: 0.78rem; color: #a7c9b6; }
+
+  @media (max-width: 767.98px) {
+    .sd-locked-preview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sd-locked-tile { height: 90px; }
+  }
+</style>
+{% endif %}
 
 {% endblock %}

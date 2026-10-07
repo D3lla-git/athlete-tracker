@@ -1,0 +1,24 @@
+{% extends "legal/_layout.html" %}
+{% block title %}Cookie Policy | D.A.R.T.{% endblock %}
+{% block meta_description %}The cookies and local storage D.A.R.T. uses: sign-in, security, offline mode, theme, and Google AdSense for free users.{% endblock %}
+{% block doc_title %}Cookie Policy{% endblock %}
+
+{% block doc %}
+<h2>Essential (always on)</h2>
+<ul>
+  <li><strong>Session cookie:</strong> keeps you signed in and protects forms from forgery (CSRF). Secure and HTTP-only.</li>
+  <li><strong>Offline storage:</strong> the app can keep a copy of your records form and unsent records on your device so you can work without data. It is cleared when another user signs in on the same device.</li>
+  <li><strong>Preferences:</strong> your light/dark theme and whether a celebration was already shown.</li>
+</ul>
+
+<h2>Advertising (free plans and visitors)</h2>
+<p>Free accounts and visitors may see ads served by Google AdSense, which uses cookies to show and measure ads. Premium users, coaches and administrators don't see ads. Learn how Google uses data at
+  <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener">policies.google.com/technologies/partner-sites</a>,
+  and manage ad personalization at <a href="https://adssettings.google.com" target="_blank" rel="noopener">adssettings.google.com</a>.</p>
+
+<h2>Google sign-in</h2>
+<p>If you choose "Continue with Google", Google sets its own cookies during sign-in.</p>
+
+<h2>Your choices</h2>
+<p>You can block or delete cookies in your browser settings. Blocking essential cookies will stop sign-in from working.</p>
+{% endblock %}

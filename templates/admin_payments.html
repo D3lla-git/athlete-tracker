@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Payments · Super Admin{% endblock %}
+
+{% block content %}
+<div class="ap-page">
+  <div class="ap-head">
+    <div>
+      <h1><i class="fa-solid fa-money-check-dollar"></i> Payments</h1>
+      <p>Check each payment against the Orange Money / MTN MoMo statement (amount, reference and transaction ID) before confirming. Confirming starts 30 days of the plan.</p>
+    </div>
+    <span class="ap-count">{{ awaiting | length }} awaiting</span>
+  </div>
+
+  {% if awaiting %}
+    <div class="ap-list">
+      {% for p in awaiting %}
+        {% set plan = plans.get(p.plan_code) %}
+        <article class="ap-card">
+          <div class="ap-card-main">
+            <div class="ap-user">
+              <strong>{{ p.user.full_name }}</strong>
+              <span>{{ p.user.role }}{% if p.user.athlete_category %} · {{ p.user.athlete_category }}{% endif %}</span>
+            </div>
+            <dl class="ap-facts">
+              <div><dt>Plan</dt><dd>{{ plan.name if plan else p.plan_code }}</dd></div>
+              <div><dt>Amount</dt><dd><strong>${{ '%.2f' | format(p.amount) }}</strong></dd></div>
+              <div><dt>Method</dt><dd>{{ payment_methods.get(p.payment_method, '-') }}</dd></div>
+              <div><dt>Reference</dt><dd><code>{{ p.payment_reference }}</code></dd></div>
+              <div><dt>Transaction ID</dt><dd><code>{{ (p.provider_payment_id or '').split(':', 1)[-1] }}</code></dd></div>
+              <div><dt>Paid from</dt><dd>{{ p.payer_phone or '-' }}</dd></div>
+              <div><dt>Submitted</dt><dd>{{ p.updated_at.strftime('%b %d, %Y %H:%M') }} UTC</dd></div>
+            </dl>
+          </div>
+
+          <div class="ap-actions">
+            <form method="POST" action="{{ url_for('admin_confirm_payment', payment_id=p.id) }}"
+                  onsubmit="return confirm('Confirm ${{ '%.2f' | format(p.amount) }} from {{ p.user.full_name | e }}? This starts {{ plan.name if plan else 'the plan' }} for 30 days.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-success ap-btn"><i class="fa-solid fa-circle-check me-1"></i> Confirm</button>
+            </form>
+
+            <form method="POST" action="{{ url_for('admin_reject_payment', payment_id=p.id) }}" class="ap-reject">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <select name="reason" class="form-select form-select-sm" required aria-label="Reason">
+                <option value="">Reject reason…</option>
+                {% for r in reject_reasons %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+              </select>
+              <button type="submit" class="btn btn-outline-danger ap-btn"><i class="fa-solid fa-circle-xmark me-1"></i> Reject</button>
+            </form>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="ap-empty"><i class="fa-solid fa-circle-check"></i> No payments waiting. All caught up.</div>
+  {% endif %}
+
+  <h2 class="ap-sub">Recently reviewed</h2>
+  {% if reviewed %}
+    <div class="table-responsive">
+      <table class="table align-middle ap-table">
+        <thead><tr><th>Reviewed</th><th>User</th><th>Plan</th><th>Amount</th><th>Status</th><th>By</th></tr></thead>
+        <tbody>
+          {% for p in reviewed %}
+            <tr>
+              <td>{{ p.reviewed_at.strftime('%b %d, %H:%M') if p.reviewed_at else '-' }}</td>
+              <td>{{ p.user.full_name }}</td>
+              <td>{{ plans[p.plan_code].name if p.plan_code in plans else '-' }}</td>
+              <td>${{ '%.2f' | format(p.amount) }}</td>
+              <td>
+                {% if p.status == 'succeeded' %}<span class="badge bg-success">Confirmed</span>
+                {% else %}<span class="badge bg-danger">Rejected</span> <small>{{ p.failure_reason }}</small>{% endif %}
+              </td>
+              <td>{{ p.reviewer.full_name if p.reviewer else '-' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="text-muted">Nothing reviewed yet.</p>
+  {% endif %}
+</div>
+
+<style>
+  .ap-page { max-width: 1100px; margin: 0 auto; }
+  .ap-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
+  .ap-head h1 { font-size: 1.6rem; font-weight: 800; }
+  .ap-head h1 i { color: #198754; }
+  .ap-head p { color: var(--muted-text, #6c757d); max-width: 700px; margin: 0; }
+  .ap-count { flex: 0 0 auto; padding: 6px 14px; border-radius: 999px; font-weight: 800; color: #8a6d00; background: rgba(245, 197, 66, 0.22); }
+
+  .ap-list { display: grid; gap: 14px; }
+  .ap-card {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px;
+    border-radius: 18px;
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    border-left: 5px solid #f5c542;
+    background: var(--surface-bg, #fff);
+  }
+  .ap-card-main { flex: 1 1 520px; min-width: 0; }
+  .ap-user strong { font-size: 1.05rem; display: block; }
+  .ap-user span { font-size: 0.82rem; color: var(--muted-text, #6c757d); }
+  .ap-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 16px; margin: 12px 0 0; }
+  .ap-facts dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-text, #6c757d); font-weight: 700; }
+  .ap-facts dd { margin: 0; overflow-wrap: anywhere; }
+  .ap-facts code { color: #198754; font-weight: 700; }
+
+  .ap-actions { display: flex; flex-direction: column; gap: 10px; flex: 0 1 260px; }
+  .ap-actions form { margin: 0; }
+  .ap-reject { display: flex; flex-direction: column; gap: 6px; }
+  .ap-btn { width: 100%; border-radius: 999px; font-weight: 700; }
+
+  .ap-empty { padding: 26px; border-radius: 18px; text-align: center; color: #146c43; background: rgba(25, 135, 84, 0.08); }
+  .ap-sub { font-size: 1.15rem; font-weight: 800; margin: 30px 0 12px; }
+  .ap-table th { font-size: 0.78rem; text-transform: uppercase; color: var(--muted-text, #6c757d); }
+</style>
+{% endblock %}

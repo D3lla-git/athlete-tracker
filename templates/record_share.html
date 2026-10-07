@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% from '_share.html' import share_button %}
+{% from '_record_table_macros.html' import record_cells with context %}
+
+{% block title %}{{ title }} | D.A.R.T. Official Record{% endblock %}
+{% block meta_description %}Official {{ record.sport | lower }} record: {{ athlete.full_name }}{% if athlete.school %} ({{ athlete.school }}){% endif %}, {{ record_headline(record) }}, {{ record.competition_display }}{% if record.game_date %}, {{ record.game_date.strftime('%B %d, %Y') }}{% endif %}. Coach-approved on D.A.R.T.{% endblock %}
+{% block canonical %}{{ share_url }}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block og_image %}{% if athlete.profile_picture %}{{ site_url(url_for('profile_picture', filename=athlete.profile_picture)) }}{% else %}{{ super() }}{% endif %}{% endblock %}
+{% block robots %}<meta name="robots" content="{{ 'index, follow' if indexable else 'noindex, nofollow' }}">{% endblock %}
+
+{% block content %}
+{% set icon = {'Football': 'fa-futbol', 'Basketball': 'fa-basketball', 'Kickball': 'fa-baseball'}.get(record.sport, 'fa-medal') %}
+<div class="rs-page">
+  <article class="rs-card" aria-labelledby="rsTitle">
+    <header class="rs-head">
+      <div class="rs-badge"><i class="fa-solid fa-circle-check"></i> Coach-approved · D.A.R.T. Record #{{ record.id }}</div>
+      <div class="rs-athlete">
+        {% if athlete.profile_picture %}
+          <img src="{{ url_for('profile_picture', filename=athlete.profile_picture) }}" alt="" class="rs-photo">
+        {% else %}
+          <span class="rs-photo" aria-hidden="true">{{ athlete.full_name[0] | upper }}</span>
+        {% endif %}
+        <div>
+          <h1 id="rsTitle">
+            {{ athlete.full_name }}
+            {% if record.shirt_number %}<span class="rs-shirt">#{{ record.shirt_number }}</span>{% endif %}
+          </h1>
+          <div class="rs-sub">
+            {{ record.team or athlete.school }}
+            {% if athlete.nationality %} · {{ country_flag(athlete.nationality) }} {{ athlete.nationality }}{% endif %}
+            {% if record.position %} · {{ record.position }}{% endif %}
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="rs-body">
+      <div class="rs-headline">
+        <span class="rs-sport"><i class="fa-solid {{ icon }}"></i> {{ record.sport }}</span>
+        <h2>{{ record_headline(record) | capitalize }}</h2>
+        <div class="rs-meta">
+          <span><i class="fa-regular fa-calendar-days"></i> {{ record.game_date.strftime('%B %d, %Y') if record.game_date else 'Season ' ~ record.year }}</span>
+          <span><i class="fa-solid fa-trophy"></i> {{ record.competition_display }}</span>
+          {% if record.trophy %}<span><i class="fa-solid fa-medal"></i> {{ record.trophy }}</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table records-table rs-table">
+          <tbody><tr>{{ record_cells(record) }}</tr></tbody>
+        </table>
+      </div>
+
+      <div class="rs-actions">
+        <a href="{{ pdf_url }}" class="btn rs-btn rs-btn-pdf" download><i class="fa-solid fa-file-pdf me-1"></i> Download PDF</a>
+        {{ share_button(record) }}
+        <a href="{{ athlete_public_path(athlete) }}" class="btn btn-outline-success rs-btn"><i class="fa-solid fa-user me-1"></i> {{ athlete.full_name.split(' ')[0] }}'s profile</a>
+      </div>
+    </div>
+
+    <footer class="rs-foot">
+      <i class="fa-solid fa-shield-halved"></i>
+      This page is the live, official copy of this record. Records are submitted by athletes and approved by their coach on D.A.R.T.
+    </footer>
+  </article>
+
+  {% include '_ad_slot.html' %}
+</div>
+
+<style>
+  .rs-page { max-width: 980px; margin: 0 auto; }
+  .rs-card { border-radius: 26px; overflow: hidden; border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1)); background: var(--surface-bg, #fff); box-shadow: 0 18px 44px rgba(0, 0, 0, 0.1); }
+  .rs-head {
+    padding: 26px;
+    color: #fff;
+    background:
+      radial-gradient(circle at 88% 15%, rgba(245, 197, 66, 0.25), transparent 38%),
+      radial-gradient(circle at 5% 100%, rgba(57, 185, 114, 0.35), transparent 40%),
+      linear-gradient(145deg, #071208, #0d2413 55%, #061008);
+  }
+  .rs-badge { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; color: #b9f0d1; background: rgba(76, 211, 138, 0.18); margin-bottom: 14px; }
+  .rs-athlete { display: flex; align-items: center; gap: 16px; }
+  .rs-photo { flex: 0 0 auto; display: grid; place-items: center; width: 74px; height: 74px; border-radius: 50%; object-fit: cover; font-size: 2rem; font-weight: 800; background: rgba(255, 255, 255, 0.12); border: 3px solid rgba(255, 255, 255, 0.3); }
+  .rs-athlete h1 { font-size: clamp(1.4rem, 3.5vw, 2rem); font-weight: 900; margin: 0; overflow-wrap: anywhere; }
+  .rs-shirt { margin-left: 6px; padding: 2px 10px; border-radius: 999px; font-size: 0.9rem; color: #3d2c00; background: linear-gradient(135deg, #f5c542, #ffd96b); vertical-align: middle; }
+  .rs-sub { color: #cfe9da; font-size: 0.92rem; }
+
+  .rs-body { padding: 24px 26px; }
+  .rs-headline h2 { font-size: 1.5rem; font-weight: 900; margin: 8px 0; }
+  .rs-sport { display: inline-flex; gap: 6px; align-items: center; padding: 3px 12px; border-radius: 999px; font-size: 0.8rem; font-weight: 800; color: #fff; background: #198754; }
+  .rs-meta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--muted-text, #6c757d); font-size: 0.9rem; margin-bottom: 16px; }
+  .rs-meta i { color: #198754; }
+  .rs-table { margin-bottom: 0; }
+
+  .rs-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; }
+  .rs-actions .dart-share-btn { margin: 0; padding: 9px 18px; font-size: 0.9rem; }
+  .rs-btn { border-radius: 999px; font-weight: 700; }
+  .rs-btn-pdf { color: #fff; background: #b02a37; border: 0; }
+  .rs-btn-pdf:hover { color: #fff; background: #8f1f2b; }
+
+  .rs-foot { padding: 14px 26px; font-size: 0.82rem; color: var(--muted-text, #6c757d); border-top: 1px solid var(--surface-border, #dee2e6); }
+  .rs-foot i { color: #198754; }
+
+  @media (max-width: 575.98px) {
+    .rs-head, .rs-body { padding: 18px; }
+    .rs-photo { width: 58px; height: 58px; font-size: 1.5rem; }
+    .rs-actions .btn, .rs-actions .dart-share-btn { flex: 1 1 100%; justify-content: center; }
+  }
+</style>
+{% endblock %}

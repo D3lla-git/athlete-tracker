@@ -1,0 +1,23 @@
+{% extends "legal/_layout.html" %}
+{% block title %}Legal Information | D.A.R.T.{% endblock %}
+{% block meta_description %}Legal information about D.A.R.T. (D3ll Athlete Records Tracker): operator, contact, record verification and reporting concerns.{% endblock %}
+{% block doc_title %}Legal Information{% endblock %}
+
+{% block doc %}
+<h2>Operator</h2>
+<p>D.A.R.T. (D3ll Athlete Records Tracker), Monrovia, Liberia. Developed by Mandella L. Wleh-Sam.</p>
+
+<h2>About the records</h2>
+<p>Records are submitted by athletes and approved by coaches registered on D.A.R.T. Each shared record and PDF links back to its live page so anyone can check it is genuine and current. D.A.R.T. is independent and is not an official body of any football, basketball or kickball association unless stated.</p>
+
+<h2>Report a problem</h2>
+<p>To report a false record, inappropriate photo or video, a wrong roster listing, or a security issue, email us at the address below with the page link. We review reports promptly and may remove content while we investigate.</p>
+
+<h2>Policies</h2>
+<ul>
+  <li><a href="{{ url_for('privacy_page') }}">Privacy Policy</a></li>
+  <li><a href="{{ url_for('terms_page') }}">Terms of Use</a></li>
+  <li><a href="{{ url_for('cookies_page') }}">Cookie Policy</a></li>
+  <li><a href="{{ url_for('organization_terms') }}">Organization Data Use Terms</a></li>
+</ul>
+{% endblock %}

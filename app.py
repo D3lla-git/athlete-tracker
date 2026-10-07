@@ -6,12 +6,25 @@ from werkzeug.utils import secure_filename
 from werkzeug.datastructures import MultiDict
 from werkzeug.security import generate_password_hash, check_password_hash
 from pymongo import MongoClient
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
+from itsdangerous import URLSafeSerializer, BadSignature
+from record_pdf import build_record_pdf, build_profile_pdf
+from profile_card import CardData, render_card as render_profile_card
+from plans import (
+    PLANS, PAYMENT_METHODS, MOMO_METHODS, FREE_ATHLETE_LIMITS, FREE_LIMITS_START,
+    FREE_ORG_ROSTER_PREVIEW, ATHLETE_PLAN_BY_CATEGORY, active_subscription,
+    current_plan, is_premium, plan_for_user, eligibility_error,
+    can_use_advanced_search, shows_ads, scout_has_full_dashboard,
+    limit_reached, usage_summary, apply_record_visibility, activate_plan,
+    clear_plan_cache,
+)
 from competitions import (
     ALL_COMPETITIONS,
+    ATHLETE_CATEGORIES,
+    COACH_CATEGORIES,
     clean_age_group,
     clean_competition_team,
     competition_allowed,
@@ -25,6 +38,8 @@ from datetime import datetime, timedelta
 from urllib.parse import urlsplit, parse_qsl, urlencode
 from flask_migrate import Migrate
 from supabase import create_client
+import csv
+import io
 import re
 import requests as http_requests
 import uuid
@@ -35,7 +50,7 @@ import pyotp
 import qrcode
 import secrets
 from flask_mail import Mail, Message
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, select
 from authlib.integrations.flask_client import OAuth
 import time
 from flask import abort
@@ -446,6 +461,28 @@ def athlete_can_submit_competition(category, competition):
     }
 
     return category_map.get(category) == competition
+
+
+def athlete_allowed_competitions(user, year=None):
+    """
+    Competitions this athlete may submit records for this season, in form
+    order: every competition any of their active registrations allows.
+    The record form only offers these (the server checks again).
+    """
+    year = year or datetime.now().year
+    categories = [
+        registration.category
+        for registration in Registration.query.filter_by(
+            user_id=user.id,
+            registration_type='athlete',
+            registration_year=year,
+            status='active'
+        )
+    ]
+    return [
+        competition for competition in ALL_COMPETITIONS
+        if any(athlete_can_submit_competition(c, competition) for c in categories)
+    ]
 
 
 def coach_can_manage_competition(category, competition):
@@ -966,132 +1003,360 @@ def unpin_premium_record(record_id):
     )
 
     return redirect(url_for('profile'))
-#==============Premium Profile route=======================
-#==============Premium Profile route=======================
+# ==========================================================
+# PRICING, CHECKOUT AND BILLING (plans.py has the plans)
+# ==========================================================
+# There is no payment API yet, so mobile money is confirmed by hand:
+#   1. The user picks a plan; checkout shows D.A.R.T.'s Orange Money /
+#      MTN MoMo number and a unique reference (DART-XXXXXXXX).
+#   2. They pay from their phone, then enter the transaction ID.
+#   3. The Super Admin checks it against the MoMo statement and confirms
+#      (or rejects) it on /admin/payments. Confirming starts 30 days.
+# Cards show "coming soon" until a card processor is connected; then
+# only step 3 needs automating (activate_plan() does the rest).
+#
+# Set in the environment:
+#   ORANGE_MONEY_NUMBER, MTN_MOMO_NUMBER, PAYMENT_ACCOUNT_NAME
+
+PAYMENT_ACCOUNTS = {
+    'orange_money': (os.environ.get('ORANGE_MONEY_NUMBER') or '').strip(),
+    'mtn_momo': (os.environ.get('MTN_MOMO_NUMBER') or '').strip(),
+}
+PAYMENT_ACCOUNT_NAME = (os.environ.get('PAYMENT_ACCOUNT_NAME') or 'D.A.R.T.').strip()
+
+TRANSACTION_ID_PATTERN = re.compile(r'^[A-Za-z0-9.\-]{5,40}$')
+PAYER_PHONE_PATTERN = re.compile(r'^\+?[0-9][0-9 ]{6,19}$')
+MAX_OPEN_PAYMENTS = 3
+PAYMENT_REJECT_REASONS = (
+    'Transaction ID not found on our statement',
+    'Amount received does not match the plan price',
+    'Reference missing or wrong',
+    'Duplicate submission',
+    'Other (contact support)',
+)
+
+app.jinja_env.globals.update(
+    payment_methods=PAYMENT_METHODS,
+    payment_accounts=PAYMENT_ACCOUNTS,
+    payment_account_name=PAYMENT_ACCOUNT_NAME,
+)
+
+
+def _new_payment_reference():
+    alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'   # no 0/O/1/I mix-ups
+    return 'DART-' + ''.join(secrets.choice(alphabet) for _ in range(8))
+
+
+def open_checkout_payment(user, plan):
+    """The not-yet-submitted payment for this user + plan (one reference per checkout)."""
+    payment = Payment.query.filter_by(
+        user_id=user.id,
+        plan_code=plan.code,
+        status='pending'
+    ).order_by(Payment.id.desc()).first()
+
+    if payment:
+        return payment
+
+    payment = Payment(
+        user_id=user.id,
+        provider='manual',
+        payment_reference=_new_payment_reference(),
+        amount=plan.price,
+        currency='USD',
+        status='pending',
+        plan_code=plan.code,
+        description=f'D.A.R.T. {plan.name} - 30 days'
+    )
+    db.session.add(payment)
+    db.session.commit()
+    return payment
+
+
+@app.route('/pricing')
+def pricing():
+    my_eligible = plan_for_user(current_user) if current_user.is_authenticated else None
+    awaiting = []
+
+    if current_user.is_authenticated:
+        awaiting = Payment.query.filter_by(
+            user_id=current_user.id,
+            status='awaiting_review'
+        ).order_by(Payment.created_at.desc()).all()
+
+    athlete_plans = [p for p in PLANS.values() if p.audience == 'athlete']
+
+    return render_template(
+        'pricing.html',
+        athlete_plans=athlete_plans,
+        high_school_plan=PLANS['athlete_high_school'],
+        pro_athlete_plans=[p for p in athlete_plans if p.code != 'athlete_high_school'],
+        pro_from_price=min(
+            (p for p in athlete_plans if p.code != 'athlete_high_school'),
+            key=lambda p: p.price
+        ).price_label,
+        free_org_preview=FREE_ORG_ROSTER_PREVIEW,
+        scout_plan=PLANS['scout_pro'],
+        organization_plan=PLANS['organization_pro'],
+        free_limits=FREE_ATHLETE_LIMITS,
+        my_eligible=my_eligible,
+        my_subscription=active_subscription(current_user),
+        awaiting=awaiting,
+        eligibility_error=eligibility_error,
+    )
+
+
+@app.route('/checkout/<plan_code>', methods=['GET', 'POST'])
+@login_required
+def checkout(plan_code):
+    plan = PLANS.get(plan_code)
+
+    if not plan:
+        abort(404)
+
+    error = eligibility_error(current_user, plan)
+
+    if error:
+        flash(error, 'warning')
+        return redirect(url_for('pricing'))
+
+    open_count = Payment.query.filter_by(
+        user_id=current_user.id,
+        status='awaiting_review'
+    ).count()
+
+    payment = open_checkout_payment(current_user, plan)
+
+    if request.method == 'POST':
+        method = request.form.get('payment_method', '').strip()
+        payer_phone = re.sub(r'\s+', ' ', request.form.get('payer_phone', '').strip())
+        transaction_id = request.form.get('transaction_id', '').strip().upper()
+
+        def back(message):
+            flash(message, 'danger')
+            return redirect(url_for('checkout', plan_code=plan.code))
+
+        if method == 'card':
+            return back('Card payments are coming soon. Please use Orange Money or MTN MoMo for now.')
+
+        if method not in plan.methods or method not in MOMO_METHODS:
+            return back('Please choose Orange Money or MTN MoMo.')
+
+        if not PAYMENT_ACCOUNTS.get(method):
+            return back(f'{PAYMENT_METHODS[method]} payments are not set up yet. Please try the other option.')
+
+        if not PAYER_PHONE_PATTERN.match(payer_phone):
+            return back('Please enter the phone number you paid from, e.g. +231 77 000 0000.')
+
+        if not TRANSACTION_ID_PATTERN.match(transaction_id):
+            return back('Please enter the transaction ID from your payment SMS (letters and numbers).')
+
+        if open_count >= MAX_OPEN_PAYMENTS:
+            return back('You already have payments waiting for confirmation. Please wait for them to be reviewed.')
+
+        provider_payment_id = f'{method}:{transaction_id}'
+
+        if Payment.query.filter_by(provider_payment_id=provider_payment_id).first():
+            return back('This transaction ID has already been submitted.')
+
+        payment.payment_method = method
+        payment.payer_phone = payer_phone
+        payment.provider_payment_id = provider_payment_id
+        payment.amount = plan.price
+        payment.status = 'awaiting_review'
+
+        create_audit_log(
+            action='payment_submitted',
+            actor_user_id=current_user.id,
+            target_type='Payment',
+            target_id=str(payment.id),
+            details={
+                'plan_code': plan.code,
+                'amount': str(plan.price),
+                'method': method,
+                'reference': payment.payment_reference,
+            }
+        )
+        db.session.commit()
+
+        flash(
+            'Thank you! Your payment was submitted. Premium starts as soon as '
+            'D.A.R.T. confirms it (usually within 24 hours).',
+            'success'
+        )
+        return redirect(url_for('billing'))
+
+    return render_template(
+        'checkout.html',
+        plan=plan,
+        payment=payment,
+        open_count=open_count,
+        max_open_payments=MAX_OPEN_PAYMENTS,
+    )
+
+
+@app.route('/billing')
+@login_required
+def billing():
+    payments = Payment.query.filter(
+        Payment.user_id == current_user.id,
+        Payment.status != 'pending'
+    ).order_by(Payment.created_at.desc()).limit(50).all()
+
+    return render_template(
+        'billing.html',
+        subscription=active_subscription(current_user),
+        plan=current_plan(current_user),
+        eligible_plan=plan_for_user(current_user),
+        payments=payments,
+    )
+
+
+# ---------- Old Recruit-Ready premium URLs now lead to the pricing page ----------
 @app.route('/profile/premium')
 @login_required
 def premium_plans():
-    premium_access = has_premium_profile_access(current_user.id)
+    return redirect(url_for('pricing'))
 
-    active_subscription = Subscription.query.filter(
-        Subscription.user_id == current_user.id,
-        Subscription.plan_code == 'premium_profile_monthly',
-        Subscription.status == 'active'
-    ).order_by(
-        Subscription.id.desc()
-    ).first()
 
-    pending_payment = Payment.query.filter(
-        Payment.user_id == current_user.id,
-        Payment.payment_reference.like('DART-PREMIUM-%'),
-        Payment.status == 'pending'
-    ).order_by(
-        Payment.id.desc()
-    ).first()
-
-    return render_template(
-        'premium_plans.html',
-        premium_access=premium_access,
-        active_subscription=active_subscription,
-        pending_payment=pending_payment,
-        uuid=uuid
-    )
-#==============Premium profile checkout route==========================
 @app.route('/profile/premium/checkout', methods=['POST'])
 @login_required
 def start_premium_checkout():
-    if current_user.role != 'Athlete':
-        flash(
-            'Recruit-Ready Premium Profiles are currently available to athletes.',
-            'warning'
-        )
-        return redirect(url_for('premium_plans'))
+    return redirect(url_for('pricing'))
 
-    if has_premium_profile_access(current_user.id):
-        flash(
-            'Your Recruit-Ready Premium Profile is already active.',
-            'info'
-        )
-        return redirect(url_for('profile'))
 
-    plan_code = 'premium_profile_monthly'
-    amount = 10.00
-    currency = 'USD'
-
-    idempotency_key = request.form.get('idempotency_key', '').strip()
-
-    if not idempotency_key:
-        flash(
-            'Invalid checkout request. Please try again.',
-            'danger'
-        )
-        return redirect(url_for('premium_plans'))
-
-    existing_payment = Payment.query.filter_by(
-        user_id=current_user.id,
-        idempotency_key=idempotency_key
-    ).first()
-
-    if existing_payment:
-        return redirect(
-            url_for(
-                'premium_checkout_pending',
-                payment_reference=existing_payment.payment_reference
-            )
-        )
-
-    payment_reference = (
-        f"DART-PREMIUM-{uuid.uuid4().hex.upper()}"
-    )
-
-    payment = Payment(
-        user_id=current_user.id,
-        provider='pending',
-        provider_payment_id=None,
-        provider_event_id=None,
-        payment_reference=payment_reference,
-        idempotency_key=idempotency_key,
-        amount=amount,
-        currency=currency,
-        status='pending',
-        description='D.A.R.T. Recruit-Ready Premium Profile - Monthly'
-    )
-
-    db.session.add(payment)
-
-    create_audit_log(
-        action='premium_checkout_started',
-        actor_user_id=current_user.id,
-        target_type='Payment',
-        details={
-            'plan_code': plan_code,
-            'amount': amount,
-            'currency': currency,
-            'payment_reference': payment_reference
-        }
-    )
-
-    db.session.commit()
-
-    return redirect(
-        url_for(
-            'premium_checkout_pending',
-            payment_reference=payment_reference
-        )
-    )
-#================Premuim profile pending route===============================
 @app.route('/profile/premium/checkout/pending/<payment_reference>')
 @login_required
 def premium_checkout_pending(payment_reference):
-    payment = Payment.query.filter_by(
-        payment_reference=payment_reference,
-        user_id=current_user.id
-    ).first_or_404()
+    return redirect(url_for('billing'))
+
+
+# ---------- Super Admin: confirm mobile-money payments ----------
+def require_super_admin():
+    if not current_user.is_authenticated or current_user.role != 'System':
+        abort(403)
+
+
+@app.route('/admin/payments')
+@login_required
+def admin_payments():
+    require_super_admin()
+
+    awaiting = Payment.query.filter_by(
+        status='awaiting_review'
+    ).order_by(Payment.created_at.asc()).all()
+
+    reviewed = Payment.query.filter(
+        Payment.status.in_(('succeeded', 'failed'))
+    ).order_by(Payment.reviewed_at.desc()).limit(30).all()
 
     return render_template(
-        'premium_checkout_pending.html',
-        payment=payment
+        'admin_payments.html',
+        awaiting=awaiting,
+        reviewed=reviewed,
+        reject_reasons=PAYMENT_REJECT_REASONS,
     )
+
+
+@app.route('/admin/payments/<int:payment_id>/confirm', methods=['POST'])
+@login_required
+def admin_confirm_payment(payment_id):
+    require_super_admin()
+
+    payment = db.session.get(Payment, payment_id)
+
+    if not payment or payment.status != 'awaiting_review':
+        flash('This payment is no longer waiting for review.', 'warning')
+        return redirect(url_for('admin_payments'))
+
+    plan = PLANS.get(payment.plan_code)
+    user = db.session.get(User, payment.user_id)
+
+    if not plan or not user:
+        flash('This payment has no valid plan or user.', 'danger')
+        return redirect(url_for('admin_payments'))
+
+    subscription = activate_plan(user, plan)
+
+    payment.status = 'succeeded'
+    payment.paid_at = datetime.utcnow()
+    payment.subscription_id = subscription.id
+    payment.reviewed_by = current_user.id
+    payment.reviewed_at = datetime.utcnow()
+
+    # Athlete plans include the Recruit-Ready premium profile.
+    if plan.audience == 'athlete':
+        grant_entitlement(
+            user.id,
+            'premium_profile',
+            source='subscription',
+            source_reference=payment.payment_reference,
+            expires_at=subscription.current_period_end
+        )
+
+    create_audit_log(
+        action='payment_confirmed',
+        actor_user_id=current_user.id,
+        target_type='Payment',
+        target_id=str(payment.id),
+        details={
+            'user_id': user.id,
+            'plan_code': plan.code,
+            'amount': str(payment.amount),
+            'period_end': subscription.current_period_end.isoformat(),
+        }
+    )
+    db.session.commit()
+
+    flash(
+        f'Confirmed: {user.full_name} now has {plan.name} until '
+        f'{subscription.current_period_end.strftime("%B %d, %Y")}.',
+        'success'
+    )
+    return redirect(url_for('admin_payments'))
+
+
+@app.route('/admin/payments/<int:payment_id>/reject', methods=['POST'])
+@login_required
+def admin_reject_payment(payment_id):
+    require_super_admin()
+
+    payment = db.session.get(Payment, payment_id)
+    reason = request.form.get('reason', '').strip()
+
+    if not payment or payment.status != 'awaiting_review':
+        flash('This payment is no longer waiting for review.', 'warning')
+        return redirect(url_for('admin_payments'))
+
+    if reason not in PAYMENT_REJECT_REASONS:
+        flash('Please choose a reason.', 'danger')
+        return redirect(url_for('admin_payments'))
+
+    payment.status = 'failed'
+    payment.failure_reason = reason
+    payment.reviewed_by = current_user.id
+    payment.reviewed_at = datetime.utcnow()
+
+    create_audit_log(
+        action='payment_rejected',
+        actor_user_id=current_user.id,
+        target_type='Payment',
+        target_id=str(payment.id),
+        details={'user_id': payment.user_id, 'reason': reason}
+    )
+    db.session.commit()
+
+    flash('Payment rejected. The user can see the reason on their Billing page.', 'info')
+    return redirect(url_for('admin_payments'))
+
+
+@app.context_processor
+def inject_admin_payment_count():
+    if current_user.is_authenticated and current_user.role == 'System':
+        return {'payments_awaiting': Payment.query.filter_by(status='awaiting_review').count()}
+    return {'payments_awaiting': 0}
+
+
 # =================SEARCH ROUTE=========================================
 # ==========================================================
 # SEARCH: FILTER DEFINITIONS
@@ -1154,6 +1419,11 @@ ADVANCED_SEARCH_FILTERS = (
     'stat_scope', 'min_games', 'stat',
 )
 
+# Locked for free users. Competition stays free: it's in the basic row.
+LOCKED_SEARCH_FILTERS = (
+    set(ADVANCED_SEARCH_FILTERS) - {'competition'}
+) | {'stat_op', 'stat_value'}
+
 
 def _search_int(value, minimum=None, maximum=None):
     try:
@@ -1186,9 +1456,32 @@ def _search_date(value):
         return None
 
 
+def _strip_locked_filters(raw_args):
+    """
+    Free users: drop advanced filters. Returns (args, whether any advanced
+    filter was actually used).
+    """
+    kept, used = [], False
+
+    for key, value in raw_args.items(multi=True):
+        if key in LOCKED_SEARCH_FILTERS:
+            if (value or '').strip() and not (key == 'stat_scope' and value == 'game'):
+                used = True
+            continue
+        kept.append((key, value))
+
+    return MultiDict(kept), used
+
+
 @app.route('/search')
 def search():
-    args = request.args
+    advanced_allowed = can_use_advanced_search(current_user)
+    advanced_locked_used = False
+
+    if advanced_allowed:
+        args = request.args
+    else:
+        args, advanced_locked_used = _strip_locked_filters(request.args)
 
     name = args.get('name', '').strip()
     school = args.get('school', '').strip()
@@ -1300,6 +1593,10 @@ def search():
             SportRecord.status == 'approved'
         )
     )
+
+    # Free athletes: only their latest record is shown to others
+    # (plans.apply_record_visibility).
+    query = apply_record_visibility(query, current_user, 'search')
 
     # ---------- Basic ----------
     if name:
@@ -1639,6 +1936,8 @@ def search():
         valid_positions={k: sorted(v) for k, v in VALID_POSITIONS.items()},
         current_query=clean_search_query(request.query_string.decode('utf-8', 'ignore')),
         saved_searches=saved_searches_for(current_user, 20) if current_user.is_authenticated else [],
+        advanced_allowed=advanced_allowed,
+        advanced_locked_used=advanced_locked_used,
     )
 # ==========================================================
 # SAVED SEARCHES
@@ -2561,7 +2860,7 @@ def redirect_after_login(default_endpoint):
 
 
 # Roles that must use two-factor authentication (authenticator app).
-TWO_FACTOR_ROLES = ('Coach', 'System', 'Scout')
+TWO_FACTOR_ROLES = ('Coach', 'System', 'Scout', 'Organization')
 
 
 def dashboard_endpoint_for(user):
@@ -2597,7 +2896,16 @@ def continue_login(user):
         )
         return redirect(url_for('login'))
 
-    # Coaches, admins and scouts must complete 2FA before being logged in
+    # Organizations must be verified by the Super Admin first.
+    if user.role == 'Organization' and not user.is_verified:
+        flash(
+            'Your organization is waiting for D.A.R.T. verification. We will '
+            'review your document, usually within 2 working days.',
+            'warning'
+        )
+        return redirect(url_for('login'))
+
+    # Coaches, admins, scouts and organizations must complete 2FA before being logged in
     if user.role in TWO_FACTOR_ROLES:
 
         # If 2FA has not been enabled yet, require setup first
@@ -2921,6 +3229,72 @@ def record_account_created(user):
     )
 
 
+# ==========================================================
+# PLANS IN TEMPLATES + GOOGLE ADSENSE
+# ==========================================================
+# Ads appear only for visitors and free users, and only once the AdSense
+# publisher ID is set: ADSENSE_CLIENT_ID=ca-pub-XXXXXXXXXXXXXXXX
+# (optional: ADSENSE_SLOT_ID for a specific ad unit).
+
+ADSENSE_CLIENT_ID = (os.environ.get('ADSENSE_CLIENT_ID') or '').strip()
+ADSENSE_SLOT_ID = (os.environ.get('ADSENSE_SLOT_ID') or '').strip()
+
+# ---------- SEO ----------
+# SITE_URL: the public address, e.g. https://dart.example.com (used for
+# canonical links and the sitemap). GOOGLE_SITE_VERIFICATION: the code
+# from Google Search Console (HTML tag method).
+SITE_URL = (os.environ.get('SITE_URL') or '').strip().rstrip('/')
+GOOGLE_SITE_VERIFICATION = (os.environ.get('GOOGLE_SITE_VERIFICATION') or '').strip()
+
+# Public pages search engines may index. Everything else is noindex;
+# athlete profiles and shared records decide per athlete (seo_indexable).
+SEO_INDEX_ENDPOINTS = {
+    'index', 'pricing', 'register', 'register_coach', 'register_scout',
+    'register_organization', 'privacy_page', 'terms_page', 'cookies_page',
+    'legal_page', 'organization_terms',
+}
+
+
+def site_url(path='/'):
+    base = SITE_URL or request.url_root.rstrip('/')
+    return base + path
+
+
+app.jinja_env.globals.update(
+    site_url=site_url,
+    seo_index_endpoints=SEO_INDEX_ENDPOINTS,
+    google_site_verification=GOOGLE_SITE_VERIFICATION,
+)
+
+
+@app.context_processor
+def inject_plan_context():
+    plan = current_plan(current_user) if current_user.is_authenticated else None
+
+    return {
+        'my_plan': plan,
+        'my_subscription': active_subscription(current_user) if plan else None,
+        'my_eligible_plan': plan_for_user(current_user) if current_user.is_authenticated else None,
+        'plans': PLANS,
+        'show_ads': bool(ADSENSE_CLIENT_ID) and shows_ads(current_user),
+        'adsense_client': ADSENSE_CLIENT_ID,
+        'adsense_slot': ADSENSE_SLOT_ID,
+        'upload_usage': lambda: usage_summary(current_user),
+    }
+
+
+@app.route('/ads.txt')
+def ads_txt():
+    """Authorizes Google to sell ads on this site (required by AdSense)."""
+    if not ADSENSE_CLIENT_ID.startswith('ca-pub-'):
+        abort(404)
+
+    publisher = ADSENSE_CLIENT_ID.replace('ca-', '', 1)
+    response = make_response(f'google.com, {publisher}, DIRECT, f08c47fec0942fa0\n')
+    response.headers['Content-Type'] = 'text/plain; charset=utf-8'
+    return response
+
+
 @app.context_processor
 def inject_google_signup():
     if current_user.is_authenticated:
@@ -3065,6 +3439,7 @@ ROLE_DASHBOARDS = {
     'Scout': ('scout_dashboard', 'Scout Dashboard', 'Scout', 'fa-solid fa-binoculars'),
     'Coach': ('admin_dashboard', 'Dashboard', 'Dashboard', 'fa-solid fa-gauge-high'),
     'System': ('admin_dashboard', 'Admin', 'Admin', 'fa-solid fa-user-shield'),
+    'Organization': ('organization_dashboard', 'Team HQ', 'Team', 'fa-solid fa-building-shield'),
 }
 
 
@@ -3552,13 +3927,17 @@ HIGHLIGHT_VIDEO_MAX_BYTES = int(os.environ.get('HIGHLIGHT_VIDEO_MAX_MB', '50')) 
 HIGHLIGHT_VIDEO_MAX_SECONDS = 60
 # Small allowance for rounding in phone recordings (60.4 s shows as 1:00).
 HIGHLIGHT_DURATION_TOLERANCE = 0.5
-HIGHLIGHT_LIMIT = 30
 HIGHLIGHT_CAPTION_MAX = 150
 HIGHLIGHT_PENDING_SECONDS = 2 * 60 * 60
 
 
+def highlight_limit_error(user, media_type):
+    """Monthly photo / video limit of the athlete's plan (plans.py)."""
+    return limit_reached(user, 'videos' if media_type == 'video' else 'photos')
+
+
 def can_upload_highlights(user):
-    """Who may upload highlights. Premium restriction will go here later."""
+    """Verified athletes; how many per month depends on their plan."""
     return (
         user.is_authenticated
         and user.role == 'Athlete'
@@ -3587,7 +3966,6 @@ def highlight_public_url(path):
 
 app.jinja_env.globals.update(
     highlight_url=highlight_public_url,
-    highlight_limit=HIGHLIGHT_LIMIT,
     highlight_photo_max_bytes=HIGHLIGHT_PHOTO_MAX_BYTES,
     highlight_video_max_bytes=HIGHLIGHT_VIDEO_MAX_BYTES,
     highlight_video_max_seconds=HIGHLIGHT_VIDEO_MAX_SECONDS,
@@ -3750,10 +4128,10 @@ def highlight_upload_url():
         if duration is not None and duration > HIGHLIGHT_VIDEO_MAX_SECONDS + HIGHLIGHT_DURATION_TOLERANCE:
             return highlight_error('Videos can be 1 minute long at most. Please trim it and try again.')
 
-    if AthleteHighlight.query.filter_by(user_id=current_user.id).count() >= HIGHLIGHT_LIMIT:
-        return highlight_error(
-            f'You can keep up to {HIGHLIGHT_LIMIT} highlights. Delete one to add another.'
-        )
+    limit_error = highlight_limit_error(current_user, media_type)
+
+    if limit_error:
+        return highlight_error(limit_error)
 
     caption = str(data.get('caption') or '').strip()[:HIGHLIGHT_CAPTION_MAX]
     path = f'{current_user.id}/{uuid.uuid4().hex}.{extension}'
@@ -3858,11 +4236,12 @@ def highlight_complete():
             remove_highlight_file(path)
             return highlight_error('Videos can be 1 minute long at most. Please trim it and try again.')
 
-    if AthleteHighlight.query.filter_by(user_id=current_user.id).count() >= HIGHLIGHT_LIMIT:
+    # Checked again: another upload may have finished in the meantime.
+    limit_error = highlight_limit_error(current_user, media_type)
+
+    if limit_error:
         remove_highlight_file(path)
-        return highlight_error(
-            f'You can keep up to {HIGHLIGHT_LIMIT} highlights. Delete one to add another.'
-        )
+        return highlight_error(limit_error)
 
     highlight = AthleteHighlight(
         user_id=current_user.id,
@@ -3906,6 +4285,1093 @@ def delete_highlight(highlight_id):
         safe_next_url(request.form.get('next'))
         or url_for('student_dashboard')
     )
+
+
+# ==========================================================
+# ENTERPRISE / INSTITUTION / ACADEMY ACCOUNTS (role 'Organization')
+# ==========================================================
+# - Register with an official document and accept the Organization Data
+#   Use Terms. Nothing is visible until the Super Admin verifies them.
+# - Login needs 2FA (TWO_FACTOR_ROLES) like coaches and scouts.
+# - Roster: every verified athlete whose team name (profile team or an
+#   approved record's team) matches the organization's name or one of its
+#   Super-Admin-approved aliases, minus athletes the organization removed.
+# - Data shown: sport profile only (name, photo, age, gender, nationality,
+#   physicals, shirt #, positions, approved records, highlights). Never
+#   email, ID document, date of birth or messages.
+# - Free: roster size + a short preview. Organization Pro: everything.
+
+ORG_TYPES = (
+    'High School', 'University', 'Club', 'Academy', 'Community / Area Team',
+    'County Team', 'Federation / Association', 'Other',
+)
+ORG_SPORTS = ('Football', 'Basketball', 'Kickball')
+ORG_TERMS_VERSION = '2026-10'
+ORG_MAX_ALIASES = 10
+ORG_DOCUMENT_MAX_BYTES = 5 * MB
+ORG_DOCUMENT_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf'}
+
+
+def normalize_team_name(name):
+    """'  L.P.R.C.  Oilers ' -> 'lprc oilers' (case, dots and spacing ignored)."""
+    name = re.sub(r"[.'’`]", '', (name or '').lower())
+    name = re.sub(r'[^a-z0-9]+', ' ', name)
+    return name.strip()
+
+
+def clean_alias_text(text):
+    aliases, seen = [], set()
+
+    for line in (text or '').splitlines():
+        alias = re.sub(r'\s+', ' ', line).strip()[:150]
+        key = normalize_team_name(alias)
+        if alias and key and key not in seen:
+            seen.add(key)
+            aliases.append(alias)
+
+    return aliases[:ORG_MAX_ALIASES]
+
+
+def organization_for(user):
+    return OrganizationProfile.query.filter_by(user_id=user.id).first()
+
+
+def roster_athletes(org_profile):
+    """Verified athletes on this organization's roster, A-Z."""
+    names = {normalize_team_name(n) for n in org_profile.roster_names if normalize_team_name(n)}
+
+    if not names:
+        return []
+
+    excluded = {
+        row.athlete_id for row in OrganizationRosterExclusion.query.filter_by(
+            organization_user_id=org_profile.user_id
+        )
+    }
+
+    # Compare normalized names ("L.P.R.C." == "LPRC"). Only two small
+    # columns are loaded, so this stays fast for thousands of athletes.
+    candidates = db.session.query(User.id, User.school).filter(
+        User.role == 'Athlete',
+        User.is_verified == True,
+    ).all()
+
+    record_teams = (
+        db.session.query(SportRecord.user_id, SportRecord.team)
+        .join(User, User.id == SportRecord.user_id)
+        .filter(
+            User.role == 'Athlete',
+            User.is_verified == True,
+            SportRecord.status == 'approved',
+        )
+        .distinct()
+        .all()
+    )
+
+    roster_ids = {uid for uid, school in candidates if normalize_team_name(school) in names}
+    roster_ids |= {uid for uid, team in record_teams if normalize_team_name(team) in names}
+    roster_ids -= excluded
+
+    if not roster_ids:
+        return []
+
+    return User.query.filter(User.id.in_(roster_ids)).order_by(func.lower(User.full_name)).all()
+
+
+def organizations_listing(athlete):
+    """Verified organizations whose roster includes this athlete (for transparency)."""
+    teams = {normalize_team_name(athlete.school)}
+    teams |= {
+        normalize_team_name(team) for (team,) in db.session.query(SportRecord.team).filter(
+            SportRecord.user_id == athlete.id,
+            SportRecord.status == 'approved'
+        ).distinct()
+    }
+    teams.discard('')
+
+    excluded = {
+        row.organization_user_id for row in OrganizationRosterExclusion.query.filter_by(athlete_id=athlete.id)
+    }
+
+    return [
+        org for org in OrganizationProfile.query.filter_by(verification_status='verified').all()
+        if org.user_id not in excluded
+        and any(normalize_team_name(n) in teams for n in org.roster_names)
+    ]
+
+
+def require_organization():
+    """Verified organization accounts only (login already required 2FA)."""
+    if not current_user.is_authenticated or current_user.role != 'Organization':
+        abort(403)
+
+    org = organization_for(current_user)
+
+    if not org or org.verification_status != 'verified' or not current_user.is_verified:
+        abort(403)
+
+    return org
+
+
+def athlete_sport_profile(athlete, records, highlight_counts):
+    """The only athlete data an organization ever receives."""
+    approved = [r for r in records if r.status == 'approved']
+    last_game = max((r.game_date for r in approved if r.game_date), default=None)
+
+    return {
+        'id': athlete.id,
+        'name': athlete.full_name,
+        'picture': athlete.profile_picture,
+        'age': athlete.age,
+        'gender': athlete.gender,
+        'nationality': athlete.nationality,
+        'height_cm': athlete.height_cm,
+        'weight_kg': athlete.weight_kg,
+        'preferred_foot': athlete.preferred_foot,
+        'shirt_number': athlete.shirt_number,
+        'team': athlete.school,
+        'sports': sorted({r.sport for r in approved}),
+        'positions': sorted({r.position for r in approved if r.position}),
+        'records': len(approved),
+        'last_game': last_game,
+        'goals': sum(r.goals or 0 for r in approved if r.sport == 'Football'),
+        'points': sum(r.points or 0 for r in approved if r.sport == 'Basketball'),
+        'home_runs': sum(r.home_runs or 0 for r in approved if r.sport == 'Kickball'),
+        'awards': sum((r.man_of_the_match or 0) + (r.mvp or 0) for r in approved),
+        'highlights': highlight_counts.get(athlete.id, 0),
+    }
+
+
+def organization_dashboard_data(org, full):
+    athletes = roster_athletes(org)
+    data = {'roster_size': len(athletes), 'full': full}
+
+    if not full:
+        data['preview'] = [
+            {'id': a.id, 'name': a.full_name, 'picture': a.profile_picture}
+            for a in athletes[:FREE_ORG_ROSTER_PREVIEW]
+        ]
+        return data
+
+    ids = [a.id for a in athletes]
+    records = SportRecord.query.filter(SportRecord.user_id.in_(ids)).all() if ids else []
+    by_athlete = {}
+    for r in records:
+        by_athlete.setdefault(r.user_id, []).append(r)
+
+    highlight_counts = dict(
+        db.session.query(AthleteHighlight.user_id, func.count(AthleteHighlight.id))
+        .filter(AthleteHighlight.user_id.in_(ids))
+        .group_by(AthleteHighlight.user_id)
+        .all()
+    ) if ids else {}
+
+    roster = [athlete_sport_profile(a, by_athlete.get(a.id, []), highlight_counts) for a in athletes]
+    approved = [r for r in records if r.status == 'approved']
+    season = max((r.year for r in approved), default=datetime.now().year)
+
+    leaders = []
+    for sport, field, label, icon in SCOUT_LEADERBOARDS:
+        totals = {}
+        for r in approved:
+            if r.sport == sport and r.year == season:
+                totals[r.user_id] = totals.get(r.user_id, 0) + (getattr(r, field) or 0)
+        top = sorted(((v, uid) for uid, v in totals.items() if v), reverse=True)[:5]
+        names = {a.id: a for a in athletes}
+        leaders.append({
+            'sport': sport, 'label': label, 'icon': icon,
+            'rows': [{'athlete': names[uid], 'total': v} for v, uid in top],
+        })
+
+    sports = []
+    for sport, icon in SCOUT_SPORT_ICONS.items():
+        sport_records = [r for r in approved if r.sport == sport]
+        sports.append({
+            'name': sport, 'icon': icon, 'records': len(sport_records),
+            'athletes': len({r.user_id for r in sport_records}),
+        })
+
+    data.update({
+        'roster': roster,
+        'season': season,
+        'kpis': {
+            'athletes': len(athletes),
+            'records': len(approved),
+            'season_records': sum(1 for r in approved if r.year == season),
+            'highlights': sum(highlight_counts.values()),
+        },
+        'leaders': leaders,
+        'sports': sports,
+        'recent': sorted(approved, key=lambda r: (r.game_date or datetime.min.date(), r.id), reverse=True)[:8],
+        'positions': sorted({p for item in roster for p in item['positions']}),
+    })
+    return data
+
+
+# ---------- Registration ----------
+@app.route('/register-organization', methods=['GET', 'POST'])
+def register_organization():
+    if current_user.is_authenticated:
+        return redirect(url_for(dashboard_endpoint_for(current_user)))
+
+    form = request.form
+
+    if request.method == 'POST':
+        org_name = re.sub(r'\s+', ' ', form.get('org_name', '')).strip()
+        org_type = form.get('org_type', '').strip()
+        sports = [s for s in form.getlist('sports') if s in ORG_SPORTS]
+        country = form.get('country', '').strip()
+        city = form.get('city', '').strip()
+        website = form.get('website', '').strip()
+        aliases = clean_alias_text(form.get('aliases', ''))
+        contact_name = re.sub(r'\s+', ' ', form.get('contact_name', '')).strip()
+        contact_title = form.get('contact_title', '').strip()
+        contact_phone = form.get('contact_phone', '').strip()
+        email = form.get('email', '').strip().lower()
+        password = form.get('password', '')
+        confirm_password = form.get('confirm_password', '')
+        document = request.files.get('document')
+
+        def back(message):
+            flash(message, 'danger')
+            return render_template('register_organization.html', org_types=ORG_TYPES, org_sports=ORG_SPORTS,
+                                   form=form, selected_sports=form.getlist('sports')), 400
+
+        if not org_name or len(org_name) > 150:
+            return back('Please enter your organization name (up to 150 characters).')
+        if org_type not in ORG_TYPES:
+            return back('Please choose your organization type.')
+        if not sports:
+            return back('Please choose at least one sport.')
+        if not country or len(country) > 100 or len(city) > 100:
+            return back('Please enter your country (and city, optional).')
+        if website and (len(website) > 255 or not re.match(r'^https?://[^\s]+\.[^\s]+$', website)):
+            return back('Please enter a full website address starting with https://, or leave it empty.')
+        if not contact_name or len(contact_name) > 150 or not contact_title or len(contact_title) > 100:
+            return back("Please enter the contact person's name and title.")
+        if not PAYER_PHONE_PATTERN.match(contact_phone):
+            return back('Please enter a valid contact phone number, e.g. +231 77 000 0000.')
+        if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email) or len(email) > 255:
+            return back('Please enter a valid official email address.')
+        if password != confirm_password:
+            return back('Passwords do not match.')
+        if not is_strong_password(password):
+            return back('Password must be at least 8 characters and include upper and lower case letters, a number and a symbol.')
+        if form.get('accept_terms') != 'yes' or form.get('authorized') != 'yes':
+            return back('Please confirm you are authorized and accept the Organization Data Use Terms.')
+        if User.query.filter(func.lower(User.email) == email).first():
+            return back('An account with this email address already exists.')
+        # Organizations log in with their organization name.
+        if User.query.filter(func.lower(User.full_name) == org_name.lower()).first():
+            return back('An account with this name already exists. Please contact D.A.R.T. if this is your organization.')
+        if any(
+            normalize_team_name(o.org_name) == normalize_team_name(org_name)
+            for o in OrganizationProfile.query.all()
+        ):
+            return back('This organization is already registered. Please contact D.A.R.T. if you need access.')
+
+        if not document or not document.filename:
+            return back('Please upload an official document (registration certificate or signed letterhead).')
+
+        extension = document.filename.rsplit('.', 1)[-1].lower() if '.' in document.filename else ''
+        document.stream.seek(0, os.SEEK_END)
+        document_size = document.stream.tell()
+        document.stream.seek(0)
+
+        if extension not in ORG_DOCUMENT_EXTENSIONS or document_size > ORG_DOCUMENT_MAX_BYTES:
+            return back('The document must be a PNG, JPG or PDF up to 5 MB.')
+
+        document_path = f'organizations/{uuid.uuid4().hex}.{extension}'
+
+        try:
+            upload_to_supabase(document, 'id-documents', document_path)
+        except Exception as e:
+            app.logger.exception('Organization document upload failed: %s', e)
+            return back('We could not upload your document. Please try again.')
+
+        user = User(
+            full_name=org_name,
+            school=org_name,
+            email=email,
+            nationality=country,
+            role='Organization',
+            is_verified=False,
+            id_document=document_path,
+        )
+        user.set_password(password)
+        db.session.add(user)
+        db.session.flush()
+
+        db.session.add(OrganizationProfile(
+            user_id=user.id,
+            org_name=org_name,
+            org_type=org_type,
+            sports=', '.join(sports),
+            country=country,
+            city=city or None,
+            website=website or None,
+            contact_name=contact_name,
+            contact_title=contact_title,
+            contact_phone=contact_phone,
+            document_path=document_path,
+            requested_aliases='\n'.join(aliases) or None,
+            verification_status='pending',
+            terms_version=ORG_TERMS_VERSION,
+            terms_accepted_at=datetime.utcnow(),
+        ))
+
+        # Started with "Sign up with Google": link Google to this account.
+        attach_google_signup(user)
+        record_account_created(user)
+        create_audit_log(
+            action='organization_registered',
+            actor_user_id=user.id,
+            target_type='User',
+            target_id=str(user.id),
+            details={'org_type': org_type, 'terms_version': ORG_TERMS_VERSION}
+        )
+        db.session.commit()
+
+        flash(
+            'Thank you! Your organization was registered. D.A.R.T. will verify your '
+            'document, usually within 2 working days. You can log in with your '
+            'organization name once it is approved.',
+            'success'
+        )
+        return redirect(url_for('login'))
+
+    return render_template('register_organization.html', org_types=ORG_TYPES, org_sports=ORG_SPORTS,
+                           form={}, selected_sports=[])
+
+
+# ---------- Organization dashboard ----------
+@app.route('/organization')
+@login_required
+def organization_dashboard():
+    org = require_organization()
+    full = is_premium(current_user)
+    data = organization_dashboard_data(org, full)
+
+    create_audit_log(
+        action='organization_roster_viewed',
+        actor_user_id=current_user.id,
+        target_type='OrganizationProfile',
+        target_id=str(org.id),
+        details={'roster_size': data['roster_size'], 'full': full}
+    )
+    db.session.commit()
+
+    return render_template('organization_dashboard.html', org=org, data=data)
+
+
+@app.route('/organization/roster.csv')
+@login_required
+def organization_roster_export():
+    org = require_organization()
+
+    if not is_premium(current_user):
+        flash('Roster export is part of Organization Pro.', 'warning')
+        return redirect(url_for('pricing') + '#organizations')
+
+    data = organization_dashboard_data(org, True)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'Athlete', 'Team', 'Age', 'Gender', 'Nationality', 'Height (cm)', 'Weight (kg)',
+        'Preferred foot', 'Shirt #', 'Sports', 'Positions', 'Approved records',
+        'Goals', 'Points', 'Home runs', 'Awards', 'Highlights', 'Last game', 'D.A.R.T. profile'
+    ])
+
+    def safe(value):
+        # Stop spreadsheet formula injection.
+        text = '' if value is None else str(value)
+        return "'" + text if text[:1] in ('=', '+', '-', '@') else text
+
+    for a in data['roster']:
+        writer.writerow([safe(v) for v in (
+            a['name'], a['team'], a['age'], a['gender'], a['nationality'], a['height_cm'],
+            a['weight_kg'], a['preferred_foot'], a['shirt_number'], ', '.join(a['sports']),
+            ', '.join(a['positions']), a['records'], a['goals'], a['points'], a['home_runs'],
+            a['awards'], a['highlights'], a['last_game'].isoformat() if a['last_game'] else '',
+            site_url(url_for('user_profile', user_id=a['id'])),
+        )])
+
+    create_audit_log(
+        action='organization_roster_exported',
+        actor_user_id=current_user.id,
+        target_type='OrganizationProfile',
+        target_id=str(org.id),
+        details={'rows': len(data['roster'])}
+    )
+    db.session.commit()
+
+    filename = f"{secure_filename(org.org_name) or 'roster'}-roster-{utc_today().isoformat()}.csv"
+    response = make_response('﻿' + output.getvalue())
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@app.route('/organization/roster/<int:athlete_id>/remove', methods=['POST'])
+@login_required
+def organization_remove_athlete(athlete_id):
+    org = require_organization()
+
+    if not OrganizationRosterExclusion.query.filter_by(
+        organization_user_id=current_user.id, athlete_id=athlete_id
+    ).first():
+        db.session.add(OrganizationRosterExclusion(organization_user_id=current_user.id, athlete_id=athlete_id))
+        create_audit_log(
+            action='organization_roster_athlete_removed',
+            actor_user_id=current_user.id,
+            target_type='User',
+            target_id=str(athlete_id),
+            details={'organization_id': org.id}
+        )
+        db.session.commit()
+
+    flash('Athlete removed from your roster. You can restore them in Settings.', 'success')
+    return redirect(url_for('organization_dashboard') + '#roster')
+
+
+@app.route('/organization/roster/<int:athlete_id>/restore', methods=['POST'])
+@login_required
+def organization_restore_athlete(athlete_id):
+    require_organization()
+    OrganizationRosterExclusion.query.filter_by(
+        organization_user_id=current_user.id, athlete_id=athlete_id
+    ).delete()
+    db.session.commit()
+    flash('Athlete restored to your roster.', 'success')
+    return redirect(url_for('organization_settings'))
+
+
+@app.route('/organization/settings', methods=['GET', 'POST'])
+@login_required
+def organization_settings():
+    org = require_organization()
+
+    if request.method == 'POST':
+        website = request.form.get('website', '').strip()
+        contact_phone = request.form.get('contact_phone', '').strip()
+        contact_name = re.sub(r'\s+', ' ', request.form.get('contact_name', '')).strip()
+        contact_title = request.form.get('contact_title', '').strip()
+        aliases = clean_alias_text(request.form.get('aliases', ''))
+
+        if website and (len(website) > 255 or not re.match(r'^https?://[^\s]+\.[^\s]+$', website)):
+            flash('Please enter a full website address starting with https://, or leave it empty.', 'danger')
+            return redirect(url_for('organization_settings'))
+        if not PAYER_PHONE_PATTERN.match(contact_phone):
+            flash('Please enter a valid contact phone number.', 'danger')
+            return redirect(url_for('organization_settings'))
+        if not contact_name or len(contact_name) > 150 or not contact_title or len(contact_title) > 100:
+            flash("Please enter the contact person's name and title.", 'danger')
+            return redirect(url_for('organization_settings'))
+
+        org.website = website or None
+        org.contact_phone = contact_phone
+        org.contact_name = contact_name
+        org.contact_title = contact_title
+
+        # Alias changes wait for the Super Admin (they decide who appears on the roster).
+        approved = OrganizationProfile.split_names(org.approved_aliases)
+        if [a.lower() for a in aliases] != [a.lower() for a in approved]:
+            org.requested_aliases = '\n'.join(aliases) or ''
+            flash('Saved. Your team name changes will apply once D.A.R.T. approves them.', 'success')
+        else:
+            org.requested_aliases = None
+            flash('Saved.', 'success')
+
+        create_audit_log(
+            action='organization_settings_updated',
+            actor_user_id=current_user.id,
+            target_type='OrganizationProfile',
+            target_id=str(org.id),
+        )
+        db.session.commit()
+        return redirect(url_for('organization_settings'))
+
+    removed = (
+        User.query.join(OrganizationRosterExclusion, OrganizationRosterExclusion.athlete_id == User.id)
+        .filter(OrganizationRosterExclusion.organization_user_id == current_user.id)
+        .order_by(User.full_name).all()
+    )
+
+    return render_template('organization_settings.html', org=org, removed=removed)
+
+
+# ---------- Super Admin: verify organizations ----------
+@app.route('/admin/organizations')
+@login_required
+def admin_organizations():
+    require_super_admin()
+
+    pending = OrganizationProfile.query.filter_by(verification_status='pending').order_by(OrganizationProfile.created_at).all()
+    alias_requests = OrganizationProfile.query.filter(
+        OrganizationProfile.verification_status == 'verified',
+        OrganizationProfile.requested_aliases.isnot(None)
+    ).all()
+    verified = OrganizationProfile.query.filter_by(verification_status='verified').order_by(OrganizationProfile.org_name).all()
+
+    return render_template(
+        'admin_organizations.html',
+        pending=pending,
+        alias_requests=alias_requests,
+        verified=verified,
+        roster_size=lambda org: len(roster_athletes(org)),
+    )
+
+
+@app.route('/admin/organizations/<int:org_id>/<action>', methods=['POST'])
+@login_required
+def admin_organization_action(org_id, action):
+    require_super_admin()
+    org = db.session.get(OrganizationProfile, org_id)
+
+    if not org or action not in ('verify', 'reject', 'approve_aliases', 'decline_aliases'):
+        abort(404)
+
+    user = db.session.get(User, org.user_id)
+
+    if action == 'verify' and org.verification_status == 'pending':
+        org.verification_status = 'verified'
+        org.verified_at = datetime.utcnow()
+        user.is_verified = True
+        if request.form.get('approve_aliases') == 'yes':
+            org.approved_aliases = org.requested_aliases
+        org.requested_aliases = None
+        message = f'{org.org_name} is verified. Its roster is now live.'
+
+    elif action == 'reject' and org.verification_status == 'pending':
+        org.verification_status = 'rejected'
+        user.is_verified = False
+        message = f'{org.org_name} was rejected.'
+
+    elif action == 'approve_aliases' and org.requested_aliases is not None:
+        org.approved_aliases = org.requested_aliases or None
+        org.requested_aliases = None
+        message = f'Team names approved for {org.org_name}.'
+
+    elif action == 'decline_aliases' and org.requested_aliases is not None:
+        org.requested_aliases = None
+        message = f'Team name changes declined for {org.org_name}.'
+
+    else:
+        flash('Nothing to do for this organization.', 'warning')
+        return redirect(url_for('admin_organizations'))
+
+    create_audit_log(
+        action=f'organization_{action}',
+        actor_user_id=current_user.id,
+        target_type='OrganizationProfile',
+        target_id=str(org.id),
+        details={'organization': org.org_name}
+    )
+    db.session.commit()
+    flash(message, 'success')
+    return redirect(url_for('admin_organizations'))
+
+
+@app.context_processor
+def inject_admin_organization_count():
+    if current_user.is_authenticated and current_user.role == 'System':
+        return {
+            'organizations_awaiting': OrganizationProfile.query.filter(or_(
+                OrganizationProfile.verification_status == 'pending',
+                db.and_(
+                    OrganizationProfile.verification_status == 'verified',
+                    OrganizationProfile.requested_aliases.isnot(None)
+                )
+            )).count()
+        }
+    return {'organizations_awaiting': 0}
+
+
+# ==========================================================
+# PUBLIC ATHLETE PAGES, SEO, SHARING AND PDF
+# ==========================================================
+# Google listing (seo_indexable):
+#   - only verified athletes;
+#   - adults (18+) are listed unless they switch it off;
+#   - under-18s (or unknown age) only after they switch it on.
+# Shared records use signed links (/r/<token>), so record numbers can't be
+# guessed to see records an athlete hasn't shared.
+
+ATHLETE_CATEGORY_SPORTS = ('Football', 'Basketball', 'Kickball')
+record_share_signer = URLSafeSerializer(app.config['SECRET_KEY'], salt='dart-record-share-v1')
+
+
+def athlete_age(user):
+    if user.date_of_birth:
+        today = utc_today()
+        dob = user.date_of_birth
+        return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    return user.age
+
+
+def seo_indexable(user):
+    if not user or user.role != 'Athlete' or not user.is_verified:
+        return False
+    if user.search_visibility == 'off':
+        return False
+    if user.search_visibility == 'on':
+        return True
+    age = athlete_age(user)
+    return age is not None and age >= 18
+
+
+def slugify(text):
+    text = re.sub(r"[^a-z0-9]+", '-', (text or '').lower()).strip('-')
+    return text[:80] or 'athlete'
+
+
+def athlete_public_path(user):
+    return url_for('athlete_public', user_id=user.id, slug=slugify(user.full_name))
+
+
+def record_share_token(record):
+    return record_share_signer.dumps(record.id)
+
+
+def record_share_path(record):
+    return url_for('record_share', token=record_share_token(record))
+
+
+def record_headline(record):
+    """e.g. '2 goals, 1 assist vs Rival Academy'."""
+    if record.sport == 'Football':
+        stats = f'{record.goals or 0} goal{"s" if (record.goals or 0) != 1 else ""}, {record.assists or 0} assist{"s" if (record.assists or 0) != 1 else ""}'
+    elif record.sport == 'Basketball':
+        stats = f'{record.points or 0} points, {record.total_rebounds or 0} rebounds'
+    else:
+        stats = f'{record.home_runs or 0} home run{"s" if (record.home_runs or 0) != 1 else ""}'
+    return f'{stats} vs {record.team_played_against or "-"}'
+
+
+app.jinja_env.globals.update(
+    athlete_public_path=athlete_public_path,
+    athlete_age=athlete_age,
+    record_share_path=record_share_path,
+    record_headline=record_headline,
+    seo_indexable=seo_indexable,
+)
+
+
+def public_records_for(athlete, viewer):
+    """Approved records of `athlete` that `viewer` may see on public pages (search rules)."""
+    query = SportRecord.query.filter(
+        SportRecord.user_id == athlete.id,
+        SportRecord.status == 'approved'
+    )
+    query = apply_record_visibility(query, viewer, 'search')
+    return query.order_by(SportRecord.game_date.desc(), SportRecord.id.desc()).all()
+
+
+def career_summary(records):
+    """Totals per sport for the public profile and its description."""
+    summary = {}
+    for r in records:
+        s = summary.setdefault(r.sport, {
+            'sport': r.sport, 'games': 0, 'goals': 0, 'assists': 0, 'points': 0,
+            'rebounds': 0, 'home_runs': 0, 'awards': 0, 'teams': set(),
+        })
+        # Each sport has its own totals, so plain sums are right.
+        s['games'] += 1
+        s['goals'] += r.goals or 0
+        s['assists'] += r.assists or 0
+        s['points'] += r.points or 0
+        s['rebounds'] += r.total_rebounds or 0
+        s['home_runs'] += r.home_runs or 0
+        s['awards'] += (r.man_of_the_match or 0) + (r.mvp or 0)
+        if r.team:
+            s['teams'].add(r.team)
+    return [summary[s] for s in ATHLETE_CATEGORY_SPORTS if s in summary]
+
+
+def athlete_seo(athlete, records):
+    """Title, description and schema.org data for a public athlete page."""
+    sports = career_summary(records)
+    sport_names = ' & '.join(s['sport'] for s in sports) or 'Sports'
+    title = f'{athlete.full_name} - Official {sport_names} Records'
+
+    parts = []
+    for s in sports:
+        if s['sport'] == 'Football':
+            parts.append(f"{s['games']} football games, {s['goals']} goals, {s['assists']} assists")
+        elif s['sport'] == 'Basketball':
+            parts.append(f"{s['games']} basketball games, {s['points']} points, {s['rebounds']} rebounds")
+        else:
+            parts.append(f"{s['games']} kickball games, {s['home_runs']} home runs")
+
+    where = ', '.join(x for x in (athlete.school, athlete.nationality) if x)
+    description = (
+        f"Verified {sport_names.lower()} record of {athlete.full_name}"
+        + (f" ({where})" if where else '')
+        + (': ' + '; '.join(parts) if parts else '')
+        + '. Official coach-approved athlete records on D.A.R.T.'
+    )
+
+    url = site_url(athlete_public_path(athlete))
+    person = {
+        '@type': 'Person',
+        'name': athlete.full_name,
+        'url': url,
+        'description': description,
+    }
+    if athlete.profile_picture:
+        person['image'] = site_url(url_for('profile_picture', filename=athlete.profile_picture))
+    if athlete.nationality:
+        person['nationality'] = athlete.nationality
+    if athlete.school:
+        person['affiliation'] = {'@type': 'SportsTeam', 'name': athlete.school}
+    if sports:
+        person['knowsAbout'] = [s['sport'] for s in sports]
+
+    structured = {
+        '@context': 'https://schema.org',
+        '@type': 'ProfilePage',
+        'name': title,
+        'url': url,
+        'mainEntity': person,
+        'isPartOf': {'@type': 'WebSite', 'name': 'D.A.R.T.', 'url': site_url('/')},
+    }
+
+    return {'title': title, 'description': description[:300], 'structured': structured, 'url': url}
+
+
+@app.route('/athletes/<int:user_id>/<slug>')
+def athlete_public(user_id, slug):
+    user = db.session.get(User, user_id)
+
+    if not user or user.role != 'Athlete':
+        abort(404)
+
+    correct = slugify(user.full_name)
+    if slug != correct:
+        return redirect(url_for('athlete_public', user_id=user.id, slug=correct), 301)
+
+    return render_user_profile(user)
+
+
+# ---------- Shared records ----------
+def _record_from_token(token):
+    try:
+        record_id = record_share_signer.loads(token)
+    except BadSignature:
+        abort(404)
+
+    record = db.session.get(SportRecord, record_id)
+
+    if (
+        not record or record.status != 'approved'
+        or not record.user or record.user.role != 'Athlete' or not record.user.is_verified
+    ):
+        abort(404)
+
+    return record
+
+
+@app.route('/r/<token>')
+def record_share(token):
+    record = _record_from_token(token)
+    athlete = record.user
+    share_url = site_url(url_for('record_share', token=token))
+
+    return render_template(
+        'record_share.html',
+        record=record,
+        athlete=athlete,
+        share_url=share_url,
+        pdf_url=url_for('record_share_pdf', token=token),
+        indexable=seo_indexable(athlete),
+        title=f'{athlete.full_name}: {record_headline(record)}',
+    )
+
+
+@app.route('/r/<token>.pdf')
+def record_share_pdf(token):
+    record = _record_from_token(token)
+    athlete = record.user
+    share_url = site_url(url_for('record_share', token=token))
+    logo = os.path.join(app.static_folder or '', 'images', 'dartlogo.png')
+
+    pdf_bytes = build_record_pdf(record, athlete, share_url, logo_path=logo)
+
+    date_part = record.game_date.isoformat() if record.game_date else str(record.year)
+    filename = f"DART-{slugify(athlete.full_name)}-{record.sport.lower()}-{date_part}.pdf"
+
+    response = make_response(pdf_bytes)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    response.headers['Cache-Control'] = 'private, max-age=300'
+    if not seo_indexable(athlete):
+        response.headers['X-Robots-Tag'] = 'noindex'
+    return response
+
+
+# ---------- Crawlers ----------
+@app.route('/robots.txt')
+def robots_txt():
+    lines = [
+        'User-agent: *',
+        'Allow: /',
+        'Disallow: /admin',
+        'Disallow: /api/',
+        'Disallow: /student',
+        'Disallow: /scout',
+        'Disallow: /organization',
+        'Disallow: /profile',
+        'Disallow: /billing',
+        'Disallow: /checkout',
+        'Disallow: /search',
+        'Disallow: /inbox',
+        'Disallow: /2fa',
+        'Disallow: /highlights/',
+        'Disallow: /edit_record',
+        'Disallow: /id-document/',
+        '',
+        f"Sitemap: {site_url('/sitemap.xml')}",
+    ]
+    response = make_response('\n'.join(lines) + '\n')
+    response.headers['Content-Type'] = 'text/plain; charset=utf-8'
+    return response
+
+
+@app.route('/sitemap.xml')
+def sitemap_xml():
+    from xml.sax.saxutils import escape
+
+    last_games = dict(
+        db.session.query(SportRecord.user_id, func.max(SportRecord.game_date))
+        .filter(SportRecord.status == 'approved')
+        .group_by(SportRecord.user_id)
+        .all()
+    )
+
+    urls = [(site_url('/'), None, '1.0'), (site_url(url_for('pricing')), None, '0.6')]
+    urls += [(site_url(url_for(e)), None, '0.4') for e in ('register', 'register_scout', 'register_organization')]
+
+    athletes = User.query.filter_by(role='Athlete', is_verified=True).all()
+    for athlete in athletes:
+        if seo_indexable(athlete):
+            last = last_games.get(athlete.id)
+            urls.append((site_url(athlete_public_path(athlete)), last.isoformat() if last else None, '0.8'))
+
+    body = ['<?xml version="1.0" encoding="UTF-8"?>',
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for loc, lastmod, priority in urls[:50000]:
+        body.append('  <url>')
+        body.append(f'    <loc>{escape(loc)}</loc>')
+        if lastmod:
+            body.append(f'    <lastmod>{lastmod}</lastmod>')
+        body.append(f'    <priority>{priority}</priority>')
+        body.append('  </url>')
+    body.append('</urlset>')
+
+    response = make_response('\n'.join(body))
+    response.headers['Content-Type'] = 'application/xml; charset=utf-8'
+    return response
+
+
+# ---------- Legal pages ----------
+LEGAL_UPDATED = 'October 6, 2026'
+
+
+@app.route('/privacy')
+def privacy_page():
+    return render_template('legal/privacy.html', updated=LEGAL_UPDATED)
+
+
+@app.route('/terms')
+def terms_page():
+    return render_template('legal/terms.html', updated=LEGAL_UPDATED)
+
+
+@app.route('/cookies')
+def cookies_page():
+    return render_template('legal/cookies.html', updated=LEGAL_UPDATED)
+
+
+@app.route('/legal')
+def legal_page():
+    return render_template('legal/legal.html', updated=LEGAL_UPDATED)
+
+
+@app.route('/legal/organizations')
+def organization_terms():
+    return render_template('legal/organizations.html', updated=LEGAL_UPDATED, version=ORG_TERMS_VERSION)
+
+
+# ==========================================================
+# PROFILE CARD: share, card image (PNG) and PDF
+# ==========================================================
+# Athletes, coaches and scouts get a D.A.R.T. profile card (profile_card.py
+# draws it). The same data shows as the card on My Profile / the public
+# profile, as the link-preview image, as "Download card" and in the PDF.
+# Only public sport information is used (age, never the date of birth).
+
+PROFILE_CARD_ROLES = ('Athlete', 'Coach', 'Scout')
+PROFILE_PHOTO_MAX_BYTES = 6 * MB
+
+
+def country_code(nationality):
+    """'Liberian' -> 'LR' (from the same table as the flag emoji)."""
+    flag = country_flag(nationality)
+    letters = [chr(ord(ch) - 0x1F1E6 + ord('A')) for ch in flag if 0x1F1E6 <= ord(ch) <= 0x1F1FF]
+    return ''.join(letters) if len(letters) == 2 else ''
+
+
+def profile_share_path(user):
+    """Public address of a user's profile (athletes: the SEO address)."""
+    if user.role == 'Athlete':
+        return athlete_public_path(user)
+    return url_for('user_profile', user_id=user.id)
+
+
+def profile_card_info(user):
+    """Everything the card shows, as plain data (template + image + PDF)."""
+    approved = SportRecord.query.filter_by(user_id=user.id, status='approved').all() if user.role == 'Athlete' else []
+    info = {
+        'id': user.id,
+        'name': user.full_name,
+        'role': user.role,
+        'verified': bool(user.is_verified),
+        'picture': user.profile_picture,
+        'nationality': user.nationality or '',
+        'flag': country_flag(user.nationality) if user.nationality else '',
+        'code': country_code(user.nationality) if user.nationality else '',
+        'stats': [],
+        'extra': [],
+    }
+
+    if user.role == 'Athlete':
+        sports = [s for s in ('Football', 'Basketball', 'Kickball') if any(r.sport == s for r in approved)]
+        positions = {}
+        for r in approved:
+            if r.position:
+                positions[r.position] = positions.get(r.position, 0) + 1
+        main_position = max(positions, key=positions.get) if positions else ''
+        sub = [' · '.join(sports) or 'Athlete']
+        if main_position:
+            sub.append(main_position)
+        if user.shirt_number:
+            sub.append(f'#{user.shirt_number}')
+        age = athlete_age(user)
+        info.update({
+            'eyebrow': 'Athlete Profile',
+            'subtitle': ' · '.join(sub),
+            'pill': user.athlete_category or 'Athlete',
+            'stats': [
+                ('Age', f'{age} yrs' if age is not None else '—'),
+                ('Weight', f'{float(user.weight_kg):g} kg' if user.weight_kg else '—'),
+                ('Height', f'{float(user.height_cm):g} cm' if user.height_cm else '—'),
+            ],
+            'extra': [('Team', user.school)] if user.school else [],
+            'career': career_summary(public_records_for(user, current_user)),
+        })
+    elif user.role == 'Coach':
+        info.update({
+            'eyebrow': 'Coach Profile',
+            'subtitle': user.school or 'Coach',
+            'pill': user.coach_category or 'Coach',
+            'stats': [('Team', user.school or '—'), ('Role', 'Coach / Admin')],
+        })
+    else:  # Scout
+        sp = ScoutProfile.query.filter_by(user_id=user.id).first()
+        info.update({
+            'eyebrow': 'Scout Profile',
+            'subtitle': (sp.organization if sp and sp.organization else user.school) or 'Scout',
+            'pill': (sp.job_title if sp and sp.job_title else 'Scout'),
+            'stats': [
+                ('Sports', (sp.sports if sp and sp.sports else '—')),
+                ('Experience', f'{sp.years_experience} yrs' if sp and sp.years_experience is not None else '—'),
+                ('Based in', ', '.join(x for x in ((sp.city if sp else None), (sp.country if sp else None)) if x) or '—'),
+            ],
+        })
+
+    info['share_path'] = profile_share_path(user)
+    return info
+
+
+def _fetch_profile_photo(user):
+    """The profile picture's bytes for the card image, or None."""
+    if not user.profile_picture:
+        return None
+    try:
+        result = supabase.storage.from_('profile-pictures').get_public_url(user.profile_picture)
+        if isinstance(result, dict):
+            result = result.get('publicUrl') or result.get('public_url')
+        url = (result or '').rstrip('?')
+        if not url:
+            return None
+        response = http_requests.get(url, timeout=5)
+        if response.status_code == 200 and len(response.content) <= PROFILE_PHOTO_MAX_BYTES:
+            return response.content
+    except Exception as e:
+        app.logger.warning('Profile photo for card failed: %s', e)
+    return None
+
+
+def profile_card_png(user):
+    info = profile_card_info(user)
+    return render_profile_card(CardData(
+        name=info['name'],
+        eyebrow=info['eyebrow'].upper(),
+        subtitle=info['subtitle'],
+        pill=info['pill'],
+        stats=info['stats'],
+        nationality=info['nationality'],
+        country_code=info['code'],
+        extra=info['extra'],
+        verified=info['verified'],
+        photo=_fetch_profile_photo(user),
+    ))
+
+
+def _card_user_or_404(user_id):
+    user = db.session.get(User, user_id)
+    if not user or user.role not in PROFILE_CARD_ROLES:
+        abort(404)
+    return user
+
+
+@app.route('/profile-card/<int:user_id>.png')
+def profile_card_image(user_id):
+    user = _card_user_or_404(user_id)
+    response = make_response(profile_card_png(user))
+    response.headers['Content-Type'] = 'image/png'
+    # Link previews fetch this often; a short cache keeps it fresh after edits.
+    response.headers['Cache-Control'] = 'public, max-age=600'
+    if request.args.get('download'):
+        response.headers['Content-Disposition'] = f'attachment; filename="DART-{slugify(user.full_name)}-card.png"'
+    if not seo_indexable(user):
+        response.headers['X-Robots-Tag'] = 'noindex'
+    return response
+
+
+@app.route('/profile-card/<int:user_id>.pdf')
+def profile_card_pdf(user_id):
+    user = _card_user_or_404(user_id)
+    info = profile_card_info(user)
+    records = public_records_for(user, current_user)[:12] if user.role == 'Athlete' else []
+    pdf_bytes = build_profile_pdf(
+        info,
+        card_png=profile_card_png(user),
+        records=records,
+        profile_url=site_url(info['share_path']),
+    )
+    response = make_response(pdf_bytes)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'attachment; filename="DART-{slugify(user.full_name)}-profile.pdf"'
+    response.headers['Cache-Control'] = 'private, max-age=300'
+    if not seo_indexable(user):
+        response.headers['X-Robots-Tag'] = 'noindex'
+    return response
+
+
+app.jinja_env.globals.update(profile_card_info=profile_card_info, profile_share_path=profile_share_path)
 
 
 # ========== SUPABASE STORAGE ROUTES ==========
@@ -3990,7 +5456,7 @@ from datetime import datetime
 @login_required
 def student_dashboard():
     if current_user.role != 'Athlete':
-        return redirect(url_for('admin_dashboard'))
+        return redirect(url_for(dashboard_endpoint_for(current_user)))
 
     records = SportRecord.query.filter_by(
         user_id=current_user.id
@@ -4015,6 +5481,7 @@ def student_dashboard():
         records=records,
         current_year=current_year,
         registered_categories=registered_categories,
+        allowed_competitions=athlete_allowed_competitions(current_user, current_year),
         highlights=highlights_for(current_user.id)
     ))
 
@@ -4025,6 +5492,30 @@ def student_dashboard():
         response.headers['X-DART-Offline-Cacheable'] = '1'
 
     return response
+@app.route('/student/record')
+@login_required
+def record_form_page():
+    """
+    Just the "Submit a sports record" form (for the athlete's own
+    categories). The service worker keeps this page on the device so
+    athletes can record games with no internet; records saved offline
+    upload automatically when the device is back online.
+    """
+    if current_user.role != 'Athlete':
+        return redirect(url_for(dashboard_endpoint_for(current_user)))
+
+    response = make_response(render_template(
+        'record_form.html',
+        allowed_competitions=athlete_allowed_competitions(current_user),
+    ))
+
+    # Verified athletes can submit records, so only they get an offline copy.
+    if current_user.is_verified:
+        response.headers['X-DART-Offline-Cacheable'] = '1'
+
+    return response
+
+
 # ==========================================================
 # SCOUT DASHBOARD
 # ==========================================================
@@ -4061,7 +5552,10 @@ def _approved_records_query():
 
 
 def scout_dashboard_data(scout):
-    approved = _approved_records_query()
+    # Free athletes show only their latest record (plans.py).
+    approved = apply_record_visibility(_approved_records_query(), scout, 'dashboard')
+    visible_ids = select(approved.with_entities(SportRecord.id).subquery().c.id)
+    full_dashboard = scout_has_full_dashboard(scout)
 
     # Season = latest year with approved records (else this year).
     season = (
@@ -4079,6 +5573,10 @@ def scout_dashboard_data(scout):
         'new_this_week': approved.filter(SportRecord.created_at >= week_ago).count(),
         'saved_searches': SavedSearch.query.filter_by(user_id=scout.id).count(),
     }
+
+    # Free scout accounts: welcome, quick search and the numbers only.
+    if not full_dashboard:
+        return {'season': season, 'kpis': kpis, 'full': False}
 
     # Athletes and records per sport, for the discovery tiles.
     sports = []
@@ -4107,7 +5605,8 @@ def scout_dashboard_data(scout):
                 User.is_verified == True,
                 SportRecord.status == 'approved',
                 SportRecord.sport == sport,
-                SportRecord.year == season
+                SportRecord.year == season,
+                SportRecord.id.in_(visible_ids)
             )
             .group_by(User.id)
             .order_by(total.desc(), func.count(SportRecord.id).asc())
@@ -4139,7 +5638,8 @@ def scout_dashboard_data(scout):
             User.is_verified == True,
             User.age.isnot(None),
             User.age <= 18,
-            SportRecord.status == 'approved'
+            SportRecord.status == 'approved',
+            SportRecord.id.in_(visible_ids)
         )
         .group_by(User.id)
         .order_by(awards.desc(), func.count(SportRecord.id).desc())
@@ -4155,6 +5655,7 @@ def scout_dashboard_data(scout):
     )
 
     return {
+        'full': True,
         'season': season,
         'kpis': kpis,
         'sports': sports,
@@ -4208,6 +5709,24 @@ class DuplicateRecordError(RecordSubmissionError):
     """The same game record was already submitted (pending or approved)."""
 
 
+def utc_today():
+    return datetime.now(timezone.utc).date()
+
+
+def game_date_future_error(game_date):
+    """A game can only be recorded on the day it was played or later."""
+    if game_date > utc_today():
+        return (
+            "The game date can't be in the future. Choose the day the game "
+            "was played (today or earlier)."
+        )
+    return None
+
+
+app.jinja_env.globals['today_iso'] = lambda: utc_today().isoformat()
+app.jinja_env.globals.update(athlete_categories=ATHLETE_CATEGORIES, coach_categories=COACH_CATEGORIES)
+
+
 SHIRT_NUMBER_PATTERN = re.compile(r'^\d{1,2}$')
 
 
@@ -4236,6 +5755,12 @@ def build_sport_record_from_form(form):
     paths apply exactly the same rules. Raises RecordSubmissionError
     (or DuplicateRecordError) with a user-facing message.
     """
+    # Monthly upload limit of the athlete's plan (plans.py).
+    limit_error = limit_reached(current_user, 'records')
+
+    if limit_error:
+        raise RecordSubmissionError(limit_error)
+
     club_division = form.get(
         'club_division',
         ''
@@ -4398,6 +5923,11 @@ def build_sport_record_from_form(form):
 
     except ValueError:
         raise RecordSubmissionError('Invalid game date. Please select a valid date.')
+
+    future_error = game_date_future_error(game_date)
+
+    if future_error:
+        raise RecordSubmissionError(future_error)
 
 
     # =====================================================
@@ -4900,6 +6430,12 @@ def edit_record(record_id):
                 f'The game date must be in the {record.year} season.',
                 'danger'
             )
+            return redirect(url_for('edit_record', record_id=record.id))
+
+        future_error = game_date_future_error(game_date)
+
+        if future_error:
+            flash(future_error, 'danger')
             return redirect(url_for('edit_record', record_id=record.id))
 
         # Same rule as new records: the same game can't be on file twice.
@@ -5472,9 +7008,10 @@ def admin_dashboard_stats():
 @app.route('/admin')
 @login_required
 def admin_dashboard():
-    # Only Coaches and Super Admins can access this dashboard.
+    # Only Coaches and Super Admins can access this dashboard; everyone
+    # else goes to their own (no redirect loops between dashboards).
     if current_user.role not in ('Coach', 'System'):
-        return redirect(url_for('student_dashboard'))
+        return redirect(url_for(dashboard_endpoint_for(current_user)))
 
     # ==========================================================
     # PENDING ATHLETE VERIFICATIONS
@@ -5752,6 +7289,10 @@ def approve_scout(user_id):
 @app.route('/profile')
 @login_required
 def profile():
+    # Organizations manage their details in Team HQ settings.
+    if current_user.role == 'Organization':
+        return redirect(url_for('organization_settings'))
+
     current_year = datetime.utcnow().year
 
     if current_user.role == 'Athlete':
@@ -5828,14 +7369,24 @@ def profile():
     pinned_records=pinned_records,
     approved_records=approved_records,
     recruitment_highlights=recruitment_highlights,
-    highlights=highlights_for(current_user.id) if current_user.role == 'Athlete' else []
+    highlights=highlights_for(current_user.id) if current_user.role == 'Athlete' else [],
+    listed_by=organizations_listing(current_user) if current_user.role == 'Athlete' else []
 )
 
 #========Read-only user profile route=========
 @app.route('/user/<int:user_id>')
 def user_profile(user_id):
-    user = User.query.get_or_404(user_id)
+    user = db.session.get(User, user_id)
 
+    if not user:
+        abort(404)
+
+    # Athletes' canonical public address is /athletes/<id>/<name> (SEO);
+    # this page shows the same content and points there.
+    return render_user_profile(user)
+
+
+def render_user_profile(user):
     # If the account owner is logged in and viewing their own profile,
     # send them to their normal editable My Profile page.
     if current_user.is_authenticated and user.id == current_user.id:
@@ -5871,6 +7422,7 @@ def user_profile(user_id):
     premium_profile = None
     pinned_records = []
     recruitment_highlights = []
+    public_records = public_records_for(user, current_user) if user.role == 'Athlete' else []
 
     if user.role == 'Athlete':
 
@@ -5903,7 +7455,11 @@ def user_profile(user_id):
     premium_profile=premium_profile,
     pinned_records=pinned_records,
     recruitment_highlights=recruitment_highlights,
-    highlights=highlights_for(user.id) if user.role == 'Athlete' else []
+    highlights=highlights_for(user.id) if user.role == 'Athlete' else [],
+    public_records=public_records,
+    career=career_summary(public_records),
+    seo=athlete_seo(user, public_records) if user.role == 'Athlete' else None,
+    indexable=seo_indexable(user),
 )
 # ==========================================================
 
@@ -6081,6 +7637,16 @@ def update_profile():
         new_preferred_foot or None
     )
 
+    # ---------- GOOGLE LISTING (athletes) ----------
+    if current_user.role == 'Athlete' and 'search_visibility' in request.form:
+        choice = request.form.get('search_visibility', 'default')
+
+        if choice not in ('default', 'on', 'off'):
+            flash('Invalid Google listing choice.', 'danger')
+            return redirect(url_for('profile'))
+
+        current_user.search_visibility = None if choice == 'default' else choice
+
     # ---------- SHIRT NUMBER (athletes; optional, blank clears it) ----------
     if current_user.role == 'Athlete' and 'shirt_number' in request.form:
         new_shirt_number, shirt_number_error = clean_shirt_number(
@@ -6111,6 +7677,22 @@ def update_profile():
         if new_athlete_category:
             if new_athlete_category not in valid_athlete_categories:
                 flash('Invalid athlete registration category.', 'danger')
+                return redirect(url_for('profile'))
+
+            # Premium is priced by category, so the category can't change
+            # while a plan bought for it is running.
+            running_plan = current_plan(current_user)
+
+            if (
+                running_plan
+                and running_plan.category
+                and new_athlete_category != current_user.athlete_category
+            ):
+                flash(
+                    f'Your category can be changed after your {running_plan.name} '
+                    'plan ends, because Premium is priced by category.',
+                    'warning'
+                )
                 return redirect(url_for('profile'))
 
             current_year = datetime.utcnow().year

@@ -10,7 +10,7 @@
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#121212",
-  "theme_color": "#212529",
+  "theme_color": "#0d2413",
   "shortcuts": [
     {
       "name": "Search Athletes",

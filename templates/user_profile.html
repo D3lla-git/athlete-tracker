@@ -1,24 +1,32 @@
 {% extends "base.html" %}
-{% block title %}{{ user.full_name }} Profile{% endblock %}
+{% block title %}{% if seo %}{{ seo.title }} | D.A.R.T.{% else %}{{ user.full_name }} Profile{% endif %}{% endblock %}
+
+{# ===== SEO: athletes get a search-friendly title, description and
+   schema.org data; only listed athletes are indexable (seo_indexable). ===== #}
+{% block meta_description %}{% if seo %}{{ seo.description }}{% else %}{{ super() }}{% endif %}{% endblock %}
+{% block canonical %}{% if seo %}{{ seo.url }}{% else %}{{ super() }}{% endif %}{% endblock %}
+{% block og_type %}{% if seo %}profile{% else %}website{% endif %}{% endblock %}
+{% block og_image %}{% if user.role in ("Athlete", "Coach", "Scout") %}{{ site_url(url_for("profile_card_image", user_id=user.id)) }}{% else %}{{ super() }}{% endif %}{% endblock %}
+{% block twitter_card %}{% if user.role in ('Athlete', 'Coach', 'Scout') %}summary_large_image{% else %}summary{% endif %}{% endblock %}
+{% block robots %}<meta name="robots" content="{{ 'index, follow, max-image-preview:large' if indexable else 'noindex, nofollow' }}">{% endblock %}
+{% block structured_data %}{% if seo and indexable %}<script type="application/ld+json">{{ seo.structured | tojson }}</script>{% endif %}{% endblock %}
 
 {% block content %}
 
 <div class="row justify-content-center">
-  <div class="col-md-7 col-lg-5">
+  <div class="col-lg-10 col-xl-9">
 
-<!-- Standard Public Profile -->
-<div class="card shadow">
+{% from '_profile_card.html' import profile_hero %}
 
-  <div class="card-header text-center">
-    <h4 class="mb-0">{{ user.full_name }}</h4>
-    <small class="text-muted">User Profile</small>
-
-    {% if user.is_verified %}
-      <span class="badge">Verified</span>
-    {% else %}
-      <span class="badge dart-status-pending">Pending</span>
-    {% endif %}
-  </div>
+{# ===== Profile card (same design as the shared card image + PDF) ===== #}
+{% if user.role in ('Athlete', 'Coach', 'Scout') %}
+  {{ profile_hero(profile_card_info(user)) }}
+{% else %}
+  <section class="up-plain">
+    <h1>{{ user.full_name }}</h1>
+    <span class="up-plain-role">{{ user.role }}</span>
+  </section>
+{% endif %}
 
   <style>
     .badge {
@@ -101,204 +109,149 @@
     }
   </style>
 
-  <div class="card-body text-center">
-
-    <!-- Profile Picture -->
-    <div class="mb-4">
-      {% if user.profile_picture %}
-        <img
-          src="{{ url_for('profile_picture', filename=user.profile_picture) }}"
-          class="rounded-circle shadow"
-          style="width:170px;height:170px;object-fit:cover;border:3px solid #dee2e6;"
-          alt="Profile Picture"
-        >
-      {% else %}
-        <div
-          class="rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center shadow"
-          style="width:170px;height:170px;font-size:4rem;font-weight:600;"
-        >
-          {{ user.full_name[0] | upper }}
-        </div>
-      {% endif %}
-    </div>
-
-    <div class="text-start">
-
-      <!-- Current Team -->
-      <div class="mb-3">
-        <label class="form-label fw-bold">
-          Current Team Name
-          <i class="fa-solid fa-people-group"></i>
-        </label>
-
-        <div class="form-control bg-light">
-          {{ user.school }}
-        </div>
-      </div>
-
-      <!-- Role -->
-      <div class="mb-3">
-        <label class="form-label fw-bold">
-          Role
-        </label>
-
-        <div class="form-control bg-light">
-          {{ user.role }}
-        </div>
-      </div>
-
-      <!-- Current Competition -->
-      <div class="mb-3">
-        <label class="form-label fw-bold">
-          Current Competition Category
-          <i class="fa-solid fa-trophy" style="color: gold;"></i>
-        </label>
-
-        <div class="form-control bg-light">
-          {{ current_category or 'Not registered for a current competition category' }}
-        </div>
-      </div>
-
-      <!-- Gender -->
-      <div class="mb-3">
-        <label class="form-label fw-bold">
-          Gender
-        </label>
-
-        <div class="form-control bg-light">
-          {% if user.gender == 'Male' %}
-            Male
-            <i class="fa-solid fa-mars" style="color:#0d6efd;"></i>
-          {% elif user.gender == 'Female' %}
-            Female
-            <i class="fa-solid fa-venus" style="color:#d63384;"></i>
-          {% else %}
-            Not provided
-          {% endif %}
-        </div>
-      </div>
-
-      {% if user.role == 'Athlete' %}
-
-        <!-- Age -->
-        <div class="mb-3">
-          <label class="form-label fw-bold">
-            Age
-            <i class="fa-solid fa-calendar-days" style="color: darkgreen;"></i>
-          </label>
-
-          <div class="form-control bg-light">
-            {{ user.age or 'Not provided' }}
-          </div>
-        </div>
-
-        <!-- Date of Birth -->
-        <div class="mb-3">
-          <label class="form-label fw-bold">
-            Date of Birth
-            <i class="fa-solid fa-cake-candles"></i>
-          </label>
-
-          <div class="form-control bg-light">
-            {% if user.date_of_birth %}
-              {{ user.date_of_birth.strftime('%B %d, %Y') }}
-            {% else %}
-              Not provided
-            {% endif %}
-          </div>
-        </div>
-
-        <!-- Nationality -->
-        <div class="mb-3">
-          <label class="form-label fw-bold">
-            Nationality
-            <i class="fa-solid fa-flag"></i>
-          </label>
-
-          <div class="form-control bg-light">
-            {{ country_flag(user.nationality) }}
-            {{ user.nationality or 'Not provided' }}
-          </div>
-        </div>
-
-        <!-- Height / Weight -->
-        <div class="row g-3">
-
-          <div class="col-md-6">
-            <label class="form-label fw-bold">
-              Height
-              <i class="fa-solid fa-ruler-vertical"></i>
-            </label>
-
-            <div class="form-control bg-light">
-              {% if user.height_cm %}
-                {{ user.height_cm }} cm
-              {% else %}
-                Not provided
-              {% endif %}
-            </div>
-          </div>
-
-          <div class="col-md-6">
-            <label class="form-label fw-bold">
-              Weight
-              <i class="fa-solid fa-weight-scale"></i>
-            </label>
-
-            <div class="form-control bg-light">
-              {% if user.weight_kg %}
-                {{ user.weight_kg }} kg
-              {% else %}
-                Not provided
-              {% endif %}
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Preferred Foot / Shirt Number -->
-        <div class="row g-3 mt-0 mb-3">
-
-          <div class="col-md-6">
-            <label class="form-label fw-bold">
-              Preferred Foot
-              <i class="fa-solid fa-shoe-prints"></i>
-            </label>
-
-            <div class="form-control bg-light">
-              {{ user.preferred_foot or 'Not provided' }}
-            </div>
-          </div>
-
-          <div class="col-md-6">
-            <label class="form-label fw-bold">
-              Shirt #
-              <i class="fa-solid fa-shirt"></i>
-            </label>
-
-            <div class="form-control bg-light">
-              {% if user.shirt_number %}#{{ user.shirt_number }}{% else %}Not provided{% endif %}
-            </div>
-          </div>
-
-        </div>
-
-      {% endif %}
-
-    </div>
-
-    <div class="alert alert-secondary mt-4 mb-0">
-      <i class="fa-solid fa-lock"></i>
-      This profile is read-only. Only the account owner can edit their own profile.
-    </div>
-
+{# ===== About: public details only (age, never the date of birth) ===== #}
+<section class="card shadow up-about" aria-labelledby="upAboutTitle">
+  <div class="card-header">
+    <h2 class="h5 mb-0" id="upAboutTitle"><i class="fa-solid fa-id-card"></i> About {{ user.full_name.split(' ')[0] }}</h2>
+    {% if user.is_verified %}
+      <span class="up-status up-status-ok"><i class="fa-solid fa-circle-check"></i> Verified</span>
+    {% else %}
+      <span class="up-status"><i class="fa-solid fa-hourglass-half"></i> Pending verification</span>
+    {% endif %}
   </div>
-</div>
+  <div class="card-body">
+    {% set age = athlete_age(user) %}
+    {% set tiles = [
+      ('fa-people-group', 'Team', user.school or 'Not provided'),
+      ('fa-id-badge', 'Role', user.role),
+      ('fa-trophy', 'Current category', current_category or 'Not registered this season'),
+      ('fa-venus-mars', 'Gender', user.gender or 'Not provided'),
+    ] %}
+    {% if user.role == 'Athlete' %}
+      {% set tiles = tiles + [
+        ('fa-cake-candles', 'Age', (age ~ ' years') if age else 'Not provided'),
+        ('fa-flag', 'Nationality', ((country_flag(user.nationality) ~ ' ' ~ user.nationality) if user.nationality else 'Not provided')),
+        ('fa-ruler-vertical', 'Height', ((user.height_cm | float | round(1) ~ ' cm') | replace('.0 cm', ' cm')) if user.height_cm else 'Not provided'),
+        ('fa-weight-scale', 'Weight', ((user.weight_kg | float | round(1) ~ ' kg') | replace('.0 kg', ' kg')) if user.weight_kg else 'Not provided'),
+        ('fa-shoe-prints', 'Preferred foot', user.preferred_foot or 'Not provided'),
+        ('fa-shirt', 'Shirt #', ('#' ~ user.shirt_number) if user.shirt_number else 'Not provided'),
+      ] %}
+    {% endif %}
+    <div class="up-tiles">
+      {% for icon, label, value in tiles %}
+        <div class="up-tile">
+          <span class="up-tile-icon" aria-hidden="true"><i class="fa-solid {{ icon }}"></i></span>
+          <div class="up-tile-text">
+            <span class="up-tile-label">{{ label }}</span>
+            <span class="up-tile-value">{{ value }}</span>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    <p class="up-readonly"><i class="fa-solid fa-lock"></i> This profile is read-only. Only the account owner can edit it.</p>
+  </div>
+</section>
+
+<style>
+  .up-plain { padding: 24px; border-radius: 24px; margin-bottom: 20px; color: #fff; background: var(--dart-primary-gradient); }
+  .up-plain h1 { font-weight: 900; margin: 0 0 6px; }
+  .up-plain-role { padding: 3px 12px; border-radius: 999px; background: #198754; font-weight: 700; font-size: 0.85rem; }
+
+  .up-about .card-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .up-about .card-header i { color: #198754; }
+  .up-status { padding: 3px 12px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; color: #8a6d00; background: rgba(245, 197, 66, 0.2); }
+  .up-status-ok { color: #146c43; background: rgba(25, 135, 84, 0.14); }
+  .up-status-ok i { color: inherit !important; }
+  html[data-theme="dark"] .up-status-ok { color: #4cd38a; }
+
+  .up-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .up-tile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    border: 1px solid var(--surface-border, #dee2e6);
+    background: var(--surface-bg, #fff);
+  }
+  .up-tile-icon {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    color: #198754;
+    background: rgba(25, 135, 84, 0.12);
+  }
+  html[data-theme="dark"] .up-tile-icon { color: #4cd38a; }
+  .up-tile-text { min-width: 0; }
+  .up-tile-label { display: block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-text, #6c757d); }
+  .up-tile-value { display: block; font-weight: 700; overflow-wrap: anywhere; }
+  .up-readonly { margin: 14px 0 0; font-size: 0.82rem; color: var(--muted-text, #6c757d); }
+</style>
 
 {% if user.role == 'Athlete' %}
+  {# ===== Official records (search visibility rules apply) ===== #}
+  <section class="card shadow mt-4 up-records" aria-labelledby="upRecordsTitle">
+    <div class="card-header">
+      <h2 class="h5 mb-0" id="upRecordsTitle"><i class="fa-solid fa-clipboard-check"></i> Official Records</h2>
+      <small class="text-muted">Coach-approved games on D.A.R.T.</small>
+    </div>
+    <div class="card-body">
+      {% if career %}
+        <div class="up-career">
+          {% for c in career %}
+            <div class="up-career-card">
+              <div class="up-career-sport"><i class="fa-solid {{ {'Football': 'fa-futbol', 'Basketball': 'fa-basketball', 'Kickball': 'fa-baseball'}[c.sport] }}"></i> {{ c.sport }}</div>
+              <div class="up-career-stats">
+                <span><strong>{{ c.games }}</strong> games</span>
+                {% if c.sport == 'Football' %}<span><strong>{{ c.goals }}</strong> goals</span><span><strong>{{ c.assists }}</strong> assists</span>
+                {% elif c.sport == 'Basketball' %}<span><strong>{{ c.points }}</strong> points</span><span><strong>{{ c.rebounds }}</strong> rebounds</span>
+                {% else %}<span><strong>{{ c.home_runs }}</strong> home runs</span>{% endif %}
+                <span><strong>{{ c.awards }}</strong> awards</span>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="up-record-list">
+          {% for r in public_records[:12] %}
+            <div class="up-record">
+              <div class="up-record-main">
+                <strong>{{ r.sport }}</strong> · {{ record_headline(r) }}
+                <div class="up-record-sub">
+                  {{ r.competition_display }}{% if r.game_date %} · {{ r.game_date.strftime('%b %d, %Y') }}{% endif %}{% if r.team %} · {{ r.team }}{% endif %}
+                </div>
+              </div>
+              {% from '_share.html' import share_button %}
+              {{ share_button(r) }}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-muted mb-0">No approved records to show yet.</p>
+      {% endif %}
+    </div>
+  </section>
+  <style>
+    .up-records .card-header i { color: #198754; }
+    .up-career { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px; }
+    .up-career-card { padding: 14px; border-radius: 16px; background: rgba(25, 135, 84, 0.07); border: 1px solid rgba(25, 135, 84, 0.2); }
+    .up-career-sport { font-weight: 800; margin-bottom: 6px; }
+    .up-career-sport i { color: #198754; }
+    .up-career-stats { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.88rem; }
+    .up-record { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--surface-border, #dee2e6); }
+    .up-record:last-child { border-bottom: 0; }
+    .up-record-main { min-width: 0; }
+    .up-record-sub { font-size: 0.8rem; color: var(--muted-text, #6c757d); }
+  </style>
+
   {% from '_highlights.html' import highlights_section with context %}
   {{ highlights_section(highlights, owner=user, can_manage=false) }}
 {% endif %}
+
+{% include '_ad_slot.html' %}
 
 
 <!-- ========================================================= -->

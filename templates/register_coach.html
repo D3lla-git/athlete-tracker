@@ -9,22 +9,8 @@
         <h4 class="mb-0">Register as Coach / Admin <i class="fa-solid fa-user-tie"></i></h4>
       </div>
       <div class="card-body">
-          <div class="mb-3">
-            <div class="dropdown">
-              <button class="btn dropdown-toggle w-100 category-dropdown-btn dart-btn" type="button"
-        data-bs-toggle="dropdown" aria-expanded="false">
-  {{ selected_category or 'All Coach' }} — Choose Coach Category
-</button>
-              <ul class="dropdown-menu w-100">
-                <li><a class="dropdown-item" href="{{ url_for('register_coach', registration_category='all-coach') }}">All Coach</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('register_coach', registration_category='county-meet') }}">County Meet Coach</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('register_coach', registration_category='club-league') }}">Club League Coach</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('register_coach', registration_category='university') }}">University Coach</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('register_coach', registration_category='community-league') }}">Community/Area League Coach</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('register_coach', registration_category='high-school') }}">High School Coach</a></li>
-              </ul>
-            </div>
-          </div>
+          {% from '_category_picker.html' import category_picker %}
+          {{ category_picker(coach_categories, selected_category or 'All Coach', 'register_coach', 'Coach') }}
 
 {% include '_google_signup_notice.html' %}
 {% if not google_signup %}
