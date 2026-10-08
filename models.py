@@ -1047,3 +1047,88 @@ class PinnedSportRecord(db.Model):
             name='uq_pinned_record_user_order'
         ),
     )
+
+
+# ==========================================================
+# COACH CAREER (Coach Pro)
+# ==========================================================
+class CoachTeam(db.Model):
+    """
+    A team a coach coaches (or coached). The coach's registered team
+    (User.school) becomes the first, primary row. Coach Pro coaches can add
+    more (e.g. a high-school team and a club at the same time); every new
+    team waits for the Super Admin before the coach may approve its
+    athletes' records. Leaving a team keeps its history.
+    """
+    __tablename__ = 'coach_team'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    coach_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    team_name = db.Column(db.String(150), nullable=False)
+    coach_category = db.Column(db.String(50), nullable=False)       # which competitions, for this team
+    role = db.Column(db.String(30), nullable=False, default='Head Coach')
+    # pending -> approved / rejected; approved -> left (history)
+    status = db.Column(db.String(12), nullable=False, default='pending', index=True)
+    is_primary = db.Column(db.Boolean, nullable=False, default=False)
+    start_date = db.Column(db.Date, nullable=True)
+    end_date = db.Column(db.Date, nullable=True)
+    review_note = db.Column(db.String(200), nullable=True)
+    reviewed_by = db.Column(db.BigInteger, nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    coach = db.relationship('User', foreign_keys=[coach_id])
+
+    @property
+    def is_active(self):
+        return self.status == 'approved' and self.end_date is None
+
+
+class CoachGameRecord(db.Model):
+    """One game a coach led: result, score, formation (football), subs, cards."""
+    __tablename__ = 'coach_game_record'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    coach_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    team_name = db.Column(db.String(150), nullable=False)     # kept even after the coach leaves
+    sport = db.Column(db.String(20), nullable=False)
+    competition = db.Column(db.String(60), nullable=True)
+    game_date = db.Column(db.Date, nullable=False)
+    season = db.Column(db.Integer, nullable=False)
+    opponent = db.Column(db.String(150), nullable=False)
+    result = db.Column(db.String(5), nullable=False)          # win / draw / loss
+    score_for = db.Column(db.Integer, nullable=True)
+    score_against = db.Column(db.Integer, nullable=True)
+    formation = db.Column(db.String(12), nullable=True)       # football only, e.g. 4-3-3
+    substitutions = db.Column(db.Integer, nullable=False, default=0)
+    yellow_cards = db.Column(db.Integer, nullable=False, default=0)   # cards the coach received
+    red_cards = db.Column(db.Integer, nullable=False, default=0)
+    notes = db.Column(db.String(200), nullable=True)
+    # pending -> approved / rejected (Super Admin). Only approved show publicly.
+    status = db.Column(db.String(12), nullable=False, default='pending', index=True)
+    review_note = db.Column(db.String(200), nullable=True)
+    reviewed_by = db.Column(db.BigInteger, nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    coach = db.relationship('User', foreign_keys=[coach_id])
+
+
+class CoachAchievement(db.Model):
+    """A trophy (league / cup / title) or award (e.g. Best Coach) a coach won."""
+    __tablename__ = 'coach_achievement'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    coach_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    kind = db.Column(db.String(10), nullable=False)            # trophy / award
+    title = db.Column(db.String(150), nullable=False)
+    competition = db.Column(db.String(80), nullable=True)
+    team_name = db.Column(db.String(150), nullable=True)
+    season = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.String(12), nullable=False, default='pending', index=True)
+    review_note = db.Column(db.String(200), nullable=True)
+    reviewed_by = db.Column(db.BigInteger, nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    coach = db.relationship('User', foreign_keys=[coach_id])

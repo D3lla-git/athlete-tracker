@@ -160,6 +160,13 @@
     background: #198754;
     object-fit: cover;
   }
+
+  .dash-career-link {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 6px 14px;
+    border-radius: 999px; font-weight: 700; font-size: 0.88rem; text-decoration: none;
+    color: #146c43 !important; background: rgba(25, 135, 84, 0.1); border: 1px solid rgba(25, 135, 84, 0.35);
+  }
+  html[data-theme="dark"] .dash-career-link { color: #4cd38a !important; }
 </style>
 
 <div class="dash-header">
@@ -176,6 +183,11 @@
         <i class="fa-solid fa-users me-1"></i>{{ current_user.school }}
         · {{ current_user.coach_category or 'Coach' }}
       </div>
+      <a class="dash-career-link" href="{{ url_for('coach_career') }}">
+        <i class="fa-solid fa-clipboard-user" aria-hidden="true"></i>
+        {{ 'My Coaching Career' if is_coach_pro(current_user) else 'Build your coaching career' }}
+        {% if not is_coach_pro(current_user) %}<span class="premium-chip"><i class="fa-solid fa-crown"></i> Coach Pro</span>{% endif %}
+      </a>
     {% endif %}
   </div>
   <div class="dash-updated" aria-live="polite">

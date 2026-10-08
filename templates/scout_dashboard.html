@@ -109,6 +109,22 @@
     border-color: #ffffff !important;
   }
 
+  .sd-name-wrap { position: relative; min-width: 0; }
+  .sd-suggestions {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 1010;   /* above the page, under the sticky navbar (1020) */
+    max-height: 260px;
+    overflow-y: auto;
+    border-radius: 14px;
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
+  }
+  .sd-suggestions .list-group-item { text-align: left; }
+  .sd-suggestions .list-group-item.active,
+  .sd-suggestions .list-group-item:hover { background: #198754; border-color: #198754; color: #fff; }
+
   .sd-hero-links {
     position: relative;
     z-index: 1;
@@ -533,18 +549,94 @@
   </div>
 
   <!-- Find Athletes -->
+  {# Same as the Search page: name suggestions while typing, all 3 sports
+     (free and Scout Pro). #}
   <form class="sd-quick-search" method="GET" action="{{ url_for('search') }}" role="search">
-    <input type="text" name="name" class="form-control" placeholder="Search athletes by name…" aria-label="Athlete name">
+    <div class="sd-name-wrap">
+      <input type="text" name="name" id="sdNameInput" class="form-control" placeholder="Search athletes by name…"
+             aria-label="Athlete name" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="sdNameSuggestions">
+      <div id="sdNameSuggestions" class="list-group sd-suggestions" role="listbox" hidden></div>
+    </div>
     <select name="sport" class="form-select" aria-label="Sport">
       <option value="">All sports</option>
-      {% for s in dash.sports %}
-        <option value="{{ s.name }}">{{ s.name }}</option>
+      {% for s in ('Football', 'Basketball', 'Kickball') %}
+        <option value="{{ s }}">{{ s }}</option>
       {% endfor %}
     </select>
     <button type="submit" class="btn dart-btn">
       <i class="fa-solid fa-magnifying-glass me-1"></i> Find Athletes
     </button>
   </form>
+  <script>
+  (function () {
+    // Name suggestions (same source as the Search page). The list is moved
+    // to <body> so the hero's rounded, clipped box can't cut it off.
+    var input = document.getElementById('sdNameInput');
+    var list = document.getElementById('sdNameSuggestions');
+    if (!input || !list) return;
+    document.body.appendChild(list);
+    var timer = null, lastQuery = '', active = -1;
+
+    function place() {
+      var r = input.getBoundingClientRect();
+      list.style.position = 'fixed';
+      list.style.top = (r.bottom + 6) + 'px';
+      list.style.left = r.left + 'px';
+      list.style.width = r.width + 'px';
+      list.style.right = 'auto';
+    }
+    function hide() { list.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; }
+    function choose(name) { input.value = name; hide(); input.focus(); }
+    function highlight(i) {
+      var items = list.querySelectorAll('.list-group-item');
+      items.forEach(function (el, n) { el.classList.toggle('active', n === i); });
+      active = i;
+    }
+
+    input.addEventListener('input', function () {
+      var q = input.value.trim();
+      clearTimeout(timer);
+      if (!q) { hide(); return; }
+      timer = setTimeout(function () {
+        lastQuery = q;
+        fetch('/api/suggest-names?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+          .then(function (r) { return r.ok ? r.json() : []; })
+          .then(function (names) {
+            if (q !== lastQuery || input.value.trim() !== q) return;
+            list.innerHTML = '';
+            if (!names.length) { hide(); return; }
+            names.forEach(function (s) {
+              var b = document.createElement('button');
+              b.type = 'button';
+              b.className = 'list-group-item list-group-item-action';
+              b.setAttribute('role', 'option');
+              b.textContent = s.full_name;
+              b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+              b.addEventListener('click', function () { choose(s.full_name); });
+              list.appendChild(b);
+            });
+            place();
+            list.hidden = false;
+            input.setAttribute('aria-expanded', 'true');
+            active = -1;
+          })
+          .catch(hide);
+      }, 150);
+    });
+
+    input.addEventListener('keydown', function (e) {
+      var items = list.querySelectorAll('.list-group-item');
+      if (list.hidden || !items.length) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); highlight(Math.min(items.length - 1, active + 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); highlight(Math.max(0, active - 1)); }
+      else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); choose(items[active].textContent); }
+      else if (e.key === 'Escape') { hide(); }
+    });
+    input.addEventListener('blur', function () { setTimeout(hide, 120); });
+    window.addEventListener('resize', function () { if (!list.hidden) place(); });
+    window.addEventListener('scroll', function () { if (!list.hidden) place(); }, { passive: true });
+  })();
+  </script>
 
   <div class="sd-hero-links">
     <a href="{{ url_for('search') }}"><i class="fa-solid fa-sliders me-1"></i>Advanced filters</a>

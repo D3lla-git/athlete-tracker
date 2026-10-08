@@ -1,0 +1,18 @@
+{# Previous / next page links that keep every other search filter.
+   pager(page, page_count, endpoint) #}
+{% macro pager(page, page_count, endpoint) %}
+  {% if page_count > 1 %}
+    {% set args = request.args.to_dict(flat=False) %}
+    <nav class="dart-pager" aria-label="Result pages">
+      {% if page > 1 %}
+        {% set _ = args.update({'page': [page - 1]}) %}
+        <a class="btn dart-btn dart-pager-btn" href="{{ url_for(endpoint, **args) }}" rel="prev"><i class="fa-solid fa-chevron-left"></i> Previous</a>
+      {% else %}<span></span>{% endif %}
+      <span class="dart-pager-info">Page {{ page }} of {{ page_count }}</span>
+      {% if page < page_count %}
+        {% set _ = args.update({'page': [page + 1]}) %}
+        <a class="btn dart-btn dart-pager-btn" href="{{ url_for(endpoint, **args) }}" rel="next">Next <i class="fa-solid fa-chevron-right"></i></a>
+      {% else %}<span></span>{% endif %}
+    </nav>
+  {% endif %}
+{% endmacro %}

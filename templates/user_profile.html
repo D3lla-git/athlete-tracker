@@ -110,6 +110,48 @@
   </style>
 
 {# ===== About: public details only (age, never the date of birth) ===== #}
+{% if user.role == 'Coach' %}
+  {# Verified coaching career: public, and kept when the coach changes teams. #}
+  {% from '_coach_career.html' import career_stats, career_honours, career_games, career_styles %}
+  {% set cd = coach_public_data(user) %}
+  {{ career_styles() }}
+  <section class="card shadow up-career" id="career" aria-labelledby="upCareerTitle">
+    <div class="card-header">
+      <h2 class="h5 mb-0" id="upCareerTitle"><i class="fa-solid fa-clipboard-user"></i> Coaching career</h2>
+      {% if cd.pro %}<span class="up-pro"><i class="fa-solid fa-crown"></i> Coach Pro</span>{% endif %}
+    </div>
+    <div class="card-body">
+      {% if cd.teams %}
+        <div class="up-teams">
+          {% for t in cd.teams %}
+            <span class="up-team {{ 'up-team-past' if t.end_date }}">
+              <i class="fa-solid fa-people-group" aria-hidden="true"></i> {{ t.team_name }}
+              <small>{{ t.role }}{% if t.end_date %} · until {{ t.end_date.strftime('%Y') }}{% elif t.is_primary %} · main team{% endif %}</small>
+            </span>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if cd.games or cd.summary.trophies or cd.summary.awards %}
+        {{ career_stats(cd.summary) }}
+        {{ career_honours(cd.summary) }}
+        {{ career_games(cd.games) }}
+      {% else %}
+        <p class="text-muted mb-0">No verified coaching records yet.</p>
+      {% endif %}
+    </div>
+  </section>
+  <style>
+    .up-career { margin-bottom: 20px; scroll-margin-top: 90px; }
+    .up-career .card-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .up-career .card-header i { color: #198754; }
+    .up-pro { padding: 2px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 800; color: #3d2c00; background: linear-gradient(135deg, #f5c542, #ffd96b); }
+    .up-teams { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .up-team { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: 0.85rem; background: rgba(25, 135, 84, 0.1); }
+    .up-team small { font-weight: 500; color: var(--muted-text, #6c757d); }
+    .up-team-past { background: rgba(108, 117, 125, 0.12); }
+  </style>
+{% endif %}
+
 <section class="card shadow up-about" aria-labelledby="upAboutTitle">
   <div class="card-header">
     <h2 class="h5 mb-0" id="upAboutTitle"><i class="fa-solid fa-id-card"></i> About {{ user.full_name.split(' ')[0] }}</h2>

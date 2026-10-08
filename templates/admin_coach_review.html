@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Coach Review · Super Admin{% endblock %}
+
+{% macro decide(kind, item) %}
+  <div class="cv-actions">
+    <form method="POST" action="{{ url_for('admin_coach_review_action', kind=kind, item_id=item.id, action='approve') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-success btn-sm cv-btn"><i class="fa-solid fa-circle-check me-1"></i> Verify</button>
+    </form>
+    <form method="POST" action="{{ url_for('admin_coach_review_action', kind=kind, item_id=item.id, action='reject') }}" class="cv-reject">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="note" class="form-control form-control-sm" maxlength="200" placeholder="Reason (shown to the coach)">
+      <button class="btn btn-outline-danger btn-sm cv-btn"><i class="fa-solid fa-circle-xmark me-1"></i> Reject</button>
+    </form>
+  </div>
+{% endmacro %}
+
+{% block content %}
+<div class="cv-page">
+  <h1 class="cv-title"><i class="fa-solid fa-clipboard-user"></i> Coach review</h1>
+  <p class="cv-lead">Check new teams against the coach's documents or the team itself before verifying: a verified team lets the coach verify its athletes and approve their records. Verified games, trophies and awards appear publicly in Coach search.</p>
+
+  <h2 class="cv-sub">New teams <span class="cv-badge">{{ teams | length }}</span></h2>
+  {% for t in teams %}
+    <article class="cv-card">
+      <div class="cv-main">
+        <strong>{{ t.team_name }}</strong> · {{ t.role }} · {{ t.coach_category }}
+        <div class="cv-muted">Coach: <a href="{{ url_for('user_profile', user_id=t.coach_id) }}">{{ t.coach.full_name }}</a> (main team: {{ t.coach.school }}) · requested {{ t.created_at.strftime('%b %d, %Y') }}</div>
+      </div>
+      {{ decide('teams', t) }}
+    </article>
+  {% else %}<p class="text-muted">No team requests.</p>{% endfor %}
+
+  <h2 class="cv-sub">Game records <span class="cv-badge">{{ games | length }}</span></h2>
+  {% for g in games %}
+    <article class="cv-card">
+      <div class="cv-main">
+        <strong>{{ coach_results[g.result] }}{% if g.score_for is not none %} {{ g.score_for }}-{{ g.score_against }}{% endif %}</strong>
+        · {{ g.team_name }} vs {{ g.opponent }} · {{ g.sport }}
+        <div class="cv-muted">{{ g.coach.full_name }} · {{ g.game_date.strftime('%b %d, %Y') }}{% if g.competition %} · {{ g.competition }}{% endif %}{% if g.formation %} · {{ g.formation }}{% endif %} · {{ g.substitutions }} subs{% if g.yellow_cards %} · {{ g.yellow_cards }} yellow{% endif %}{% if g.red_cards %} · red card{% endif %}{% if g.notes %} · “{{ g.notes }}”{% endif %}</div>
+      </div>
+      {{ decide('games', g) }}
+    </article>
+  {% else %}<p class="text-muted">No game records waiting.</p>{% endfor %}
+
+  <h2 class="cv-sub">Trophies &amp; awards <span class="cv-badge">{{ achievements | length }}</span></h2>
+  {% for a in achievements %}
+    <article class="cv-card">
+      <div class="cv-main">
+        <strong><i class="fa-solid {{ 'fa-trophy' if a.kind == 'trophy' else 'fa-award' }}"></i> {{ a.title }}</strong> · {{ a.season }}
+        <div class="cv-muted">{{ a.coach.full_name }} · {{ coach_achievement_kinds[a.kind] }}{% if a.competition %} · {{ a.competition }}{% endif %}{% if a.team_name %} · {{ a.team_name }}{% endif %}</div>
+      </div>
+      {{ decide('achievements', a) }}
+    </article>
+  {% else %}<p class="text-muted">No trophies or awards waiting.</p>{% endfor %}
+</div>
+
+<style>
+  .cv-page { max-width: 1000px; margin: 0 auto; }
+  .cv-title { font-size: 1.6rem; font-weight: 800; }
+  .cv-title i { color: #198754; }
+  .cv-lead { color: var(--muted-text, #6c757d); max-width: 780px; }
+  .cv-sub { font-size: 1.15rem; font-weight: 800; margin: 24px 0 10px; }
+  .cv-badge { padding: 2px 10px; border-radius: 999px; font-size: 0.8rem; color: #8a6d00; background: rgba(245, 197, 66, 0.22); }
+  .cv-card {
+    display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center;
+    padding: 14px 16px; margin-bottom: 10px; border-radius: 16px;
+    background: var(--surface-bg); border: 1px solid var(--surface-border); border-left: 5px solid #198754;
+  }
+  .cv-main { flex: 1 1 380px; min-width: 0; overflow-wrap: anywhere; }
+  .cv-muted { font-size: 0.85rem; color: var(--muted-text, #6c757d); }
+  .cv-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; flex: 0 1 420px; }
+  .cv-actions form { margin: 0; }
+  .cv-reject { display: flex; gap: 6px; flex: 1 1 260px; }
+  .cv-btn { border-radius: 999px; font-weight: 700; white-space: nowrap; }
+</style>
+{% endblock %}

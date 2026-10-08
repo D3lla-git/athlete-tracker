@@ -30,7 +30,6 @@
           <span class="badge dart-status-pending">Pending</span>
         {% endif %}
       </div>
-      {% if current_user.role == 'Athlete' %}
 {% if current_user.role == 'Athlete' %}
     <div class="premium-profile-actions mt-3 mb-4">
 
@@ -182,10 +181,40 @@
   </div>
 </div>
 
+              {% set coach_pro_user = current_user.role == 'Coach' and is_coach_pro(current_user) %}
               <div class="mb-3">
                 <label class="form-label">Team Name <i class="fa-solid fa-users"></i></label>
-                <input type="text" name="school" class="form-control" value="{{ current_user.school }}">
+                {% if current_user.role == 'Coach' %}
+                  <input type="text" class="form-control" value="{{ current_user.school }}" readonly aria-describedby="coachTeamHelp">
+                  <small class="text-muted" id="coachTeamHelp">
+                    Your team decides whose records you approve, so team changes are verified by D.A.R.T.
+                    {% if coach_pro_user %}<a href="{{ url_for('coach_career') }}#teams">Add or change teams in My Coaching Career</a>.
+                    {% else %}<a href="{{ url_for('pricing') }}#coaches">Coach Pro</a> lets you add teams and switch any time.{% endif %}
+                  </small>
+                {% else %}
+                  <input type="text" name="school" class="form-control" value="{{ current_user.school }}">
+                {% endif %}
               </div>
+
+              {% if current_user.role == 'Coach' %}
+                {# Coach Pro: date of birth + nationality. #}
+                <div class="row g-3 mb-3 coach-personal {{ 'is-locked' if not coach_pro_user }}">
+                  <div class="col-md-6">
+                    <label class="form-label" for="coachDob">Date of Birth <i class="fa-solid fa-cake-candles"></i>
+                      {% if not coach_pro_user %}<span class="premium-chip"><i class="fa-solid fa-crown"></i> Coach Pro</span>{% endif %}</label>
+                    <input type="date" id="coachDob" name="date_of_birth" class="form-control" max="{{ today_iso() }}"
+                           value="{{ current_user.date_of_birth.strftime('%Y-%m-%d') if current_user.date_of_birth else '' }}"
+                           {% if not coach_pro_user %}disabled{% endif %}>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label" for="coachNationality">Nationality <i class="fa-solid fa-flag"></i>
+                      {% if not coach_pro_user %}<span class="premium-chip"><i class="fa-solid fa-crown"></i> Coach Pro</span>{% endif %}</label>
+                    <input type="text" id="coachNationality" name="nationality" class="form-control" maxlength="100"
+                           value="{{ current_user.nationality or '' }}" placeholder="e.g. Liberian"
+                           {% if not coach_pro_user %}disabled{% endif %}>
+                  </div>
+                </div>
+              {% endif %}
 <div class="mb-3">
   <label class="form-label">Gender <i class="fa-solid fa-person-half-dress"></i></label>
 
@@ -430,7 +459,7 @@
               {% elif current_user.role == 'Coach' %}
               <div class="mb-3">
                 <label class="form-label">Coach Registration Category <i class="fa-solid fa-user-tie"></i></label>
-                <select name="coach_category" class="form-select" required>
+                <select name="coach_category" class="form-select" required {% if not coach_pro_user %}disabled{% endif %}>
                   {% for category in [
                     'All Coach',
                     'County Meet Coach',
@@ -442,13 +471,16 @@
                     <option value="{{ category }}" {% if current_user.coach_category == category %}selected{% endif %}>{{ category }}</option>
                   {% endfor %}
                 </select>
-                <small class="text-muted">This controls which competition categories you can manage in the future.</small>
+                <small class="text-muted">This controls which competition categories you can manage.
+                  {% if not coach_pro_user %}Changing it any time is part of <a href="{{ url_for('pricing') }}#coaches">Coach Pro</a>.{% endif %}</small>
               </div>
               {% endif %}
 
               <div class="mb-3">
-                <label class="form-label">Upload / Change Profile Picture <i class="fa-solid fa-id-card-clip"></i></label>
-                <input type="file" name="profile_picture" class="form-control" accept=".png,.jpg,.jpeg">
+                <label class="form-label">Upload / Change Profile Picture <i class="fa-solid fa-id-card-clip"></i>
+                  {% if current_user.role == 'Coach' and not coach_pro_user %}<span class="premium-chip"><i class="fa-solid fa-crown"></i> Coach Pro</span>{% endif %}</label>
+                <input type="file" name="profile_picture" class="form-control" accept=".png,.jpg,.jpeg"
+                       {% if current_user.role == 'Coach' and not coach_pro_user %}disabled{% endif %}>
               </div>
 
               <button type="submit" class="btn btn-primary dart-btn dart-btn-blue">Save Changes <i class="fa-regular fa-floppy-disk"></i></button>
@@ -958,7 +990,6 @@ function confirmAccountDeletion() {
 }
 </script>
 
-{% endif %}
 
 <style>
   .mp-hero-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }

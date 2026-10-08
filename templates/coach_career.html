@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+{% block title %}My Coaching Career{% endblock %}
+
+{% block content %}
+{% from '_coach_career.html' import career_stats, career_honours, career_games, career_styles %}
+{{ career_styles() }}
+{% set status_label = {'pending': 'Waiting for verification', 'approved': 'Verified', 'rejected': 'Not accepted', 'left': 'Former team'} %}
+<div class="cr-page">
+  <section class="cr-hero">
+    <div>
+      <div class="cr-eyebrow">My Coaching Career {% if pro %}<span class="cr-pro"><i class="fa-solid fa-crown"></i> Coach Pro</span>{% endif %}</div>
+      <h1>{{ current_user.full_name }}</h1>
+      <p>Build your coaching record: results, formations, substitutions, cards, trophies and awards. Verified records stay on D.A.R.T. and in Coach search, even when you change teams.</p>
+    </div>
+    <a class="btn dart-btn cr-hero-btn" href="{{ url_for('user_profile', user_id=current_user.id) }}#career"><i class="fa-solid fa-eye me-1"></i> See my public career</a>
+  </section>
+
+  {% if not pro %}
+    <div class="cr-upsell">
+      <div class="cr-upsell-icon" aria-hidden="true"><i class="fa-solid fa-crown"></i></div>
+      <div>
+        <strong>Upgrade to Coach Pro</strong> to record your games and honours, coach more than one team
+        (e.g. a high school and a club), change your category any time and edit your date of birth,
+        nationality and profile picture.
+      </div>
+      <a href="{{ url_for('pricing') }}#coaches" class="btn dart-btn cr-btn"><i class="fa-solid fa-crown me-1"></i> See Coach Pro</a>
+    </div>
+  {% endif %}
+
+  {# ---------- Summary ---------- #}
+  <section class="cr-card">
+    <h2><i class="fa-solid fa-chart-simple"></i> Verified career</h2>
+    {% if summary.total.games or summary.trophies or summary.awards %}
+      {{ career_stats(summary) }}
+      {{ career_honours(summary) }}
+    {% else %}
+      <p class="cr-muted">Your verified games, trophies and awards will appear here.</p>
+    {% endif %}
+  </section>
+
+  {# ---------- Teams ---------- #}
+  <section class="cr-card" id="teams">
+    <h2><i class="fa-solid fa-people-group"></i> My teams</h2>
+    <p class="cr-muted">You verify athletes and approve records for your <strong>verified, current</strong> teams only. Every new team is checked by the D.A.R.T. Super Admin first.</p>
+    <ul class="cr-teams">
+      {% for t in teams %}
+        <li class="cr-team cr-team-{{ t.status }}">
+          <div class="cr-team-main">
+            <strong>{{ t.team_name }}</strong>
+            {% if t.is_primary and t.is_active %}<span class="cr-tag cr-tag-main">Main team</span>{% endif %}
+            <span class="cr-tag cr-tag-{{ t.status }}">{{ status_label[t.status] }}</span>
+            <div class="cr-muted small">{{ t.role }} · {{ t.coach_category }}
+              {% if t.start_date %} · since {{ t.start_date.strftime('%b %Y') }}{% endif %}
+              {% if t.end_date %} · until {{ t.end_date.strftime('%b %Y') }}{% endif %}
+              {% if t.review_note %} · “{{ t.review_note }}”{% endif %}</div>
+          </div>
+          {% if pro %}
+            <div class="cr-team-actions">
+              {% if t.status == 'pending' %}
+                <form method="POST" action="{{ url_for('coach_team_action', team_id=t.id, action='cancel') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-outline-secondary rounded-pill">Cancel</button>
+                </form>
+              {% elif t.is_active %}
+                {% if not t.is_primary %}
+                  <form method="POST" action="{{ url_for('coach_team_action', team_id=t.id, action='primary') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-success rounded-pill">Make main</button>
+                  </form>
+                {% endif %}
+                <form method="POST" action="{{ url_for('coach_team_action', team_id=t.id, action='leave') }}"
+                      onsubmit="return confirm('Leave {{ t.team_name | e }}? Your records with this team stay on D.A.R.T., but you will no longer approve its athletes.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-outline-danger rounded-pill">Leave team</button>
+                </form>
+              {% endif %}
+            </div>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+
+    {% if pro %}
+      <form method="POST" action="{{ url_for('coach_team_add') }}" class="cr-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <h3>Add a team</h3>
+        <div class="row g-2">
+          <div class="col-md-5">
+            <label class="form-label" for="crTeam">Team name</label>
+            <input id="crTeam" type="text" name="team_name" class="form-control" maxlength="150" required placeholder="e.g. Lone Star FC">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="crTeamCat">Category for this team</label>
+            <select id="crTeamCat" name="coach_category" class="form-select" required>
+              {% for c in coach_category_choices %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="crRole">Your role</label>
+            <select id="crRole" name="role" class="form-select">
+              {% for r in coach_team_roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="btn dart-btn cr-btn mt-3"><i class="fa-solid fa-plus me-1"></i> Send for verification</button>
+        <p class="cr-muted small mt-2 mb-0">Up to {{ max_teams }} teams at a time.</p>
+      </form>
+    {% endif %}
+  </section>
+
+  {# ---------- Add a game ---------- #}
+  {% if pro %}
+    <section class="cr-card" id="add-game">
+      <h2><i class="fa-solid fa-clipboard-list"></i> Record a game</h2>
+      {% if not record_teams %}
+        <p class="cr-muted">Your team must be verified before you can record games.</p>
+      {% else %}
+        <form method="POST" action="{{ url_for('coach_game_add') }}" class="cr-form" id="crGameForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label" for="gTeam">Your team</label>
+              <select id="gTeam" name="team_name" class="form-select" required>
+                {% for t in record_teams %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="gSport">Sport</label>
+              <select id="gSport" name="sport" class="form-select" required>
+                {% for s in ('Football', 'Basketball', 'Kickball') %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="gComp">Competition <span class="cr-muted">(optional)</span></label>
+              <select id="gComp" name="competition" class="form-select">
+                <option value="">-</option>
+                {% for c in competitions %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="gDate">Game date</label>
+              <input id="gDate" type="date" name="game_date" class="form-control" required max="{{ today_iso() }}">
+            </div>
+            <div class="col-md-8">
+              <label class="form-label" for="gOpp">Opponent</label>
+              <input id="gOpp" type="text" name="opponent" class="form-control" maxlength="150" required>
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label" for="gResult">Result</label>
+              <select id="gResult" name="result" class="form-select" required>
+                <option value="">Choose</option>
+                {% for key, label in coach_results.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-3 col-md-2">
+              <label class="form-label" for="gFor">Us</label>
+              <input id="gFor" type="number" name="score_for" class="form-control" min="0" max="300" inputmode="numeric">
+            </div>
+            <div class="col-3 col-md-2">
+              <label class="form-label" for="gAgainst">Them</label>
+              <input id="gAgainst" type="number" name="score_against" class="form-control" min="0" max="300" inputmode="numeric">
+            </div>
+            <div class="col-md-5" id="gFormationWrap">
+              <label class="form-label" for="gFormation">Formation <span class="cr-muted">(football)</span></label>
+              <select id="gFormation" name="formation" class="form-select">
+                <option value="">-</option>
+                {% for f in coach_formations %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-4 col-md-3">
+              <label class="form-label" for="gSubs">Substitutions</label>
+              <input id="gSubs" type="number" name="substitutions" class="form-control" min="0" max="15" value="0" inputmode="numeric">
+            </div>
+            <div class="col-4 col-md-3">
+              <label class="form-label" for="gYellow">Yellow cards <span class="cr-muted">(you)</span></label>
+              <input id="gYellow" type="number" name="yellow_cards" class="form-control" min="0" max="5" value="0" inputmode="numeric">
+            </div>
+            <div class="col-4 col-md-3">
+              <label class="form-label" for="gRed">Red card <span class="cr-muted">(you)</span></label>
+              <input id="gRed" type="number" name="red_cards" class="form-control" min="0" max="1" value="0" inputmode="numeric">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="gNotes">Note <span class="cr-muted">(optional)</span></label>
+              <input id="gNotes" type="text" name="notes" class="form-control" maxlength="200">
+            </div>
+          </div>
+          <button type="submit" class="btn dart-btn cr-btn mt-3"><i class="fa-solid fa-paper-plane me-1"></i> Save for verification</button>
+        </form>
+        <script>
+          (function () {
+            var sport = document.getElementById('gSport'), wrap = document.getElementById('gFormationWrap');
+            var result = document.getElementById('gResult');
+            function sync() {
+              var football = sport.value === 'Football';
+              wrap.hidden = !football;
+              if (!football) document.getElementById('gFormation').value = '';
+              // Basketball games have no draws.
+              var draw = result.querySelector('option[value="draw"]');
+              draw.disabled = sport.value === 'Basketball';
+              if (draw.disabled && result.value === 'draw') result.value = '';
+            }
+            sport.addEventListener('change', sync);
+            sync();
+          })();
+        </script>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  {# ---------- Games ---------- #}
+  <section class="cr-card" id="games">
+    <h2><i class="fa-solid fa-list-check"></i> My games</h2>
+    {% for g in games %}
+      {% if loop.first %}<ul class="cr-list">{% endif %}
+      <li>
+        <div class="cr-list-main">
+          <strong>{{ coach_results[g.result] }}{% if g.score_for is not none %} {{ g.score_for }}-{{ g.score_against }}{% endif %}</strong>
+          · {{ g.team_name }} vs {{ g.opponent }}
+          <div class="cr-muted small">{{ g.sport }}{% if g.competition %} · {{ g.competition }}{% endif %} · {{ g.game_date.strftime('%b %d, %Y') }}
+            {% if g.formation %} · {{ g.formation }}{% endif %} · {{ g.substitutions }} subs
+            {% if g.yellow_cards %} · {{ g.yellow_cards }} yellow{% endif %}{% if g.red_cards %} · red card{% endif %}
+            {% if g.review_note %} · “{{ g.review_note }}”{% endif %}</div>
+        </div>
+        <span class="cr-tag cr-tag-{{ g.status }}">{{ status_label[g.status] }}</span>
+        {% if g.status != 'approved' %}
+          <form method="POST" action="{{ url_for('coach_item_delete', kind='games', item_id=g.id) }}" onsubmit="return confirm('Remove this game?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-link text-danger" aria-label="Remove"><i class="fa-solid fa-trash"></i></button>
+          </form>
+        {% endif %}
+      </li>
+      {% if loop.last %}</ul>{% endif %}
+    {% else %}
+      <p class="cr-muted">No games yet.</p>
+    {% endfor %}
+  </section>
+
+  {# ---------- Trophies & awards ---------- #}
+  <section class="cr-card" id="achievements">
+    <h2><i class="fa-solid fa-trophy"></i> Trophies &amp; awards</h2>
+    {% if pro %}
+      <form method="POST" action="{{ url_for('coach_achievement_add') }}" class="cr-form" id="add-achievement">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="row g-2">
+          <div class="col-md-3">
+            <label class="form-label" for="aKind">Type</label>
+            <select id="aKind" name="kind" class="form-select" required>
+              {% for key, label in coach_achievement_kinds.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label" for="aTitle">What you won</label>
+            <input id="aTitle" type="text" name="title" class="form-control" maxlength="150" required placeholder="e.g. County Meet Champions / Best Coach">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label" for="aSeason">Season</label>
+            <input id="aSeason" type="number" name="season" class="form-control" min="1990" max="{{ today_iso()[:4] }}" value="{{ today_iso()[:4] }}" required>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label" for="aTeam">Team <span class="cr-muted">(optional)</span></label>
+            <input id="aTeam" type="text" name="team_name" class="form-control" maxlength="150">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="aComp">League / cup <span class="cr-muted">(optional)</span></label>
+            <input id="aComp" type="text" name="competition" class="form-control" maxlength="80">
+          </div>
+        </div>
+        <button type="submit" class="btn dart-btn cr-btn mt-3"><i class="fa-solid fa-paper-plane me-1"></i> Save for verification</button>
+      </form>
+    {% endif %}
+    {% for a in achievements %}
+      {% if loop.first %}<ul class="cr-list mt-3">{% endif %}
+      <li>
+        <div class="cr-list-main">
+          <strong><i class="fa-solid {{ 'fa-trophy' if a.kind == 'trophy' else 'fa-award' }}"></i> {{ a.title }}</strong> · {{ a.season }}
+          <div class="cr-muted small">{{ coach_achievement_kinds[a.kind] }}{% if a.competition %} · {{ a.competition }}{% endif %}{% if a.team_name %} · {{ a.team_name }}{% endif %}{% if a.review_note %} · “{{ a.review_note }}”{% endif %}</div>
+        </div>
+        <span class="cr-tag cr-tag-{{ a.status }}">{{ status_label[a.status] }}</span>
+        {% if a.status != 'approved' %}
+          <form method="POST" action="{{ url_for('coach_item_delete', kind='achievements', item_id=a.id) }}" onsubmit="return confirm('Remove this?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-link text-danger" aria-label="Remove"><i class="fa-solid fa-trash"></i></button>
+          </form>
+        {% endif %}
+      </li>
+      {% if loop.last %}</ul>{% endif %}
+    {% else %}
+      {% if not pro %}<p class="cr-muted">No trophies or awards yet.</p>{% endif %}
+    {% endfor %}
+  </section>
+</div>
+
+<style>
+  .cr-page { max-width: 980px; margin: 0 auto; }
+  .cr-hero {
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 14px;
+    padding: 24px; margin-bottom: 16px; border-radius: 24px; color: #fff; background: var(--dart-primary-gradient);
+  }
+  .cr-hero h1 { font-weight: 900; margin: 2px 0 6px; }
+  .cr-hero p { margin: 0; max-width: 620px; color: #d7efe1; }
+  .cr-eyebrow { font-size: 0.78rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #8fe3b4; }
+  .cr-pro { margin-left: 6px; padding: 2px 9px; border-radius: 999px; color: #3d2c00; background: #f5c542; letter-spacing: 0; text-transform: none; }
+  .cr-hero-btn { border-radius: 999px; border-color: #fff !important; color: #fff; white-space: nowrap; }
+  .cr-upsell {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 14px 16px; margin-bottom: 16px;
+    border-radius: 18px; background: rgba(245, 197, 66, 0.14); border: 1px solid rgba(245, 197, 66, 0.55);
+  }
+  .cr-upsell > div:nth-child(2) { flex: 1 1 280px; }
+  .cr-upsell-icon { flex: 0 0 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; color: #3d2c00; background: linear-gradient(135deg, #f5c542, #ffd96b); }
+  .cr-card {
+    padding: 18px; margin-bottom: 16px; border-radius: 20px; scroll-margin-top: 90px;
+    background: var(--surface-bg); border: 1px solid var(--surface-border);
+  }
+  .cr-card h2 { font-size: 1.15rem; font-weight: 800; margin-bottom: 10px; }
+  .cr-card h2 i { color: #198754; }
+  .cr-form { margin-top: 14px; padding: 14px; border-radius: 16px; border: 1px dashed var(--surface-border); }
+  .cr-form h3 { font-size: 1rem; font-weight: 800; }
+  .cr-form .form-label { font-size: 0.8rem; font-weight: 700; margin-bottom: 3px; }
+  .cr-btn { border-radius: 999px; color: #fff; }
+  .cr-muted { color: var(--muted-text, #6c757d); }
+  .cr-teams, .cr-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .cr-team, .cr-list li {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: 14px;
+    border: 1px solid var(--surface-border);
+  }
+  .cr-team-main, .cr-list-main { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
+  .cr-team-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .cr-team-actions form, .cr-list form { margin: 0; }
+  .cr-tag { padding: 2px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 800; white-space: nowrap; }
+  .cr-tag-main { color: #fff; background: #198754; }
+  .cr-tag-approved { color: #146c43; background: rgba(25, 135, 84, 0.15); }
+  .cr-tag-pending { color: #8a6d00; background: rgba(245, 197, 66, 0.25); }
+  .cr-tag-rejected { color: #b02a37; background: rgba(220, 53, 69, 0.12); }
+  .cr-tag-left { color: #6c757d; background: rgba(108, 117, 125, 0.15); }
+  html[data-theme="dark"] .cr-tag-approved { color: #4cd38a; }
+  html[data-theme="dark"] .cr-tag-pending { color: #f5c542; }
+  html[data-theme="dark"] .cr-tag-rejected { color: #ff8a95; }
+  html[data-theme="dark"] .cr-tag-left { color: #adb5bd; }
+</style>
+{% endblock %}

@@ -1,0 +1,106 @@
+{# Verified coaching career: totals, trophies/awards and games.
+   career_stats(summary)                 - W/D/L tiles
+   career_honours(summary)               - trophies + awards chips
+   career_games(games, limit=None)       - game list (cards on phones) #}
+
+{% macro career_stats(summary) %}
+  {% set t = summary.total %}
+  <div class="cc-stats">
+    <div class="cc-stat"><span>Games</span><strong>{{ t.games }}</strong></div>
+    <div class="cc-stat cc-win"><span>Wins</span><strong>{{ t.win }}</strong></div>
+    <div class="cc-stat cc-draw"><span>Draws</span><strong>{{ t.draw }}</strong></div>
+    <div class="cc-stat cc-loss"><span>Losses</span><strong>{{ t.loss }}</strong></div>
+    <div class="cc-stat cc-pct"><span>Win rate</span><strong>{{ t.win_pct }}%</strong></div>
+    {% if summary.top_formation %}<div class="cc-stat"><span>Top formation</span><strong>{{ summary.top_formation }}</strong></div>{% endif %}
+  </div>
+{% endmacro %}
+
+{% macro career_honours(summary) %}
+  {% if summary.trophies or summary.awards %}
+    <div class="cc-honours">
+      {% for a in summary.trophies %}
+        <span class="cc-honour cc-trophy" title="{{ a.competition or '' }}{{ ' · ' ~ a.team_name if a.team_name }}">
+          <i class="fa-solid fa-trophy" aria-hidden="true"></i> {{ a.title }} <small>{{ a.season }}</small>
+        </span>
+      {% endfor %}
+      {% for a in summary.awards %}
+        <span class="cc-honour cc-award" title="{{ a.competition or '' }}">
+          <i class="fa-solid fa-award" aria-hidden="true"></i> {{ a.title }} <small>{{ a.season }}</small>
+        </span>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro career_games(games, limit=None) %}
+  {% set shown = games[:limit] if limit else games %}
+  {% if shown %}
+    <ul class="cc-games">
+      {% for g in shown %}
+        <li class="cc-game cc-{{ g.result }}">
+          <span class="cc-result" title="{{ coach_results[g.result] }}">{{ coach_results[g.result][0] }}</span>
+          <div class="cc-game-main">
+            <strong>{{ g.team_name }} <span class="cc-vs">vs</span> {{ g.opponent }}</strong>
+            <div class="cc-game-meta">
+              {% if g.score_for is not none %}<span class="cc-score">{{ g.score_for }}-{{ g.score_against }}</span>{% endif %}
+              <span><i class="fa-solid {{ {'Football': 'fa-futbol', 'Basketball': 'fa-basketball', 'Kickball': 'fa-baseball'}[g.sport] }}" aria-hidden="true"></i> {{ g.sport }}</span>
+              {% if g.competition %}<span>{{ g.competition }}</span>{% endif %}
+              <span><i class="fa-regular fa-calendar" aria-hidden="true"></i> {{ g.game_date.strftime('%b %d, %Y') }}</span>
+            </div>
+            <div class="cc-game-meta">
+              {% if g.formation %}<span title="Formation"><i class="fa-solid fa-chess-board" aria-hidden="true"></i> {{ g.formation }}</span>{% endif %}
+              <span title="Substitutions"><i class="fa-solid fa-right-left" aria-hidden="true"></i> {{ g.substitutions }} sub{{ 's' if g.substitutions != 1 }}</span>
+              {% if g.yellow_cards %}<span title="Yellow cards (coach)"><i class="fa-solid fa-square" style="color:#FFCC00;" aria-hidden="true"></i> {{ g.yellow_cards }}</span>{% endif %}
+              {% if g.red_cards %}<span title="Red card (coach)"><i class="fa-solid fa-square" style="color:#FF0000;" aria-hidden="true"></i> {{ g.red_cards }}</span>{% endif %}
+            </div>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endmacro %}
+
+{% macro career_styles() %}
+<style>
+  .cc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 8px; }
+  .cc-stat {
+    padding: 10px 12px; border-radius: 14px; text-align: center;
+    background: var(--surface-bg, #fff); border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+  }
+  .cc-stat span { display: block; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted-text, #6c757d); }
+  .cc-stat strong { font-size: 1.35rem; font-weight: 900; }
+  .cc-win strong { color: #198754; }
+  .cc-draw strong { color: #b8860b; }
+  .cc-loss strong { color: #dc3545; }
+  html[data-theme="dark"] .cc-win strong { color: #4cd38a; }
+  html[data-theme="dark"] .cc-draw strong { color: #f5c542; }
+  .cc-honours { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .cc-honour { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; }
+  .cc-honour small { opacity: 0.75; font-weight: 600; }
+  .cc-trophy { color: #3d2c00; background: rgba(245, 197, 66, 0.35); }
+  .cc-award { color: #4a1d96; background: rgba(111, 66, 193, 0.15); }
+  html[data-theme="dark"] .cc-trophy { color: #ffd96b; background: rgba(245, 197, 66, 0.18); }
+  html[data-theme="dark"] .cc-award { color: #d4bbff; background: rgba(111, 66, 193, 0.25); }
+  .cc-games { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+  .cc-game {
+    display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 14px;
+    background: var(--surface-bg, #fff); border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.08));
+    border-left: 4px solid #6c757d;
+  }
+  .cc-game.cc-win { border-left-color: #198754; }
+  .cc-game.cc-draw { border-left-color: #d4a514; }
+  .cc-game.cc-loss { border-left-color: #dc3545; }
+  .cc-result {
+    flex: 0 0 30px; height: 30px; display: grid; place-items: center; border-radius: 9px;
+    font-weight: 900; color: #fff; background: #6c757d;
+  }
+  .cc-win .cc-result { background: #198754; }
+  .cc-draw .cc-result { background: #d4a514; }
+  .cc-loss .cc-result { background: #dc3545; }
+  .cc-game-main { flex: 1; min-width: 0; }
+  .cc-game-main strong { overflow-wrap: anywhere; }
+  .cc-vs { font-weight: 500; color: var(--muted-text, #6c757d); }
+  .cc-game-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.8rem; color: var(--muted-text, #6c757d); margin-top: 2px; }
+  .cc-score { font-weight: 900; color: inherit; }
+</style>
+{% endmacro %}

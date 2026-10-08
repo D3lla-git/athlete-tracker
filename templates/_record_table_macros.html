@@ -103,6 +103,51 @@
 {% endmacro %}
 
 
+{# Phone card version of record_cells(): every field the desktop table
+   shows, per sport. Division / team / age group only when the record has one. #}
+{% macro record_card_grid(r) %}
+{% set award = 'QOTM' if r.sport == 'Kickball' else 'MOTM' %}
+<div class="card-grid">
+  <div><strong>Team <i class="fa-solid fa-users"></i> :</strong> {{ r.team or r.user.school or '-' }}</div>
+  <div><strong>Opponent <i class="fa-solid fa-shield-halved"></i> :</strong> {{ r.team_played_against or '-' }}</div>
+  <div><strong>Season <i class="fa-solid fa-calendar" style="color: green;"></i> :</strong> {{ r.year }}</div>
+  <div><strong>Position <i class="fa-solid fa-shirt"></i> :</strong> {{ r.position or '-' }}{% if r.shirt_number %} <span class="rt-shirt">#{{ r.shirt_number }}</span>{% endif %}</div>
+  <div><strong>Competition <i class="fa-solid fa-trophy"></i> :</strong> {{ r.competition_category or '-' }}</div>
+  {% if r.competition_detail %}
+    <div><strong>{{ r.competition_detail_label }} <i class="fa-solid fa-layer-group"></i> :</strong> {{ r.competition_detail }}</div>
+  {% endif %}
+  <div><strong>Trophies Won <i class="fa-solid fa-trophy" style="color:goldenrod;"></i> :</strong> {{ r.trophy or 'None' }}</div>
+  <div><strong>Games <i class="fa-solid fa-person-running"></i> :</strong> {{ r.games_played or 0 }}</div>
+  <div><strong>Match Minutes <i class="fa-solid fa-clock"></i> :</strong> {{ r.match_minutes_played or 0 }}</div>
+  <div class="{{ 'card-award-on' if r.man_of_the_match }}"><strong>{{ award }} <i class="fa-solid fa-medal" style="color:goldenrod;"></i> :</strong> {{ r.man_of_the_match or 0 }}</div>
+  <div class="{{ 'card-award-on' if r.mvp }}"><strong>MVP <i class="fa-solid fa-star" style="color:goldenrod;"></i> :</strong> {{ r.mvp or 0 }}</div>
+
+  {% if r.sport == 'Football' %}
+    <div><strong>Goals <i class="fa-solid fa-futbol"></i> :</strong> {{ r.goals or 0 }}</div>
+    <div><strong>Assists <i class="fa-solid fa-handshake-angle"></i> :</strong> {{ r.assists or 0 }}</div>
+    <div><strong>Yellow Cards <i class="fa-solid fa-square" style="color:#FFCC00;"></i> :</strong> {{ r.yellow_cards or 0 }}</div>
+    <div><strong>Red Cards <i class="fa-solid fa-square" style="color:#FF0000;"></i> :</strong> {{ r.red_cards or 0 }}</div>
+    {% if r.position == 'GK' %}
+      <div><strong>Clean Sheets <i class="fa-solid fa-shield-halved"></i> :</strong> {{ r.clean_sheets or 0 }}</div>
+      <div><strong>Saves <i class="fa-solid fa-hands-bubbles"></i> :</strong> {{ r.saves or 0 }}</div>
+    {% endif %}
+  {% elif r.sport == 'Kickball' %}
+    <div><strong>Home Runs <i class="fa-solid fa-baseball"></i> :</strong> {{ r.home_runs or 0 }}</div>
+    <div><strong>Cut Base <i class="fa-solid fa-person-running"></i> :</strong> {{ r.cut_base or 0 }}</div>
+    <div><strong>Fouls Played <i class="fa-solid fa-triangle-exclamation"></i> :</strong> {{ r.foul_played or 0 }}</div>
+    <div><strong>Yellow Cards <i class="fa-solid fa-square" style="color:#FFCC00;"></i> :</strong> {{ r.kickball_yellow_cards or 0 }}</div>
+    <div><strong>Red Cards <i class="fa-solid fa-square" style="color:#FF0000;"></i> :</strong> {{ r.kickball_red_cards or 0 }}</div>
+  {% else %}
+    <div><strong>Points <i class="fa-solid fa-basketball" style="color:orangered;"></i> :</strong> {{ r.points or 0 }}</div>
+    <div><strong>Assists <i class="fa-solid fa-handshake-angle"></i> :</strong> {{ r.assists or 0 }}</div>
+    <div><strong>Blocks <i class="fa-regular fa-hand"></i> :</strong> {{ r.blocks or 0 }}</div>
+    <div><strong>Rebounds <i class="fa-solid fa-rotate"></i> :</strong> {{ r.rebounds_display }}</div>
+    <div><strong>Sent Off Court <i class="fa-solid fa-user-xmark" style="color:red;"></i> :</strong> {{ r.sent_off or 0 }}</div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+
 {# Header cells matching record_cells(). #}
 {% macro record_header_cells() %}
         <th scope="col">Game &amp; Position</th>

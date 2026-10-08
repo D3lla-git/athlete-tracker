@@ -1,6 +1,6 @@
 // Bump this version whenever PRECACHE_URLS or caching behaviour changes.
 // Old 'dart-pwa-*' caches are deleted on activate.
-const CACHE_NAME = 'dart-pwa-v7';
+const CACHE_NAME = 'dart-pwa-v8';
 
 // Pages saved for offline use (the athlete dashboard). This name is
 // deliberately NOT versioned, so a service-worker update does not wipe an
@@ -104,6 +104,24 @@ async function storeOfflinePage(pathname, response) {
             headers: { 'Content-Type': 'text/html; charset=utf-8' }
         })
     );
+}
+
+// Cache a static file, removing older versions of the same path.
+async function storeStatic(request, response) {
+    const cache = await caches.open(CACHE_NAME);
+    const url = new URL(request.url);
+
+    if (url.searchParams.has('v')) {
+        const keys = await cache.keys();
+        await Promise.all(keys.map(key => {
+            const old = new URL(key.url);
+            return old.pathname === url.pathname && old.search !== url.search
+                ? cache.delete(key)
+                : null;
+        }));
+    }
+
+    await cache.put(request, response);
 }
 
 // Keep the offline page up to date (it is otherwise only stored at install).
@@ -249,33 +267,39 @@ self.addEventListener('fetch', event => {
     }
 
     // Static files:
-    // Network first, then cached copy if offline.
-    // Static URLs are not fingerprinted, so network-first avoids serving
-    // stale CSS/JS after a deploy.
+    // Versioned URLs (/static/...?v=<deploy>) never change: served from the
+    // cache straight away (no network round trip). Unversioned ones go to
+    // the network first. Offline, any cached copy of the file is used.
     if (url.pathname.startsWith('/static/')) {
+        const versioned = url.searchParams.has('v');
+
         event.respondWith(
-            fetch(request)
-                .then(response => {
+            (async () => {
+                if (versioned) {
+                    const hit = await caches.match(request);
+                    if (hit) {
+                        return hit;
+                    }
+                }
+
+                try {
+                    const response = await fetch(request);
+
                     // Only cache complete, same-origin responses (not 206 partials).
                     if (response.status === 200 && response.type === 'basic') {
                         const responseClone = response.clone();
-
-                        event.waitUntil(
-                            caches.open(CACHE_NAME)
-                                .then(cache => cache.put(request, responseClone))
-                                .catch(() => {
-                                    // Ignore cache write failures (e.g. quota).
-                                })
-                        );
+                        event.waitUntil(storeStatic(request, responseClone).catch(() => {}));
                     }
 
                     return response;
-                })
-                .catch(async () => {
-                    const cachedResponse = await caches.match(request);
+                } catch (error) {
+                    const cachedResponse =
+                        (await caches.match(request)) ||
+                        (await caches.match(request, { ignoreSearch: true }));
 
                     return cachedResponse || Response.error();
-                })
+                }
+            })()
         );
     }
 

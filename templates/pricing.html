@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Pricing: Athlete, Scout & Organization Plans | D.A.R.T.{% endblock %}
-{% block meta_description %}D.A.R.T. plans: free athlete profiles, High School Premium from $2.50/month, unlimited athlete Premium, Scout Pro and Organization Pro for academies, schools and clubs. Pay with Orange Money or MTN MoMo.{% endblock %}
+{% block title %}Pricing: Athlete, Coach, Scout & Organization Plans | D.A.R.T.{% endblock %}
+{% block meta_description %}D.A.R.T. plans: free athlete profiles, High School Premium from $2.50/month, unlimited athlete Premium, Coach Pro, Scout Pro and Organization Pro for academies, schools and clubs. Pay with Orange Money or MTN MoMo.{% endblock %}
 
 {# One "plan action" button, consistent everywhere on the page. #}
 {% macro plan_action(plan) %}
   {% set sub_plan = my_plan %}
   {% if not current_user.is_authenticated %}
-    {% set reg = {'athlete': 'register', 'scout': 'register_scout', 'organization': 'register_organization'}[plan.audience] %}
+    {% set reg = {'athlete': 'register', 'scout': 'register_scout', 'organization': 'register_organization', 'coach': 'register_coach'}[plan.audience] %}
     <a href="{{ url_for(reg) }}" class="btn dart-btn pr-btn">Create account to upgrade</a>
   {% elif sub_plan and sub_plan.code == plan.code %}
     <a href="{{ url_for('checkout', plan_code=plan.code) }}" class="btn pr-btn pr-btn-current">
@@ -47,6 +47,7 @@
     <p>Start free. Upgrade when you're ready to be seen by premium scouts, unlock advanced search, or manage your whole roster.</p>
     <nav class="pr-jump" aria-label="Plan groups">
       <a href="#athletes"><i class="fa-solid fa-person-running"></i> Athletes · Local</a>
+      <a href="#coaches"><i class="fa-solid fa-clipboard-user"></i> Coaches</a>
       <a href="#scouts"><i class="fa-solid fa-binoculars"></i> Scouts · Global</a>
       <a href="#organizations"><i class="fa-solid fa-building-shield"></i> Organizations</a>
     </nav>
@@ -77,7 +78,7 @@
           <li><i class="fa-solid fa-check"></i> Basic D.A.R.T. profile & dashboard</li>
           <li><i class="fa-solid fa-check"></i> {{ free_limits.records }} sports record uploads a month</li>
           <li><i class="fa-solid fa-check"></i> {{ free_limits.photos + free_limits.videos }} highlights a month ({{ free_limits.photos }} photos, {{ free_limits.videos }} video)</li>
-          <li><i class="fa-solid fa-check"></i> Your latest record is shown to scouts</li>
+          <li><i class="fa-solid fa-check"></i> Searchers see {{ free_showcase_records }} records: the ones you pin</li>
           <li class="pr-no"><i class="fa-solid fa-xmark"></i> Advanced search filters</li>
           <li class="pr-no"><i class="fa-solid fa-rectangle-ad"></i> Includes ads</li>
         </ul>
@@ -126,6 +127,48 @@
         {% elif not current_user.is_authenticated %}
           <a href="{{ url_for('register') }}" class="btn dart-btn pr-btn">Create account to upgrade</a>
         {% endif %}
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== COACHES ===================== -->
+  {% set coach_plan = plans['coach_pro'] %}
+  <section id="coaches" class="pr-section" aria-labelledby="coachesTitle">
+    <div class="pr-section-head">
+      <h2 id="coachesTitle"><i class="fa-solid fa-clipboard-user"></i> Coach Tier</h2>
+      <p>Build a verified coaching career that follows you from team to team.</p>
+    </div>
+
+    <div class="pr-grid pr-grid-2" data-pr-slider aria-label="Coach plans">
+      <article class="pr-card">
+        <div class="pr-card-name">Coach</div>
+        <div class="pr-price">Free</div>
+        <div class="pr-price-note">After verification</div>
+        <ul class="pr-features">
+          <li><i class="fa-solid fa-check"></i> Verify your team's athletes</li>
+          <li><i class="fa-solid fa-check"></i> Approve or reject their records (with reasons)</li>
+          <li><i class="fa-solid fa-check"></i> Full records of your own team's athletes</li>
+          <li class="pr-no"><i class="fa-solid fa-xmark"></i> Coaching career records, trophies & awards</li>
+          <li class="pr-no"><i class="fa-solid fa-xmark"></i> More than one team, category changes</li>
+          <li class="pr-no"><i class="fa-solid fa-xmark"></i> Advanced search filters</li>
+        </ul>
+        {% if not current_user.is_authenticated %}
+          <a href="{{ url_for('register_coach') }}" class="btn btn-outline-success pr-btn">Create coach account</a>
+        {% elif current_user.role == 'Coach' and not my_plan %}
+          <button class="btn pr-btn pr-btn-current" disabled><i class="fa-solid fa-circle-check me-1"></i> Current plan</button>
+        {% endif %}
+      </article>
+
+      <article class="pr-card pr-card-featured">
+        <div class="pr-ribbon">Career</div>
+        <div class="pr-card-name">{{ coach_plan.name }}</div>
+        <div class="pr-price">{{ coach_plan.price_label }}<span>/month</span></div>
+        <div class="pr-price-note">Billed monthly · no auto-renewal</div>
+        <ul class="pr-features">
+          {% for f in coach_plan.features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
+        </ul>
+        {{ methods(coach_plan) }}
+        {{ plan_action(coach_plan) }}
       </article>
     </div>
   </section>

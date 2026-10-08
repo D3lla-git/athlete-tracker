@@ -1,0 +1,32 @@
+{# Search page tabs: Athletes | Coaches. active = 'athletes' or 'coaches'. #}
+<nav class="search-tabs" aria-label="What to search">
+  <a href="{{ url_for('search') }}" class="search-tab {{ 'active' if active == 'athletes' }}" {% if active == 'athletes' %}aria-current="page"{% endif %}>
+    <i class="fa-solid fa-person-running" aria-hidden="true"></i> Athletes
+  </a>
+  <a href="{{ url_for('search', mode='coaches') }}" class="search-tab {{ 'active' if active == 'coaches' }}" {% if active == 'coaches' %}aria-current="page"{% endif %}>
+    <i class="fa-solid fa-clipboard-user" aria-hidden="true"></i> Coaches
+  </a>
+</nav>
+<style>
+  .search-tabs {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    margin-bottom: 16px;
+    border-radius: 999px;
+    background: var(--surface-bg, #fff);
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+  }
+  .search-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 18px;
+    border-radius: 999px;
+    font-weight: 700;
+    text-decoration: none;
+    color: inherit !important;
+  }
+  .search-tab:hover { background: rgba(25, 135, 84, 0.08); }
+  .search-tab.active { color: #fff !important; background: var(--dart-primary-gradient, #198754); }
+</style>

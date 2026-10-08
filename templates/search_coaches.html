@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}Search Coaches{% endblock %}
+{% block meta_description %}Find verified football, basketball and kickball coaches in Liberia and their verified coaching records: wins, draws, losses, trophies and awards.{% endblock %}
+
+{% block content %}
+{% from '_coach_career.html' import career_stats, career_honours, career_games, career_styles %}
+{{ career_styles() }}
+<div class="container py-4 cs-page">
+  <h2 class="mb-4">Search Coaches <i class="fa-solid fa-clipboard-user"></i></h2>
+  {% set active = 'coaches' %}{% include '_search_tabs.html' %}
+
+  <form method="GET" action="{{ url_for('search') }}" class="cs-panel" role="search">
+    <input type="hidden" name="mode" value="coaches">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label" for="csName">Coach name <i class="fa-solid fa-user"></i></label>
+        <input type="text" id="csName" name="name" value="{{ filters.name }}" class="form-control" maxlength="80" placeholder="Enter coach name" autocomplete="off">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="csTeam">Team <i class="fa-solid fa-people-group"></i></label>
+        <input type="text" id="csTeam" name="team" value="{{ filters.team }}" class="form-control" maxlength="80" placeholder="Current or past team">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="csSport">Sport <i class="fa-solid fa-medal"></i></label>
+        <select id="csSport" name="sport" class="form-select">
+          <option value="">All sports</option>
+          {% for s in ('Football', 'Basketball', 'Kickball') %}<option value="{{ s }}" {{ 'selected' if filters.sport == s }}>{{ s }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <details class="cs-advanced" {{ 'open' if advanced_allowed and (filters.formation or filters.competition or filters.trophies or filters.min_win) }}>
+      <summary>
+        <span><i class="fa-solid fa-sliders"></i> Advanced filters</span>
+        {% if not advanced_allowed %}<span class="premium-chip"><i class="fa-solid fa-crown"></i> Premium</span>{% endif %}
+      </summary>
+      {% if advanced_allowed %}
+        <div class="row g-3 mt-1">
+          <div class="col-md-3">
+            <label class="form-label" for="csWin">Minimum win rate</label>
+            <select id="csWin" name="min_win" class="form-select">
+              {% for v in (0, 25, 40, 50, 60, 70, 80) %}<option value="{{ v }}" {{ 'selected' if filters.min_win == v }}>{{ 'Any' if v == 0 else v ~ '%+' }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="csFormation">Formation (football)</label>
+            <select id="csFormation" name="formation" class="form-select">
+              <option value="">Any</option>
+              {% for f in coach_formations %}<option value="{{ f }}" {{ 'selected' if filters.formation == f }}>{{ f }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="csComp">Competition</label>
+            <select id="csComp" name="competition" class="form-select">
+              <option value="">Any</option>
+              {% for c in competitions %}<option value="{{ c }}" {{ 'selected' if filters.competition == c }}>{{ c }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3 d-flex align-items-end">
+            <label class="form-check cs-check">
+              <input type="checkbox" class="form-check-input" name="trophies" value="1" {{ 'checked' if filters.trophies }}>
+              <span>Has won a trophy</span>
+            </label>
+          </div>
+        </div>
+      {% else %}
+        <div class="adv-upgrade mt-3">
+          <div class="adv-upgrade-icon" aria-hidden="true"><i class="fa-solid fa-crown"></i></div>
+          <div class="adv-upgrade-text">
+            <strong>Win rate, formation, competition and trophy filters are Premium.</strong>
+            Scout Pro, Coach Pro, Organization Pro and premium athletes can use them.
+          </div>
+          <a href="{{ url_for('pricing') }}" class="btn dart-btn adv-upgrade-btn"><i class="fa-solid fa-crown me-1"></i> See plans</a>
+        </div>
+      {% endif %}
+    </details>
+
+    {% if advanced_locked_used %}
+      <div class="alert alert-warning mt-3 mb-0">Advanced coach filters are Premium, so they were not applied.</div>
+    {% endif %}
+
+    <div class="d-flex gap-2 mt-3">
+      <button type="submit" class="btn dart-btn cs-btn"><i class="fa-solid fa-magnifying-glass me-1"></i> Search coaches</button>
+      {% if search_active %}<a href="{{ url_for('search', mode='coaches') }}" class="btn btn-outline-secondary cs-btn"><i class="fa-solid fa-rotate-left me-1"></i> Clear</a>{% endif %}
+    </div>
+  </form>
+
+  <p class="cs-count">{{ total }} coach{{ 'es' if total != 1 }} found{% if total > results | length %} · showing the first {{ results | length }}{% endif %}</p>
+
+  {% for item in results %}
+    {% set c = item.coach %}
+    <article class="cs-card">
+      <div class="cs-head">
+        {% if c.profile_picture %}
+          <img class="cs-avatar" src="{{ url_for('profile_picture', filename=c.profile_picture) }}" alt="" loading="lazy">
+        {% else %}
+          <span class="cs-avatar" aria-hidden="true">{{ (c.full_name or '?')[0] | upper }}</span>
+        {% endif %}
+        <div class="cs-who">
+          <a href="{{ url_for('user_profile', user_id=c.id) }}" class="cs-name">{{ c.full_name }}</a>
+          {% if item.pro %}<span class="cs-pro"><i class="fa-solid fa-crown"></i> Coach Pro</span>{% endif %}
+          <div class="cs-sub"><i class="fa-solid fa-people-group"></i> {{ c.school }} · {{ c.coach_category or 'Coach' }}</div>
+          {% if item.summary.teams | length > 1 %}<div class="cs-sub">Teams coached: {{ item.summary.teams | join(', ') }}</div>{% endif %}
+        </div>
+      </div>
+      {% if item.games or item.summary.trophies or item.summary.awards %}
+        {{ career_stats(item.summary) }}
+        {{ career_honours(item.summary) }}
+        {{ career_games(item.games, limit=5) }}
+        {% if item.games | length > 5 %}
+          <a class="cs-more" href="{{ url_for('user_profile', user_id=c.id) }}#career">All {{ item.games | length }} games <i class="fa-solid fa-arrow-right"></i></a>
+        {% endif %}
+      {% else %}
+        <p class="cs-empty">No verified coaching records yet.</p>
+      {% endif %}
+    </article>
+  {% else %}
+    <div class="alert alert-light">No coaches found.</div>
+  {% endfor %}
+</div>
+
+<style>
+  .cs-page { max-width: 980px; }
+  .cs-panel {
+    padding: 18px; margin-bottom: 16px; border-radius: 20px;
+    background: var(--surface-bg); border: 1px solid var(--surface-border); box-shadow: 0 8px 26px rgba(0, 0, 0, 0.06);
+  }
+  .cs-panel .form-label { font-size: 0.8rem; font-weight: 700; margin-bottom: 4px; }
+  .cs-advanced { margin-top: 16px; }
+  .cs-advanced > summary {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px;
+    border-radius: 14px; cursor: pointer; font-weight: 700; list-style: none;
+    border: 1px dashed var(--surface-border); background: linear-gradient(135deg, rgba(245, 197, 66, 0.14), rgba(25, 135, 84, 0.08));
+  }
+  .cs-advanced > summary::-webkit-details-marker { display: none; }
+  .cs-check { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; }
+  .cs-btn { border-radius: 999px; }
+  .cs-count { color: var(--muted-text, #6c757d); font-size: 0.9rem; }
+  .cs-card {
+    padding: 16px; margin-bottom: 14px; border-radius: 20px;
+    background: var(--surface-bg); border: 1px solid var(--surface-border); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+  }
+  .cs-head { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+  .cs-avatar {
+    flex: 0 0 52px; width: 52px; height: 52px; border-radius: 50%; object-fit: cover;
+    display: grid; place-items: center; font-weight: 900; color: #fff; background: var(--dart-primary-gradient, #198754);
+  }
+  .cs-who { min-width: 0; }
+  .cs-name { font-size: 1.1rem; font-weight: 800; text-decoration: none; }
+  .cs-pro { margin-left: 6px; padding: 2px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 800; color: #3d2c00; background: linear-gradient(135deg, #f5c542, #ffd96b); white-space: nowrap; }
+  .cs-sub { font-size: 0.85rem; color: var(--muted-text, #6c757d); }
+  .cs-more { display: inline-flex; gap: 6px; align-items: center; margin-top: 10px; font-weight: 700; }
+  .cs-empty { margin: 0; color: var(--muted-text, #6c757d); font-size: 0.9rem; }
+  .adv-upgrade { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; background: rgba(245, 197, 66, 0.1); }
+  .adv-upgrade-icon { flex: 0 0 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; color: #3d2c00; background: linear-gradient(135deg, #f5c542, #ffd96b); }
+  .adv-upgrade-text { flex: 1; min-width: 0; font-size: 0.9rem; }
+  .adv-upgrade-text strong { display: block; }
+  .adv-upgrade-btn { border-radius: 999px; color: #fff; }
+  @media (max-width: 575.98px) {
+    .adv-upgrade { flex-wrap: wrap; }
+    .adv-upgrade-btn { width: 100%; }
+  }
+</style>
+{% endblock %}

@@ -1,0 +1,1589 @@
+/* D.A.R.T. site styles (moved out of templates/base.html so browsers
+   cache them instead of downloading them with every page). */
+/* ===== Mobile Swipe Cards ===== */
+.records-swipe {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  gap: 16px;
+  padding: 10px 5px 20px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.records-swipe::-webkit-scrollbar {
+  display: none;
+}
+
+.record-card {
+  flex: 0 0 85%;
+  scroll-snap-align: center;
+  background: #fff;
+  border-radius: 20px;
+  padding: 24px 20px;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+  border: 2px solid #c8e6c9;
+  min-height: 320px;
+}
+
+.card-sport {
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 20px;
+  color: #1a1a1a;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 10px;
+  font-size: 0.95rem;
+}
+
+.card-status {
+  text-align: center;
+  margin-top: 22px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.record-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 22px 18px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+  border: 2px solid #c8e6c9;
+  max-width: 340px;
+  min-height: 340px;
+}
+
+.card-sport {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 12px;
+  font-size: 0.95rem;
+}
+
+/* Dots style */
+.carousel-indicators {
+  margin-bottom: 0;
+}
+
+.carousel-indicators [data-bs-target] {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: #adb5bd;
+  border: none;
+  opacity: 1;
+}
+
+.carousel-indicators .active {
+  background-color: #0d6efd;
+}
+.record-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 22px 18px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.12);
+  border: 2px solid #c8e6c9;
+  max-width: 340px;
+  min-height: 320px;
+}
+
+.card-sport {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 13px 10px;
+  font-size: 0.95rem;
+}
+
+/* "Premium" / "Coach Pro" chip next to a locked feature. */
+.premium-chip {
+  margin-left: 8px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #3d2c00;
+  background: linear-gradient(135deg, #f5c542, #ffd96b);
+}
+.coach-personal.is-locked input { cursor: not-allowed; }
+
+/* Pin a record to your profile / search. */
+.pin-form { display: inline; margin: 0; }
+.pin-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  border-radius: 999px !important; font-weight: 700;
+  color: #198754 !important; background: transparent !important;
+  border: 1.5px solid #198754 !important;
+}
+.pin-btn.is-pinned { color: #3d2c00 !important; background: #f5c542 !important; border-color: #d4a514 !important; }
+.pin-btn:disabled { opacity: 0.45; }
+html[data-theme="dark"] .pin-btn:not(.is-pinned) { color: #4cd38a !important; border-color: #4cd38a !important; }
+.pin-help {
+  display: flex; gap: 10px; align-items: flex-start; margin: 0 0 14px; padding: 10px 14px;
+  border-radius: 14px; font-size: 0.88rem; background: rgba(245, 197, 66, 0.12); border: 1px solid rgba(245, 197, 66, 0.45);
+}
+.pin-help > i { color: #b8860b; margin-top: 3px; }
+
+/* Award won in this game (MOTM / QOTM / MVP). */
+.card-grid .card-award-on { color: #b8860b; font-weight: 700; }
+html[data-theme="dark"] .card-grid .card-award-on { color: #f5c542; }
+
+.carousel-indicators [data-bs-target] {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: #adb5bd;
+  border: none;
+}
+
+.carousel-indicators .active {
+  background-color: #0d6efd;
+}
+/* Navbar link hover effect */
+.navbar-nav .nav-link {
+  color: white !important;
+  transition: all 0.25s ease;
+  border-radius: 6px;
+  padding: 8px 14px !important;
+  margin: 0 2px;
+}
+
+/* Icon always beside its label (never wrapped underneath), with badges
+   (unread, awaiting) on the same line too. */
+nav.navbar .navbar-nav .nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  white-space: nowrap;
+}
+
+nav.navbar .navbar-nav .nav-link > i,
+nav.navbar .navbar-nav .nav-link > .badge {
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+nav.navbar .navbar-nav .nav-link > .badge { margin-left: 0 !important; }
+
+/* Personal details the user keeps private. */
+.rt-chip-private { font-style: italic; opacity: 0.85; }
+
+/* Super Admin "Review" menu: icon, label, waiting count in one row. */
+.dart-review-menu .dropdown-item { display: flex; align-items: center; gap: 10px; }
+.dart-review-menu .dropdown-item i { width: 18px; text-align: center; color: #198754; }
+.dart-review-menu .dropdown-item .badge { margin-left: auto; }
+
+/* Laptops: a little tighter so a full menu still fits on one row. */
+@media (min-width: 992px) and (max-width: 1399.98px) {
+  nav.navbar .navbar-nav .nav-link {
+    padding: 8px 9px !important;
+    font-size: 0.95rem;
+  }
+}
+
+.navbar-nav .nav-link:hover {
+    background:
+        radial-gradient(
+            circle at 85% 30%,
+            rgba(57,185,114,0.30),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #071208,
+            #0d2413 55%,
+            #061008
+        ) !important;
+  color: #ffffff !important;
+}
+
+/* The bar itself now uses that gradient, so hovered links get a light
+   glass highlight to stay visible. */
+nav.navbar.sticky-top .navbar-nav .nav-link:hover,
+nav.navbar.sticky-top .navbar-nav .nav-link:focus-visible {
+  background: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: inset 0 0 0 1px rgba(76, 211, 138, 0.35);
+}
+/* Custom button styles
+.btn-custom-search {
+  background-color: green;
+  border: 2px solid black;
+  color: white;
+}
+
+.btn-custom-search:hover {
+  background-color: green;
+  border-color: red;
+  color: white;
+}
+
+.btn-custom-register {
+  background-color: transparent;
+  border: 2px solid #198754;
+  color: #198754;
+}
+
+.btn-custom-register:hover {
+  background-color: #198759;
+  color: white;
+}
+.btn-search {
+  border: 2px solid green !important;
+}
+
+.btn-register {
+  border: 2px solid #198754 !important;
+}*/
+.btn-search-hover {
+  background-color: black;
+  border: 2px solid darkgreen !important;
+  color: white;
+  transition: all 0.3s ease;
+}
+.btn-search-hover:hover {
+  background-color: darkgreen;
+  border-color: black !important;
+  color: white;
+}
+.btn-register-hover {
+  background-color: darkgreen;
+  border: 2px solid black !important;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.btn-register-hover:hover {
+  background-color: black;
+  border-color: black !important;
+  color: white;
+}
+.btn-coach-hover {
+  background-color: black;
+  border: 2px solid darkgreen !important;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.btn-coach-hover:hover {
+  background-color: darkgreen;
+  border-color: black !important;
+  color: white;
+}
+@media (min-width: 992px) {
+  .navbar .dropdown:hover .dropdown-menu {
+    display: block;
+    margin-top: 0;
+  }
+/* ===== Allow horizontal card swiping while preserving vertical scrolling ===== */
+.carousel {
+  touch-action: pan-y;
+}
+}
+/* ===== DARK MODE MOBILE NAVBAR BRAND ===== */
+/* ===== NAVBAR BRAND ===== */
+
+.navbar-brand,
+.navbar-brand:hover,
+.navbar-brand:focus {
+  color: #ffffff !important;
+}
+
+.navbar-brand i {
+  color: #ffffff !important;
+}
+/* ===== DARK MODE RECORD CARDS ===== */
+html[data-theme="dark"] .record-card {
+  background: #212529 !important;
+  color: #ffffff !important;
+  border-color: #495057 !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme="dark"] .record-card .card-sport,
+html[data-theme="dark"] .record-card .card-grid,
+html[data-theme="dark"] .record-card strong,
+html[data-theme="dark"] .record-card div,
+html[data-theme="dark"] .record-card small,
+html[data-theme="dark"] .record-card span,
+html[data-theme="dark"] .record-card a {
+  color: #ffffff !important;
+}
+
+/* ===== D.A.R.T. BUTTONS & PILLS ===== */
+/* The look of the "Register" button on the athlete registration form:
+   smooth rounded corners and the D.A.R.T. green gradient, with a black
+   border in both light and dark mode. */
+.dart-btn,
+.dart-pill {
+  background:
+    radial-gradient(
+      circle at 85% 30%,
+      rgba(57, 185, 114, 0.30),
+      transparent 30%
+    ),
+    linear-gradient(
+      135deg,
+      #071208,
+      #0d2413 55%,
+      #061008
+    ) !important;
+  color: #ffffff !important;
+  border: 2px solid #000000 !important;
+  border-radius: 2rem !important;
+}
+
+.dart-btn {
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+
+.dart-btn:hover,
+.dart-btn:focus-visible {
+  color: #ffffff !important;
+  filter: brightness(1.3);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  transform: translateY(-1px);
+}
+
+.dart-btn:active {
+  transform: translateY(0);
+}
+
+.dart-btn:disabled {
+  filter: grayscale(0.4);
+  transform: none;
+}
+
+/* Premium (crown) buttons and labels: crown and text stay centred on one
+   line, and the text shrinks on narrow phones instead of breaking apart. */
+.btn:has(> .fa-crown),
+.premium-chip,
+.hl-premium-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45em;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.btn:has(> .fa-crown) > .fa-crown {
+  margin: 0 !important;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+@media (max-width: 400px) {
+  .btn:has(> .fa-crown) {
+    font-size: clamp(0.8rem, 3.9vw, 0.95rem);
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
+
+/* Small headings / status labels (Approved, Verified Athlete, ...). */
+.dart-pill {
+  display: inline-block;
+  border-width: 1.5px !important;
+  padding: 0.4em 0.9em;
+  font-weight: 600;
+}
+
+/* "Save Changes" keeps its blue color. */
+.dart-btn.dart-btn-blue {
+  background: #0d6efd !important;
+}
+
+/* ===== MODERN FORMS (app-wide) ===== */
+/* Same look for every form; page styles can still override. Texts,
+   icons and placeholders are untouched — only presentation changes. */
+.form-label,
+.mb-3 > label:not(.form-check-label):not(.btn) {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--surface-text);
+}
+
+.form-label i,
+.mb-3 > label:not(.form-check-label):not(.btn) i {
+  margin-left: 3px;
+  color: #198754;
+}
+
+html[data-theme="dark"] .form-label i,
+html[data-theme="dark"] .mb-3 > label:not(.form-check-label):not(.btn) i {
+  color: #4cd38a;
+}
+
+.form-text {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: #5f6b66;
+}
+
+html[data-theme="dark"] .form-text {
+  color: #a7b3ad;
+}
+
+.form-control,
+.form-select {
+  min-height: 46px;
+  padding: 0.6rem 0.9rem;
+  border: 1.5px solid var(--input-border);
+  border-radius: 12px;
+  background-color: var(--input-bg);
+  color: var(--input-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.form-select {
+  padding-right: 2.4rem;
+}
+
+.form-control-sm,
+.form-select-sm {
+  min-height: 34px;
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+  border-radius: 10px;
+}
+
+textarea.form-control {
+  min-height: 96px;
+}
+
+.form-control:hover:not(:focus):not([readonly]):not(:disabled),
+.form-select:hover:not(:focus):not(:disabled) {
+  border-color: rgba(25, 135, 84, 0.55);
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #198754;
+  box-shadow: 0 0 0 4px rgba(25, 135, 84, 0.16);
+  background-color: var(--input-bg);
+  color: var(--input-text);
+}
+
+.form-control::placeholder {
+  color: var(--muted-text);
+  opacity: 0.85;
+}
+
+.form-control[readonly] {
+  background-color: var(--page-bg);
+}
+
+.form-control[type="file"] {
+  padding: 0.45rem 0.6rem;
+}
+
+.form-control::file-selector-button {
+  margin-right: 10px;
+  padding: 0.35rem 0.9rem;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #198754;
+  font-weight: 600;
+}
+
+.form-check-input:checked {
+  background-color: #198754;
+  border-color: #198754;
+}
+
+.form-check-input:focus {
+  border-color: #198754;
+  box-shadow: 0 0 0 4px rgba(25, 135, 84, 0.16);
+}
+
+/* ===== Modern file picker (enhanceFileInputs() below) =====
+   The real <input type=file> stays inside, invisible, covering the whole
+   box: click, tap or drop a file anywhere on it; forms and "required"
+   checks work as before. */
+.dart-file {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1.5px dashed var(--input-border, #ced4da);
+  background: var(--input-bg, #fff);
+  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
+}
+
+.dart-file:hover,
+.dart-file.is-dragging { border-color: #198754; background-color: rgba(25, 135, 84, 0.06); }
+.dart-file:focus-within { border-color: #198754; box-shadow: 0 0 0 4px rgba(25, 135, 84, 0.16); }
+.dart-file.has-file { border-style: solid; border-color: rgba(25, 135, 84, 0.55); }
+.dart-file.is-invalid { border-color: #dc3545; }
+
+.dart-file > input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.dart-file-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 1.1rem;
+  color: #fff;
+  background: linear-gradient(135deg, #0d2413, #198754);
+}
+
+.dart-file-icon img { width: 100%; height: 100%; object-fit: cover; }
+
+.dart-file-text { flex: 1 1 auto; min-width: 0; line-height: 1.3; }
+
+.dart-file-name {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--surface-text, inherit);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dart-file-hint {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--muted-text, #6c757d);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dart-file-browse {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fff;
+  background: #198754;
+  pointer-events: none;
+}
+
+.dart-file.has-file .dart-file-browse { display: none; }
+
+.dart-file-clear {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  display: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted-text, #6c757d);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.dart-file.has-file .dart-file-clear { display: grid; }
+.dart-file-clear:hover,
+.dart-file-clear:focus-visible { color: #fff; background: #dc3545; }
+
+html[data-theme="dark"] .dart-file-clear { background: rgba(255, 255, 255, 0.08); }
+
+@media (max-width: 400px) {
+  .dart-file-browse { display: none; }
+}
+
+/* Auth / form cards: softer corners and a cleaner header. */
+.card.shadow {
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid var(--surface-border);
+}
+
+.card.shadow > .card-header {
+  padding: 1.1rem 1.25rem 0.9rem;
+  border-bottom: 1px solid var(--surface-border);
+  background: transparent;
+}
+
+.card.shadow > .card-header h4 {
+  margin: 0;
+  font-weight: 800;
+}
+
+.card.shadow > .card-body {
+  padding: 1.25rem;
+}
+
+/* ===== PASSWORD SHOW / HIDE (added to every password field) ===== */
+.dart-password-field {
+  position: relative;
+}
+
+.dart-password-field > .form-control {
+  padding-right: 3rem;
+}
+
+.dart-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted-text);
+  transform: translateY(-50%);
+}
+
+.dart-password-toggle:hover {
+  color: #198754;
+  background: rgba(25, 135, 84, 0.08);
+}
+
+.dart-password-toggle:focus-visible {
+  outline: 2px solid #198754;
+  outline-offset: 1px;
+}
+
+/* ===== GOOGLE SIGN-IN BUTTON (Google's standard white button) ===== */
+.google-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #ffffff !important;
+  color: #1f1f1f !important;
+  border: 1px solid #747775 !important;
+  border-radius: 2rem !important;
+  font-weight: 500;
+  padding: 0.55rem 1rem;
+}
+
+.google-btn:hover,
+.google-btn:focus-visible {
+  background: #f8faff !important;
+  box-shadow: 0 2px 6px rgba(60, 64, 67, 0.25);
+}
+
+.google-btn-logo {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+}
+
+.google-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted-text);
+  font-size: 0.85rem;
+}
+
+.google-divider::before,
+.google-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--surface-border);
+}
+
+/* ===== RECORD STATUS PILLS ===== */
+/* Approved keeps the D.A.R.T. gradient (.dart-pill); pending uses a
+   solid caution color and rejected a solid red, never the gradient. */
+.dart-status-pending,
+.dart-status-rejected {
+  display: inline-block;
+  padding: 0.4em 0.9em;
+  font-weight: 600;
+  border: 1.5px solid #000000 !important;
+  border-radius: 2rem !important;
+  background-image: none !important;
+}
+
+.dart-status-pending {
+  background-color: #ffc107 !important;
+  color: #212529 !important;
+}
+
+.dart-status-rejected {
+  background-color: #dc3545 !important;
+  color: #ffffff !important;
+}
+
+/* ===== MODERN RECORDS TABLE (desktop) ===== */
+.records-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--surface-border);
+  border-radius: 18px;
+  background: var(--surface-bg);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.06);
+}
+
+.records-table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--surface-text);
+  min-width: 980px;
+  font-size: 0.9rem;
+}
+
+.records-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #ffffff;
+  background: #212529;
+  border-bottom: 0;
+}
+
+.records-table tbody td {
+  padding: 12px 10px;
+  vertical-align: middle;
+  border-color: var(--surface-border);
+}
+
+.records-table tbody tr:hover > td {
+  background: rgba(25, 135, 84, 0.06);
+}
+
+.records-table tbody tr:last-child > td {
+  border-bottom: 0;
+}
+
+.rt-game {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rt-sport-icon {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  color: #ffffff;
+  background: #198754;
+}
+
+.rt-sport-basketball { background: #e8590c; }
+.rt-sport-kickball { background: #6f42c1; }
+
+.rt-strong {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.rt-muted {
+  font-size: 0.78rem;
+  color: var(--muted-text);
+  line-height: 1.35;
+}
+
+.rt-icon {
+  width: 1.1em;
+  margin-right: 6px;
+  text-align: center;
+  opacity: 0.8;
+}
+
+.rt-match > div,
+.rt-competition > div {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rt-trophy {
+  margin-top: 3px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #b8860b;
+}
+
+html[data-theme="dark"] .rt-trophy {
+  color: #e0b84c;
+}
+
+.rt-trophy i {
+  margin-right: 5px;
+}
+
+.rt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.rt-chip,
+.rt-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 2rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--page-bg);
+  border: 1px solid var(--surface-border);
+}
+
+/* Position + minutes under the game date. */
+.rt-position {
+  margin-top: 2px;
+  font-size: 0.8rem;
+}
+
+.rt-position > i {
+  width: 1.1em;
+  opacity: 0.8;
+}
+
+/* Shirt number badge, e.g. "#10". */
+.rt-shirt {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #146c43;
+  background: rgba(25, 135, 84, 0.12);
+}
+
+html[data-theme="dark"] .rt-shirt {
+  color: #4cd38a;
+  background: rgba(76, 211, 138, 0.14);
+}
+
+/* Coach / admin tables have an extra Athlete column. */
+.records-table.records-table-wide {
+  min-width: 1100px;
+}
+
+.records-table-wide td:first-child {
+  min-width: 170px;
+}
+
+/* Key stats: icon + label + value, two aligned columns. */
+.rt-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 5px;
+  min-width: 222px;
+}
+
+.rt-stats-grid .rt-stat {
+  display: flex;
+  min-width: 0;
+  padding: 3px 7px;
+}
+
+.rt-stats-grid .rt-stat > i {
+  flex: 0 0 1.1em;
+  text-align: center;
+}
+
+.rt-stat-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  color: var(--muted-text);
+}
+
+.rt-stat-value {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.rt-stats-grid .rt-stat-wide {
+  grid-column: 1 / -1;
+}
+
+.rt-chip-gold {
+  background: rgba(218, 165, 32, 0.16);
+  border-color: rgba(218, 165, 32, 0.55);
+}
+
+.rt-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.rt-actions form {
+  margin: 0;
+}
+
+.rt-actions .btn {
+  white-space: nowrap;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.7rem;
+}
+
+/* ===== PHONE KEYBOARD OPEN ===== */
+/* While typing on a phone, hide the tab bar so the keyboard and the
+   field being typed in get the whole screen. */
+@media (max-width: 991.98px) {
+  body.dart-keyboard-open .dart-tabbar {
+    display: none;
+  }
+
+  body.dart-keyboard-open {
+    padding-bottom: 0;
+  }
+}
+
+/* ===== RECORD CARD: GAME DATE (below the sport) ===== */
+/* Deep gray; a lighter gray in dark mode so it stays readable. */
+.record-card .card-game-date {
+  color: #3d4247 !important;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+html[data-theme="dark"] .record-card .card-game-date {
+  color: #9aa1a8 !important;
+}
+
+/* ===== RECORD CARD: CENTERED STAT TILES (mobile readability) ===== */
+/* Each "Label: value" cell becomes an equal-width, centered tile with the
+   label above the value, so text lines up evenly and long names wrap. */
+.record-card .card-grid {
+  align-items: stretch;
+}
+
+.record-card .card-grid > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border-radius: 12px;
+  background: rgba(25, 135, 84, 0.06);
+  text-align: center;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+.record-card .card-grid > div > strong {
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+html[data-theme="dark"] .record-card .card-grid > div {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+@media (max-width: 360px) {
+  .record-card {
+    padding: 18px 12px;
+  }
+
+  .record-card .card-grid {
+    gap: 8px;
+  }
+}
+
+/* ===== DARK MODE DROPDOWN TEXT ===== */
+html[data-theme="dark"] .dropdown-menu {
+  background-color: #1e1e1e !important;
+  border-color: #3a3a3a !important;
+}
+
+html[data-theme="dark"] .dropdown-menu .dropdown-item {
+  color: #ffffff !important;
+}
+
+html[data-theme="dark"] .dropdown-menu .dropdown-item:hover,
+html[data-theme="dark"] .dropdown-menu .dropdown-item:focus {
+  background-color: #333333 !important;
+  color: #ffffff !important;
+}
+
+/* ===== Light / Dark Theme ===== */
+:root {
+  color-scheme: light dark;
+  --page-bg: #f8f9fa;
+  --page-text: #212529;
+  --surface-bg: #ffffff;
+  --surface-text: #212529;
+  --surface-border: #dee2e6;
+  --muted-text: #6c757d;
+  --input-bg: #ffffff;
+  --input-text: #212529;
+  --input-border: #ced4da;
+  --table-bg: #ffffff;
+  --table-text: #212529;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --page-bg: #121212;
+  --page-text: #f1f3f5;
+  --surface-bg: #1e1e1e;
+  --surface-text: #f1f3f5;
+  --surface-border: #3a3a3a;
+  --muted-text: #adb5bd;
+  --input-bg: #262626;
+  --input-text: #f1f3f5;
+  --input-border: #555555;
+  --table-bg: #1e1e1e;
+  --table-text: #f1f3f5;
+}
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] .bg-light {
+  background-color: var(--page-bg) !important;
+  color: var(--page-text) !important;
+}
+
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .modal-content,
+html[data-theme="dark"] .dropdown-menu,
+html[data-theme="dark"] .list-group-item {
+  background-color: var(--surface-bg);
+  color: var(--surface-text);
+  border-color: var(--surface-border);
+}
+
+html[data-theme="dark"] .text-muted {
+  color: var(--muted-text) !important;
+}
+
+html[data-theme="dark"] .form-control,
+html[data-theme="dark"] .form-select,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] input {
+  background-color: var(--input-bg);
+  color: var(--input-text);
+  border-color: var(--input-border);
+}
+
+html[data-theme="dark"] .form-control::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: #868e96;
+}
+
+html[data-theme="dark"] .form-check-label,
+html[data-theme="dark"] label,
+html[data-theme="dark"] .form-label {
+  color: var(--page-text);
+}
+
+html[data-theme="dark"] .table {
+  --bs-table-bg: var(--table-bg);
+  --bs-table-color: var(--table-text);
+  --bs-table-border-color: var(--surface-border);
+}
+
+html[data-theme="dark"] .table-light {
+  --bs-table-bg: #2a2a2a;
+  --bs-table-color: #f1f3f5;
+}
+
+html[data-theme="dark"] .alert {
+  border-color: var(--surface-border);
+}
+
+html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item):not(.dart-tab) {
+  color: #8ab4f8;
+}
+
+.theme-toggle,
+.pwa-install-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 42px;
+  height: 38px;
+  padding: 6px 10px !important;
+  border: 1px solid rgba(255,255,255,0.25) !important;
+  border-radius: 20px !important;
+  color: #fff !important;
+  background: rgba(255,255,255,0.08) !important;
+}
+
+.theme-toggle:hover,
+.pwa-install-btn:hover {
+  background: rgba(255,255,255,0.18) !important;
+}
+
+.theme-toggle .theme-label,
+.pwa-install-btn .pwa-install-label {
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+/* Never squeezed by a long menu. */
+.theme-toggle,
+.pwa-install-btn {
+  flex-shrink: 0;
+}
+
+/* Super Admin / Scout bar between 992px and 1199px (hamburger menu there): keep
+   the Light / Install buttons beside the logo, menu button on the right. */
+@media (min-width: 992px) and (max-width: 1199.98px) {
+  nav.dart-nav-wide > .container { justify-content: flex-start; }
+  nav.dart-nav-wide .navbar-brand { margin-right: 18px; }
+  nav.dart-nav-wide .navbar-toggler { margin-left: auto; }
+  nav.dart-nav-wide .navbar-collapse .navbar-nav { padding-top: 6px; }
+}
+
+/* Super Admin / Scout bar on smaller laptops: icon-only Light / Install
+   buttons so all their links fit on one row (title + aria-label still name them). */
+@media (min-width: 1200px) and (max-width: 1365.98px) {
+  nav.dart-nav-wide .theme-label,
+  nav.dart-nav-wide .pwa-install-label { display: none !important; }
+}
+
+/* ===== PWA INSTALL BUTTON ===== */
+.pwa-install-btn {
+  border-color: rgba(57,185,114,0.65) !important;
+}
+
+/* .pwa-install-btn sets display, so [hidden] needs to win explicitly. */
+.pwa-install-btn[hidden] {
+  display: none !important;
+}
+
+/* ===== PWA: MOBILE BOTTOM TAB BAR ===== */
+.dart-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1030;
+  display: flex;
+  background: #212529;
+  border-top: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 -6px 20px rgba(0,0,0,0.25);
+  padding:
+    0
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+.dart-tab {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: rgba(255,255,255,0.62);
+  text-decoration: none;
+  font-size: 0.7rem;
+  font-weight: 600;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dart-tab i {
+  font-size: 1.15rem;
+}
+
+.dart-tab span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dart-tab:hover,
+.dart-tab:focus-visible,
+.dart-tab.active {
+  color: #ffffff;
+}
+
+.dart-tab:active {
+  background: rgba(255,255,255,0.06);
+}
+
+.dart-tab.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 28%;
+  right: 28%;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: #39b972;
+}
+
+.dart-tab-badge {
+  position: absolute;
+  top: 6px;
+  left: calc(50% + 5px);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #dc3545;
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* Keep page content and the footer clear of the fixed tab bar. */
+@media (max-width: 991.98px) {
+  body {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom));
+  }
+  /* Fields scrolled into view (focus, validation) stop above the tab bar. */
+  html {
+    scroll-padding-bottom: calc(74px + env(safe-area-inset-bottom));
+  }
+}
+
+.pwa-ios-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pwa-ios-steps li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.pwa-ios-steps li + li {
+  border-top: 1px solid var(--surface-border);
+}
+
+.pwa-ios-step-icon {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: #ffffff;
+  background: darkgreen;
+}
+
+@media (max-width: 991.98px) {
+  .theme-toggle,
+  .pwa-install-btn {
+    margin-top: 6px;
+    width: fit-content;
+  }
+}
+
+/* ================================
+   ATHLETE TRACKER FOOTER
+================================ */
+
+.athlete-footer {
+  margin-top: 60px;
+  background: #111111;
+  color: #ffffff;
+  border-top: 4px solid darkgreen;
+}
+
+.athlete-footer-container {
+  width: 96%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 45px 0 20px;
+}
+
+.athlete-footer-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr;
+  gap: 35px;
+}
+
+.athlete-footer-section h5 {
+  color: #ffffff;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.athlete-footer-section h5 i {
+  margin-right: 7px;
+}
+
+.athlete-footer-section p {
+  color: #d6d6d6;
+  font-size: 0.94rem;
+  line-height: 1.7;
+  margin-bottom: 8px;
+}
+
+.athlete-footer-section a {
+  display: block;
+  color: #d6d6d6;
+  text-decoration: none;
+  margin-bottom: 9px;
+  transition: all 0.2s ease;
+}
+
+.athlete-footer-section a:hover {
+  color: #ffffff;
+  transform: translateX(3px);
+}
+
+.athlete-footer-brand {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.athlete-footer-brand i {
+  margin-right: 6px;
+}
+
+.athlete-footer-social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.athlete-footer-social a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin: 0;
+  border: 1px solid #555555;
+  border-radius: 50%;
+  color: #ffffff;
+  transition: all 0.25s ease;
+}
+
+.athlete-footer-social a:hover {
+  background: darkgreen;
+  border-color: darkgreen;
+  color: #ffffff;
+  transform: translateY(-3px);
+}
+
+.athlete-footer-divider {
+  border: 0;
+  border-top: 1px solid #444444;
+  margin: 35px 0 18px;
+}
+
+.athlete-footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.athlete-footer-bottom p {
+  margin: 0;
+  color: #bdbdbd;
+  font-size: 0.9rem;
+}
+
+.athlete-footer-bottom-links {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.athlete-footer-bottom-links a {
+  display: inline-block;
+  margin: 0;
+  color: #bdbdbd;
+  font-size: 0.9rem;
+}
+
+.athlete-footer-bottom-links a:hover {
+  color: #ffffff;
+}
+
+/* ===== LIGHT MODE FOOTER ===== */
+
+html[data-theme="light"] .athlete-footer {
+  background: #212529;
+  color: #ffffff;
+}
+
+/* ===== MOBILE FOOTER ===== */
+
+@media (max-width: 991px) {
+  .athlete-footer-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+  }
+}
+
+@media (max-width: 575px) {
+  .athlete-footer-container {
+    width: 92%;
+    padding: 35px 0 18px;
+  }
+
+  .athlete-footer-grid {
+    grid-template-columns: 1fr;
+    gap: 25px;
+  }
+
+  .athlete-footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .athlete-footer-bottom-links {
+    gap: 12px;
+  }
+}
+/* ===== STATIC / STICKY NAVBAR ===== */
+.navbar.sticky-top {
+  z-index: 1030;
+  width: 100%;
+}
+
+/* ===== D.A.R.T. primary gradient on the menu bars (light + dark) =====
+   Same gradient as the app's primary buttons and cards. */
+:root {
+  --dart-primary-gradient:
+    radial-gradient(circle at 85% 30%, rgba(57, 185, 114, 0.30), transparent 30%),
+    linear-gradient(135deg, #071208, #0d2413 55%, #061008);
+}
+
+nav.navbar.sticky-top,
+html[data-theme="dark"] nav.navbar.sticky-top,
+html[data-theme="light"] nav.navbar.sticky-top {
+  background-image: var(--dart-primary-gradient) !important;
+  background-color: #0d2413 !important;
+  border-bottom: 1px solid rgba(57, 185, 114, 0.35);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.dart-tabbar,
+html[data-theme="dark"] .dart-tabbar,
+html[data-theme="light"] .dart-tabbar {
+  background: var(--dart-primary-gradient);
+  background-color: #0d2413;
+  border-top: 1px solid rgba(57, 185, 114, 0.35);
+}
+
+/* Mobile menu panel (opened from the hamburger) uses the same look. */
+@media (max-width: 991.98px) {
+  nav.navbar.sticky-top .navbar-collapse .dropdown-menu {
+    background: #0d2413;
+    border-color: rgba(57, 185, 114, 0.35);
+  }
+}
+.dart-logo {
+    height: 50px;
+    width: auto;
+    max-width: 180px;
+    object-fit: contain;
+    display: block;
+}
+
+/* The mobile menu opens quickly. */
+.navbar-collapse.collapsing { transition-duration: 0.18s; }
+
+/* No 300 ms tap delay / double-tap zoom on buttons and links. */
+a, button, summary, label, .btn, .nav-link, .dart-tab { touch-action: manipulation; }
+
+/* Result pages (search). */
+.dart-pager {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 8px;
+}
+.dart-pager > :last-child { justify-self: end; }
+.dart-pager-btn { border-radius: 999px; color: #fff; display: inline-flex; align-items: center; gap: 6px; }
+.dart-pager-info { font-weight: 700; color: var(--muted-text, #6c757d); white-space: nowrap; }
+
+/* Instant feedback: slim progress bar while the next page loads (dart-nav.js). */
+.dart-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2000;
+  height: 3px;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, #39b972, #f5c542);
+  box-shadow: 0 0 10px rgba(57, 185, 114, 0.7);
+}
+.dart-progress.is-active { opacity: 1; }
+.dart-progress.is-done { opacity: 0; }
+
+/* Taps show a pressed state immediately. */
+.btn:active, .dart-tab:active, .nav-link:active { transform: scale(0.97); }
+.dart-tab { transition: color 0.12s ease, transform 0.08s ease; }

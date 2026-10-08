@@ -10,9 +10,10 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from flask import g, has_request_context
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 
-from models import db, User, SportRecord, Subscription, AthleteHighlight
+from models import db, User, SportRecord, Subscription, AthleteHighlight, PinnedSportRecord
+import coaching
 
 
 # ==========================================================
@@ -53,7 +54,7 @@ class Limits:
 @dataclass(frozen=True)
 class Plan:
     code: str
-    audience: str                  # athlete / scout / organization
+    audience: str                  # athlete / scout / organization / coach
     name: str
     price: Decimal
     methods: tuple
@@ -77,7 +78,7 @@ _UNLIMITED_ATHLETE_FEATURES = (
     'Unlimited sports record uploads',
     'Unlimited photo & video highlights',
     'Advanced search filters',
-    'All your records visible to premium scouts (dashboards + search)',
+    'All your records visible in search + pin your 3 best to the top',
     'Recruit-Ready premium profile',
     'No ads',
 )
@@ -98,11 +99,11 @@ PLANS = {
             code='athlete_high_school', audience='athlete', name='High School Premium',
             price=Decimal('2.50'), methods=MOMO_METHODS, category=HIGH_SCHOOL,
             limits=Limits(records=10, photos=5, videos=5),
-            visible_on_dashboards=True,
+            visible_on_dashboards=True, visible_in_search=True,
             features=(
                 '10 sports record uploads a month',
                 '10 highlights a month (5 photos + 5 videos)',
-                'All your records visible to premium scouts on their dashboards',
+                'All your records visible in search + pin your 3 best to the top',
                 'Recruit-Ready premium profile',
                 'No ads',
             ),
@@ -125,6 +126,20 @@ PLANS = {
             ),
         ),
         Plan(
+            # Price: set by D.A.R.T. (change here; the pricing page follows).
+            code='coach_pro', audience='coach', name='Coach Pro', price=Decimal('9.90'),
+            methods=MOMO_METHODS, advanced_search=True, highlight=True,
+            features=(
+                'Coaching career: wins, draws, losses, scores, formations, subs, cards',
+                'Trophies, leagues, cups and awards (e.g. Best Coach) on your profile',
+                'Coach more than one team (e.g. high school + club), switch any time',
+                'Your verified career stays on D.A.R.T. when you change teams',
+                'Change your coach category any time',
+                'Edit date of birth, nationality and profile picture',
+                'Advanced search filters',
+            ),
+        ),
+        Plan(
             code='organization_pro', audience='organization', name='Organization Pro',
             price=Decimal('99.90'), methods=('card',) + MOMO_METHODS, advanced_search=True,
             highlight=True,
@@ -144,7 +159,14 @@ ATHLETE_PLAN_BY_CATEGORY = {
     plan.category: plan for plan in PLANS.values() if plan.audience == 'athlete'
 }
 
-AUDIENCE_FOR_ROLE = {'Athlete': 'athlete', 'Scout': 'scout', 'Organization': 'organization'}
+AUDIENCE_FOR_ROLE = {'Athlete': 'athlete', 'Scout': 'scout', 'Organization': 'organization', 'Coach': 'coach'}
+
+# Records an athlete shows to people searching for them. Free athletes:
+# their pinned records (up to FREE_SHOWCASE_RECORDS), topped up with their
+# newest ones. Premium athletes show everything; their pins go first.
+FREE_SHOWCASE_RECORDS = 2
+PIN_LIMIT_FREE = 2
+PIN_LIMIT_PREMIUM = 3
 
 # Free organization accounts see this many roster athletes (names only).
 FREE_ORG_ROSTER_PREVIEW = 5
@@ -204,8 +226,35 @@ def is_premium(user):
 
 
 def is_staff(user):
-    """Coaches and the Super Admin manage records; plans don't apply to them."""
+    """Coaches and the Super Admin manage records (no ads for them)."""
     return bool(user and getattr(user, 'is_authenticated', False) and user.role in ('Coach', 'System'))
+
+
+def is_super_admin(user):
+    return bool(user and getattr(user, 'is_authenticated', False) and user.role == 'System')
+
+
+def is_coach_pro(user):
+    if not (user and getattr(user, 'is_authenticated', False) and user.role == 'Coach'):
+        return False
+    plan = current_plan(user)
+    return bool(plan and plan.code == 'coach_pro')
+
+
+def active_plan_user_ids(code):
+    """Ids of users with an active subscription to `code` (one query)."""
+    return {
+        row[0] for row in db.session.query(Subscription.user_id).filter(
+            Subscription.status == 'active',
+            Subscription.plan_code == code,
+            Subscription.current_period_end > utcnow(),
+        ).distinct()
+    }
+
+
+def pin_limit(user):
+    plan = current_plan(user)
+    return PIN_LIMIT_PREMIUM if plan and plan.audience == 'athlete' else PIN_LIMIT_FREE
 
 
 def plan_for_user(user):
@@ -218,6 +267,8 @@ def plan_for_user(user):
         return PLANS['scout_pro']
     if audience == 'organization':
         return PLANS['organization_pro']
+    if audience == 'coach':
+        return PLANS['coach_pro']
     return None
 
 
@@ -246,7 +297,8 @@ def eligibility_error(user, plan):
 # ==========================================================
 
 def can_use_advanced_search(user):
-    if is_staff(user):
+    # Free coaches don't get advanced search; Coach Pro does (its plan).
+    if is_super_admin(user):
         return True
     plan = current_plan(user)
     return bool(plan and plan.advanced_search)
@@ -260,7 +312,7 @@ def shows_ads(user):
 
 
 def scout_has_full_dashboard(user):
-    return is_staff(user) or (user.role == 'Scout' and is_premium(user))
+    return is_super_admin(user) or (user.role == 'Scout' and is_premium(user))
 
 
 def upload_limits(user):
@@ -399,27 +451,38 @@ def full_visibility_athlete_ids(context):
     return ids
 
 
-def latest_approved_record_ids():
-    """Subquery: the newest approved record id of every athlete."""
+def showcase_record_ids(limit=FREE_SHOWCASE_RECORDS):
+    """
+    Subquery: each athlete's showcase records - pinned ones first (in the
+    athlete's order), then their newest approved games - `limit` per athlete.
+    """
+    pinned_first = case((PinnedSportRecord.id.is_(None), 1), else_=0)
     ranked = (
         db.session.query(
             SportRecord.id.label('id'),
             func.row_number().over(
                 partition_by=SportRecord.user_id,
-                order_by=(SportRecord.game_date.desc(), SportRecord.id.desc()),
+                order_by=(pinned_first, func.coalesce(PinnedSportRecord.display_order, 99),
+                          SportRecord.game_date.desc(), SportRecord.id.desc()),
             ).label('rank'),
         )
+        .outerjoin(PinnedSportRecord, (PinnedSportRecord.sport_record_id == SportRecord.id)
+                   & (PinnedSportRecord.user_id == SportRecord.user_id))
         .filter(SportRecord.status == 'approved')
         .subquery()
     )
 
-    return db.session.query(ranked.c.id).filter(ranked.c.rank == 1)
+    return db.session.query(ranked.c.id).filter(ranked.c.rank <= limit)
+
+
+# Older name, kept for callers that still use it.
+latest_approved_record_ids = showcase_record_ids
 
 
 def sees_everything(viewer):
-    # Organizations see their own roster in full on their dashboard; in
-    # search they follow the same rules as scouts.
-    return is_staff(viewer)
+    # Only the Super Admin. Coaches see their own teams in full (below);
+    # organizations their own roster on their dashboard.
+    return is_super_admin(viewer)
 
 
 def apply_record_visibility(query, viewer, context):
@@ -437,6 +500,10 @@ def apply_record_visibility(query, viewer, context):
 
     if viewer and getattr(viewer, 'is_authenticated', False):
         conditions.append(SportRecord.user_id == viewer.id)
+        # A coach sees every record of the teams they manage.
+        keys = coaching.team_keys(viewer) if viewer.role == 'Coach' else set()
+        if keys:
+            conditions.append(func.lower(func.trim(SportRecord.team)).in_(keys))
 
     return query.filter(or_(*conditions))
 

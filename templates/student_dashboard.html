@@ -45,11 +45,35 @@
 
 <!-- ==================== MY RECORDS TABLE ==================== -->
 <!-- ==================== MY SUBMITTED RECORDS ==================== -->
-<h4 class="mt-4 mb-3">My Submitted Records <i class="fa-solid fa-book"></i></h4>
+<h4 class="mt-4 mb-3" id="my-records">My Submitted Records <i class="fa-solid fa-book"></i></h4>
 {% include '_record_warning.html' %}
+{% set my_pins = pinned_record_ids(current_user.id) %}
+{% set my_pin_limit = pin_limit(current_user) %}
+{% macro pin_button(r, my_pins, my_pin_limit) %}
+  {% if r.status == 'approved' %}
+    {% set pinned = r.id in my_pins %}
+    <form method="POST" action="{{ url_for('unpin_record' if pinned else 'pin_record', record_id=r.id) }}" class="pin-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ url_for('student_dashboard') }}#my-records">
+      <button type="submit" class="btn btn-sm pin-btn {{ 'is-pinned' if pinned }}"
+              {% if not pinned and my_pins | length >= my_pin_limit %}disabled title="You can pin {{ my_pin_limit }} records"{% endif %}
+              aria-pressed="{{ 'true' if pinned else 'false' }}">
+        <i class="fa-solid fa-thumbtack" aria-hidden="true"></i> {{ 'Pinned' if pinned else 'Pin' }}
+      </button>
+    </form>
+  {% endif %}
+{% endmacro %}
+<div class="pin-help">
+  <i class="fa-solid fa-thumbtack" aria-hidden="true"></i>
+  {% if my_plan %}
+    <span><strong>Premium:</strong> searchers see all your approved records. Pin your {{ my_pin_limit }} best: they show first on your profile and in search.</span>
+  {% else %}
+    <span>Searchers see <strong>{{ free_showcase_records }}</strong> of your records: the ones you <strong>pin</strong> ({{ my_pins | length }}/{{ my_pin_limit }} pinned), otherwise your newest. <a href="{{ url_for('pricing') }}">Premium</a> shows them all.</span>
+  {% endif %}
+</div>
 <!-- ===== DESKTOP TABLE (hidden on mobile) ===== -->
 {# Styles: .records-table in base.html #}
-{% from '_record_table_macros.html' import record_cells, record_header_cells with context %}
+{% from '_record_table_macros.html' import record_cells, record_header_cells, record_card_grid with context %}
 {% from '_share.html' import share_button %}
 <div class="records-table-wrap d-none d-md-block">
   <table class="table records-table align-middle mb-0">
@@ -79,6 +103,7 @@
         <!-- Actions -->
         <td class="text-end">
           <div class="rt-actions">
+            {{ pin_button(r, my_pins, my_pin_limit) }}
             {% if r.status == 'rejected' %}
               <form
                   method="POST"
@@ -144,143 +169,14 @@
 </div>
 {% if r.status == 'approved' %}<div class="text-center mb-3">{{ share_button(r) }}</div>{% endif %}
 
-          <!-- Stats Grid -->
-          <div class="card-grid">
-            <div><strong>Team <i class="fa-solid fa-users"></i> :</strong> {{ r.team or '-' }}</div>
-            <div><strong>Opponent <i class="fa-solid fa-shield-halved" style="color: red;"></i> :</strong> {{ r.team_played_against or '-' }}</div>
-            <div><strong>Year <i class="fa-solid fa-calendar" style="color: green;"></i> :</strong> {{ r.year }}</div>
-
-            {% if r.sport == 'Football' %}
-  <div><strong>Goals <i class="fa-solid fa-futbol"></i> :</strong> {{ r.goals or 0 }}</div>
-
-{% elif r.sport == 'Kickball' %}
-  <div><strong>Home Runs <i class="fa-solid fa-baseball"></i> :</strong> {{ r.home_runs or 0 }}</div>
-
-{% else %}
-  <div><strong>Points <i class="fa-solid fa-basketball" style="color: orangered;"></i> :</strong> {{ r.points or 0 }}</div>
-{% endif %}
-            <div><strong>Position <i class="fa-solid fa-shirt"></i> :</strong> {{ r.position or '-' }}{% if r.shirt_number %} <span class="rt-shirt">#{{ r.shirt_number }}</span>{% endif %}</div>
-            <div><strong>Assist <i class="fa-solid fa-handshake-angle"></i> :</strong> {{ r.assists or 0 }}</div>
-            <div><strong>Games <i class="fa-solid fa-person-running"></i> :</strong> {{ r.games_played or 0 }}</div>
-            <div>
-  <strong>
-    Match Minutes
-    <i class="fa-solid fa-clock"></i> :
-  </strong>
-  {{ r.match_minutes_played or 0 }}
-</div>
-            <div>
-  <strong>
-    {% if r.sport == 'Kickball' %}
-      QOTM
-    {% else %}
-      MOTM
-    {% endif %}
-    <i class="fa-solid fa-medal" style="color: goldenrod;"></i> :
-  </strong>
-  {{ r.man_of_the_match or 0 }}
-</div>
-
-<div>
-  <strong>MVP <i class="fa-solid fa-star" style="color: goldenrod;"></i> :</strong>
-  {{ r.mvp or 0 }}
-</div>
-          {% if r.sport == 'Football' %}
-  <div>
-    <strong>Yellow Card <i class="fa-solid fa-square" style="color: #FFCC00;"></i> :</strong>
-    {{ r.yellow_cards or 0 }}
-  </div>
-
-{% elif r.sport == 'Kickball' %}
-  <div>
-    <strong>Red Cards <i class="fa-solid fa-square" style="color: #FF0000;"></i> :</strong>
-    {{ r.kickball_red_cards or 0 }}
-  </div>
-
-{% else %}
-
-  <div>
-    <strong>Blocks <i class="fa-regular fa-hand"></i> :</strong>
-    {{ r.blocks or 0 }}
-  </div>
-
-{% endif %}
-
-            <div>
-              <strong>Trophies <i class="fa-solid fa-trophy" style="color: goldenrod;"></i> :</strong> {{ r.trophy or 'None' }}
-            </div>
-
-            <div>
-    <strong>
-        {{ r.competition_detail_label or 'Club Division' }}
-        <i class="fa-solid fa-layer-group"></i> :
-    </strong>
-
-    {{ r.competition_detail or 'None' }}
-</div>
-
-       {% if r.sport == 'Football' %}
-  <div>
-    <strong>Red Card <i class="fa-solid fa-square" style="color: #FF0000;"></i> :</strong>
-    {{ r.red_cards or 0 }}
-  </div>
-  {% if r.position == 'GK' %}
-
-<div>
-  <strong>
-    Clean Sheets
-    <i class="fa-solid fa-shield-halved"></i> :
-  </strong>
-  {{ r.clean_sheets or 0 }}
-</div>
-
-<div>
-  <strong>
-    Saves
-    <i class="fa-solid fa-hands-bubbles"></i> :
-  </strong>
-  {{ r.saves or 0 }}
-</div>
-
-{% endif %}
-
-
-{% elif r.sport == 'Kickball' %}
-  <div>
-    <strong>Yellow Cards <i class="fa-solid fa-square" style="color: #FFCC00;"></i> :</strong>
-    {{ r.kickball_yellow_cards or 0 }}
-  </div>
-
-  <div>
-    <strong>Cut Base <i class="fa-solid fa-person-running"></i> :</strong>
-    {{ r.cut_base or 0 }}
-  </div>
-
-  <div>
-    <strong>Foul Played <i class="fa-solid fa-triangle-exclamation"></i> :</strong>
-    {{ r.foul_played or 0 }}
-  </div>
-
-{% else %}
-
-  <div>
-    <strong>Sent Off Court <i class="fa-solid fa-x" style="color: red;"></i> :</strong>
-    {{ r.sent_off or 0 }}
-  </div>
-<div>
-  <strong>
-    Rebounds
-    <i class="fa-solid fa-basketball"></i> :
-  </strong>
-  {{ r.rebounds_display }}
-</div>
-{% endif %}
-          </div>
+          <!-- Stats Grid (same as the search page cards) -->
+          {{ record_card_grid(r) }}
 
           <!-- Status -->
 <div class="d-flex justify-content-center align-items-center gap-2 mt-3 flex-wrap">
   {% if r.status == 'approved' %}
     <span class="badge dart-pill px-3 py-2">Approved</span>
+    {{ pin_button(r, my_pins, my_pin_limit) }}
   {% elif r.status == 'rejected' %}
     <span class="badge dart-status-rejected px-3 py-2">Rejected{% if r.rejection_reason in record_reject_reasons %} · {{ record_reject_reasons[r.rejection_reason][0] }}{% endif %}</span>
   {% else %}

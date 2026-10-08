@@ -1,27 +1,48 @@
 import os
-from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, send_from_directory, session, abort, make_response
+from flask import Flask, jsonify, render_template, request, redirect, url_for, flash, send_from_directory, session, abort, make_response, g, has_request_context
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user, user_logged_in
 from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import MultiDict
 from werkzeug.security import generate_password_hash, check_password_hash
-from pymongo import MongoClient
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
 from itsdangerous import URLSafeSerializer, BadSignature
-from record_pdf import build_record_pdf, build_profile_pdf
 import moderation
-from profile_card import CardData, render_card as render_profile_card
+
+
+# PDF and card-image libraries are big: load them only when someone
+# downloads a PDF or a profile card (keeps every other page's cold start fast).
+def build_record_pdf(*args, **kwargs):
+    from record_pdf import build_record_pdf as _build
+    return _build(*args, **kwargs)
+
+
+def build_profile_pdf(*args, **kwargs):
+    from record_pdf import build_profile_pdf as _build
+    return _build(*args, **kwargs)
+
+
+def render_profile_card(*args, **kwargs):
+    from profile_card import render_card as _render
+    return _render(*args, **kwargs)
+
+
+def CardData(*args, **kwargs):
+    from profile_card import CardData as _CardData
+    return _CardData(*args, **kwargs)
 from plans import (
     PLANS, PAYMENT_METHODS, MOMO_METHODS, FREE_ATHLETE_LIMITS, FREE_LIMITS_START,
     FREE_ORG_ROSTER_PREVIEW, ATHLETE_PLAN_BY_CATEGORY, active_subscription,
     current_plan, is_premium, plan_for_user, eligibility_error,
     can_use_advanced_search, shows_ads, scout_has_full_dashboard,
     limit_reached, usage_summary, apply_record_visibility, activate_plan,
-    clear_plan_cache,
+    clear_plan_cache, is_coach_pro, pin_limit, FREE_SHOWCASE_RECORDS,
+    full_visibility_athlete_ids, active_plan_user_ids,
 )
+import coaching
 from competitions import (
     ALL_COMPETITIONS,
     ATHLETE_CATEGORIES,
@@ -52,6 +73,7 @@ import qrcode
 import secrets
 from flask_mail import Mail, Message
 from sqlalchemy import or_, func, select
+from sqlalchemy.orm import contains_eager, joinedload
 from sqlalchemy.exc import OperationalError
 from authlib.integrations.flask_client import OAuth
 import time
@@ -283,6 +305,34 @@ app = Flask(
 )
 app.config.from_object(Config)
 
+
+# ========== STATIC FILE VERSIONS ==========
+# Every url_for('static', ...) gets ?v=<version>. Browsers and the Vercel
+# CDN may then keep those files for a year (vercel.json), and a new deploy
+# changes the version so everyone gets the new CSS/JS straight away.
+def _static_version():
+    deploy = os.environ.get('VERCEL_GIT_COMMIT_SHA') or os.environ.get('VERCEL_DEPLOYMENT_ID')
+    if deploy:
+        return deploy[:10]
+    newest = 0.0
+    for folder, _, files in os.walk(app.static_folder or ''):
+        for name in files:
+            try:
+                newest = max(newest, os.path.getmtime(os.path.join(folder, name)))
+            except OSError:
+                pass
+    return str(int(newest))
+
+
+STATIC_VERSION = _static_version()
+
+
+@app.url_defaults
+def _version_static_urls(endpoint, values):
+    if endpoint == 'static' and 'v' not in values:
+        values['v'] = STATIC_VERSION
+
+
 # ========== DATABASE CONNECTION POOL ==========
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,
@@ -511,6 +561,10 @@ def athlete_allowed_competitions(user, year=None):
     The record form only offers these (the server checks again).
     """
     year = year or datetime.now().year
+    memo = g.setdefault('_dart_allowed_competitions', {}) if has_request_context() else {}
+    key = (user.id, year)
+    if key in memo:
+        return list(memo[key])
     categories = [
         registration.category
         for registration in Registration.query.filter_by(
@@ -520,10 +574,11 @@ def athlete_allowed_competitions(user, year=None):
             status='active'
         )
     ]
-    return [
+    memo[key] = [
         competition for competition in ALL_COMPETITIONS
         if any(athlete_can_submit_competition(c, competition) for c in categories)
     ]
+    return list(memo[key])
 
 
 def coach_can_manage_competition(category, competition):
@@ -749,15 +804,17 @@ def index():
 # ========== PUBLIC ROUTES ==========
 @app.route('/api/suggest-names')
 def suggest_names():
-    q = request.args.get('q', '').strip()
+    q = request.args.get('q', '').strip()[:60]
     if not q:
         return jsonify([])
 
-    # Only names that START with the typed letters
+    # Only names that START with the typed letters (% and _ are typed
+    # characters here, not wildcards).
+    escaped = q.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
     students = User.query.filter(
         User.role == 'Athlete',
         User.is_verified == True,
-        User.full_name.ilike(f'{q}%')          # ← starts with
+        User.full_name.ilike(f'{escaped}%', escape='\\')
     ).order_by(User.full_name).limit(8).all()
 
     return jsonify([{'full_name': s.full_name} for s in students])
@@ -1050,6 +1107,73 @@ def unpin_premium_record(record_id):
     )
 
     return redirect(url_for('profile'))
+# ==========================================================
+# PIN RECORDS TO YOUR PROFILE (every verified athlete)
+# ==========================================================
+# Free athletes choose the 2 records searchers see (plans.showcase_record_ids);
+# premium athletes pin their 3 best to the top of their profile and search.
+@app.route('/records/<int:record_id>/pin', methods=['POST'])
+@login_required
+def pin_record(record_id):
+    if current_user.role != 'Athlete' or not current_user.is_verified:
+        abort(403)
+    record = db.session.get(SportRecord, record_id)
+    if not record or record.user_id != current_user.id:
+        abort(404)
+    back = safe_next_url(request.form.get('next')) or (url_for('student_dashboard') + '#my-records')
+    if record.status != 'approved':
+        flash('Only approved records can be pinned.', 'warning')
+        return redirect(back)
+
+    pins = PinnedSportRecord.query.filter_by(user_id=current_user.id).order_by(PinnedSportRecord.display_order).all()
+    if any(p.sport_record_id == record.id for p in pins):
+        flash('This record is already pinned.', 'info')
+        return redirect(back)
+    limit = pin_limit(current_user)
+    if len(pins) >= limit:
+        flash(f'You can pin {limit} records. Unpin one first'
+              + ('' if limit > FREE_SHOWCASE_RECORDS else ', or go Premium to pin 3 and show all your records') + '.', 'warning')
+        return redirect(back)
+
+    db.session.add(PinnedSportRecord(user_id=current_user.id, sport_record_id=record.id, display_order=len(pins) + 1))
+    create_audit_log(action='record_pinned', actor_user_id=current_user.id, target_type='SportRecord', target_id=str(record.id))
+    db.session.commit()
+    flash('Pinned: searchers see this record first.', 'success')
+    return redirect(back)
+
+
+@app.route('/records/<int:record_id>/unpin', methods=['POST'])
+@login_required
+def unpin_record(record_id):
+    if current_user.role != 'Athlete':
+        abort(403)
+    back = safe_next_url(request.form.get('next')) or (url_for('student_dashboard') + '#my-records')
+    pin = PinnedSportRecord.query.filter_by(user_id=current_user.id, sport_record_id=record_id).first()
+    if not pin:
+        return redirect(back)
+    db.session.delete(pin)
+    db.session.flush()
+    remaining = PinnedSportRecord.query.filter_by(user_id=current_user.id).order_by(PinnedSportRecord.display_order).all()
+    # Renumber without clashing with the unique (user, order) constraint.
+    for offset, item in enumerate(remaining, start=1):
+        item.display_order = 100 + offset
+    db.session.flush()
+    for offset, item in enumerate(remaining, start=1):
+        item.display_order = offset
+    db.session.commit()
+    flash('Unpinned.', 'info')
+    return redirect(back)
+
+
+def pinned_record_ids(user_id):
+    return [row[0] for row in db.session.query(PinnedSportRecord.sport_record_id)
+            .filter_by(user_id=user_id).order_by(PinnedSportRecord.display_order).all()]
+
+
+app.jinja_env.globals.update(pinned_record_ids=pinned_record_ids, pin_limit=pin_limit,
+                             free_showcase_records=FREE_SHOWCASE_RECORDS)
+
+
 # ==========================================================
 # PRICING, CHECKOUT AND BILLING (plans.py has the plans)
 # ==========================================================
@@ -1523,8 +1647,118 @@ def _strip_locked_filters(raw_args):
     return MultiDict(kept), used
 
 
+# ==========================================================
+# COACH SEARCH (Search page, "Coaches" tab)
+# ==========================================================
+# Everyone (also visitors) can find verified coaches and see their
+# verified coaching career. Advanced filters (win %, formation, trophies,
+# competition) follow the same rule as athlete advanced search.
+COACH_SEARCH_PAGE = 30
+SEARCH_PAGE_SIZE = 20
+
+# Small in-memory cache (per server instance) for lists that change rarely,
+# e.g. the search page's dropdown options. Saves database round trips.
+_VALUE_CACHE = {}
+VALUE_CACHE_SECONDS = 300
+
+
+def cached_value(key, compute, seconds=VALUE_CACHE_SECONDS):
+    hit = _VALUE_CACHE.get(key)
+    now = time.time()
+    if hit and hit[1] > now:
+        return hit[0]
+    value = compute()
+    _VALUE_CACHE[key] = (value, now + seconds)
+    return value
+
+
+def _like(value):
+    """LIKE pattern for user text (% and _ typed are not wildcards)."""
+    escaped = value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+    return f'%{escaped}%'
+
+
+def coach_search():
+    args = request.args
+    name = args.get('name', '').strip()[:80]
+    team = args.get('team', '').strip()[:80]
+    sport = args.get('sport', '')
+    sport = sport if sport in coaching.COACH_SPORTS else ''
+    advanced_allowed = can_use_advanced_search(current_user)
+
+    formation = args.get('formation', '')
+    formation = formation if formation in coaching.FORMATIONS else ''
+    competition = args.get('competition', '')
+    competition = competition if competition in VALID_COMPETITIONS else ''
+    has_trophies = args.get('trophies') == '1'
+    try:
+        min_win = max(0, min(100, int(args.get('min_win') or 0)))
+    except ValueError:
+        min_win = 0
+    advanced_used = bool(formation or competition or has_trophies or min_win)
+    advanced_locked_used = advanced_used and not advanced_allowed
+    if not advanced_allowed:
+        formation = competition = ''
+        has_trophies = False
+        min_win = 0
+
+    query = User.query.filter(User.role == 'Coach', User.is_verified.is_(True), User.is_suspended.is_(False))
+    if name:
+        query = query.filter(User.full_name.ilike(_like(name), escape='\\'))
+    if team:
+        # Current team, any team they coached, or a team in their records.
+        team_like = _like(team)
+        query = query.filter(or_(
+            User.school.ilike(team_like, escape='\\'),
+            User.id.in_(db.session.query(CoachTeam.coach_id).filter(
+                CoachTeam.status.in_(('approved', 'left')), CoachTeam.team_name.ilike(team_like, escape='\\'))),
+            User.id.in_(db.session.query(CoachGameRecord.coach_id).filter(
+                CoachGameRecord.status == 'approved', CoachGameRecord.team_name.ilike(team_like, escape='\\'))),
+        ))
+    coaches = query.order_by(User.full_name).limit(200).all()
+
+    career = coaching.public_career([c.id for c in coaches])
+    pro_ids = active_plan_user_ids('coach_pro')
+    results = []
+    for coach in coaches:
+        games, achievements = career.get(coach.id, ([], []))
+        if sport:
+            games = [g for g in games if g.sport == sport]
+        if competition:
+            games = [g for g in games if g.competition == competition]
+        if formation:
+            games = [g for g in games if g.formation == formation]
+        summary = coaching.career_summary(games, achievements)
+        if (sport or competition or formation) and not games:
+            continue
+        if has_trophies and not summary['trophies']:
+            continue
+        if min_win and (not summary['total']['games'] or summary['total']['win_pct'] < min_win):
+            continue
+        results.append({'coach': coach, 'games': games, 'summary': summary, 'pro': coach.id in pro_ids})
+
+    # Coaches with a verified career first (Coach Pro first), then by wins.
+    results.sort(key=lambda r: (not r['games'] and not r['summary']['trophies'] and not r['summary']['awards'],
+                                not r['pro'], -r['summary']['total']['win'], (r['coach'].full_name or '').casefold()))
+
+    return render_template(
+        'search_coaches.html',
+        results=results[:COACH_SEARCH_PAGE],
+        total=len(results),
+        filters={'name': name, 'team': team, 'sport': sport, 'formation': formation,
+                 'competition': competition, 'trophies': has_trophies, 'min_win': min_win},
+        competitions=sorted(VALID_COMPETITIONS),
+        advanced_allowed=advanced_allowed,
+        advanced_locked_used=advanced_locked_used,
+        search_active=bool(name or team or sport or advanced_used),
+    )
+
+
 @app.route('/search')
 def search():
+    if request.args.get('mode') == 'coaches':
+        return coach_search()
+
     advanced_allowed = can_use_advanced_search(current_user)
     advanced_locked_used = False
 
@@ -1588,7 +1822,7 @@ def search():
     # ==========================================================
     # OPTIONS FOR THE FILTER FORM (from approved records only)
     # ==========================================================
-    available_years = [
+    available_years = cached_value('search_years', lambda: [
         row[0]
         for row in (
             db.session.query(SportRecord.year)
@@ -1597,9 +1831,16 @@ def search():
             .order_by(SportRecord.year.desc())
             .all()
         )
-    ]
+    ])
 
-    available_nationalities = [
+    # Nationalities depend on whose personal details this viewer may see.
+    if current_user.is_authenticated and current_user.role == 'System':
+        nationality_scope = 'all'
+    elif current_user.is_authenticated and current_user.role in PERSONAL_RECRUITER_ROLES and current_user.is_verified:
+        nationality_scope = 'members'
+    else:
+        nationality_scope = 'public'
+    available_nationalities = cached_value(f'search_nationalities_{nationality_scope}', lambda: [
         row[0]
         for row in (
             db.session.query(User.nationality)
@@ -1608,15 +1849,15 @@ def search():
                 User.is_verified == True,
                 User.nationality.isnot(None),
                 User.nationality != '',
-                personal_visible_filter(current_user)
+                personal_visible_filter(current_user) if nationality_scope != 'all' else db.true()
             )
             .distinct()
             .order_by(User.nationality)
             .all()
         )
-    ]
+    ])
 
-    available_trophies = [
+    available_trophies = cached_value('search_trophies', lambda: [
         row[0]
         for row in (
             db.session.query(SportRecord.trophy)
@@ -1629,7 +1870,7 @@ def search():
             .order_by(SportRecord.trophy)
             .all()
         )
-    ]
+    ])
 
     # ==========================================================
     # BASE QUERY
@@ -1651,20 +1892,20 @@ def search():
 
     # ---------- Basic ----------
     if name:
-        query = query.filter(User.full_name.ilike(f'%{name}%'))
+        query = query.filter(User.full_name.ilike(_like(name[:80]), escape='\\'))
 
     # Team: record team or athlete school.
     if school:
         query = query.filter(
             or_(
-                SportRecord.team.ilike(f'%{school}%'),
-                User.school.ilike(f'%{school}%')
+                SportRecord.team.ilike(_like(school[:80]), escape='\\'),
+                User.school.ilike(_like(school[:80]), escape='\\')
             )
         )
 
     if team_played_against:
         query = query.filter(
-            SportRecord.team_played_against.ilike(f'%{team_played_against}%')
+            SportRecord.team_played_against.ilike(_like(team_played_against[:80]), escape='\\')
         )
 
     if year:
@@ -1771,7 +2012,10 @@ def search():
             else:
                 query = query.filter(column == number)
 
-    records = query.all()
+    # Nothing searched yet: no results to build (the page only shows the form).
+    has_filters = any((value or '').strip() for key, value in request.args.items(multi=True) if key != 'page')
+    # Each record's athlete comes in the same query (no query per athlete).
+    records = query.options(contains_eager(SportRecord.user)).all() if has_filters else []
 
     # ---------- Stats as season / career totals ----------
     # Sum each stat over the athlete's matching games, then keep
@@ -1905,9 +2149,19 @@ def search():
     else:
 
         sort_by = ''
+        # Premium athletes first (pinned best records on top), then A-Z.
+        premium_ids = full_visibility_athlete_ids('search')
+        pins = dict(
+            db.session.query(PinnedSportRecord.sport_record_id, PinnedSportRecord.display_order)
+            .filter(PinnedSportRecord.sport_record_id.in_([r.id for r in records] or [0]))
+            .all()
+        ) if records else {}
         records.sort(
             key=lambda r: (
+                0 if r.user_id in premium_ids else 1,
                 (r.user.full_name or '').lower(),
+                r.user_id,
+                pins.get(r.id, 99),
                 -(r.year or 0),
                 (r.sport or '').lower()
             )
@@ -1934,14 +2188,24 @@ def search():
 
     results = list(grouped_results.values())
 
+    # 20 athletes per page keeps pages light and fast on phones.
+    total_athletes = len(results)
+    page_count = max(1, (total_athletes + SEARCH_PAGE_SIZE - 1) // SEARCH_PAGE_SIZE)
+    try:
+        page = min(page_count, max(1, int(request.args.get('page', 1))))
+    except ValueError:
+        page = 1
+    all_results = results
+    results = results[(page - 1) * SEARCH_PAGE_SIZE: page * SEARCH_PAGE_SIZE]
+
     # ==========================================================
     # SUMMARY + ACTIVE FILTERS
     # ==========================================================
     summary = {
-        'athletes': len(results),
+        'athletes': total_athletes,
         'records': len(records),
-        'male': sum(1 for item in results if item['student'].gender == 'Male'),
-        'female': sum(1 for item in results if item['student'].gender == 'Female'),
+        'male': sum(1 for item in all_results if item['student'].gender == 'Male'),
+        'female': sum(1 for item in all_results if item['student'].gender == 'Female'),
     }
 
     filters = {
@@ -1996,6 +2260,8 @@ def search():
         saved_searches=saved_searches_for(current_user, 20) if current_user.is_authenticated else [],
         advanced_allowed=advanced_allowed,
         advanced_locked_used=advanced_locked_used,
+        page=page,
+        page_count=page_count,
     )
 # ==========================================================
 # SAVED SEARCHES
@@ -3244,8 +3510,22 @@ def celebrate_on_login(sender, user, **extra):
         app.logger.exception('Could not queue login celebration')
 
 
+def is_prefetch():
+    """
+    True when the browser is only prefetching this page (a link the user
+    may open next, see base.html speculationrules). Such requests must not
+    use up one-time things: messages, celebrations, "read" markers.
+    """
+    return has_request_context() and request.headers.get('Sec-Purpose', '').startswith('prefetch')
+
+
+app.jinja_env.globals['is_prefetch'] = is_prefetch
+
+
 def pop_celebration():
     """Used once by base.html: the celebration to show on this page, if any."""
+    if is_prefetch():
+        return None
     celebrations = session.pop('celebrations', None) or []
 
     if not celebrations or not current_user.is_authenticated:
@@ -3915,18 +4195,20 @@ def conversation(user_id):
             )
         )
 
-    ChatMessage.query.filter_by(
-        sender_id=recipient.id,
-        recipient_id=current_user.id,
-        is_read=False
-    ).update(
-        {
-            ChatMessage.is_read: True
-        },
-        synchronize_session=False
-    )
+    # Opening the conversation marks it read (not when only prefetched).
+    if not is_prefetch():
+        ChatMessage.query.filter_by(
+            sender_id=recipient.id,
+            recipient_id=current_user.id,
+            is_read=False
+        ).update(
+            {
+                ChatMessage.is_read: True
+            },
+            synchronize_session=False
+        )
 
-    db.session.commit()
+        db.session.commit()
 
     messages = ChatMessage.query.filter(
         or_(
@@ -4667,6 +4949,302 @@ def admin_unsuspend(user_id):
     db.session.commit()
     flash(f'Suspension lifted for {user.full_name}.', 'success')
     return redirect(url_for('admin_highlights'))
+
+
+# ==========================================================
+# COACH PRO: COACHING CAREER (coaching.py has the rules)
+# ==========================================================
+# Teams: the coach's registered team is the first (primary) team. Coach
+# Pro coaches add more teams (e.g. a high school + a club at once); each
+# waits for the Super Admin before the coach can verify / approve that
+# team's athletes and records. Leaving a team keeps every record.
+# Career: game records (result, score, formation, subs, cards) and
+# trophies / awards. The Super Admin verifies them; approved ones show on
+# the coach's profile and in Coach search for everyone, for good.
+COACH_CATEGORY_CHOICES = (
+    'All Coach', 'County Meet Coach', 'Club League Coach', 'University Coach',
+    'Community/Area League Coach', 'High School Coach',
+)
+
+app.jinja_env.globals.update(
+    coach_formations=coaching.FORMATIONS,
+    coach_results=coaching.RESULTS,
+    coach_team_roles=coaching.TEAM_ROLES,
+    coach_achievement_kinds=coaching.ACHIEVEMENT_KINDS,
+    coach_category_choices=COACH_CATEGORY_CHOICES,
+    is_coach_pro=is_coach_pro,
+)
+
+
+def _require_coach():
+    if not current_user.is_authenticated or current_user.role != 'Coach' or not current_user.is_verified:
+        abort(403)
+
+
+def _require_coach_pro():
+    _require_coach()
+    if not is_coach_pro(current_user):
+        flash('This is part of Coach Pro.', 'warning')
+        return redirect(url_for('pricing') + '#coaches')
+    return None
+
+
+def _own(model, item_id):
+    item = db.session.get(model, item_id)
+    if not item or item.coach_id != current_user.id:
+        abort(404)
+    return item
+
+
+@app.route('/coach/career')
+@login_required
+def coach_career():
+    _require_coach()
+    coaching.ensure_primary_team(current_user)
+    db.session.commit()
+
+    teams = CoachTeam.query.filter_by(coach_id=current_user.id).order_by(
+        CoachTeam.is_primary.desc(), CoachTeam.created_at.asc()).all()
+    games = CoachGameRecord.query.filter_by(coach_id=current_user.id).order_by(
+        CoachGameRecord.game_date.desc(), CoachGameRecord.id.desc()).all()
+    achievements = CoachAchievement.query.filter_by(coach_id=current_user.id).order_by(
+        CoachAchievement.season.desc(), CoachAchievement.id.desc()).all()
+    summary = coaching.career_summary([g for g in games if g.status == 'approved'],
+                                      [a for a in achievements if a.status == 'approved'])
+    # Teams a game can be recorded for: every team the Super Admin approved
+    # (also teams the coach has left - their history).
+    record_teams = [t.team_name for t in teams if t.status in ('approved', 'left')]
+
+    return render_template(
+        'coach_career.html',
+        teams=teams, games=games, achievements=achievements, summary=summary,
+        record_teams=record_teams, competitions=sorted(VALID_COMPETITIONS),
+        pro=is_coach_pro(current_user), max_teams=coaching.MAX_ACTIVE_TEAMS,
+    )
+
+
+@app.route('/coach/teams/add', methods=['POST'])
+@login_required
+def coach_team_add():
+    blocked = _require_coach_pro()
+    if blocked:
+        return blocked
+
+    name = coaching.clean_text(request.form.get('team_name'), 150)
+    category = request.form.get('coach_category', '')
+    role = request.form.get('role', 'Head Coach')
+    if len(name) < 2:
+        flash('Enter the team name.', 'warning')
+        return redirect(url_for('coach_career') + '#teams')
+    if category not in COACH_CATEGORY_CHOICES or role not in coaching.TEAM_ROLES:
+        flash('Choose the category and your role for this team.', 'warning')
+        return redirect(url_for('coach_career') + '#teams')
+
+    open_teams = CoachTeam.query.filter(
+        CoachTeam.coach_id == current_user.id,
+        CoachTeam.status.in_(('pending', 'approved')),
+        CoachTeam.end_date.is_(None),
+    ).all()
+    if any(t.team_name.strip().casefold() == name.casefold() for t in open_teams):
+        flash('You already have this team.', 'info')
+        return redirect(url_for('coach_career') + '#teams')
+    if len(open_teams) >= coaching.MAX_ACTIVE_TEAMS:
+        flash(f'You can coach up to {coaching.MAX_ACTIVE_TEAMS} teams at a time. Leave a team first.', 'warning')
+        return redirect(url_for('coach_career') + '#teams')
+
+    team = CoachTeam(coach_id=current_user.id, team_name=name, coach_category=category, role=role, status='pending')
+    db.session.add(team)
+    db.session.flush()
+    create_audit_log(action='coach_team_requested', actor_user_id=current_user.id, target_type='CoachTeam',
+                     target_id=str(team.id), details={'team': name, 'category': category, 'role': role})
+    db.session.commit()
+    flash(f'{name} was sent to the Super Admin. Once approved you can verify its athletes and approve their records.', 'success')
+    return redirect(url_for('coach_career') + '#teams')
+
+
+@app.route('/coach/teams/<int:team_id>/<action>', methods=['POST'])
+@login_required
+def coach_team_action(team_id, action):
+    blocked = _require_coach_pro()
+    if blocked:
+        return blocked
+    team = _own(CoachTeam, team_id)
+
+    if action == 'cancel' and team.status == 'pending':
+        db.session.delete(team)
+        db.session.commit()
+        flash('Team request cancelled.', 'info')
+        return redirect(url_for('coach_career') + '#teams')
+
+    if not team.is_active:
+        abort(404)
+
+    others = CoachTeam.query.filter(
+        CoachTeam.coach_id == current_user.id, CoachTeam.id != team.id,
+        CoachTeam.status == 'approved', CoachTeam.end_date.is_(None),
+    ).order_by(CoachTeam.created_at.asc()).all()
+
+    if action == 'primary':
+        for other in others:
+            other.is_primary = False
+        team.is_primary = True
+        current_user.school = team.team_name
+        current_user.coach_category = team.coach_category
+    elif action == 'leave':
+        if not others:
+            flash('Add your new team first: you need at least one team.', 'warning')
+            return redirect(url_for('coach_career') + '#teams')
+        team.status = 'left'
+        team.end_date = utc_today()
+        if team.is_primary:
+            team.is_primary = False
+            others[0].is_primary = True
+            current_user.school = others[0].team_name
+            current_user.coach_category = others[0].coach_category
+    else:
+        abort(404)
+
+    coaching.forget_teams()
+    create_audit_log(action=f'coach_team_{action}', actor_user_id=current_user.id, target_type='CoachTeam',
+                     target_id=str(team.id), details={'team': team.team_name})
+    db.session.commit()
+    flash(f'You left {team.team_name}. Your records with them stay on D.A.R.T.' if action == 'leave'
+          else f'{team.team_name} is now your main team.', 'success')
+    return redirect(url_for('coach_career') + '#teams')
+
+
+@app.route('/coach/games/add', methods=['POST'])
+@login_required
+def coach_game_add():
+    blocked = _require_coach_pro()
+    if blocked:
+        return blocked
+
+    values, error = coaching.validate_game(request.form, VALID_COMPETITIONS, utc_today())
+    if not error:
+        allowed = {t.team_name.strip().casefold() for t in CoachTeam.query.filter(
+            CoachTeam.coach_id == current_user.id, CoachTeam.status.in_(('approved', 'left'))).all()}
+        if values['team_name'].casefold() not in allowed:
+            error = 'Choose one of your approved teams.'
+    if not error:
+        clash = CoachGameRecord.query.filter(
+            CoachGameRecord.coach_id == current_user.id,
+            CoachGameRecord.game_date == values['game_date'],
+            func.lower(CoachGameRecord.opponent) == values['opponent'].lower(),
+            CoachGameRecord.status != 'rejected',
+        ).first()
+        if clash:
+            error = 'You already recorded this game.'
+    if error:
+        flash(error, 'warning')
+        return redirect(url_for('coach_career') + '#add-game')
+
+    game = CoachGameRecord(coach_id=current_user.id, status='pending', **values)
+    db.session.add(game)
+    db.session.flush()
+    create_audit_log(action='coach_game_submitted', actor_user_id=current_user.id,
+                     target_type='CoachGameRecord', target_id=str(game.id))
+    db.session.commit()
+    flash('Game saved. It shows on your profile once the Super Admin verifies it.', 'success')
+    return redirect(url_for('coach_career') + '#games')
+
+
+@app.route('/coach/achievements/add', methods=['POST'])
+@login_required
+def coach_achievement_add():
+    blocked = _require_coach_pro()
+    if blocked:
+        return blocked
+
+    values, error = coaching.validate_achievement(request.form, utc_today())
+    if error:
+        flash(error, 'warning')
+        return redirect(url_for('coach_career') + '#add-achievement')
+
+    item = CoachAchievement(coach_id=current_user.id, status='pending', **values)
+    db.session.add(item)
+    db.session.flush()
+    create_audit_log(action='coach_achievement_submitted', actor_user_id=current_user.id,
+                     target_type='CoachAchievement', target_id=str(item.id))
+    db.session.commit()
+    flash('Saved. It shows on your profile once the Super Admin verifies it.', 'success')
+    return redirect(url_for('coach_career') + '#achievements')
+
+
+@app.route('/coach/<kind>/<int:item_id>/delete', methods=['POST'])
+@login_required
+def coach_item_delete(kind, item_id):
+    _require_coach()
+    model = {'games': CoachGameRecord, 'achievements': CoachAchievement}.get(kind)
+    if not model:
+        abort(404)
+    item = _own(model, item_id)
+    # Verified career records are permanent (they belong to the record of
+    # the teams too); only pending / rejected ones can be removed.
+    if item.status == 'approved':
+        flash('Verified records stay on your career. Contact D.A.R.T. to correct one.', 'warning')
+        return redirect(url_for('coach_career') + f'#{kind}')
+    db.session.delete(item)
+    db.session.commit()
+    flash('Removed.', 'info')
+    return redirect(url_for('coach_career') + f'#{kind}')
+
+
+# ---------- Super Admin: verify coach teams and career records ----------
+@app.route('/admin/coach-review')
+@login_required
+def admin_coach_review():
+    require_super_admin()
+    return render_template(
+        'admin_coach_review.html',
+        teams=CoachTeam.query.filter_by(status='pending').order_by(CoachTeam.created_at).all(),
+        games=CoachGameRecord.query.filter_by(status='pending').order_by(CoachGameRecord.created_at).limit(200).all(),
+        achievements=CoachAchievement.query.filter_by(status='pending').order_by(CoachAchievement.created_at).limit(200).all(),
+    )
+
+
+@app.route('/admin/coach-review/<kind>/<int:item_id>/<action>', methods=['POST'])
+@login_required
+def admin_coach_review_action(kind, item_id, action):
+    require_super_admin()
+    model = {'teams': CoachTeam, 'games': CoachGameRecord, 'achievements': CoachAchievement}.get(kind)
+    if not model or action not in ('approve', 'reject'):
+        abort(404)
+    item = db.session.get(model, item_id)
+    if not item or item.status != 'pending':
+        abort(404)
+
+    item.status = 'approved' if action == 'approve' else 'rejected'
+    item.review_note = (request.form.get('note') or '').strip()[:200] or None
+    item.reviewed_by = current_user.id
+    item.reviewed_at = datetime.utcnow()
+    if kind == 'teams' and action == 'approve' and not item.start_date:
+        item.start_date = utc_today()
+    create_audit_log(action=f'coach_{kind}_{action}d', actor_user_id=current_user.id,
+                     target_type=model.__name__, target_id=str(item.id), details={'coach_id': item.coach_id})
+    db.session.commit()
+    flash('Approved.' if action == 'approve' else 'Rejected.', 'success')
+    return redirect(url_for('admin_coach_review'))
+
+
+@app.context_processor
+def inject_coach_review_count():
+    if current_user.is_authenticated and current_user.role == 'System':
+        counts = coaching.pending_counts()
+        return {'coach_review_awaiting': sum(counts.values())}
+    return {'coach_review_awaiting': 0}
+
+
+def coach_public_data(coach):
+    """Approved career of one coach (profile page)."""
+    games, achievements = coaching.public_career([coach.id]).get(coach.id, ([], []))
+    teams = CoachTeam.query.filter(CoachTeam.coach_id == coach.id, CoachTeam.status.in_(('approved', 'left'))).order_by(
+        CoachTeam.end_date.isnot(None), CoachTeam.is_primary.desc(), CoachTeam.created_at).all()
+    return {'games': games, 'summary': coaching.career_summary(games, achievements), 'teams': teams,
+            'pro': is_coach_pro(coach)}
+
+
+app.jinja_env.globals['coach_public_data'] = coach_public_data
 
 
 # ==========================================================
@@ -6084,9 +6662,9 @@ def id_document(filename):
     # Super Admin can view documents from all schools
     is_super_admin = current_user.role == 'System'
 
-    # Regular coaches can only view documents belonging to their school
+    # Coaches can only view ID documents of athletes on a team they manage.
     if not is_super_admin:
-        if current_user.school.strip().casefold() != owner.school.strip().casefold():
+        if current_user.role != 'Coach' or owner.role != 'Athlete' or not coaching.manages_athlete(current_user, owner):
             flash(
                 'You are not authorized to view this ID document.',
                 'danger'
@@ -7558,23 +8136,19 @@ def coach_scope_records(coach):
     team played for matches the coach's school/team (ignoring case and
     spaces) and the coach's category allows the competition.
     """
-    team = (coach.school or '').strip().casefold()
+    keys = coaching.team_keys(coach)
 
-    if not team:
+    if not keys:
         return []
 
-    candidates = SportRecord.query.filter(
-        func.lower(func.trim(SportRecord.team)) == team
+    candidates = SportRecord.query.options(joinedload(SportRecord.user)).filter(
+        func.lower(func.trim(SportRecord.team)).in_(keys)
     ).all()
 
     return [
         record
         for record in candidates
-        if (record.team or '').strip().casefold() == team
-        and coach_can_manage_competition(
-            coach.coach_category,
-            record.competition_category
-        )
+        if coaching.manages_record(coach, record, coach_can_manage_competition)
     ]
 
 
@@ -7663,6 +8237,9 @@ def coach_dashboard_data(coach):
     return stats, managed_teams, approved_records
 
 
+DASHBOARD_LIST_LIMIT = 40
+
+
 @app.route('/admin/dashboard-stats')
 @login_required
 def admin_dashboard_stats():
@@ -7697,11 +8274,16 @@ def admin_dashboard():
             is_verified=False
         ).all()
     else:
-        pending_users = User.query.filter_by(
-            role='Athlete',
-            is_verified=False,
-            school=current_user.school
-        ).all()
+        # Athletes of every team the coach manages.
+        keys = coaching.team_keys(current_user)
+        pending_users = [
+            u for u in User.query.filter(
+                User.role == 'Athlete',
+                User.is_verified.is_(False),
+                func.lower(func.trim(User.school)).in_(keys or {''})
+            ).all()
+            if coaching.manages_athlete(current_user, u)
+        ]
 
     # ==========================================================
     # PENDING COACH APPROVALS
@@ -7729,10 +8311,18 @@ def admin_dashboard():
     # ==========================================================
     # PENDING SPORTS RECORDS
     # ==========================================================
-    all_pending_records = SportRecord.query.join(User).filter(
+    pending_query = SportRecord.query.join(User).filter(
         SportRecord.status.in_(['pending', 'rejected'])
-    ).order_by(
-        SportRecord.status.desc()
+    )
+    if current_user.role != 'System':
+        # Only rows of the coach's teams leave the database.
+        pending_query = pending_query.filter(
+            func.lower(func.trim(SportRecord.team)).in_(coaching.team_keys(current_user) or {''})
+        )
+    # Waiting records first (oldest first, so nothing is forgotten), then
+    # rejected ones; each record's athlete comes in the same query.
+    all_pending_records = pending_query.options(contains_eager(SportRecord.user)).order_by(
+        (SportRecord.status != 'pending'), SportRecord.created_at.asc(), SportRecord.id.asc()
     ).all()
 
     # System sees every pending record.
@@ -7745,17 +8335,7 @@ def admin_dashboard():
         pending_records = [
             record
             for record in all_pending_records
-            if current_user.school.strip().casefold()
-            == (record.team or '').strip().casefold()
-        ]
-
-        pending_records = [
-            record
-            for record in pending_records
-            if coach_can_manage_competition(
-                current_user.coach_category,
-                record.competition_category
-            )
+            if coaching.manages_record(current_user, record, coach_can_manage_competition)
         ]
 
     # ==========================================================
@@ -7769,15 +8349,23 @@ def admin_dashboard():
     else:
         dashboard_stats, managed_teams, approved_records = coach_dashboard_data(current_user)
 
+    # Long lists make the page heavy on phones: show the first ones and
+    # say how many there are in total.
+    pending_records_total = len(pending_records)
+    approved_records_total = len(approved_records)
+
     return render_template(
         'admin_dashboard.html',
         pending_users=pending_users,
         pending_coaches=pending_coaches,
         pending_scouts=pending_scouts,
-        pending_records=pending_records,
+        pending_records=pending_records[:DASHBOARD_LIST_LIMIT],
+        pending_records_total=pending_records_total,
         dashboard_stats=dashboard_stats,
         managed_teams=managed_teams,
-        approved_records=approved_records
+        approved_records=approved_records[:DASHBOARD_LIST_LIMIT],
+        approved_records_total=approved_records_total,
+        dashboard_list_limit=DASHBOARD_LIST_LIMIT,
     )
 
 @app.route('/approve_coach/<int:user_id>', methods=['POST'])
@@ -8209,10 +8797,30 @@ def recruit_ready_profile(user_id):
 @app.route('/update_profile', methods=['POST'])
 @login_required
 def update_profile():
-    # Update school/team
+    is_coach = current_user.role == 'Coach'
+    coach_pro = is_coach and is_coach_pro(current_user)
+
+    # Update school/team. A coach's team decides whose records they approve,
+    # so coaches change teams in My Coaching Career (Super Admin approves).
     new_school = request.form.get('school', '').strip()
     if new_school:
-        current_user.school = new_school
+        if is_coach:
+            if new_school.casefold() != (current_user.school or '').strip().casefold():
+                flash('Coaches change or add teams in My Coaching Career; the Super Admin approves each new team.', 'warning')
+                return redirect(url_for('profile'))
+        else:
+            current_user.school = new_school
+
+    # Coaches: date of birth, nationality and profile picture are Coach Pro.
+    if is_coach and not coach_pro:
+        wants_personal = (
+            (request.form.get('date_of_birth') or '').strip()
+            or (request.form.get('nationality') or '').strip()
+            or (request.files.get('profile_picture') and request.files['profile_picture'].filename)
+        )
+        if wants_personal:
+            flash('Editing date of birth, nationality and profile picture is part of Coach Pro.', 'warning')
+            return redirect(url_for('pricing') + '#coaches')
 
     # Update gender
     new_gender = request.form.get('gender', '').strip()
@@ -8243,7 +8851,7 @@ def update_profile():
             return redirect(url_for('profile'))
 
         current_user.age = new_age
-    else:
+    elif 'age' in request.form:
         current_user.age = None
 
     # ---------- DATE OF BIRTH ----------
@@ -8262,13 +8870,13 @@ def update_profile():
             return redirect(url_for('profile'))
 
         current_user.date_of_birth = parsed_dob
-    else:
+    elif 'date_of_birth' in request.form:
         current_user.date_of_birth = None
 
     # ---------- NATIONALITY ----------
     if new_nationality:
-        current_user.nationality = new_nationality
-    else:
+        current_user.nationality = new_nationality[:100]
+    elif 'nationality' in request.form:
         current_user.nationality = None
 
     # ---------- HEIGHT ----------
@@ -8284,7 +8892,7 @@ def update_profile():
             return redirect(url_for('profile'))
 
         current_user.height_cm = height_value
-    else:
+    elif 'height_cm' in request.form:
         current_user.height_cm = None
 
     # ---------- WEIGHT ----------
@@ -8300,7 +8908,7 @@ def update_profile():
             return redirect(url_for('profile'))
 
         current_user.weight_kg = weight_value
-    else:
+    elif 'weight_kg' in request.form:
         current_user.weight_kg = None
 
     # ---------- PREFERRED FOOT ----------
@@ -8308,9 +8916,8 @@ def update_profile():
         flash('Invalid preferred foot selection.', 'danger')
         return redirect(url_for('profile'))
 
-    current_user.preferred_foot = (
-        new_preferred_foot or None
-    )
+    if 'preferred_foot' in request.form:
+        current_user.preferred_foot = new_preferred_foot or None
 
     # ---------- WHO SEES MY PERSONAL DETAILS ----------
     if current_user.role in ('Athlete', 'Coach', 'Scout') and 'personal_visibility' in request.form:
@@ -8435,10 +9042,22 @@ def update_profile():
             'High School Coach'
         }
 
-        if new_coach_category:
+        if new_coach_category and new_coach_category != current_user.coach_category:
             if new_coach_category not in valid_coach_categories:
                 flash('Invalid coach registration category.', 'danger')
                 return redirect(url_for('profile'))
+
+            # Changing category any time is part of Coach Pro.
+            if not coach_pro:
+                flash('Changing your coach category any time is part of Coach Pro.', 'warning')
+                return redirect(url_for('pricing') + '#coaches')
+
+            create_audit_log(
+                action='coach_category_changed', actor_user_id=current_user.id,
+                target_type='User', target_id=str(current_user.id),
+                details={'from': current_user.coach_category, 'to': new_coach_category}
+            )
+            coaching.forget_teams()
 
             current_year = datetime.utcnow().year
             active_coach_registrations = Registration.query.filter_by(
@@ -8699,9 +9318,9 @@ def verify_user(user_id):
 
     user = User.query.get_or_404(user_id)
 
-    # Security check
-    if current_user.role != 'System' and user.school != current_user.school:
-        flash('You can only verify athletes from your own school.', 'danger')
+    # Security check: coaches verify only ATHLETES of teams they manage.
+    if current_user.role != 'System' and (user.role != 'Athlete' or not coaching.manages_athlete(current_user, user)):
+        flash('You can only verify athletes from your own team.', 'danger')
         return redirect(url_for('admin_dashboard'))
 
     user.is_verified = True
@@ -8782,19 +9401,10 @@ def approve_record(record_id):
 
     # System can manage every record; Coaches are restricted to their school/team and category.
     if current_user.role != 'System':
-        if current_user.school.strip().casefold() != (record.team or '').strip().casefold():
-            flash('You can only manage records from your own school/team.', 'danger')
+        if not coaching.manages_record(current_user, record, coach_can_manage_competition):
+            flash('You can only manage records of your own team(s), in competitions your category covers.', 'danger')
             return redirect(url_for('admin_dashboard'))
 
-        if not coach_can_manage_competition(
-            current_user.coach_category,
-            record.competition_category
-        ):
-            flash(
-                'You are not authorized to manage records from this competition category.',
-                'danger'
-            )
-            return redirect(url_for('admin_dashboard'))
 
     record.status = 'approved'
     db.session.commit()
@@ -8813,22 +9423,13 @@ def reject_record(record_id):
     # Coaches can only manage records from their own school/team
     # and their authorized competition category.
     if current_user.role != 'System':
-        if current_user.school.strip().casefold() != (record.team or '').strip().casefold():
+        if not coaching.manages_record(current_user, record, coach_can_manage_competition):
             flash(
                 'You can only manage records from your own school/team.',
                 'danger'
             )
             return redirect(url_for('admin_dashboard'))
 
-        if not coach_can_manage_competition(
-            current_user.coach_category,
-            record.competition_category
-        ):
-            flash(
-                'You are not authorized to manage records from this competition category.',
-                'danger'
-            )
-            return redirect(url_for('admin_dashboard'))
 
         # Approved records are final for coaches: they can view them on
         # their dashboard but not reject them (which would also let the
@@ -8892,11 +9493,8 @@ def record_rejection_mistake(record_id):
     record = SportRecord.query.get_or_404(record_id)
 
     if current_user.role != 'System':
-        if current_user.school.strip().casefold() != (record.team or '').strip().casefold():
-            flash('You can only manage records from your own school/team.', 'danger')
-            return redirect(url_for('admin_dashboard'))
-        if not coach_can_manage_competition(current_user.coach_category, record.competition_category):
-            flash('You are not authorized to manage records from this competition category.', 'danger')
+        if not coaching.manages_record(current_user, record, coach_can_manage_competition):
+            flash('You can only manage records of your own team(s), in competitions your category covers.', 'danger')
             return redirect(url_for('admin_dashboard'))
 
     if record.status != 'rejected':
@@ -8948,7 +9546,7 @@ def reject_user(user_id):
     # Regular Coaches can only reject athletes
     # from their own school/team.
     if current_user.role == 'Coach':
-        if current_user.school.strip().casefold() != user.school.strip().casefold():
+        if not coaching.manages_athlete(current_user, user):
             flash(
                 'You can only reject athletes from your own school/team.',
                 'danger'
