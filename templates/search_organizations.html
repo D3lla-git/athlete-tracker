@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Search Organizations{% endblock %}
+{% block meta_description %}Find verified high schools, universities, clubs and academies in Liberia on D.A.R.T., with their athletes and coaches.{% endblock %}
+
+{% block content %}
+{% from '_name_suggest.html' import name_suggest %}
+<div class="container py-4 os-page">
+  <h2 class="mb-4">Search Organizations <i class="fa-solid fa-building-shield"></i></h2>
+  {% set active = 'organizations' %}{% include '_search_tabs.html' %}
+
+  <form method="GET" action="{{ url_for('search') }}" class="os-panel" role="search">
+    <input type="hidden" name="mode" value="organizations">
+    <div class="row g-3">
+      <div class="col-md-6 col-lg-3 position-relative">
+        <label class="form-label" for="osName">Organization name <i class="fa-solid fa-building"></i></label>
+        <input type="text" id="osName" name="name" value="{{ filters.name }}" class="form-control" maxlength="80" placeholder="Any part of the name" autocomplete="off">
+        {{ name_suggest('osName', 'organizations') }}
+      </div>
+      <div class="col-md-6 col-lg-3">
+        <label class="form-label" for="osPlace">City / country <i class="fa-solid fa-location-dot"></i></label>
+        <input type="text" id="osPlace" name="place" value="{{ filters.place }}" class="form-control" maxlength="80" placeholder="e.g. Monrovia">
+      </div>
+      <div class="col-md-6 col-lg-3">
+        <label class="form-label" for="osType">Type <i class="fa-solid fa-school"></i></label>
+        <select id="osType" name="org_type" class="form-select">
+          <option value="">All types</option>
+          {% for t in org_types %}<option value="{{ t }}" {{ 'selected' if filters.org_type == t }}>{{ t }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6 col-lg-3">
+        <label class="form-label" for="osSport">Sport <i class="fa-solid fa-medal"></i></label>
+        <select id="osSport" name="sport" class="form-select">
+          <option value="">All sports</option>
+          {% for s in org_sports %}<option value="{{ s }}" {{ 'selected' if filters.sport == s }}>{{ s }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2 mt-3">
+      <button type="submit" class="btn dart-btn os-btn"><i class="fa-solid fa-magnifying-glass me-1"></i> Search organizations</button>
+      {% if search_active %}<a href="{{ url_for('search', mode='organizations') }}" class="btn btn-outline-secondary os-btn"><i class="fa-solid fa-rotate-left me-1"></i> Clear</a>{% endif %}
+    </div>
+  </form>
+
+  <p class="os-count">{{ total }} organization{{ 's' if total != 1 }} found{% if total > results | length %} · showing the first {{ results | length }}{% endif %}</p>
+
+  <div class="os-grid">
+  {% for item in results %}
+    {% set o = item.org %}
+    <article class="os-card">
+      <div class="os-head">
+        {% if o.user.profile_picture %}
+          <img class="os-logo" src="{{ url_for('profile_picture', filename=o.user.profile_picture) }}" alt="" loading="lazy">
+        {% else %}
+          <span class="os-logo" aria-hidden="true"><i class="fa-solid fa-building-shield"></i></span>
+        {% endif %}
+        <div class="os-who">
+          <div class="os-name">{{ o.org_name }} <i class="fa-solid fa-circle-check os-verified" title="Verified by D.A.R.T."></i></div>
+          <div class="os-sub">{{ o.org_type }}{% if o.city or o.country %} · <i class="fa-solid fa-location-dot"></i> {{ [o.city, o.country] | select | join(', ') }}{% endif %}</div>
+          {% if o.sports %}<div class="os-sub"><i class="fa-solid fa-medal"></i> {{ o.sports }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="os-stats">
+        <a class="os-stat" href="{{ url_for('search', school=o.org_name) }}">
+          <strong>{{ item.athletes }}</strong><span>Athlete{{ 's' if item.athletes != 1 }}</span>
+        </a>
+        <a class="os-stat" href="{{ url_for('search', mode='coaches', team=o.org_name) }}">
+          <strong>{{ item.coaches }}</strong><span>Coach{{ 'es' if item.coaches != 1 }}</span>
+        </a>
+      </div>
+
+      <div class="os-actions">
+        <a href="{{ url_for('search', school=o.org_name) }}" class="btn btn-sm dart-btn os-btn"><i class="fa-solid fa-person-running me-1"></i> Athletes</a>
+        <a href="{{ url_for('search', mode='coaches', team=o.org_name) }}" class="btn btn-sm btn-outline-secondary os-btn"><i class="fa-solid fa-clipboard-user me-1"></i> Coaches</a>
+        {% if o.website and o.website.startswith(('http://', 'https://')) %}
+          <a href="{{ o.website }}" class="btn btn-sm btn-outline-secondary os-btn" target="_blank" rel="noopener nofollow"><i class="fa-solid fa-globe me-1"></i> Website</a>
+        {% endif %}
+      </div>
+    </article>
+  {% else %}
+    <div class="alert alert-light">No organizations found.</div>
+  {% endfor %}
+  </div>
+</div>
+
+<style>
+  .os-page { max-width: 1080px; }
+  .os-panel {
+    padding: 18px; margin-bottom: 16px; border-radius: 20px;
+    background: var(--surface-bg); border: 1px solid var(--surface-border); box-shadow: 0 8px 26px rgba(0, 0, 0, 0.06);
+  }
+  .os-panel .form-label { font-size: 0.8rem; font-weight: 700; margin-bottom: 4px; }
+  .os-btn { border-radius: 999px; }
+  .os-count { color: var(--muted-text, #6c757d); font-size: 0.9rem; }
+  .os-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .os-grid > .alert { grid-column: 1 / -1; }
+  .os-card {
+    display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 20px; min-width: 0;
+    background: var(--surface-bg); border: 1px solid var(--surface-border); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+  }
+  .os-head { display: flex; gap: 12px; align-items: center; }
+  .os-logo {
+    flex: 0 0 52px; width: 52px; height: 52px; border-radius: 14px; object-fit: cover;
+    display: grid; place-items: center; font-size: 1.3rem; color: #fff; background: var(--dart-primary-gradient, #198754);
+  }
+  .os-who { min-width: 0; }
+  .os-name { font-size: 1.08rem; font-weight: 800; overflow-wrap: anywhere; }
+  .os-verified { color: #198754; font-size: 0.9rem; }
+  .os-sub { font-size: 0.85rem; color: var(--muted-text, #6c757d); }
+  .os-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .os-stat {
+    display: flex; flex-direction: column; align-items: center; padding: 10px; border-radius: 14px;
+    text-decoration: none; color: inherit; background: rgba(25, 135, 84, 0.07);
+  }
+  .os-stat:hover { background: rgba(25, 135, 84, 0.13); }
+  .os-stat strong { font-size: 1.35rem; line-height: 1.1; }
+  .os-stat span { font-size: 0.78rem; font-weight: 700; color: var(--muted-text, #6c757d); }
+  .os-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+  @media (max-width: 575.98px) {
+    .os-grid { grid-template-columns: 1fr; }
+    .os-actions .os-btn { flex: 1 1 auto; }
+  }
+</style>
+{% endblock %}

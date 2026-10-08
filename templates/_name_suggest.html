@@ -1,0 +1,53 @@
+{# As-you-type name suggestions under a text input.
+   name_suggest(input_id, kind): kind = 'athletes', 'coaches' or 'organizations'.
+   Place the input inside a .position-relative wrapper. #}
+{% macro name_suggest(input_id, kind) %}
+<div id="{{ input_id }}Suggest" class="list-group position-absolute w-100 shadow-sm name-suggest" role="listbox" hidden></div>
+<script>
+(function () {
+  var input = document.getElementById({{ input_id | tojson }});
+  var box = document.getElementById({{ (input_id ~ 'Suggest') | tojson }});
+  if (!input || !box) return;
+  var timer = null, seq = 0;
+
+  function hide() { box.hidden = true; }
+
+  input.addEventListener('input', function () {
+    clearTimeout(timer);
+    var q = input.value.trim();
+    if (!q) { hide(); return; }
+    timer = setTimeout(function () {
+      var mine = ++seq;
+      fetch('/api/suggest-names?kind={{ kind }}&q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (data) {
+          if (mine !== seq) return;               // a newer search already answered
+          box.innerHTML = '';
+          data.forEach(function (item) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'list-group-item list-group-item-action';
+            btn.textContent = item.full_name;
+            btn.addEventListener('click', function () {
+              input.value = item.full_name;
+              hide();
+              if (input.form) input.form.requestSubmit ? input.form.requestSubmit() : input.form.submit();
+            });
+            box.appendChild(btn);
+          });
+          box.hidden = data.length === 0;
+        })
+        .catch(hide);
+    }, 150);
+  });
+
+  input.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(); });
+  document.addEventListener('click', function (e) {
+    if (e.target !== input && !box.contains(e.target)) hide();
+  });
+})();
+</script>
+<style>
+  .name-suggest { z-index: 1050; max-height: 250px; overflow-y: auto; top: 100%; left: 0; }
+</style>
+{% endmacro %}

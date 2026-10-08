@@ -1,4 +1,4 @@
-{# Search page tabs: Athletes | Coaches. active = 'athletes' or 'coaches'. #}
+{# Search page tabs: Athletes | Coaches | Organizations. active = 'athletes', 'coaches' or 'organizations'. #}
 <nav class="search-tabs" aria-label="What to search">
   <a href="{{ url_for('search') }}" class="search-tab {{ 'active' if active == 'athletes' }}" {% if active == 'athletes' %}aria-current="page"{% endif %}>
     <i class="fa-solid fa-person-running" aria-hidden="true"></i> Athletes
@@ -6,10 +6,16 @@
   <a href="{{ url_for('search', mode='coaches') }}" class="search-tab {{ 'active' if active == 'coaches' }}" {% if active == 'coaches' %}aria-current="page"{% endif %}>
     <i class="fa-solid fa-clipboard-user" aria-hidden="true"></i> Coaches
   </a>
+  <a href="{{ url_for('search', mode='organizations') }}" class="search-tab {{ 'active' if active == 'organizations' }}" {% if active == 'organizations' %}aria-current="page"{% endif %}>
+    <i class="fa-solid fa-building-shield" aria-hidden="true"></i> Organizations
+  </a>
 </nav>
 <style>
   .search-tabs {
     display: inline-flex;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
     gap: 4px;
     padding: 4px;
     margin-bottom: 16px;
@@ -26,7 +32,18 @@
     font-weight: 700;
     text-decoration: none;
     color: inherit !important;
+    white-space: nowrap;
   }
   .search-tab:hover { background: rgba(25, 135, 84, 0.08); }
   .search-tab.active { color: #fff !important; background: var(--dart-primary-gradient, #198754); }
+  .search-tabs::-webkit-scrollbar { display: none; }
+  /* Phones: three equal tabs, icon above the word, never cut off. */
+  @media (max-width: 575.98px) {
+    .search-tabs { display: flex; width: 100%; border-radius: 18px; }
+    .search-tab {
+      flex: 1 1 0; min-width: 0; flex-direction: column; justify-content: center; gap: 3px;
+      padding: 7px 4px; border-radius: 14px; font-size: 0.78rem; text-align: center;
+    }
+    .search-tab i { font-size: 1rem; }
+  }
 </style>

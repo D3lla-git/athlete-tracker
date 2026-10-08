@@ -810,13 +810,30 @@ def suggest_names():
 
     # Any word of the name may start with what is typed ("fel" -> "August
     # Felix Wleh-Sam"; "wleh sam" too); names starting with it come first.
-    students = User.query.filter(
-        User.role == 'Athlete',
+    kind = request.args.get('kind', 'athletes')
+    if kind == 'organizations':
+        names = (
+            db.session.query(OrganizationProfile.org_name)
+            .join(User, User.id == OrganizationProfile.user_id)
+            .filter(
+                OrganizationProfile.verification_status == 'verified',
+                User.is_verified == True,
+                User.is_suspended == False,
+                name_suggestion_filter(OrganizationProfile.org_name, q)
+            )
+            .order_by(*suggestion_order(OrganizationProfile.org_name, q)).limit(8).all()
+        )
+        return jsonify([{'full_name': n} for (n,) in names])
+
+    role = 'Coach' if kind == 'coaches' else 'Athlete'
+    users = User.query.filter(
+        User.role == role,
         User.is_verified == True,
+        User.is_suspended == False if role == 'Coach' else sa_true(),
         name_suggestion_filter(User.full_name, q)
     ).order_by(*suggestion_order(User.full_name, q)).limit(8).all()
 
-    return jsonify([{'full_name': s.full_name} for s in students])
+    return jsonify([{'full_name': u.full_name} for u in users])
 
 # ==========================================================
 # PWA: SERVICE WORKER
@@ -1803,10 +1820,104 @@ def coach_search():
     )
 
 
+ORG_SEARCH_PAGE = 50
+
+
+def org_search():
+    """Search verified organizations (schools, clubs, academies...)."""
+    args = request.args
+    name = args.get('name', '').strip()[:80]
+    place = args.get('place', '').strip()[:80]
+    org_type = args.get('org_type', '')
+    org_type = org_type if org_type in ORG_TYPES else ''
+    sport = args.get('sport', '')
+    sport = sport if sport in ORG_SPORTS else ''
+
+    query = (
+        OrganizationProfile.query
+        .join(User, User.id == OrganizationProfile.user_id)
+        .filter(
+            OrganizationProfile.verification_status == 'verified',
+            User.is_verified.is_(True),
+            User.is_suspended.is_(False),
+        )
+    )
+    if name:
+        # Official name or a name athletes use for the team ("LPRC", "Oilers").
+        query = query.filter(or_(
+            text_matches(OrganizationProfile.org_name, name),
+            text_matches(func.coalesce(OrganizationProfile.approved_aliases, ''), name),
+        ))
+    if place:
+        query = query.filter(text_matches(
+            func.coalesce(OrganizationProfile.city, '') + ' ' + func.coalesce(OrganizationProfile.country, ''), place))
+    if org_type:
+        query = query.filter(OrganizationProfile.org_type == org_type)
+    if sport:
+        query = query.filter(OrganizationProfile.sports.ilike(_like(sport), escape='\\'))
+
+    total = query.count()
+    orgs = query.order_by(func.lower(OrganizationProfile.org_name)).limit(ORG_SEARCH_PAGE).all()
+
+    # Athletes and coaches on D.A.R.T. for each team (same rule as the roster).
+    athletes, coaches = organization_member_counts(orgs) if orgs else ({}, {})
+    results = [{'org': org, 'athletes': athletes.get(org.user_id, 0), 'coaches': coaches.get(org.user_id, 0)}
+               for org in orgs]
+
+    return render_template(
+        'search_organizations.html',
+        results=results,
+        total=total,
+        filters={'name': name, 'place': place, 'org_type': org_type, 'sport': sport},
+        org_types=ORG_TYPES,
+        org_sports=ORG_SPORTS,
+        search_active=bool(name or place or org_type or sport),
+    )
+
+
+def organization_member_counts(orgs):
+    """{org user_id: verified athletes on its roster}, {org user_id: verified coaches of the team}."""
+    names = {org.user_id: {k for k in map(normalize_team_name, org.roster_names) if k} for org in orgs}
+    wanted = set().union(*names.values())
+
+    def team_members(rows):
+        by_team = {}
+        for uid, team in rows:
+            key = normalize_team_name(team)
+            if key in wanted:
+                by_team.setdefault(key, set()).add(uid)
+        return by_team
+
+    athlete_teams = team_members(cached_value('org_search_athlete_teams', lambda: [
+        *db.session.query(User.id, User.school).filter(User.role == 'Athlete', User.is_verified == True).all(),
+        *db.session.query(SportRecord.user_id, SportRecord.team).join(User, User.id == SportRecord.user_id).filter(
+            User.role == 'Athlete', User.is_verified == True, SportRecord.status == 'approved').distinct().all(),
+    ], seconds=60))
+    coach_teams = team_members(cached_value('org_search_coach_teams', lambda: [
+        *db.session.query(User.id, User.school).filter(
+            User.role == 'Coach', User.is_verified == True, User.is_suspended == False).all(),
+        *db.session.query(CoachTeam.coach_id, CoachTeam.team_name).join(User, User.id == CoachTeam.coach_id).filter(
+            User.is_verified == True, User.is_suspended == False, CoachTeam.status == 'approved').all(),
+    ], seconds=60))
+    excluded = {}
+    for row in OrganizationRosterExclusion.query.filter(
+            OrganizationRosterExclusion.organization_user_id.in_(list(names))):
+        excluded.setdefault(row.organization_user_id, set()).add(row.athlete_id)
+
+    athletes, coaches = {}, {}
+    for org_id, keys in names.items():
+        a_ids = set().union(*(athlete_teams.get(k, set()) for k in keys)) - excluded.get(org_id, set())
+        c_ids = set().union(*(coach_teams.get(k, set()) for k in keys))
+        athletes[org_id], coaches[org_id] = len(a_ids), len(c_ids)
+    return athletes, coaches
+
+
 @app.route('/search')
 def search():
     if request.args.get('mode') == 'coaches':
         return coach_search()
+    if request.args.get('mode') == 'organizations':
+        return org_search()
 
     advanced_allowed = can_use_advanced_search(current_user)
     advanced_locked_used = False

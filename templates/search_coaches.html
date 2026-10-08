@@ -4,6 +4,7 @@
 
 {% block content %}
 {% from '_coach_career.html' import career_stats, career_honours, career_games, career_styles %}
+{% from '_name_suggest.html' import name_suggest %}
 {{ career_styles() }}
 <div class="container py-4 cs-page">
   <h2 class="mb-4">Search Coaches <i class="fa-solid fa-clipboard-user"></i></h2>
@@ -12,9 +13,10 @@
   <form method="GET" action="{{ url_for('search') }}" class="cs-panel" role="search">
     <input type="hidden" name="mode" value="coaches">
     <div class="row g-3">
-      <div class="col-md-4">
+      <div class="col-md-4 position-relative">
         <label class="form-label" for="csName">Coach name <i class="fa-solid fa-user"></i></label>
-        <input type="text" id="csName" name="name" value="{{ filters.name }}" class="form-control" maxlength="80" placeholder="Enter coach name" autocomplete="off">
+        <input type="text" id="csName" name="name" value="{{ filters.name }}" class="form-control" maxlength="80" placeholder="Any part of the name" autocomplete="off">
+        {{ name_suggest('csName', 'coaches') }}
       </div>
       <div class="col-md-4">
         <label class="form-label" for="csTeam">Team <i class="fa-solid fa-people-group"></i></label>
