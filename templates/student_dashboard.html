@@ -144,12 +144,12 @@
 <!-- ===== MOBILE SLIDER CARDS (with dots) ===== -->
 <div class="d-md-none">
   {% if records %}
-  <div id="recordsCarousel" class="carousel slide" data-bs-ride="false" data-bs-touch="true">
+  <div class="dart-slider" data-dart-slider aria-label="My submitted records">
     
     <!-- The Cards -->
-    <div class="carousel-inner px-2">
+    <div class="dart-slider-track">
       {% for r in records %}
-      <div class="carousel-item {% if loop.first %}active{% endif %}">
+      <div class="dart-slide">
         <div class="record-card mx-auto">
           
           <!-- Sport Title with Icon -->
@@ -224,17 +224,6 @@
       {% endfor %}
     </div>
 
-    <!-- DOTS at the bottom -->
-    <div class="carousel-indicators position-relative mt-2 mb-2">
-      {% for r in records %}
-        <button type="button" 
-                data-bs-target="#recordsCarousel" 
-                data-bs-slide-to="{{ loop.index0 }}"
-                class="{% if loop.first %}active{% endif %}"
-                aria-label="Slide {{ loop.index }}"> 
-        </button>
-      {% endfor %}
-    </div>
 
   </div>
   {% else %}

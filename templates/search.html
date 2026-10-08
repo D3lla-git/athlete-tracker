@@ -926,14 +926,13 @@
       {% endif %}
 
       {% if item.records %}
-        {% set carousel_id = 'searchCarousel' ~ loop.index %}
 
-        <div id="{{ carousel_id }}" class="carousel slide" data-bs-ride="false" data-bs-touch="true">
+        <div class="dart-slider" data-dart-slider aria-label="{{ item.student.full_name }}'s records">
           
           <!-- Cards -->
-          <div class="carousel-inner">
+          <div class="dart-slider-track">
             {% for r in item.records %}
-              <div class="carousel-item {% if loop.first %}active{% endif %}">
+              <div class="dart-slide">
                 <div class="record-card mx-auto">
 
                   <div class="card-sport text-center mb-3">
@@ -966,18 +965,6 @@
             {% endfor %}
           </div>
 
-          <!-- Dots -->
-          {% if item.records|length > 1 %}
-          <div class="carousel-indicators position-relative mt-3">
-            {% for r in item.records %}
-              <button type="button"
-                      data-bs-target="#{{ carousel_id }}"
-                      data-bs-slide-to="{{ loop.index0 }}"
-                      class="{% if loop.first %}active{% endif %}">
-              </button>
-            {% endfor %}
-          </div>
-          {% endif %}
 
         </div>
       {% else %}

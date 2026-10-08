@@ -1587,3 +1587,74 @@ a, button, summary, label, .btn, .nav-link, .dart-tab { touch-action: manipulati
 /* Taps show a pressed state immediately. */
 .btn:active, .dart-tab:active, .nav-link:active { transform: scale(0.97); }
 .dart-tab { transition: color 0.12s ease, transform 0.08s ease; }
+
+/* ===== Card slider (record cards on phones, dart-slider.js) =====
+   Native horizontal scrolling with snap points: cards follow the finger,
+   keep their momentum and settle on a card; the next card peeks in. */
+.dart-slider { position: relative; margin: 0 -12px; }
+.dart-slider-track {
+  display: flex;
+  gap: 12px;
+  padding: 6px 12px 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 12px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+.dart-slider-track::-webkit-scrollbar { display: none; }
+.dart-slider-track:focus-visible { outline: 3px solid rgba(57, 185, 114, 0.5); outline-offset: -3px; border-radius: 22px; }
+.dart-slide {
+  flex: 0 0 86%;
+  max-width: 380px;
+  min-width: 0;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+.dart-slider:not(.is-single) .dart-slide:not(.is-active) { transform: scale(0.96); opacity: 0.7; }
+.dart-slider.is-single .dart-slide { flex-basis: 100%; }
+.dart-slide .record-card { max-width: none; width: 100%; height: 100%; margin: 0 !important; }
+
+.dart-slider-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 2px;
+}
+.dart-slider-arrow {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.12));
+  color: #fff;
+  background: var(--dart-primary-gradient, #198754);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  transition: opacity 0.2s ease, transform 0.1s ease;
+}
+.dart-slider-arrow:disabled { opacity: 0.3; box-shadow: none; }
+.dart-slider-arrow:not(:disabled):active { transform: scale(0.92); }
+.dart-slider-middle { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; }
+.dart-slider-dots { display: flex; gap: 6px; }
+.dart-slider-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(108, 117, 125, 0.45);
+  transition: width 0.25s ease, background 0.25s ease;
+}
+.dart-slider-dot.is-active { width: 22px; background: #198754; }
+html[data-theme="dark"] .dart-slider-dot.is-active { background: #4cd38a; }
+.dart-slider-count { font-size: 0.75rem; font-weight: 700; color: var(--muted-text, #6c757d); }
+@media (prefers-reduced-motion: reduce) {
+  .dart-slide { transition: none; }
+  .dart-slider:not(.is-single) .dart-slide:not(.is-active) { transform: none; }
+}

@@ -267,11 +267,11 @@
   <h4 class="mt-4 mb-3">Pending Sports Records</h4>
 
   {% if pending_records %}
-    <div id="adminRecordsCarousel" class="carousel slide" data-bs-ride="false" data-bs-touch="true">
+    <div class="dart-slider" data-dart-slider aria-label="Pending sports records">
       
-      <div class="carousel-inner px-2">
+      <div class="dart-slider-track">
         {% for r in pending_records %}
-        <div class="carousel-item {% if loop.first %}active{% endif %}">
+        <div class="dart-slide">
           <div class="record-card mx-auto">
 
             <!-- Header -->
@@ -371,18 +371,6 @@
         {% endfor %}
       </div>
 
-      <!-- Dots -->
-      {% if pending_records|length > 1 %}
-      <div class="carousel-indicators position-relative mt-3">
-        {% for r in pending_records %}
-          <button type="button"
-                  data-bs-target="#adminRecordsCarousel"
-                  data-bs-slide-to="{{ loop.index0 }}"
-                  class="{% if loop.first %}active{% endif %}">
-          </button>
-        {% endfor %}
-      </div>
-      {% endif %}
 
     </div>
   {% else %}
