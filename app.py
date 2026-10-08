@@ -3103,11 +3103,8 @@ def register(registration_category=None):
                 'success'
             )
         else:
-            flash(
-                'Registration successful! Wait for admin verification '
-                'of your ID.',
-                'success'
-            )
+            # Pop-up on the login page: who must approve the new profile.
+            queue_profile_prompt(user, 'registered')
 
         return redirect(url_for('login'))
 
@@ -3683,6 +3680,50 @@ def is_prefetch():
 
 
 app.jinja_env.globals['is_prefetch'] = is_prefetch
+
+
+# ---------- "Sent for approval" prompts ----------
+# After an athlete submits, edits or resubmits a record, registers, or
+# changes the team on a profile that is not live yet, the next page shows
+# a pop-up (_approval_prompt.html) saying exactly who must approve it.
+def queue_approval_prompt(kind, **data):
+    session['approval_prompt'] = {'kind': kind, **data}
+
+
+def queue_profile_prompt(athlete, kind):
+    """kind: 'registered', 'waiting' (logged in, not live yet) or 'team_changed'."""
+    queue_approval_prompt(
+        'profile', reason=kind, team=athlete.school or '',
+        coach_done=bool(athlete.coach_verified),
+        org=athlete.org_approval or 'not_required', org_name=athlete.org_approval_name or '',
+    )
+
+
+def queue_record_prompt(record, action):
+    """action: 'submitted', 'edited' or 'resubmitted'."""
+    queue_approval_prompt(
+        'record', action=action, sport=record.sport or '', team=record.team or '',
+        opponent=record.team_played_against or '',
+        date=record.game_date.strftime('%d %b %Y') if record.game_date else str(record.year or ''),
+    )
+
+
+def pop_approval_prompt():
+    """Used once by base.html: the approval pop-up for this page, if any."""
+    if is_prefetch():
+        return None
+    return session.pop('approval_prompt', None)
+
+
+app.jinja_env.globals['pop_approval_prompt'] = pop_approval_prompt
+
+
+@user_logged_in.connect_via(app)
+def prompt_pending_profile(sender, user, **extra):
+    # New-rule athletes whose profile is not live yet are reminded who still
+    # has to approve it every time they log in.
+    if user.role == 'Athlete' and not user.is_verified and user.org_approval is not None:
+        queue_profile_prompt(user, 'waiting')
 
 
 def pop_celebration():
@@ -7681,7 +7722,7 @@ def submit_record():
     db.session.add(record)
     db.session.commit()
 
-    flash('Record submitted successfully and is pending approval.', 'success')
+    queue_record_prompt(record, 'submitted')
     return redirect(url_for('student_dashboard'))
 
 # ==========================================================
@@ -7756,9 +7797,9 @@ def api_submit_record():
     db.session.commit()
 
     if request.headers.get('X-DART-Submit-Mode') == 'online':
-        # Regular "Submit Record" click: show the usual message after
-        # the page redirects back to the dashboard.
-        flash('Record submitted successfully and is pending approval.', 'success')
+        # Regular "Submit Record" click: show the "sent for approval"
+        # pop-up after the page redirects back to the dashboard.
+        queue_record_prompt(record, 'submitted')
 
     return _no_store_json({
         'ok': True,
@@ -7820,7 +7861,7 @@ def resubmit_record(record_id):
     record.rejection_note = None
     record.status = 'pending'
     db.session.commit()
-    flash('Record resubmitted successfully. Waiting for coach approval.', 'success')
+    queue_record_prompt(record, 'resubmitted')
     return redirect(url_for('student_dashboard'))
 
 # ========== Edit route ==========#
@@ -8362,10 +8403,7 @@ def edit_record(record_id):
 
         db.session.commit()
 
-        flash(
-            'Record updated successfully and sent for coach approval.',
-            'success'
-        )
+        queue_record_prompt(record, 'edited')
 
         return redirect(
             url_for('student_dashboard')
@@ -9123,6 +9161,7 @@ def recruit_ready_profile(user_id):
 @login_required
 def update_profile():
     is_coach = current_user.role == 'Coach'
+    profile_resent = False
     coach_pro = is_coach and is_coach_pro(current_user)
 
     # Update school/team. A coach's team decides whose records they approve,
@@ -9142,6 +9181,7 @@ def update_profile():
                     and current_user.org_approval is not None):
                 current_user.coach_verified = False
                 start_org_approval(current_user)
+                profile_resent = True
 
     # Coaches: date of birth, nationality and profile picture are Coach Pro.
     if is_coach and not coach_pro:
@@ -9501,7 +9541,12 @@ def update_profile():
             return redirect(url_for('profile'))
 
     db.session.commit()
-    flash('Profile updated successfully!', 'success')
+    if profile_resent:
+        # The profile is not live yet and now goes to the new team's coach
+        # and organization: say so clearly.
+        queue_profile_prompt(current_user, 'team_changed')
+    else:
+        flash('Profile updated successfully!', 'success')
     return redirect(url_for('profile'))
 
 @app.route('/change_password', methods=['POST'])

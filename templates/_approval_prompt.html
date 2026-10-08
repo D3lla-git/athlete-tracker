@@ -1,0 +1,163 @@
+{# "Sent for approval" pop-up, shown once after an athlete submits / edits /
+   resubmits a record, registers, logs in while their profile is not live yet,
+   or changes the team on such a profile. Queued by queue_approval_prompt(). #}
+{% set prompt = pop_approval_prompt() %}
+{% if prompt %}
+{% set p = prompt %}
+<div class="approval-prompt" id="approvalPrompt" role="dialog" aria-modal="true" aria-labelledby="approvalPromptTitle" aria-describedby="approvalPromptBody" hidden>
+  <div class="approval-prompt-card">
+    <div class="approval-prompt-icon" aria-hidden="true">
+      <i class="fa-solid {{ 'fa-file-circle-check' if p.kind == 'record' else 'fa-user-clock' }}"></i>
+    </div>
+
+    {% if p.kind == 'record' %}
+      <h2 id="approvalPromptTitle">
+        {% if p.action == 'edited' %}Edited record sent for coach approval
+        {% elif p.action == 'resubmitted' %}Record resubmitted for coach approval
+        {% else %}Record sent for coach approval{% endif %}
+      </h2>
+      <div id="approvalPromptBody">
+        <p class="approval-prompt-what">
+          <i class="fa-solid fa-medal"></i> {{ p.sport }}{% if p.opponent %} · vs {{ p.opponent }}{% endif %}{% if p.date %} · {{ p.date }}{% endif %}
+        </p>
+        <ul class="approval-prompt-steps">
+          <li class="is-done"><i class="fa-solid fa-circle-check"></i>
+            <span><strong>{{ 'Changes saved' if p.action == 'edited' else 'Submitted' }}</strong> · the record is now <em>Pending</em></span></li>
+          <li><i class="fa-solid fa-hourglass-half"></i>
+            <span><strong>Your coach{% if p.team %} at {{ p.team }}{% endif %}</strong> checks and approves it</span></li>
+          <li class="is-skip"><i class="fa-solid fa-eye"></i>
+            <span>Once approved it appears on your profile and in search</span></li>
+        </ul>
+        {% if p.action == 'edited' %}
+          <p class="approval-prompt-note">Every edit goes back to Pending until your coach approves the changes.</p>
+        {% endif %}
+      </div>
+      <div class="approval-prompt-actions">
+        <button type="button" class="btn dart-btn approval-prompt-close">Got it</button>
+      </div>
+
+    {% else %}
+      <h2 id="approvalPromptTitle">
+        {% if p.reason == 'registered' %}Registration received: profile sent for approval
+        {% elif p.reason == 'team_changed' %}Profile sent to your new team for approval
+        {% else %}Your profile is waiting for approval{% endif %}
+      </h2>
+      <div id="approvalPromptBody">
+        <p>Your athlete profile goes live, and you can submit records, once {{ 'these approvals are' if p.org in ('pending', 'approved', 'rejected') else 'this approval is' }} done:</p>
+        <ul class="approval-prompt-steps">
+          <li class="{{ 'is-done' if p.coach_done }}">
+            <i class="fa-solid {{ 'fa-circle-check' if p.coach_done else 'fa-hourglass-half' }}"></i>
+            <span><strong>Your coach{% if p.team %} at {{ p.team }}{% endif %}</strong>
+              {{ 'approved your profile' if p.coach_done else 'checks your ID and approves your profile' }}</span>
+          </li>
+          {% if p.org == 'not_required' %}
+            <li class="is-skip"><i class="fa-solid fa-minus"></i>
+              <span><strong>{{ p.team or 'Your team' }}</strong> has no organization account on D.A.R.T. yet, so your coach's approval is enough.</span></li>
+          {% elif p.org == 'rejected' %}
+            <li class="is-no"><i class="fa-solid fa-circle-xmark"></i>
+              <span><strong>{{ p.org_name }}</strong> says you don't play for them. Check the spelling of your team / school in My Profile.</span></li>
+          {% else %}
+            <li class="{{ 'is-done' if p.org == 'approved' }}">
+              <i class="fa-solid {{ 'fa-circle-check' if p.org == 'approved' else 'fa-hourglass-half' }}"></i>
+              <span><strong>{{ p.org_name }}</strong> {{ 'confirmed you play for them' if p.org == 'approved' else 'confirms you play for them' }}</span>
+            </li>
+          {% endif %}
+        </ul>
+        <p class="approval-prompt-note">
+          {% if p.reason == 'registered' %}You can log in now and follow each approval on your dashboard.
+          {% else %}You can follow each approval on your dashboard.{% endif %}
+        </p>
+      </div>
+      <div class="approval-prompt-actions">
+        {% if p.org == 'rejected' and current_user.is_authenticated %}
+          <a href="{{ url_for('profile') }}#editProfile" class="btn btn-outline-secondary approval-prompt-btn">Fix my team name</a>
+        {% endif %}
+        <button type="button" class="btn dart-btn approval-prompt-close">Got it</button>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+  .approval-prompt {
+    position: fixed; inset: 0; z-index: 2100; display: grid; place-items: center; padding: 16px;
+    background: rgba(5, 15, 10, 0.55); backdrop-filter: blur(3px);
+    animation: approvalPromptFade 0.2s ease-out;
+  }
+  .approval-prompt[hidden] { display: none; }
+  .approval-prompt-card {
+    width: min(460px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; padding: 22px 20px 18px;
+    border-radius: 22px; text-align: left; color: var(--text-color, inherit);
+    background: var(--surface-bg, #fff); border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+    animation: approvalPromptPop 0.25s cubic-bezier(.2, .9, .3, 1.2);
+  }
+  .approval-prompt-icon {
+    width: 56px; height: 56px; margin: 0 auto 12px; display: grid; place-items: center; border-radius: 50%;
+    font-size: 1.5rem; color: #fff; background: var(--dart-primary-gradient, #198754);
+  }
+  .approval-prompt h2 { font-size: 1.15rem; font-weight: 800; text-align: center; margin: 0 0 12px; }
+  .approval-prompt p { font-size: 0.92rem; margin-bottom: 10px; }
+  .approval-prompt-what { text-align: center; font-weight: 700; }
+  .approval-prompt-steps { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+  .approval-prompt-steps li {
+    display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; border-radius: 12px; font-size: 0.9rem;
+    background: rgba(245, 197, 66, 0.1); border: 1px solid rgba(245, 197, 66, 0.4);
+  }
+  .approval-prompt-steps li > i { margin-top: 3px; color: #b8860b; }
+  .approval-prompt-steps li.is-done { background: rgba(25, 135, 84, 0.08); border-color: rgba(25, 135, 84, 0.3); }
+  .approval-prompt-steps li.is-done > i { color: #198754; }
+  .approval-prompt-steps li.is-skip { opacity: 0.8; background: transparent; border-style: dashed; }
+  .approval-prompt-steps li.is-skip > i { color: var(--muted-text, #6c757d); }
+  .approval-prompt-steps li.is-no { background: rgba(220, 53, 69, 0.08); border-color: rgba(220, 53, 69, 0.35); }
+  .approval-prompt-steps li.is-no > i { color: #dc3545; }
+  .approval-prompt-note { color: var(--muted-text, #6c757d); font-size: 0.85rem !important; }
+  .approval-prompt-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
+  .approval-prompt-actions .btn { border-radius: 999px; min-width: 120px; }
+  .approval-prompt-close { color: #fff; }
+  @keyframes approvalPromptFade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes approvalPromptPop { from { transform: translateY(12px) scale(0.97); opacity: 0; } to { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .approval-prompt, .approval-prompt-card { animation: none; } }
+</style>
+<script>
+(function () {
+  var root = document.getElementById('approvalPrompt');
+  if (!root) return;
+  var card = root.querySelector('.approval-prompt-card');
+  var before = null;
+
+  function close() {
+    root.hidden = true;
+    document.removeEventListener('keydown', onKey);
+    if (before && before.focus) before.focus({ preventScroll: true });
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') close();
+    if (e.key === 'Tab') {                      // keep focus inside the pop-up
+      var f = card.querySelectorAll('a[href], button');
+      if (!f.length) return;
+      if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+      else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+    }
+  }
+  function open() {
+    before = document.activeElement;
+    root.hidden = false;
+    root.querySelector('.approval-prompt-close').focus({ preventScroll: true });
+    document.addEventListener('keydown', onKey);
+  }
+
+  root.querySelectorAll('.approval-prompt-close').forEach(function (b) { b.addEventListener('click', close); });
+  root.addEventListener('click', function (e) { if (!card.contains(e.target)) close(); });
+
+  // A welcome celebration on the same page goes first; then this pop-up.
+  function whenFree() {
+    var c = document.getElementById('dartCelebration');
+    if (c && document.body.contains(c) && !c.hidden) { setTimeout(whenFree, 400); return; }
+    open();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(whenFree, 150); });
+  else setTimeout(whenFree, 150);
+})();
+</script>
+{% endif %}
