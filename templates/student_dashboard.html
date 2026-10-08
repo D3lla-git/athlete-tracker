@@ -28,6 +28,48 @@
 {% if current_user.is_verified %}
   {% include '_record_form.html' %}
 
+{% elif current_user.org_approval is not none %}
+  {# New accounts: coach + the team's organization approve the profile. #}
+  {% set u = current_user %}
+  <section class="go-live" aria-labelledby="goLiveTitle">
+    <h5 id="goLiveTitle"><i class="fa-solid fa-hourglass-half"></i> Your profile is waiting to go live</h5>
+    <p>Before your profile appears on D.A.R.T. and you can submit records, it must be approved by:</p>
+    <ul class="go-live-steps">
+      <li class="{{ 'is-done' if u.coach_verified }}">
+        <i class="fa-solid {{ 'fa-circle-check' if u.coach_verified else 'fa-hourglass-half' }}"></i>
+        <span><strong>Your coach</strong> at {{ u.school }} ({{ 'approved' if u.coach_verified else 'checks your ID and approves your profile' }})</span>
+      </li>
+      {% if u.org_approval == 'not_required' %}
+        <li class="is-skip">
+          <i class="fa-solid fa-minus"></i>
+          <span><strong>{{ u.school }}</strong> has no organization account on D.A.R.T. yet, so your coach's approval is enough.</span>
+        </li>
+      {% elif u.org_approval == 'rejected' %}
+        <li class="is-no">
+          <i class="fa-solid fa-circle-xmark"></i>
+          <span><strong>{{ u.org_approval_name }}</strong> says you don't play for them. Check the spelling of your team / school in
+            <a href="{{ url_for('profile') }}#editProfile">My Profile</a>: it must be exactly your team's name.</span>
+        </li>
+      {% else %}
+        <li class="{{ 'is-done' if u.org_approval == 'approved' }}">
+          <i class="fa-solid {{ 'fa-circle-check' if u.org_approval == 'approved' else 'fa-hourglass-half' }}"></i>
+          <span><strong>{{ u.org_approval_name }}</strong> ({{ 'confirmed you play for them' if u.org_approval == 'approved' else 'confirms you play for them' }})</span>
+        </li>
+      {% endif %}
+    </ul>
+  </section>
+  <style>
+    .go-live { margin-bottom: 18px; padding: 16px 18px; border-radius: 18px; background: rgba(245, 197, 66, 0.12); border: 1px solid rgba(245, 197, 66, 0.55); }
+    .go-live h5 { font-weight: 800; display: flex; gap: 8px; align-items: center; }
+    .go-live h5 i { color: #b8860b; }
+    .go-live p { font-size: 0.9rem; margin-bottom: 8px; }
+    .go-live-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    .go-live-steps li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 12px; border-radius: 12px; font-size: 0.9rem; background: var(--surface-bg, #fff); border: 1px solid var(--surface-border, rgba(0,0,0,.08)); }
+    .go-live-steps li > i { margin-top: 3px; color: #b8860b; }
+    .go-live-steps li.is-done > i { color: #198754; }
+    .go-live-steps li.is-no > i { color: #dc3545; }
+    .go-live-steps li.is-skip > i { color: #6c757d; }
+  </style>
 {% else %}
   <div class="alert alert-warning">
     Your Athlete ID is still pending verification. You cannot submit records yet.

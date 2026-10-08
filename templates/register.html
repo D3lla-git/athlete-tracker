@@ -30,9 +30,56 @@
             <input type="text" name="full_name" placeholder="Example: John Brown" class="form-control" value="{{ google_signup.name if google_signup else '' }}" required>
           </div>
           <div class="mb-3">
-            <label>Team Name <i class="fa-solid fa-users"></i></label>
-            <input type="text" name="school" placeholder="Example: St. John's High School/Bea Mountain FC" class="form-control" required>
+            <label for="regTeam">Team Name <i class="fa-solid fa-users"></i></label>
+            <input type="text" name="school" id="regTeam" placeholder="Example: St. John's High School/Bea Mountain FC" class="form-control"
+                   required maxlength="150" autocomplete="organization" aria-describedby="regTeamNote regTeamCheck">
+            <small class="team-note" id="regTeamNote">
+              <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+              <span>Spell it exactly as your team / school / academy is officially named: your coach <strong>and</strong> your
+              team's organization must approve your profile before it goes live.</span>
+            </small>
+            <small class="team-check" id="regTeamCheck" aria-live="polite" hidden></small>
           </div>
+          <style>
+            .team-note { display: flex; gap: 6px; align-items: flex-start; margin-top: 6px; font-size: 0.8rem; line-height: 1.4; color: var(--muted-text, #6c757d); }
+            .team-note i { margin-top: 2px; color: #198754; }
+            .team-check { display: flex; gap: 6px; align-items: flex-start; margin-top: 4px; font-size: 0.8rem; font-weight: 600; }
+            .team-check.is-found { color: #146c43; }
+            .team-check.is-none { color: #8a6d00; }
+            html[data-theme="dark"] .team-check.is-found { color: #4cd38a; }
+            html[data-theme="dark"] .team-check.is-none { color: #f5c542; }
+          </style>
+          <script>
+            (function () {
+              // Tell the athlete while typing whether their team is on D.A.R.T.
+              var input = document.getElementById('regTeam'), out = document.getElementById('regTeamCheck');
+              if (!input || !out) return;
+              var timer = null, last = '';
+              input.addEventListener('input', function () {
+                clearTimeout(timer);
+                var name = input.value.trim();
+                if (name.length < 3) { out.hidden = true; return; }
+                timer = setTimeout(function () {
+                  last = name;
+                  fetch('/api/team-check?name=' + encodeURIComponent(name))
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (data) {
+                      if (!data || input.value.trim() !== last) return;
+                      out.hidden = false;
+                      if (data.organization) {
+                        out.className = 'team-check is-found';
+                        out.innerHTML = '<i class="fa-solid fa-circle-check"></i><span></span>';
+                        out.querySelector('span').textContent = data.organization + ' is on D.A.R.T.: they will confirm you play for them, and your coach approves your profile.';
+                      } else {
+                        out.className = 'team-check is-none';
+                        out.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i><span>No organization with this exact name is on D.A.R.T. yet. Check the spelling; if it is right, your coach\'s approval is enough.</span>';
+                      }
+                    })
+                    .catch(function () { out.hidden = true; });
+                }, 400);
+              });
+            })();
+          </script>
           <div class="mb-3">
   <label class="form-label">
     Gender <i class="fa-solid fa-venus-mars"></i>

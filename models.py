@@ -63,6 +63,16 @@ class User(UserMixin, db.Model):
     # Records a coach rejected as FAKE (kept even if the athlete deletes the
     # record). 1st = warning, 2nd = final warning, 3rd = account suspended.
     fake_record_strikes = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+    # Two-step approval for NEW athletes (None = account from before this
+    # rule: the coach alone verified it). The profile goes live
+    # (is_verified) once the coach approved it AND the organization of
+    # their team / school approved it - or no such organization is on
+    # D.A.R.T. ('not_required').
+    coach_verified = db.Column(db.Boolean, nullable=True)
+    org_approval = db.Column(db.String(12), nullable=True)      # pending / approved / rejected / not_required
+    org_approval_by = db.Column(db.BigInteger, nullable=True)   # the Organization user asked to approve
+    org_approval_name = db.Column(db.String(150), nullable=True)
+    org_approved_at = db.Column(db.DateTime, nullable=True)
     # A suspended account can't sign in or use D.A.R.T. until the Super
     # Admin lifts it.
     is_suspended = db.Column(db.Boolean, nullable=False, default=False, server_default='false')

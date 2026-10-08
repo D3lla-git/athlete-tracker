@@ -72,7 +72,7 @@ import pyotp
 import qrcode
 import secrets
 from flask_mail import Mail, Message
-from sqlalchemy import or_, func, select
+from sqlalchemy import or_, and_, case, func, select, true as sa_true, false as sa_false
 from sqlalchemy.orm import contains_eager, joinedload
 from sqlalchemy.exc import OperationalError
 from authlib.integrations.flask_client import OAuth
@@ -808,14 +808,13 @@ def suggest_names():
     if not q:
         return jsonify([])
 
-    # Only names that START with the typed letters (% and _ are typed
-    # characters here, not wildcards).
-    escaped = q.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+    # Any word of the name may start with what is typed ("fel" -> "August
+    # Felix Wleh-Sam"; "wleh sam" too); names starting with it come first.
     students = User.query.filter(
         User.role == 'Athlete',
         User.is_verified == True,
-        User.full_name.ilike(f'{escaped}%', escape='\\')
-    ).order_by(User.full_name).limit(8).all()
+        name_suggestion_filter(User.full_name, q)
+    ).order_by(*suggestion_order(User.full_name, q)).limit(8).all()
 
     return jsonify([{'full_name': s.full_name} for s in students])
 
@@ -867,9 +866,9 @@ def suggest_message_recipients():
             User.id != current_user.id,
             User.role.in_(allowed_roles),
             User.is_verified == True,
-            User.full_name.ilike(f'%{query}%')
+            text_matches(User.full_name, query[:80])
         )
-        .order_by(User.full_name.asc())
+        .order_by(*suggestion_order(User.full_name, query))
         .limit(10)
         .all()
     )
@@ -1678,6 +1677,57 @@ def _like(value):
     return f'%{escaped}%'
 
 
+# ---------- Name / text search used everywhere ----------
+# "August Felix Wleh-Sam" is found by "august", "Felix", "WLEH", "sam",
+# "wleh sam", "Sam August"...: what is typed is split into words and every
+# word must appear in the name, in any order, ignoring capital letters,
+# hyphens, dots and apostrophes.
+SEARCH_WORD_RE = re.compile(r"[^\s\-.,'’`/()]+")
+SEARCH_MAX_WORDS = 6
+
+
+def search_words(text):
+    return SEARCH_WORD_RE.findall((text or '').lower())[:SEARCH_MAX_WORDS]
+
+
+def text_matches(column, text):
+    """SQL condition: every typed word appears somewhere in `column` (any case)."""
+    words = search_words(text)
+    if not words:
+        return sa_true()
+    # "St. Mary's" is also found by "st marys": ignore apostrophes and dots.
+    plain = func.replace(func.replace(func.replace(column, "'", ''), '’', ''), '.', '')
+    return and_(*[plain.ilike(_like(word), escape='\\') for word in words])
+
+
+def _escape_like(value):
+    return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+
+def word_starts_with(column, word):
+    """`column` has a word starting with `word` ("fel" -> "August Felix")."""
+    w = _escape_like(word)
+    return or_(*[column.ilike(pattern, escape='\\') for pattern in (
+        f'{w}%', f'% {w}%', f'%-{w}%', f"%'{w}%", f'%.{w}%', f'%({w}%')])
+
+
+def name_suggestion_filter(column, text):
+    """As-you-type suggestions: every typed word starts a word of the name."""
+    words = search_words(text)
+    if not words:
+        return sa_false()
+    return and_(*[word_starts_with(column, word) for word in words])
+
+
+def suggestion_order(column, text):
+    """Names that start with what was typed come first, then A-Z."""
+    first = _escape_like((text or '').strip().lower())
+    return (case((column.ilike(f'{first}%', escape='\\'), 0), else_=1), column)
+
+
+app.jinja_env.globals['search_words'] = search_words
+
+
 def coach_search():
     args = request.args
     name = args.get('name', '').strip()[:80]
@@ -1704,16 +1754,15 @@ def coach_search():
 
     query = User.query.filter(User.role == 'Coach', User.is_verified.is_(True), User.is_suspended.is_(False))
     if name:
-        query = query.filter(User.full_name.ilike(_like(name), escape='\\'))
+        query = query.filter(text_matches(User.full_name, name))
     if team:
         # Current team, any team they coached, or a team in their records.
-        team_like = _like(team)
         query = query.filter(or_(
-            User.school.ilike(team_like, escape='\\'),
+            text_matches(User.school, team),
             User.id.in_(db.session.query(CoachTeam.coach_id).filter(
-                CoachTeam.status.in_(('approved', 'left')), CoachTeam.team_name.ilike(team_like, escape='\\'))),
+                CoachTeam.status.in_(('approved', 'left')), text_matches(CoachTeam.team_name, team))),
             User.id.in_(db.session.query(CoachGameRecord.coach_id).filter(
-                CoachGameRecord.status == 'approved', CoachGameRecord.team_name.ilike(team_like, escape='\\'))),
+                CoachGameRecord.status == 'approved', text_matches(CoachGameRecord.team_name, team))),
         ))
     coaches = query.order_by(User.full_name).limit(200).all()
 
@@ -1892,20 +1941,20 @@ def search():
 
     # ---------- Basic ----------
     if name:
-        query = query.filter(User.full_name.ilike(_like(name[:80]), escape='\\'))
+        query = query.filter(text_matches(User.full_name, name[:80]))
 
     # Team: record team or athlete school.
     if school:
         query = query.filter(
             or_(
-                SportRecord.team.ilike(_like(school[:80]), escape='\\'),
-                User.school.ilike(_like(school[:80]), escape='\\')
+                text_matches(SportRecord.team, school[:80]),
+                text_matches(User.school, school[:80])
             )
         )
 
     if team_played_against:
         query = query.filter(
-            SportRecord.team_played_against.ilike(_like(team_played_against[:80]), escape='\\')
+            text_matches(SportRecord.team_played_against, team_played_against[:80])
         )
 
     if year:
@@ -2862,6 +2911,9 @@ def register(registration_category=None):
 
             user.set_password(password)
             attach_google_signup(user)
+            # New rule: coach + the team's organization (if on D.A.R.T.).
+            user.coach_verified = False
+            start_org_approval(user)
             db.session.add(user)
             db.session.flush()
             record_account_created(user)
@@ -4109,9 +4161,9 @@ def message_recipients():
     users = User.query.filter(
         User.id != current_user.id,
         User.role.in_(allowed_roles),
-        User.full_name.ilike(f'%{q}%')
+        text_matches(User.full_name, q[:80])
     ).order_by(
-        User.full_name.asc()
+        *suggestion_order(User.full_name, q)
     ).limit(12).all()
 
     recipients = []
@@ -5360,6 +5412,48 @@ def organizations_listing(athlete):
     ]
 
 
+# ---------- New athletes: coach + organization approval ----------
+# Accounts created from now on need two approvals before the profile goes
+# live (User.is_verified): their coach (profile + later every record) and
+# the organization of the team / school they typed (profile only: "this
+# athlete plays for us"). If no verified organization with that name is on
+# D.A.R.T., the coach's approval is enough. Older accounts keep the old
+# rule (org_approval is None).
+def find_team_organization(team_name):
+    """The verified organization whose name or approved alias matches, or None."""
+    key = normalize_team_name(team_name)
+    if not key:
+        return None
+    for org in OrganizationProfile.query.filter_by(verification_status='verified').all():
+        if key in {normalize_team_name(n) for n in org.roster_names}:
+            return org
+    return None
+
+
+def start_org_approval(athlete):
+    """Decide (again) whether an organization must approve this athlete. Caller commits."""
+    org = find_team_organization(athlete.school)
+    if org:
+        athlete.org_approval = 'pending'
+        athlete.org_approval_by = org.user_id
+        athlete.org_approval_name = org.org_name
+    else:
+        athlete.org_approval = 'not_required'
+        athlete.org_approval_by = None
+        athlete.org_approval_name = None
+    athlete.org_approved_at = None
+    return org
+
+
+def finish_athlete_verification(athlete):
+    """Go live once every needed approval is there. Returns True if live now."""
+    if athlete.org_approval is None:                 # account from before the rule
+        athlete.is_verified = bool(athlete.coach_verified) or athlete.is_verified
+    else:
+        athlete.is_verified = bool(athlete.coach_verified) and athlete.org_approval in ('approved', 'not_required')
+    return athlete.is_verified
+
+
 def require_organization():
     """Verified organization accounts only (login already required 2FA)."""
     if not current_user.is_authenticated or current_user.role != 'Organization':
@@ -5626,7 +5720,69 @@ def organization_dashboard():
     )
     db.session.commit()
 
-    return render_template('organization_dashboard.html', org=org, data=data)
+    return render_template('organization_dashboard.html', org=org, data=data,
+                           athletes_to_confirm=athletes_to_confirm(org))
+
+
+def athletes_to_confirm(org):
+    """New athletes who registered under this organization and wait for it."""
+    return User.query.filter(
+        User.role == 'Athlete',
+        User.org_approval == 'pending',
+        User.org_approval_by == org.user_id,
+    ).order_by(User.created_at.asc()).all()
+
+
+@app.route('/organization/athletes/<int:athlete_id>/<action>', methods=['POST'])
+@login_required
+def organization_confirm_athlete(athlete_id, action):
+    """The organization confirms (or denies) that an athlete plays for it."""
+    org = require_organization()
+    athlete = db.session.get(User, athlete_id)
+    if (action not in ('approve', 'reject') or not athlete or athlete.role != 'Athlete'
+            or athlete.org_approval != 'pending' or athlete.org_approval_by != org.user_id):
+        abort(404)
+
+    athlete.org_approval = 'approved' if action == 'approve' else 'rejected'
+    athlete.org_approved_at = datetime.utcnow()
+    live = finish_athlete_verification(athlete) if action == 'approve' else False
+    create_audit_log(action=f'athlete_org_{action}d', actor_user_id=current_user.id, target_type='User',
+                     target_id=str(athlete.id), details={'organization': org.org_name, 'live': live})
+    db.session.commit()
+
+    if action == 'approve':
+        flash(f'{athlete.full_name} confirmed as your athlete.'
+              + (' The profile is now live.' if live else ' The profile goes live once their coach also approves it.'), 'success')
+    else:
+        flash(f'{athlete.full_name} was marked as not your athlete. They are asked to correct their team name.', 'info')
+    return redirect(url_for('organization_dashboard') + '#confirm-athletes')
+
+
+@app.route('/admin/athletes/<int:user_id>/verify-now', methods=['POST'])
+@login_required
+def admin_athlete_override(user_id):
+    """Super Admin: make a new athlete live without the organization (e.g. it never answers)."""
+    require_super_admin()
+    athlete = db.session.get(User, user_id)
+    if not athlete or athlete.role != 'Athlete':
+        abort(404)
+    athlete.coach_verified = True
+    athlete.org_approval = 'approved'
+    athlete.org_approved_at = datetime.utcnow()
+    athlete.is_verified = True
+    create_audit_log(action='athlete_verified_override', actor_user_id=current_user.id, target_type='User',
+                     target_id=str(athlete.id), details={'organization': athlete.org_approval_name})
+    db.session.commit()
+    flash(f'{athlete.full_name} is verified and live (Super Admin override).', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/api/team-check')
+def team_check():
+    """Registration form: is this team / school on D.A.R.T. as an organization?"""
+    name = (request.args.get('name') or '').strip()[:150]
+    org = find_team_organization(name) if len(name) >= 3 else None
+    return jsonify({'organization': org.org_name if org else None})
 
 
 @app.route('/organization/roster.csv')
@@ -6435,7 +6591,7 @@ def _terms_acceptance_query(role_filter, q):
     if role_filter in ('Athlete', 'Coach', 'Scout', 'Organization'):
         query = query.filter(TermsAcceptance.role == role_filter)
     if q:
-        query = query.filter(TermsAcceptance.full_name.ilike(f'%{q}%'))
+        query = query.filter(text_matches(TermsAcceptance.full_name, q))
     return query.order_by(TermsAcceptance.accepted_at.desc())
 
 
@@ -8867,7 +9023,14 @@ def update_profile():
                 flash('Coaches change or add teams in My Coaching Career; the Super Admin approves each new team.', 'warning')
                 return redirect(url_for('profile'))
         else:
+            team_changed = normalize_team_name(new_school) != normalize_team_name(current_user.school)
             current_user.school = new_school
+            # New-rule athlete not live yet: a corrected team name goes to
+            # the right coach and organization from the start.
+            if (team_changed and current_user.role == 'Athlete' and not current_user.is_verified
+                    and current_user.org_approval is not None):
+                current_user.coach_verified = False
+                start_org_approval(current_user)
 
     # Coaches: date of birth, nationality and profile picture are Coach Pro.
     if is_coach and not coach_pro:
@@ -9379,6 +9542,26 @@ def verify_user(user_id):
     # Security check: coaches verify only ATHLETES of teams they manage.
     if current_user.role != 'System' and (user.role != 'Athlete' or not coaching.manages_athlete(current_user, user)):
         flash('You can only verify athletes from your own team.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    if user.role == 'Athlete' and user.org_approval is not None:
+        # New-rule account: the coach's part. An organization that joined
+        # D.A.R.T. after the athlete registered is asked now too.
+        if user.org_approval == 'not_required':
+            start_org_approval(user)
+        user.coach_verified = True
+        live = finish_athlete_verification(user)
+        create_audit_log(action='athlete_coach_approved', actor_user_id=current_user.id, target_type='User',
+                         target_id=str(user.id), details={'org_approval': user.org_approval, 'live': live})
+        db.session.commit()
+        if live:
+            flash(f'{user.full_name} has been verified and is now live.', 'success')
+        elif user.org_approval == 'rejected':
+            flash(f'You approved {user.full_name}, but {user.org_approval_name} said this athlete does not play for them. '
+                  'The athlete has been asked to correct their team name.', 'warning')
+        else:
+            flash(f'You approved {user.full_name}. The profile goes live once {user.org_approval_name} also confirms '
+                  'the athlete plays for them.', 'info')
         return redirect(url_for('admin_dashboard'))
 
     user.is_verified = True

@@ -215,9 +215,28 @@
         {% else %}
         <span class="badge bg-warning text-dark mt-1">No ID document uploaded</span>
         {% endif %}
+        {% if u.org_approval is not none %}
+          {# New accounts: coach + the team's organization must approve. #}
+          <div class="approval-steps mt-2">
+            <span class="approval-step {{ 'is-done' if u.coach_verified }}">
+              <i class="fa-solid {{ 'fa-circle-check' if u.coach_verified else 'fa-hourglass-half' }}"></i> Coach
+            </span>
+            {% if u.org_approval == 'not_required' %}
+              <span class="approval-step is-skip" title="{{ u.school }} has no organization account on D.A.R.T."><i class="fa-solid fa-minus"></i> No organization on D.A.R.T.</span>
+            {% else %}
+              <span class="approval-step {{ 'is-done' if u.org_approval == 'approved' else ('is-no' if u.org_approval == 'rejected' else '') }}">
+                <i class="fa-solid {{ 'fa-circle-check' if u.org_approval == 'approved' else ('fa-circle-xmark' if u.org_approval == 'rejected' else 'fa-hourglass-half') }}"></i>
+                {{ u.org_approval_name }}{% if u.org_approval == 'rejected' %}: not their athlete{% endif %}
+              </span>
+            {% endif %}
+          </div>
+        {% endif %}
       </div>
-            <div class="d-flex gap-2 flex-wrap">
+            <div class="d-flex gap-2 flex-wrap align-items-center">
 
+        {% if u.coach_verified and current_user.role != 'System' %}
+          <span class="approval-wait"><i class="fa-solid fa-circle-check"></i> Approved by you · waiting for {{ u.org_approval_name or 'the organization' }}</span>
+        {% else %}
         <!-- Verify Athlete -->
         <form method="POST"
               action="{{ url_for('verify_user', user_id=u.id) }}"
@@ -235,6 +254,17 @@
           </button>
 
         </form>
+        {% endif %}
+
+        {% if current_user.role == 'System' and u.org_approval in ('pending', 'rejected') %}
+          <form method="POST" action="{{ url_for('admin_athlete_override', user_id=u.id) }}" style="display:inline;"
+                onsubmit="return confirm('Make this profile live without the organization\'s approval?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-warning btn-sm dart-btn" title="Super Admin override">
+              <i class="fa-solid fa-gavel"></i> Verify without organization
+            </button>
+          </form>
+        {% endif %}
 
         <!-- Reject Athlete -->
         <form method="POST"
@@ -261,6 +291,22 @@
 {% else %}
   <p class="text-muted">No Athletes waiting for verification.</p>
 {% endif %}
+<style>
+  .approval-steps { display: flex; flex-wrap: wrap; gap: 6px; }
+  .approval-step {
+    display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 999px;
+    font-size: 0.78rem; font-weight: 700; color: #8a6d00; background: rgba(245, 197, 66, 0.22);
+  }
+  .approval-step.is-done { color: #146c43; background: rgba(25, 135, 84, 0.14); }
+  .approval-step.is-no { color: #b02a37; background: rgba(220, 53, 69, 0.12); }
+  .approval-step.is-skip { color: #6c757d; background: rgba(108, 117, 125, 0.12); }
+  html[data-theme="dark"] .approval-step { color: #f5c542; }
+  html[data-theme="dark"] .approval-step.is-done { color: #4cd38a; }
+  html[data-theme="dark"] .approval-step.is-no { color: #ff8a95; }
+  html[data-theme="dark"] .approval-step.is-skip { color: #adb5bd; }
+  .approval-wait { font-size: 0.85rem; font-weight: 700; color: #146c43; }
+  html[data-theme="dark"] .approval-wait { color: #4cd38a; }
+</style>
 
 <!-- ==================== MOBILE VIEW - PENDING RECORDS SLIDER ==================== -->
 <div class="d-md-none">

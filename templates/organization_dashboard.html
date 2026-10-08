@@ -37,6 +37,74 @@
     </div>
   </section>
 
+  <!-- ===================== CONFIRM NEW ATHLETES (free + Pro) ===================== -->
+  <section class="oh-confirm" id="confirm-athletes" aria-labelledby="ohConfirmTitle">
+    <div class="oh-confirm-head">
+      <h2 id="ohConfirmTitle"><i class="fa-solid fa-user-check"></i> Confirm your athletes
+        {% if athletes_to_confirm %}<span class="oh-confirm-badge">{{ athletes_to_confirm | length }}</span>{% endif %}</h2>
+      <p>New athletes who registered under <strong>{{ org.org_name }}</strong>. Confirm only people who really play for you: their profile goes live once you and their coach have approved it. Their coach approves their game records.</p>
+    </div>
+    {% if athletes_to_confirm %}
+      <ul class="oh-confirm-list">
+        {% for a in athletes_to_confirm %}
+          <li>
+            <div class="oh-confirm-who">
+              <strong>{{ a.full_name }}</strong>
+              <span>Team typed: “{{ a.school }}” · {{ a.athlete_category or 'Athlete' }} · registered {{ a.created_at.strftime('%b %d, %Y') if a.created_at else '' }}</span>
+              <span class="oh-confirm-coach {{ 'is-done' if a.coach_verified }}">
+                <i class="fa-solid {{ 'fa-circle-check' if a.coach_verified else 'fa-hourglass-half' }}"></i>
+                {{ 'Coach has approved' if a.coach_verified else 'Waiting for the coach too' }}
+              </span>
+            </div>
+            <div class="oh-confirm-actions">
+              <form method="POST" action="{{ url_for('organization_confirm_athlete', athlete_id=a.id, action='approve') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-success btn-sm oh-confirm-btn"><i class="fa-solid fa-check me-1"></i> Plays for us</button>
+              </form>
+              <form method="POST" action="{{ url_for('organization_confirm_athlete', athlete_id=a.id, action='reject') }}"
+                    onsubmit="return confirm('{{ a.full_name | e }} does not play for {{ org.org_name | e }}?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-outline-danger btn-sm oh-confirm-btn"><i class="fa-solid fa-xmark me-1"></i> Not our athlete</button>
+              </form>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="oh-confirm-empty"><i class="fa-solid fa-circle-check"></i> No athletes waiting for you.</p>
+    {% endif %}
+  </section>
+  <style>
+    .oh-confirm {
+      margin-top: 16px; padding: 18px; border-radius: 20px; scroll-margin-top: 90px;
+      background: var(--surface-bg); border: 1px solid var(--surface-border); border-left: 5px solid #f5c542;
+    }
+    .oh-confirm-head h2 { font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+    .oh-confirm-head h2 i { color: #198754; }
+    .oh-confirm-head p { color: var(--muted-text, #6c757d); font-size: 0.9rem; margin-bottom: 10px; }
+    .oh-confirm-badge { padding: 1px 10px; border-radius: 999px; font-size: 0.8rem; color: #3d2c00; background: #f5c542; }
+    .oh-confirm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+    .oh-confirm-list li {
+      display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px;
+      padding: 12px 14px; border-radius: 14px; border: 1px solid var(--surface-border);
+    }
+    .oh-confirm-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 260px; overflow-wrap: anywhere; }
+    .oh-confirm-who span { font-size: 0.82rem; color: var(--muted-text, #6c757d); }
+    .oh-confirm-coach { font-weight: 700; color: #8a6d00 !important; }
+    .oh-confirm-coach.is-done { color: #146c43 !important; }
+    html[data-theme="dark"] .oh-confirm-coach { color: #f5c542 !important; }
+    html[data-theme="dark"] .oh-confirm-coach.is-done { color: #4cd38a !important; }
+    .oh-confirm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .oh-confirm-actions form { margin: 0; }
+    .oh-confirm-btn { border-radius: 999px; font-weight: 700; white-space: nowrap; }
+    .oh-confirm-empty { margin: 0; color: var(--muted-text, #6c757d); }
+    @media (max-width: 575.98px) {
+      .oh-confirm-actions { width: 100%; }
+      .oh-confirm-actions form { flex: 1 1 0; }
+      .oh-confirm-btn { width: 100%; }
+    }
+  </style>
+
   {% if data.full %}
   <!-- ===================== KPIs ===================== -->
   <div class="oh-kpis">
@@ -419,9 +487,13 @@
   var rows = Array.prototype.slice.call(list.querySelectorAll('.oh-athlete'));
 
   function apply() {
-    var q = search.value.trim().toLowerCase(), s = sport.value, p = position.value, shown = 0;
+    // Every typed word must appear in the name, any order / case
+    // ("wleh sam" finds "August Felix Wleh-Sam").
+    var words = search.value.toLowerCase().split(/[\s\-.,'’`\/()]+/).filter(Boolean);
+    var s = sport.value, p = position.value, shown = 0;
     rows.forEach(function (row) {
-      var ok = (!q || row.dataset.name.indexOf(q) !== -1)
+      var name = row.dataset.name;
+      var ok = words.every(function (w) { return name.indexOf(w) !== -1; })
         && (!s || row.dataset.sports.split('|').indexOf(s) !== -1)
         && (!p || row.dataset.positions.split('|').indexOf(p) !== -1);
       row.hidden = !ok;
