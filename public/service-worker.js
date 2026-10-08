@@ -1,6 +1,6 @@
 // Bump this version whenever PRECACHE_URLS or caching behaviour changes.
 // Old 'dart-pwa-*' caches are deleted on activate.
-const CACHE_NAME = 'dart-pwa-v8';
+const CACHE_NAME = 'dart-pwa-v9';
 
 // Pages saved for offline use (the athlete dashboard). This name is
 // deliberately NOT versioned, so a service-worker update does not wipe an
@@ -8,7 +8,7 @@ const CACHE_NAME = 'dart-pwa-v8';
 const PAGES_CACHE = 'dart-pages-v1';
 
 // Versioned third-party CSS/JS/fonts (Bootstrap, Font Awesome).
-const CDN_CACHE = 'dart-cdn-v1';
+const CDN_CACHE = 'dart-cdn-v2';
 
 const OFFLINE_URL = '/offline';
 
@@ -59,7 +59,9 @@ self.addEventListener('activate', event => {
 
             await Promise.all(
                 cacheNames
-                    .filter(name => name.startsWith('dart-pwa-') && name !== CACHE_NAME)
+                    .filter(name =>
+                        (name.startsWith('dart-pwa-') && name !== CACHE_NAME) ||
+                        (name.startsWith('dart-cdn-') && name !== CDN_CACHE))
                     .map(name => caches.delete(name))
             );
 
@@ -132,7 +134,8 @@ async function refreshOfflinePage() {
 
     lastOfflinePageRefresh = Date.now();
 
-    const response = await fetch(OFFLINE_URL, { cache: 'reload' });
+    // Background request: does not count as the user being active.
+    const response = await fetch(OFFLINE_URL, { cache: 'reload', headers: { 'X-DART-Background': '1' } });
 
     if (response.ok) {
         const cache = await caches.open(CACHE_NAME);
@@ -149,7 +152,9 @@ async function saveOfflinePages() {
             const response = await fetch(pathname, {
                 credentials: 'same-origin',
                 cache: 'no-store',
-                redirect: 'follow'
+                redirect: 'follow',
+                // Background save: does not count as the user being active.
+                headers: { 'X-DART-Background': '1' }
             });
             await storeOfflinePage(pathname, response);
         } catch (error) {
@@ -191,7 +196,10 @@ self.addEventListener('fetch', event => {
                     const cache = await caches.open(CDN_CACHE);
                     const cachedResponse = await cache.match(request);
 
-                    if (cachedResponse) {
+                    // A saved "opaque" (no-CORS) copy can't be used for a
+                    // CORS request - the browser would block the file (e.g.
+                    // Bootstrap, which runs the menu button). Fetch it instead.
+                    if (cachedResponse && !(request.mode === 'cors' && cachedResponse.type === 'opaque')) {
                         return cachedResponse;
                     }
 

@@ -6236,7 +6236,7 @@ TERMS_EXEMPT_ROLES = ('System',)
 TERMS_OPEN_ENDPOINTS = {
     'accept_terms', 'logout', 'static', 'service_worker', 'offline',
     'privacy_page', 'terms_page', 'cookies_page', 'legal_page', 'organization_terms',
-    'robots_txt', 'sitemap_xml', 'profile_picture', 'record_sync_status',
+    'robots_txt', 'sitemap_xml', 'profile_picture', 'record_sync_status', 'session_keepalive',
 }
 
 TERMS_DOCUMENTS = {
@@ -6271,6 +6271,43 @@ SUSPENDED_MESSAGE = (
 NO_ACCOUNT_ENDPOINTS = {'static', 'service_worker', 'offline', 'robots_txt', 'sitemap_xml'}
 
 
+# ---------- Sign out after inactivity ----------
+# A signed-in user is signed out after SESSION_IDLE_SECONDS without real
+# activity (opening pages, submitting forms, or using the page: the
+# browser pings /session/keepalive while someone is reading or typing).
+# Background requests never count as activity: the dashboards' live
+# refresh, link prefetching, offline sync and service-worker saves.
+SESSION_IDLE_SECONDS = int(app.permanent_session_lifetime.total_seconds())   # config.py: 30 minutes
+SESSION_WARNING_SECONDS = 2 * 60
+BACKGROUND_ENDPOINTS = {'admin_dashboard_stats', 'record_sync_status'}
+IDLE_SIGNOUT_MESSAGE = 'For your security you were signed out after 30 minutes without activity. Please log in again.'
+
+
+def is_background_request():
+    return (
+        request.endpoint in BACKGROUND_ENDPOINTS
+        or is_prefetch()
+        or request.headers.get('X-DART-Background') == '1'
+    )
+
+
+app.jinja_env.globals.update(session_idle_seconds=SESSION_IDLE_SECONDS,
+                             session_warning_seconds=SESSION_WARNING_SECONDS)
+
+
+@user_logged_in.connect_via(app)
+def _start_activity_clock(sender, user, **extra):
+    session['_last_active'] = time.time()
+
+
+@app.route('/session/keepalive', methods=['POST'])
+def session_keepalive():
+    """The page is being used (reading, typing): keep the sign-in alive."""
+    if not current_user.is_authenticated:
+        return _no_store_json({'ok': False, 'reason': 'session_expired'}, 401)
+    return _no_store_json({'ok': True, 'idle_seconds': SESSION_IDLE_SECONDS})
+
+
 @app.before_request
 def require_terms_acceptance():
     # Checked before touching current_user, so these never hit the database.
@@ -6284,6 +6321,27 @@ def require_terms_acceptance():
             return _no_store_json({'ok': False, 'reason': 'suspended', 'error': SUSPENDED_MESSAGE}, 403)
         flash(SUSPENDED_MESSAGE, 'danger')
         return redirect(url_for('login'))
+
+    # Inactivity sign-out.
+    if current_user.is_authenticated:
+        now = time.time()
+        last = session.get('_last_active')
+        background = is_background_request()
+        if last is not None and now - float(last) > SESSION_IDLE_SECONDS:
+            logout_user()
+            session.pop('_last_active', None)
+            session.pop('pending_highlights', None)
+            if background:
+                # Carry on as a signed-out visitor (e.g. sync says "log in").
+                return None
+            if request.path.startswith('/api/') or request.endpoint == 'session_keepalive':
+                return _no_store_json({'ok': False, 'reason': 'session_expired',
+                                       'error': 'Your session expired. Please log in again.'}, 401)
+            flash(IDLE_SIGNOUT_MESSAGE, 'info')
+            next_url = request.full_path.rstrip('?') if request.method == 'GET' else None
+            return redirect(url_for('login', next=next_url))
+        if not background or last is None:
+            session['_last_active'] = now
 
     if request.endpoint in TERMS_OPEN_ENDPOINTS:
         return None

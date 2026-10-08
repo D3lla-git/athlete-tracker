@@ -92,6 +92,113 @@
     }, 0);
   });
 
+  // Safety net for the menu button: Bootstrap normally opens the menu. If
+  // its script could not load (bad connection, blocked CDN), open and
+  // close the menu here so the navigation is never locked.
+  document.addEventListener('click', function (event) {
+    var toggler = event.target.closest && event.target.closest('.navbar-toggler');
+    if (!toggler || (window.bootstrap && window.bootstrap.Collapse)) return;
+    var menu = document.querySelector(toggler.getAttribute('data-bs-target') || '#mainNavbar');
+    if (!menu) return;
+    var open = !menu.classList.contains('show');
+    menu.classList.toggle('show', open);
+    toggler.classList.toggle('collapsed', !open);
+    toggler.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+
+  // ---------- Sign out after inactivity ----------
+  // The server signs people out after N minutes without activity. Using
+  // the page (tap, type, scroll) counts: we tell the server now and then.
+  // Two minutes before the end a "Stay signed in" prompt appears; at the
+  // end the page reloads and the server shows the login page. All tabs
+  // share one clock (localStorage), so working in one tab keeps all alive.
+  (function idleSignOut() {
+    var body = document.body;
+    if (!body || body.dataset.dartAuth !== '1') return;
+
+    var IDLE = (+body.dataset.idleSeconds || 1800) * 1000;
+    var WARN = (+body.dataset.warningSeconds || 120) * 1000;
+    var PING_EVERY = 4 * 60 * 1000;
+    var KEY = 'dartLastActivity';
+    var lastPing = Date.now();
+    var prompt = null;
+
+    function store(time) { try { localStorage.setItem(KEY, String(time)); } catch (e) { /* private mode */ } }
+    function lastActivity() {
+      var mine = +(body.dataset.lastActivity || 0);
+      var shared = 0;
+      try { shared = +(localStorage.getItem(KEY) || 0); } catch (e) { /* ignore */ }
+      return Math.max(mine, shared);
+    }
+    function mark() {
+      var now = Date.now();
+      body.dataset.lastActivity = String(now);
+      store(now);
+      // Back from (almost) idle: always tell the server straight away.
+      if (prompt) {
+        hidePrompt();
+        ping();
+      } else if (now - lastPing > PING_EVERY) {
+        ping();
+      }
+    }
+    function ping() {
+      lastPing = Date.now();
+      return fetch(body.dataset.keepaliveUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': body.dataset.csrf, 'Accept': 'application/json' }
+      }).then(function (r) {
+        if (r.status === 401) location.reload();   // already signed out: show the login page
+      }).catch(function () { /* offline: try again on the next activity */ });
+    }
+    function showPrompt(secondsLeft) {
+      if (!prompt) {
+        prompt = document.createElement('div');
+        prompt.className = 'dart-idle-prompt';
+        prompt.setAttribute('role', 'alertdialog');
+        prompt.setAttribute('aria-live', 'assertive');
+        prompt.innerHTML =
+          '<div class="dart-idle-text"><i class="fa-solid fa-clock" aria-hidden="true"></i> ' +
+          '<span>For your security you will be signed out in <strong class="dart-idle-left"></strong>.</span></div>' +
+          '<button type="button" class="btn dart-btn dart-idle-stay">Stay signed in</button>';
+        prompt.querySelector('.dart-idle-stay').addEventListener('click', function () {
+          ping();
+          mark();
+        });
+        document.body.appendChild(prompt);
+      }
+      var m = Math.floor(secondsLeft / 60), s = secondsLeft % 60;
+      prompt.querySelector('.dart-idle-left').textContent = m + ':' + String(s).padStart(2, '0');
+    }
+    function hidePrompt() {
+      if (prompt) { prompt.remove(); prompt = null; }
+    }
+
+    body.dataset.lastActivity = String(Date.now());   // the page just loaded = activity
+    store(Date.now());
+    ['pointerdown', 'keydown', 'input', 'touchstart'].forEach(function (type) {
+      document.addEventListener(type, mark, { passive: true, capture: true });
+    });
+    var scrollTimer = null;
+    window.addEventListener('scroll', function () {
+      if (scrollTimer) return;
+      scrollTimer = setTimeout(function () { scrollTimer = null; mark(); }, 1000);
+    }, { passive: true });
+
+    setInterval(function () {
+      var idleFor = Date.now() - lastActivity();
+      if (idleFor >= IDLE + 3000) {
+        hidePrompt();
+        location.reload();          // the server signs out and shows the login page
+      } else if (idleFor >= IDLE - WARN) {
+        showPrompt(Math.max(0, Math.ceil((IDLE - idleFor) / 1000)));
+      } else if (prompt) {
+        hidePrompt();               // another tab was used
+      }
+    }, 1000);
+  })();
+
   // Back / forward (page restored from cache) or a download that didn't
   // leave the page: stop the bar.
   window.addEventListener('pageshow', stop);

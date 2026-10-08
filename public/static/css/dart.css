@@ -1658,3 +1658,30 @@ html[data-theme="dark"] .dart-slider-dot.is-active { background: #4cd38a; }
   .dart-slide { transition: none; }
   .dart-slider:not(.is-single) .dart-slide:not(.is-active) { transform: none; }
 }
+
+/* "You will be signed out" prompt (dart-nav.js). */
+.dart-idle-prompt {
+  position: fixed;
+  left: 50%;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  z-index: 2100;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 14px;
+  width: min(520px, calc(100% - 24px));
+  padding: 14px 16px;
+  transform: translateX(-50%);
+  border-radius: 18px;
+  color: #fff;
+  background: var(--dart-primary-gradient, #0d2413);
+  border: 1px solid rgba(245, 197, 66, 0.6);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  animation: dart-idle-in 0.25s ease-out;
+}
+.dart-idle-text { display: flex; gap: 8px; align-items: center; font-size: 0.92rem; }
+.dart-idle-text i { color: #f5c542; }
+.dart-idle-stay { border-radius: 999px; color: #fff; border-color: #fff !important; white-space: nowrap; }
+@media (min-width: 992px) { .dart-idle-prompt { bottom: 24px; } }
+@keyframes dart-idle-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
