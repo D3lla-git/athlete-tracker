@@ -17,6 +17,8 @@
 {% endmacro %}
 
 <style>
+  .dash-stat-link, .dash-stat-link:hover, .dash-stat-link:visited { display: block; color: inherit !important; text-decoration: none; }
+  .dash-stat-link:hover .dash-stat, .dash-stat-link:focus-visible .dash-stat { box-shadow: 0 0 0 2px #f5c542; }
   .dash-header {
     display: flex;
     flex-wrap: wrap;
@@ -245,6 +247,9 @@
       {{ stat_card('records_approved', 'Records Approved', 'fa-solid fa-circle-check', 'success') }}
       {{ stat_card('records_pending', 'Records Pending', 'fa-solid fa-hourglass-half', 'pending') }}
       {{ stat_card('athletes_managed', 'Athletes Managing', 'fa-solid fa-people-group', 'purple') }}
+      <a href="#pendingAthletes" class="dash-stat-link" aria-label="Athletes pending: see the list">
+        {{ stat_card('athletes_pending', 'Athletes Pending', 'fa-solid fa-user-clock', 'pending', 'Waiting to be approved') }}
+      </a>
     </div>
   </div>
 

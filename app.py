@@ -8986,6 +8986,21 @@ def coach_scope_records(coach):
     ]
 
 
+def coach_pending_athletes(coach):
+    """Athletes of every team the coach manages whose profile is not live yet."""
+    keys = coaching.team_keys(coach)
+    if not keys:
+        return []
+    return [
+        u for u in User.query.filter(
+            User.role == 'Athlete',
+            User.is_verified.is_(False),
+            func.lower(func.trim(User.school)).in_(keys)
+        ).all()
+        if coaching.manages_athlete(coach, u)
+    ]
+
+
 def coach_dashboard_data(coach):
     records = coach_scope_records(coach)
 
@@ -9059,6 +9074,8 @@ def coach_dashboard_data(coach):
         'records_pending': by_status.get('pending', 0),
         'records_rejected': by_status.get('rejected', 0),
         'athletes_managed': athletes_managed,
+        # Not live yet: waiting for this coach (and / or their organization).
+        'athletes_pending': len(coach_pending_athletes(coach)),
     }
 
     # Approved records the coach can view (read-only), newest game first.
@@ -9108,16 +9125,7 @@ def admin_dashboard():
             is_verified=False
         ).all()
     else:
-        # Athletes of every team the coach manages.
-        keys = coaching.team_keys(current_user)
-        pending_users = [
-            u for u in User.query.filter(
-                User.role == 'Athlete',
-                User.is_verified.is_(False),
-                func.lower(func.trim(User.school)).in_(keys or {''})
-            ).all()
-            if coaching.manages_athlete(current_user, u)
-        ]
+        pending_users = coach_pending_athletes(current_user)
 
     # ==========================================================
     # PENDING COACH APPROVALS
