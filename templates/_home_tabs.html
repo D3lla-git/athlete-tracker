@@ -1,0 +1,27 @@
+{# Top tabs, like X's "For you | Following": Home (the home page) | Highlights (the feed).
+   Set `home_tab` to 'home' or 'highlights' before including. #}
+<nav class="home-tabs" aria-label="Home sections">
+  <a href="{{ url_for('index') }}" class="home-tab {{ 'active' if home_tab == 'home' }}" {% if home_tab == 'home' %}aria-current="page"{% endif %}>
+    <span>Home</span>
+  </a>
+  <a href="{{ url_for('feed') }}" class="home-tab {{ 'active' if home_tab == 'highlights' }}" {% if home_tab == 'highlights' %}aria-current="page"{% endif %}>
+    <span><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> Highlights</span>
+  </a>
+</nav>
+<style>
+  .home-tabs {
+    display: flex; margin: -8px 0 18px; border-bottom: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+  }
+  .home-tab {
+    flex: 1 1 0; display: flex; justify-content: center; padding: 12px 8px 0;
+    font-weight: 700; text-decoration: none; color: var(--muted-text, #6c757d) !important;
+    transition: background-color 0.15s ease;
+  }
+  .home-tab:hover { background: rgba(25, 135, 84, 0.06); }
+  .home-tab span {
+    display: inline-flex; align-items: center; gap: 7px; padding-bottom: 10px;
+    border-bottom: 4px solid transparent; border-radius: 2px;
+  }
+  .home-tab.active { color: inherit !important; }
+  .home-tab.active span { border-bottom-color: #198754; }
+</style>

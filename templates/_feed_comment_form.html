@@ -1,0 +1,15 @@
+{# Write a comment (post page + the feed's comments sheet). #}
+{% if can_interact %}
+  <form class="fp-c-form" data-comment-form novalidate>
+    <label class="visually-hidden" for="{{ comment_field_id | default('fpCommentBody') }}">Write a comment</label>
+    <textarea id="{{ comment_field_id | default('fpCommentBody') }}" name="body" rows="1" maxlength="300" required
+              placeholder="Add a comment about the play…"></textarea>
+    <button type="submit" class="btn dart-btn fp-c-send" aria-label="Post comment"><i class="fa-solid fa-paper-plane"></i></button>
+    <div class="fp-c-error" role="alert" hidden></div>
+  </form>
+  <p class="fp-c-rules">Keep it about the sport. No links, insults or personal details: the Super Admin removes comments that break the rules.</p>
+{% elif current_user.is_authenticated %}
+  <p class="fp-c-locked"><i class="fa-solid fa-lock"></i> Commenting opens once your account is verified.</p>
+{% else %}
+  <p class="fp-c-locked"><a href="{{ url_for('login', next=request.path) }}">Log in</a> to like, repost, save and comment.</p>
+{% endif %}

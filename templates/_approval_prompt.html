@@ -7,7 +7,7 @@
 <div class="approval-prompt" id="approvalPrompt" role="dialog" aria-modal="true" aria-labelledby="approvalPromptTitle" aria-describedby="approvalPromptBody" hidden>
   <div class="approval-prompt-card">
     <div class="approval-prompt-icon" aria-hidden="true">
-      <i class="fa-solid {{ 'fa-file-circle-check' if p.kind == 'record' else 'fa-user-clock' }}"></i>
+      <i class="fa-solid {{ 'fa-file-circle-check' if p.kind == 'record' else 'fa-photo-film' if p.kind == 'highlight' else 'fa-user-clock' }}"></i>
     </div>
 
     {% if p.kind == 'record' %}
@@ -31,6 +31,26 @@
         {% if p.action == 'edited' %}
           <p class="approval-prompt-note">Every edit goes back to Pending until your coach approves the changes.</p>
         {% endif %}
+      </div>
+      <div class="approval-prompt-actions">
+        <button type="button" class="btn dart-btn approval-prompt-close">Got it</button>
+      </div>
+
+    {% elif p.kind == 'highlight' %}
+      <h2 id="approvalPromptTitle">{{ 'Video' if p.media == 'video' else 'Photo' }} sent for approval</h2>
+      <div id="approvalPromptBody">
+        <p>It goes live on your profile and in the <strong>Highlights</strong> feed once {{ 'both approve' if p.coach == 'pending' else 'it is approved' }}:</p>
+        <ul class="approval-prompt-steps">
+          <li class="is-done"><i class="fa-solid fa-circle-check"></i>
+            <span><strong>Uploaded</strong> · passed the first safety check</span></li>
+          <li class="{{ 'is-done' if p.admin_done }}"><i class="fa-solid {{ 'fa-circle-check' if p.admin_done else 'fa-hourglass-half' }}"></i>
+            <span><strong>D.A.R.T. Super Admin</strong> {{ 'approved it' if p.admin_done else 'checks it is real sports action' }}</span></li>
+          {% if p.coach == 'pending' %}
+            <li><i class="fa-solid fa-hourglass-half"></i>
+              <span><strong>Your coach{% if p.team %} at {{ p.team }}{% endif %}</strong> approves it</span></li>
+          {% endif %}
+        </ul>
+        <p class="approval-prompt-note">Only football, basketball and kickball action is allowed. Anything else is rejected and counts as a strike.</p>
       </div>
       <div class="approval-prompt-actions">
         <button type="button" class="btn dart-btn approval-prompt-close">Got it</button>

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ post.user.full_name }}{{ ' · ' ~ post.sport if post.sport }} highlight · D.A.R.T.{% endblock %}
+{% block meta_description %}{{ post.caption or (post.user.full_name ~ "'s " ~ (post.sport or 'sports') ~ ' highlight on D.A.R.T.') }}{% endblock %}
+{% block robots %}<meta name="robots" content="{{ 'index, follow' if indexable else 'noindex, nofollow' }}">{% endblock %}
+{% block og_type %}{{ 'video.other' if post.is_video else 'article' }}{% endblock %}
+{% block og_image %}{{ highlight_url(post) if not post.is_video else site_url(url_for('static', filename='images/icons/icon-512.png')) }}{% endblock %}
+{% block twitter_card %}{{ 'summary' if post.is_video else 'summary_large_image' }}{% endblock %}
+
+{% block content %}
+{% from '_feed_card.html' import feed_card %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-feed.css') }}">
+<div class="feed-page" id="feedRoot"
+     data-csrf="{{ csrf_token() }}"
+     data-can-interact="{{ '1' if can_interact else '0' }}"
+     data-signed-in="{{ '1' if current_user.is_authenticated else '0' }}"
+     data-login-url="{{ url_for('login', next=request.path) }}"
+     data-single="1">
+
+  <a href="{{ url_for('feed') }}" class="feed-back"><i class="fa-solid fa-arrow-left"></i> Highlights</a>
+
+  <div class="feed-list">
+    {{ feed_card(post, state, can_interact, full=true) }}
+  </div>
+
+  <section class="fp-thread" aria-labelledby="fpThreadTitle" data-post="{{ post.id }}">
+    <h2 id="fpThreadTitle" class="fp-thread-title">Comments</h2>
+    {% include '_feed_comment_form.html' %}
+    <ul class="fp-comments" data-comments>
+      {% for c in comments %}
+        <li class="fp-c" data-comment="{{ c.id }}">
+          <div class="fp-c-head">
+            <a href="{{ c.author_url }}" class="fp-c-name">{{ c.author }}</a>
+            {% if c.is_athlete %}<span class="fp-c-tag">Athlete</span>{% elif c.role in ('Coach', 'Scout', 'Organization') %}<span class="fp-c-role">{{ c.role }}</span>{% endif %}
+            <span class="fp-c-ago">· {{ c.ago }}</span>
+            {% if c.can_delete %}
+              <button type="button" class="fp-c-del" data-delete-comment="{{ c.id }}" aria-label="Delete comment" title="Delete"><i class="fa-solid fa-trash"></i></button>
+            {% endif %}
+          </div>
+          <p class="fp-c-body">{{ c.body }}</p>
+        </li>
+      {% endfor %}
+    </ul>
+    <p class="fp-c-empty" data-comments-empty {% if comments %}hidden{% endif %}>No comments yet. Start the conversation.</p>
+    {% if more_comments %}
+      <button type="button" class="btn btn-outline-secondary btn-sm fp-c-more" data-more-comments>Show more comments</button>
+    {% endif %}
+  </section>
+</div>
+<script src="{{ url_for('static', filename='js/dart-feed.js') }}" defer></script>
+{% endblock %}

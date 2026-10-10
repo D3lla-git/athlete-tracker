@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Highlights · D.A.R.T.{% endblock %}
+{% block meta_description %}Watch verified football, basketball and kickball highlights from athletes in Liberia: action photos and videos approved by their coaches and D.A.R.T.{% endblock %}
+{% block canonical %}{{ site_url(url_for('feed')) }}{% endblock %}
+{% block robots %}<meta name="robots" content="{{ 'index, follow' if tab == 'foryou' and not sport and page == 1 else 'noindex, follow' }}">{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-feed.css') }}">
+<div class="feed-page" id="feedRoot"
+     data-csrf="{{ csrf_token() }}"
+     data-can-interact="{{ '1' if can_interact else '0' }}"
+     data-signed-in="{{ '1' if current_user.is_authenticated else '0' }}"
+     data-login-url="{{ url_for('login', next=request.full_path if request.query_string else request.path) }}">
+
+  {% set home_tab = 'highlights' %}{% include '_home_tabs.html' %}
+
+  {# For you | Latest | Saved, then sport filters #}
+  <div class="feed-bar">
+    <nav class="feed-modes" aria-label="Highlights view">
+      {% for key, label in (('foryou', 'For you'), ('latest', 'Latest'), ('saved', 'Saved')) %}
+        <a href="{{ url_for('feed', tab=key if key != 'foryou' else None, sport=sport or None) }}"
+           class="feed-mode {{ 'active' if tab == key }}" {% if tab == key %}aria-current="page"{% endif %}>
+          {% if key == 'saved' %}<i class="fa-solid fa-bookmark" aria-hidden="true"></i> {% endif %}{{ label }}
+        </a>
+      {% endfor %}
+    </nav>
+    <nav class="feed-sports" aria-label="Sport">
+      <a href="{{ url_for('feed', tab=tab if tab != 'foryou' else None) }}" class="feed-chip {{ 'active' if not sport }}">All</a>
+      {% for s in ('Football', 'Basketball', 'Kickball') %}
+        <a href="{{ url_for('feed', tab=tab if tab != 'foryou' else None, sport=s) }}" class="feed-chip {{ 'active' if sport == s }}">{{ s }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+
+  {% if can_post %}
+    <a href="{{ url_for('student_dashboard') }}#highlights" class="feed-compose">
+      <span class="feed-compose-icon" aria-hidden="true"><i class="fa-solid fa-plus"></i></span>
+      <span><strong>Post a highlight</strong><small>Football, basketball or kickball action · photo or video up to 1 minute</small></span>
+    </a>
+  {% elif current_user.is_authenticated and current_user.role == 'Athlete' %}
+    <div class="feed-note"><i class="fa-solid fa-lock"></i> You can post highlights once your profile is approved.</div>
+  {% endif %}
+
+  <div class="feed-list" id="feedList" aria-live="polite">
+    {% if posts %}
+      {% include '_feed_posts.html' %}
+    {% else %}
+      <div class="feed-empty">
+        <i class="fa-solid {{ 'fa-bookmark' if tab == 'saved' else 'fa-clapperboard' }}" aria-hidden="true"></i>
+        {% if tab == 'saved' %}
+          <strong>No saved posts yet</strong>
+          <span>Tap <i class="fa-regular fa-bookmark"></i> on a highlight to keep it here. Only you can see your saved posts.</span>
+        {% else %}
+          <strong>No highlights {{ 'for ' ~ sport if sport else 'yet' }}</strong>
+          <span>Approved football, basketball and kickball action from D.A.R.T. athletes shows up here.</span>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  <p class="feed-rules"><i class="fa-solid fa-shield-halved"></i>
+    Sports only: every photo and video is approved by the athlete's coach and the D.A.R.T. Super Admin before it appears here.</p>
+</div>
+
+{% include '_feed_comments.html' %}
+<script src="{{ url_for('static', filename='js/dart-feed.js') }}" defer></script>
+{% endblock %}

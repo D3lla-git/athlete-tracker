@@ -1,0 +1,74 @@
+{# Coach dashboard: photos / videos from the coach's teams waiting for them.
+   Uploads go live (profile + Highlights feed) once the coach AND the
+   D.A.R.T. Super Admin approve them. #}
+{% from '_media_reject_form.html' import media_reject_form %}
+<section class="chr" id="highlightReview" aria-labelledby="chrTitle">
+  <h4 id="chrTitle"><i class="fa-solid fa-clapperboard"></i> Highlights to approve
+    <span class="chr-badge">{{ highlight_queue | length }}</span></h4>
+  <p class="chr-lead">
+    Photos and videos your athletes posted for the Highlights feed. Approve only real football, basketball or
+    kickball action of your athlete: no selfies, posed pictures, other sports or anything rude. Each one also needs
+    the D.A.R.T. Super Admin's approval before it goes live.
+  </p>
+
+  {% if highlight_queue %}
+    <div class="chr-grid">
+      {% for h in highlight_queue %}
+        {% set url = highlight_url(h) %}
+        <article class="chr-card">
+          <div class="chr-media">
+            {% if h.is_video %}
+              <video src="{{ url }}" controls preload="metadata" playsinline></video>
+            {% else %}
+              <img src="{{ url }}" alt="Photo waiting for your approval" loading="lazy">
+            {% endif %}
+          </div>
+          <div class="chr-body">
+            <div class="chr-who"><strong>{{ h.user.full_name }}</strong> · {{ h.team_name }}</div>
+            <div class="chr-meta">
+              <span><i class="fa-solid {{ 'fa-video' if h.is_video else 'fa-image' }}"></i> {{ 'Video ' ~ h.duration_label if h.is_video else 'Photo' }}</span>
+              <span><i class="fa-solid fa-medal"></i> {{ h.sport or 'Sport not given' }}</span>
+              <span><i class="fa-regular fa-clock"></i> {{ time_ago(h.created_at) }}</span>
+            </div>
+            {% if h.caption %}<div class="chr-caption">“{{ h.caption }}”</div>{% endif %}
+            <div class="chr-step {{ 'is-done' if h.admin_approved_at }}">
+              <i class="fa-solid {{ 'fa-circle-check' if h.admin_approved_at else 'fa-hourglass-half' }}"></i>
+              Super Admin: {{ 'approved' if h.admin_approved_at else 'not yet' }}
+            </div>
+            <div class="chr-actions">
+              <form method="POST" action="{{ url_for('coach_highlight_action', highlight_id=h.id, action='approve') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-success btn-sm chr-btn"><i class="fa-solid fa-circle-check me-1"></i> Approve</button>
+              </form>
+              {{ media_reject_form(url_for('coach_highlight_action', highlight_id=h.id, action='reject'), h,
+                                   form_class='chr-reject', button_class='btn btn-outline-danger btn-sm chr-btn') }}
+            </div>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-muted mb-0">No photos or videos waiting for you.</p>
+  {% endif %}
+</section>
+
+<style>
+  .chr { margin-bottom: 24px; padding: 16px; border-radius: 18px; background: var(--surface-bg); border: 1px solid var(--surface-border); }
+  .chr h4 { display: flex; align-items: center; gap: 8px; }
+  .chr-badge { padding: 2px 10px; border-radius: 999px; font-size: 0.8rem; color: #fff; background: var(--dart-primary-gradient, #198754); }
+  .chr-lead { font-size: 0.9rem; color: var(--muted-text, #6c757d); }
+  .chr-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .chr-card { overflow: hidden; border-radius: 16px; border: 1px solid var(--surface-border); background: var(--surface-bg); }
+  .chr-media { aspect-ratio: 4 / 5; background: #000; display: grid; place-items: center; }
+  .chr-media img, .chr-media video { width: 100%; height: 100%; object-fit: contain; }
+  .chr-body { padding: 12px; display: grid; gap: 8px; }
+  .chr-who { overflow-wrap: anywhere; }
+  .chr-meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: 0.8rem; color: var(--muted-text, #6c757d); }
+  .chr-caption { font-size: 0.9rem; font-style: italic; overflow-wrap: anywhere; }
+  .chr-step { font-size: 0.82rem; padding: 6px 10px; border-radius: 10px; background: rgba(245, 197, 66, 0.15); }
+  .chr-step.is-done { background: rgba(25, 135, 84, 0.1); }
+  .chr-step i { margin-right: 4px; }
+  .chr-actions { display: grid; gap: 8px; }
+  .chr-reject { display: grid; gap: 6px; }
+  .chr-btn { border-radius: 999px; width: 100%; }
+</style>

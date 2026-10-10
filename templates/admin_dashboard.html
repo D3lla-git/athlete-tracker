@@ -200,6 +200,10 @@
 </div>
 {% endif %}
 
+{% if current_user.role == 'Coach' %}
+  {% include '_coach_highlight_review.html' %}
+{% endif %}
+
 <h4>Pending Athlete Verifications</h4>
 {% if pending_users %}
   {% for u in pending_users %}

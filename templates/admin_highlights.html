@@ -2,6 +2,7 @@
 {% block title %}Safety Review · Super Admin{% endblock %}
 
 {% block content %}
+{% from '_media_reject_form.html' import media_reject_form %}
 <div class="mr-page">
   <h1 class="mr-title"><i class="fa-solid fa-shield-halved"></i> Media &amp; account safety</h1>
   <p class="mr-lead">
@@ -49,24 +50,23 @@
               {% else %}<i class="fa-solid fa-eye"></i> Not checked automatically: look carefully.{% endif %}
             </div>
 
+            <div class="mr-coach {{ 'mr-coach-wait' if h.coach_approval == 'pending' }}">
+              {% if h.coach_approval == 'pending' %}
+                <i class="fa-solid fa-clipboard-user"></i> Their coach{{ ' at ' ~ h.team_name if h.team_name }} must also approve it.
+              {% elif h.coach_approval == 'approved' %}
+                <i class="fa-solid fa-circle-check"></i> Their coach{{ ' at ' ~ h.team_name if h.team_name }} approved it.
+              {% else %}
+                <i class="fa-solid fa-minus"></i> No coach on D.A.R.T. for {{ h.team_name or 'this team' }}: your approval is enough.
+              {% endif %}
+            </div>
+
             <div class="mr-actions">
               <form method="POST" action="{{ url_for('admin_highlight_action', highlight_id=h.id, action='approve') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-success mr-btn"><i class="fa-solid fa-circle-check me-1"></i> Approve</button>
+                <button type="submit" class="btn btn-success mr-btn"><i class="fa-solid fa-circle-check me-1"></i>
+                  {{ 'Approve (then coach)' if h.coach_approval == 'pending' else 'Approve & publish' }}</button>
               </form>
-              <form method="POST" action="{{ url_for('admin_highlight_action', highlight_id=h.id, action='reject') }}" class="mr-reject">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <select name="reason" class="form-select form-select-sm" required aria-label="Reason">
-                  <option value="">Reject because…</option>
-                  <option value="not_action">{{ 'Selfie / posed / not in action' if not h.is_video else 'Not the athlete in action' }}</option>
-                  <option value="distracted">Distracted video, not a direct highlight</option>
-                  <option value="not_sport">Not football, basketball or kickball</option>
-                  <option value="offensive">Rude, offensive or violent</option>
-                  <option value="nudity">Nudity or sexual (blocks uploads)</option>
-                </select>
-                <input type="text" name="note" class="form-control form-control-sm" maxlength="150" placeholder="Note to the athlete (optional)">
-                <button type="submit" class="btn btn-outline-danger mr-btn"><i class="fa-solid fa-trash me-1"></i> Reject &amp; delete</button>
-              </form>
+              {{ media_reject_form(url_for('admin_highlight_action', highlight_id=h.id, action='reject'), h) }}
             </div>
           </div>
         </article>
@@ -74,6 +74,31 @@
     </div>
   {% else %}
     <p class="text-muted">Nothing waiting. 🎉</p>
+  {% endif %}
+
+  <h2 class="mr-sub">Approved by you, waiting for the coach <span class="mr-badge">{{ waiting_coach | length }}</span></h2>
+  {% if waiting_coach %}
+    <div class="mr-wait-list">
+      {% for h in waiting_coach %}
+        <div class="mr-wait">
+          <div class="mr-wait-who">
+            <i class="fa-solid {{ 'fa-video' if h.is_video else 'fa-image' }}"></i>
+            <a href="{{ url_for('user_profile', user_id=h.user_id) }}"><strong>{{ h.user.full_name if h.user else 'Athlete' }}</strong></a>
+            <span>· coach at {{ h.team_name or 'their team' }} · approved by you {{ time_ago(h.admin_approved_at) }} ago</span>
+          </div>
+          <div class="mr-actions">
+            <form method="POST" action="{{ url_for('admin_highlight_action', highlight_id=h.id, action='approve_all') }}"
+                  onsubmit="return confirm('Publish now without the coach's approval?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-outline-success mr-btn"><i class="fa-solid fa-forward me-1"></i> Publish now (skip coach)</button>
+            </form>
+            {{ media_reject_form(url_for('admin_highlight_action', highlight_id=h.id, action='reject'), h) }}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-muted">None.</p>
   {% endif %}
 
   <h2 class="mr-sub">Uploads blocked <span class="mr-badge">{{ blocked | length }}</span></h2>
@@ -194,5 +219,11 @@
   @media (max-width: 575.98px) {
     .mr-grid { grid-template-columns: 1fr; }
   }
+  .mr-coach { margin: 8px 0; padding: 7px 10px; border-radius: 10px; font-size: 0.85rem; background: rgba(25, 135, 84, 0.08); }
+  .mr-coach-wait { background: rgba(245, 197, 66, 0.15); }
+  .mr-wait-list { display: grid; gap: 10px; margin-bottom: 18px; }
+  .mr-wait { padding: 12px; border-radius: 14px; background: var(--surface-bg); border: 1px solid var(--surface-border); }
+  .mr-wait-who { margin-bottom: 8px; font-size: 0.9rem; overflow-wrap: anywhere; }
+  .mr-wait-who span { color: var(--muted-text, #6c757d); }
 </style>
 {% endblock %}

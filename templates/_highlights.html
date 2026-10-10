@@ -218,6 +218,14 @@
             {% endif %}
 
             <figcaption>
+              {% if h.status == 'pending' and (can_manage or is_admin) %}
+                {% set waiting_for = [] %}
+                {% if not h.admin_approved_at %}{% set _ = waiting_for.append('D.A.R.T. Super Admin') %}{% endif %}
+                {% if h.coach_approval == 'pending' %}{% set _ = waiting_for.append('your coach' ~ (' at ' ~ h.team_name if h.team_name else '')) %}{% endif %}
+                {% if waiting_for %}
+                  <span class="hl-waiting"><i class="fa-solid fa-hourglass-half"></i> Waiting for: {{ waiting_for | join(' and ') }}</span>
+                {% endif %}
+              {% endif %}
               {% if h.caption %}<span class="hl-caption">{{ h.caption }}</span>{% endif %}
               <span class="hl-date">
                 <i class="fa-solid {{ 'fa-video' if h.is_video else 'fa-image' }}"></i>
@@ -386,6 +394,8 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
     pointer-events: none;
   }
+  .hl-waiting { display: block; font-size: 0.75rem; font-weight: 700; color: #9a6b00; }
+  [data-theme="dark"] .hl-waiting { color: #f5c542; }
   .hl-tile-pending .hl-media { outline: 2px dashed #f5c542; outline-offset: -2px; }
   .hl-rejected-box {
     display: flex;

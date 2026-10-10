@@ -1,0 +1,20 @@
+{# Comments sheet for the feed (opens over the list; comments load on demand). #}
+<div class="fp-sheet" id="fpSheet" role="dialog" aria-modal="true" aria-labelledby="fpSheetTitle" hidden>
+  <div class="fp-sheet-card fp-thread" data-post="">
+    <div class="fp-sheet-head">
+      <h2 id="fpSheetTitle" class="fp-thread-title">Comments</h2>
+      <a href="#" class="fp-sheet-open" data-open-post>Open post</a>
+      <button type="button" class="fp-sheet-close" aria-label="Close comments"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="fp-sheet-body">
+      <ul class="fp-comments" data-comments></ul>
+      <p class="fp-c-empty" data-comments-empty hidden>No comments yet. Start the conversation.</p>
+      <p class="fp-c-loading" data-comments-loading hidden><i class="fa-solid fa-spinner fa-spin"></i> Loading…</p>
+      <button type="button" class="btn btn-outline-secondary btn-sm fp-c-more" data-more-comments hidden>Show more comments</button>
+    </div>
+    <div class="fp-sheet-foot">
+      {% set comment_field_id = 'fpSheetBody' %}
+      {% include '_feed_comment_form.html' %}
+    </div>
+  </div>
+</div>

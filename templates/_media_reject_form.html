@@ -1,0 +1,16 @@
+{# Reject a photo / video with a reason (Super Admin + coaches). #}
+{% macro media_reject_form(action_url, h, form_class='mr-reject', button_class='btn btn-outline-danger mr-btn') %}
+<form method="POST" action="{{ action_url }}" class="{{ form_class }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <select name="reason" class="form-select form-select-sm" required aria-label="Reason">
+    <option value="">Reject because…</option>
+    <option value="not_action">{{ 'Selfie / posed / not in action' if not h.is_video else 'Not the athlete in action' }}</option>
+    <option value="distracted">Distracted video, not a direct highlight</option>
+    <option value="not_sport">Not football, basketball or kickball</option>
+    <option value="offensive">Rude, offensive or violent</option>
+    <option value="nudity">Nudity or sexual (blocks uploads)</option>
+  </select>
+  <input type="text" name="note" class="form-control form-control-sm" maxlength="150" placeholder="Note to the athlete (optional)">
+  <button type="submit" class="{{ button_class }}"><i class="fa-solid fa-trash me-1"></i> Reject &amp; delete</button>
+</form>
+{% endmacro %}

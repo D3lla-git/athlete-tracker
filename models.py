@@ -4,6 +4,7 @@ from werkzeug.security import generate_password_hash, check_password_hash  # typ
 from competitions import COMPETITION_TEAM_LABELS
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import declared_attr
 
 
 db = SQLAlchemy()
@@ -293,6 +294,24 @@ class AthleteHighlight(db.Model):
     reviewed_by = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
     reviewed_at = db.Column(db.DateTime, nullable=True)
 
+    # Two approvals before a new upload goes live (feed + profile):
+    # the Super Admin (or the AI check, if auto-approve is on) and the
+    # coach of the athlete's team - when that team has a coach on D.A.R.T.
+    # coach_approval: pending / approved / not_required (None = older upload).
+    team_name = db.Column(db.String(150), nullable=True)
+    admin_approved_at = db.Column(db.DateTime, nullable=True)
+    coach_approval = db.Column(db.String(12), nullable=True)
+    coach_reviewed_by = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    coach_reviewed_at = db.Column(db.DateTime, nullable=True)
+    published_at = db.Column(db.DateTime, nullable=True, index=True)
+
+    # Highlights feed counters (kept in step with the rows below).
+    like_count = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+    repost_count = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+    comment_count = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+    save_count = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+    share_count = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+
     user = db.relationship('User', foreign_keys=[user_id])
 
     @property
@@ -310,6 +329,49 @@ class AthleteHighlight(db.Model):
             return ''
         seconds = int(round(float(self.duration_seconds)))
         return f'{seconds // 60}:{seconds % 60:02d}'
+
+
+class _HighlightReaction:
+    """One row per (highlight, user): a like, a repost or a saved post."""
+    id = db.Column(db.BigInteger, primary_key=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    @declared_attr
+    def highlight_id(cls):
+        return db.Column(db.BigInteger, db.ForeignKey('athlete_highlight.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    @declared_attr
+    def user_id(cls):
+        return db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    @declared_attr
+    def __table_args__(cls):
+        return (db.UniqueConstraint('highlight_id', 'user_id', name=f'uq_{cls.__tablename__}'),)
+
+
+class HighlightLike(_HighlightReaction, db.Model):
+    __tablename__ = 'highlight_like'
+
+
+class HighlightRepost(_HighlightReaction, db.Model):
+    __tablename__ = 'highlight_repost'
+
+
+class HighlightSave(_HighlightReaction, db.Model):
+    """A post the user bookmarked (only they see their saved posts)."""
+    __tablename__ = 'highlight_save'
+
+
+class HighlightComment(db.Model):
+    __tablename__ = 'highlight_comment'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    highlight_id = db.Column(db.BigInteger, db.ForeignKey('athlete_highlight.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    body = db.Column(db.String(300), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship('User', foreign_keys=[user_id])
 
 
 class OrganizationProfile(db.Model):

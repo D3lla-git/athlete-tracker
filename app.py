@@ -5,12 +5,13 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import MultiDict
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
 from itsdangerous import URLSafeSerializer, BadSignature
 import moderation
+import feed as feed_mod
 
 
 # PDF and card-image libraries are big: load them only when someone
@@ -3798,7 +3799,7 @@ GOOGLE_SITE_VERIFICATION = (os.environ.get('GOOGLE_SITE_VERIFICATION') or '').st
 SEO_INDEX_ENDPOINTS = {
     'index', 'pricing', 'register', 'register_coach', 'register_scout',
     'register_organization', 'privacy_page', 'terms_page', 'cookies_page',
-    'legal_page', 'organization_terms',
+    'legal_page', 'organization_terms', 'feed',
 }
 
 
@@ -4527,6 +4528,97 @@ def can_moderate_media(user):
     return user.is_authenticated and user.role == 'System'
 
 
+# ---------- Two approvals: Super Admin + the athlete's coach ----------
+# A new photo / video goes live (profile + Highlights feed) only when the
+# Super Admin approved it (or the AI check, when HIGHLIGHT_AUTO_APPROVE is
+# on) AND the coach of the athlete's team approved it. Teams with no coach
+# on D.A.R.T. only need the Super Admin. Uploads from before this rule
+# (coach_approval None) only ever needed the Super Admin.
+def team_has_coach(team_name):
+    """True if a verified coach on D.A.R.T. coaches this team now."""
+    key = coaching._key(team_name)
+    if not key:
+        return False
+    candidates = User.query.filter(
+        User.role == 'Coach',
+        User.is_verified.is_(True),
+        User.is_suspended.is_(False),
+        or_(
+            func.lower(func.trim(User.school)) == key,
+            User.id.in_(db.session.query(CoachTeam.coach_id).filter(
+                CoachTeam.status == 'approved', CoachTeam.end_date.is_(None),
+                func.lower(func.trim(CoachTeam.team_name)) == key)),
+        ),
+    ).limit(20).all()
+    return any(key in coaching.team_keys(coach) for coach in candidates)
+
+
+def coach_reviews_highlight(coach, highlight):
+    """This coach may approve / reject this upload (their team's athlete)."""
+    return (
+        coach.is_authenticated and coach.role == 'Coach' and coach.is_verified and not coach.is_suspended
+        and highlight.coach_approval == 'pending'
+        and coaching._key(highlight.team_name) in coaching.team_keys(coach)
+    )
+
+
+def coach_highlight_queue(coach):
+    """Uploads from the coach's teams that wait for the coach (oldest first)."""
+    keys = coaching.team_keys(coach)
+    if not keys:
+        return []
+    return (
+        AthleteHighlight.query
+        .join(User, User.id == AthleteHighlight.user_id)
+        .filter(
+            AthleteHighlight.status == 'pending',
+            AthleteHighlight.coach_approval == 'pending',
+            func.lower(func.trim(AthleteHighlight.team_name)).in_(keys),
+            User.is_suspended.is_(False),
+        )
+        .options(contains_eager(AthleteHighlight.user))
+        .order_by(AthleteHighlight.created_at.asc(), AthleteHighlight.id.asc())
+        .limit(50).all()
+    )
+
+
+def highlight_steps_done(highlight):
+    return (
+        highlight.admin_approved_at is not None
+        and highlight.coach_approval in (None, 'approved', 'not_required')
+    )
+
+
+def finish_highlight_approval(highlight):
+    """
+    Publish once every approval is in. Returns 'live', 'waiting' or 'error'
+    (the file could not be moved; try again). Caller commits.
+    """
+    if not highlight_steps_done(highlight):
+        return 'waiting'
+    if highlight.storage_bucket == HIGHLIGHT_REVIEW_BUCKET and not publish_highlight_file(highlight.storage_path):
+        return 'error'
+    now = datetime.utcnow()
+    highlight.storage_bucket = HIGHLIGHTS_BUCKET
+    highlight.status = 'approved'
+    highlight.published_at = now
+    if not highlight.reviewed_at:
+        highlight.reviewed_at = now
+    return 'live'
+
+
+def reject_highlight(highlight, reviewer, reason_key, note, source):
+    """Delete the file, keep the reason, count a strike. Returns True if uploads are now blocked. Caller commits."""
+    athlete = db.session.get(User, highlight.user_id)
+    remove_highlight_file(highlight.storage_path, highlight.storage_bucket)
+    highlight.status = 'rejected'
+    highlight.review_reason = moderation.REASONS[reason_key] + (f' {note}' if note else '')
+    highlight.ai_flags = reason_key
+    highlight.reviewed_by = reviewer.id
+    highlight.reviewed_at = datetime.utcnow()
+    return record_media_violation(athlete, [reason_key], source, note) if athlete else False
+
+
 def highlight_public_url(path):
     result = supabase.storage.from_(HIGHLIGHTS_BUCKET).get_public_url(path)
 
@@ -4985,7 +5077,10 @@ def highlight_complete():
         check['decision'] == 'approve'
         and (HIGHLIGHT_AUTO_APPROVE == 'all' or (HIGHLIGHT_AUTO_APPROVE == 'photos' and media_type == 'photo'))
     )
-    published = auto_ok and publish_highlight_file(path)
+    # The team's coach approves too (when the team has a coach on D.A.R.T.).
+    coach_needed = team_has_coach(current_user.school)
+    published = auto_ok and not coach_needed and publish_highlight_file(path)
+    now = datetime.utcnow()
 
     highlight = AthleteHighlight(
         user_id=current_user.id,
@@ -5000,7 +5095,11 @@ def highlight_complete():
         storage_bucket=HIGHLIGHTS_BUCKET if published else HIGHLIGHT_REVIEW_BUCKET,
         ai_checked=bool(check['checked']),
         ai_summary=check['summary'] or None,
-        reviewed_at=datetime.utcnow() if published else None,
+        reviewed_at=now if published else None,
+        team_name=(current_user.school or '').strip()[:150] or None,
+        admin_approved_at=now if auto_ok else None,
+        coach_approval='pending' if coach_needed else 'not_required',
+        published_at=now if published else None,
     )
     db.session.add(highlight)
     db.session.commit()
@@ -5009,7 +5108,11 @@ def highlight_complete():
         flash('Your highlight passed the safety check and is live! 🎬' if media_type == 'video'
               else 'Your photo passed the safety check and is live! 📸', 'success')
     else:
-        flash('Thanks! Your highlight is being reviewed and will appear on your profile once it is approved.', 'info')
+        # Pop-up: who still has to approve it before it goes live.
+        queue_approval_prompt(
+            'highlight', media=media_type, team=highlight.team_name or '',
+            admin_done=bool(auto_ok), coach=highlight.coach_approval,
+        )
 
     return jsonify({'ok': True, 'id': highlight.id, 'status': highlight.status})
 
@@ -5027,6 +5130,7 @@ def delete_highlight(highlight_id):
 
     if highlight.status != 'rejected':      # rejected files are already gone
         remove_highlight_file(highlight.storage_path, highlight.storage_bucket)
+    feed_mod.delete_children(highlight.id)
     db.session.delete(highlight)
     db.session.commit()
 
@@ -5045,8 +5149,14 @@ def admin_highlights():
     require_super_admin()
 
     waiting = (
-        AthleteHighlight.query.filter_by(status='pending')
+        AthleteHighlight.query.filter(AthleteHighlight.status == 'pending', AthleteHighlight.admin_approved_at.is_(None))
         .order_by(AthleteHighlight.created_at.asc(), AthleteHighlight.id.asc())
+        .limit(100).all()
+    )
+    # Approved by the Super Admin, still waiting for the athlete's coach.
+    waiting_coach = (
+        AthleteHighlight.query.filter(AthleteHighlight.status == 'pending', AthleteHighlight.admin_approved_at.isnot(None))
+        .order_by(AthleteHighlight.admin_approved_at.asc(), AthleteHighlight.id.asc())
         .limit(100).all()
     )
     recent = (
@@ -5063,6 +5173,7 @@ def admin_highlights():
     return render_template(
         'admin_highlights.html',
         waiting=waiting,
+        waiting_coach=waiting_coach,
         recent=recent,
         blocked=blocked,
         suspended=suspended,
@@ -5078,27 +5189,42 @@ def admin_highlight_action(highlight_id, action):
     require_super_admin()
 
     highlight = db.session.get(AthleteHighlight, highlight_id)
-    if not highlight or highlight.status != 'pending' or action not in ('approve', 'reject'):
+    if not highlight or highlight.status != 'pending' or action not in ('approve', 'approve_all', 'reject'):
         abort(404)
 
     athlete = db.session.get(User, highlight.user_id)
     now = datetime.utcnow()
+    name = athlete.full_name if athlete else 'athlete'
 
-    if action == 'approve':
-        if highlight.storage_bucket == HIGHLIGHT_REVIEW_BUCKET and not publish_highlight_file(highlight.storage_path):
+    if action in ('approve', 'approve_all'):
+        if highlight.admin_approved_at is None:
+            highlight.admin_approved_at = now
+            highlight.reviewed_by = current_user.id
+            highlight.reviewed_at = now
+        # Super Admin override: the coach has not answered (or cannot).
+        overridden = action == 'approve_all' and highlight.coach_approval == 'pending'
+        if overridden:
+            highlight.coach_approval = 'approved'
+            highlight.coach_reviewed_by = current_user.id
+            highlight.coach_reviewed_at = now
+
+        result = finish_highlight_approval(highlight)
+        if result == 'error':
+            db.session.rollback()
             flash('Could not publish this file right now. Please try again.', 'danger')
             return redirect(url_for('admin_highlights'))
-        highlight.storage_bucket = HIGHLIGHTS_BUCKET
-        highlight.status = 'approved'
-        highlight.reviewed_by = current_user.id
-        highlight.reviewed_at = now
         create_audit_log(
             action='highlight_approved', actor_user_id=current_user.id,
             target_type='AthleteHighlight', target_id=str(highlight.id),
-            details={'athlete_id': highlight.user_id, 'media_type': highlight.media_type}
+            details={'athlete_id': highlight.user_id, 'media_type': highlight.media_type,
+                     'live': result == 'live', 'coach_step_overridden': overridden}
         )
         db.session.commit()
-        flash(f"Approved: {athlete.full_name if athlete else 'athlete'}'s {highlight.media_type} is now live.", 'success')
+        if result == 'live':
+            flash(f"Approved: {name}'s {highlight.media_type} is now live in Highlights.", 'success')
+        else:
+            flash(f"Approved by you. {name}'s {highlight.media_type} goes live once their coach"
+                  f"{' at ' + highlight.team_name if highlight.team_name else ''} also approves it.", 'info')
         return redirect(url_for('admin_highlights'))
 
     reason_key = request.form.get('reason', '')
@@ -5107,17 +5233,243 @@ def admin_highlight_action(highlight_id, action):
         return redirect(url_for('admin_highlights'))
     note = (request.form.get('note') or '').strip()[:150]
 
-    remove_highlight_file(highlight.storage_path, highlight.storage_bucket)
-    highlight.status = 'rejected'
-    highlight.review_reason = moderation.REASONS[reason_key] + (f' {note}' if note else '')
-    highlight.ai_flags = reason_key
-    highlight.reviewed_by = current_user.id
-    highlight.reviewed_at = now
-    blocked = record_media_violation(athlete, [reason_key], 'highlight_review', note) if athlete else False
+    blocked = reject_highlight(highlight, current_user, reason_key, note, 'highlight_review')
     db.session.commit()
 
     flash('Rejected and deleted.' + (' Uploads are now blocked for this athlete.' if blocked else ''), 'success')
     return redirect(url_for('admin_highlights'))
+
+
+@app.route('/coach/highlights/<int:highlight_id>/<action>', methods=['POST'])
+@login_required
+def coach_highlight_action(highlight_id, action):
+    """The athlete's coach approves / rejects a photo or video of their team."""
+    highlight = db.session.get(AthleteHighlight, highlight_id)
+    if not highlight or highlight.status != 'pending' or action not in ('approve', 'reject') \
+            or not coach_reviews_highlight(current_user, highlight):
+        abort(404)
+
+    athlete = db.session.get(User, highlight.user_id)
+    name = athlete.full_name if athlete else 'athlete'
+    back = redirect(url_for('admin_dashboard') + '#highlightReview')
+
+    if action == 'approve':
+        highlight.coach_approval = 'approved'
+        highlight.coach_reviewed_by = current_user.id
+        highlight.coach_reviewed_at = datetime.utcnow()
+        result = finish_highlight_approval(highlight)
+        if result == 'error':
+            db.session.rollback()
+            flash('Could not publish this file right now. Please try again.', 'danger')
+            return back
+        create_audit_log(
+            action='highlight_coach_approved', actor_user_id=current_user.id,
+            target_type='AthleteHighlight', target_id=str(highlight.id),
+            details={'athlete_id': highlight.user_id, 'live': result == 'live'}
+        )
+        db.session.commit()
+        flash(f"Approved: {name}'s {highlight.media_type} is now live in Highlights." if result == 'live'
+              else f"Approved by you. {name}'s {highlight.media_type} goes live once the D.A.R.T. Super Admin also approves it.",
+              'success' if result == 'live' else 'info')
+        return back
+
+    reason_key = request.form.get('reason', '')
+    if reason_key not in moderation.REASONS or reason_key == 'unreadable':
+        flash('Choose why this is rejected.', 'warning')
+        return back
+    note = (request.form.get('note') or '').strip()[:150]
+    highlight.coach_approval = 'rejected'
+    highlight.coach_reviewed_by = current_user.id
+    highlight.coach_reviewed_at = datetime.utcnow()
+    blocked = reject_highlight(highlight, current_user, reason_key, note, 'highlight_coach')
+    create_audit_log(
+        action='highlight_coach_rejected', actor_user_id=current_user.id,
+        target_type='AthleteHighlight', target_id=str(highlight.id),
+        details={'athlete_id': highlight.user_id, 'reason': reason_key}
+    )
+    db.session.commit()
+    flash(f"Rejected and deleted. {name} sees why." + (' Their uploads are now blocked.' if blocked else ''), 'success')
+    return back
+
+
+# ==========================================================
+# HIGHLIGHTS FEED  (Home | Highlights)
+# ==========================================================
+# Approved sports photos / videos from verified athletes, newest days first
+# ("For you" ranks each day by likes, reposts, comments, saves, shares).
+# Everyone can watch; signed-in verified members can like, repost, save
+# and comment. Posting stays with athletes (their dashboard uploader) and
+# every upload is approved by the Super Admin and the athlete's coach.
+def can_interact(user):
+    return (
+        user.is_authenticated and bool(user.is_verified) and not user.is_suspended
+        and not needs_terms_acceptance(user)
+    )
+
+
+def feed_json_error(message, status=400):
+    response = jsonify({'ok': False, 'error': message})
+    response.status_code = status
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+def feed_json(payload):
+    response = jsonify({'ok': True, **payload})
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+def live_highlight_or_404(highlight_id):
+    highlight = feed_mod.get_live(highlight_id)
+    if not highlight:
+        abort(404)
+    return highlight
+
+
+def comment_payload(comment, highlight):
+    author = comment.user
+    can_delete = current_user.is_authenticated and (
+        comment.user_id == current_user.id or highlight.user_id == current_user.id or current_user.role == 'System'
+    )
+    return {
+        'id': comment.id,
+        'body': comment.body,
+        'author': author.full_name if author else 'Member',
+        'role': author.role if author else '',
+        'author_url': (athlete_public_path(author) if author and author.role == 'Athlete'
+                       else url_for('user_profile', user_id=author.id) if author else ''),
+        'ago': feed_mod.time_ago(comment.created_at),
+        'can_delete': bool(can_delete),
+        'is_athlete': bool(author and author.id == highlight.user_id),
+    }
+
+
+app.jinja_env.globals.update(
+    time_ago=feed_mod.time_ago,
+    compact_count=feed_mod.compact_count,
+    athlete_public_path=lambda user: athlete_public_path(user),   # defined further down
+)
+
+
+@app.route('/feed')
+def feed():
+    tab = request.args.get('tab', 'foryou')
+    tab = tab if tab in feed_mod.FEED_TABS else 'foryou'
+    sport = request.args.get('sport', '')
+    sport = sport if sport in feed_mod.FEED_SPORTS else ''
+    page = request.args.get('page', 1, type=int) or 1
+
+    if tab == 'saved' and not current_user.is_authenticated:
+        return redirect(url_for('login', next=url_for('feed', tab='saved')))
+
+    posts, has_more = feed_mod.feed_page(feed_mod.feed_query(tab, sport, current_user), page)
+    state = feed_mod.viewer_state(current_user, [p.id for p in posts])
+    context = dict(
+        posts=posts, state=state, has_more=has_more, page=page, tab=tab, sport=sport,
+        can_interact=can_interact(current_user),
+        next_url=url_for('feed', tab=tab if tab != 'foryou' else None, sport=sport or None, page=page + 1, partial=1) if has_more else '',
+        more_url=url_for('feed', tab=tab if tab != 'foryou' else None, sport=sport or None, page=page + 1) if has_more else '',
+    )
+
+    if request.args.get('partial') == '1':
+        response = make_response(render_template('_feed_posts.html', **context))
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
+    return render_template(
+        'feed.html', **context,
+        can_post=can_upload_highlights(current_user),
+    )
+
+
+@app.route('/feed/post/<int:highlight_id>')
+def feed_post(highlight_id):
+    highlight = live_highlight_or_404(highlight_id)
+    comments, more_comments = feed_mod.comments_for(highlight.id)
+    return render_template(
+        'feed_post.html',
+        post=highlight,
+        state=feed_mod.viewer_state(current_user, [highlight.id]),
+        comments=[comment_payload(c, highlight) for c in comments],
+        more_comments=more_comments,
+        can_interact=can_interact(current_user),
+        indexable=seo_indexable(highlight.user),
+    )
+
+
+@app.route('/feed/post/<int:highlight_id>/<kind>', methods=['POST'])
+def feed_react(highlight_id, kind):
+    if kind not in feed_mod.REACTIONS:
+        abort(404)
+    if not current_user.is_authenticated:
+        return feed_json_error('Log in to do that.', 401)
+    if not can_interact(current_user):
+        return feed_json_error('Your account must be verified to do that.', 403)
+    highlight = live_highlight_or_404(highlight_id)
+
+    on = str((request.get_json(silent=True) or request.form).get('on', '')).lower() in ('1', 'true', 'on')
+    active, count = feed_mod.set_reaction(kind, highlight, current_user, on)
+    return feed_json({'on': active, 'count': count, 'label': feed_mod.compact_count(count)})
+
+
+@app.route('/feed/post/<int:highlight_id>/share', methods=['POST'])
+def feed_share(highlight_id):
+    highlight = live_highlight_or_404(highlight_id)
+    # Counted once per browser session for each post.
+    shared = session.get('feed_shared') or []
+    if highlight.id in shared:
+        count = highlight.share_count
+    else:
+        count = feed_mod.count_share(highlight)
+        session['feed_shared'] = (shared + [highlight.id])[-200:]
+    return feed_json({'count': count, 'label': feed_mod.compact_count(count),
+                      'url': site_url(url_for('feed_post', highlight_id=highlight.id))})
+
+
+@app.route('/feed/post/<int:highlight_id>/comments', methods=['GET', 'POST'])
+def feed_comments(highlight_id):
+    highlight = live_highlight_or_404(highlight_id)
+
+    if request.method == 'GET':
+        before = request.args.get('before', type=int)
+        comments, has_more = feed_mod.comments_for(highlight.id, before_id=before)
+        return feed_json({'comments': [comment_payload(c, highlight) for c in comments], 'has_more': has_more,
+                          'count': highlight.comment_count})
+
+    if not current_user.is_authenticated:
+        return feed_json_error('Log in to comment.', 401)
+    if not can_interact(current_user):
+        return feed_json_error('Your account must be verified to comment.', 403)
+    body, error = feed_mod.clean_comment((request.get_json(silent=True) or request.form).get('body'))
+    if error:
+        return feed_json_error(error, 422)
+    if feed_mod.comment_rate_limited(current_user):
+        return feed_json_error('You are commenting too fast. Please wait a minute.', 429)
+
+    comment = feed_mod.add_comment(highlight, current_user, body)
+    db.session.refresh(highlight)
+    return feed_json({'comment': comment_payload(comment, highlight), 'count': highlight.comment_count,
+                      'label': feed_mod.compact_count(highlight.comment_count)})
+
+
+@app.route('/feed/comments/<int:comment_id>/delete', methods=['POST'])
+@login_required
+def feed_comment_delete(comment_id):
+    comment = db.session.get(HighlightComment, comment_id)
+    highlight = db.session.get(AthleteHighlight, comment.highlight_id) if comment else None
+    # The writer, the athlete who posted, or the Super Admin.
+    if not comment or not highlight or not (
+        comment.user_id == current_user.id or highlight.user_id == current_user.id or current_user.role == 'System'
+    ):
+        abort(404)
+    if current_user.role == 'System' and comment.user_id != current_user.id:
+        create_audit_log(action='feed_comment_removed', actor_user_id=current_user.id,
+                         target_type='HighlightComment', target_id=str(comment.id),
+                         details={'highlight_id': highlight.id, 'author_id': comment.user_id, 'body': comment.body})
+    feed_mod.delete_comment(comment)
+    db.session.refresh(highlight)
+    return feed_json({'count': highlight.comment_count, 'label': feed_mod.compact_count(highlight.comment_count)})
 
 
 @app.route('/admin/users/<int:user_id>/media-restore', methods=['POST'])
@@ -6474,7 +6826,8 @@ def sitemap_xml():
         .all()
     )
 
-    urls = [(site_url('/'), None, '1.0'), (site_url(url_for('pricing')), None, '0.6')]
+    urls = [(site_url('/'), None, '1.0'), (site_url(url_for('feed')), None, '0.7'),
+            (site_url(url_for('pricing')), None, '0.6')]
     urls += [(site_url(url_for(e)), None, '0.4') for e in ('register', 'register_scout', 'register_organization')]
 
     athletes = User.query.filter_by(role='Athlete', is_verified=True).all()
@@ -8729,6 +9082,7 @@ def admin_dashboard():
         approved_records=approved_records[:DASHBOARD_LIST_LIMIT],
         approved_records_total=approved_records_total,
         dashboard_list_limit=DASHBOARD_LIST_LIMIT,
+        highlight_queue=coach_highlight_queue(current_user) if current_user.role == 'Coach' else [],
     )
 
 @app.route('/approve_coach/<int:user_id>', methods=['POST'])
