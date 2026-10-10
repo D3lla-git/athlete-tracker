@@ -5,7 +5,7 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import MultiDict
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
@@ -72,6 +72,7 @@ from io import BytesIO
 import pyotp
 import qrcode
 import secrets
+import hashlib
 from flask_mail import Mail, Message
 from sqlalchemy import or_, and_, case, func, select, true as sa_true, false as sa_false
 from sqlalchemy.orm import contains_eager, joinedload
@@ -1543,7 +1544,7 @@ def inject_admin_payment_count():
     if current_user.is_authenticated and current_user.role == 'System':
         return {
             'payments_awaiting': Payment.query.filter_by(status='awaiting_review').count(),
-            'media_awaiting': AthleteHighlight.query.filter_by(status='pending').count(),
+            'media_awaiting': AthleteHighlight.query.filter(AthleteHighlight.status == 'pending', AthleteHighlight.admin_approved_at.is_(None)).count(),   # waiting for the Super Admin
         }
     return {'payments_awaiting': 0, 'media_awaiting': 0}
 
@@ -5297,14 +5298,64 @@ def coach_highlight_action(highlight_id, action):
 # ==========================================================
 # Approved sports photos / videos from verified athletes, newest days first
 # ("For you" ranks each day by likes, reposts, comments, saves, shares).
-# Everyone can watch; signed-in verified members can like, repost, save
-# and comment. Posting stays with athletes (their dashboard uploader) and
-# every upload is approved by the Super Admin and the athlete's coach.
-def can_interact(user):
+# EVERYONE can like, repost, save, share and comment, even without an
+# account: verified members react as themselves, everyone else as an
+# anonymous visitor (random id in the 'dart_vid' cookie). The Super Admin's
+# analysis page tells members and visitors apart. Suspended accounts can't
+# react. Posting stays with verified athletes, and every upload is approved
+# by the Super Admin and the athlete's coach.
+VISITOR_COOKIE = 'dart_vid'
+VISITOR_COOKIE_DAYS = 365
+_VISITOR_KEY_RE = re.compile(r'^[a-f0-9]{32}$')
+
+
+def is_feed_member(user):
+    """A verified D.A.R.T. member (reacts by name)."""
     return (
         user.is_authenticated and bool(user.is_verified) and not user.is_suspended
         and not needs_terms_acceptance(user)
     )
+
+
+def can_interact(user):
+    """Members and visitors may react; suspended accounts may not."""
+    return not (user.is_authenticated and user.is_suspended)
+
+
+def visitor_ip_hash():
+    """One-way hash of the visitor's IP (never stored in clear), to slow down spam."""
+    raw = f'{app.secret_key}|{get_client_ip()}'.encode()
+    return hashlib.sha256(raw).hexdigest()[:32]
+
+
+def feed_actor(create=False):
+    """
+    The member / visitor reacting, or None (suspended account, or a visitor
+    without a cookie when create=False). create=True gives a new visitor a
+    cookie (set on the response by remember_visitor_cookie).
+    """
+    if is_feed_member(current_user):
+        return feed_mod.Actor(user_id=current_user.id)
+    if not can_interact(current_user):
+        return None
+    key = request.cookies.get(VISITOR_COOKIE, '')
+    if not _VISITOR_KEY_RE.match(key):
+        if not create:
+            return None
+        key = secrets.token_hex(16)
+        g.new_visitor_key = key
+    return feed_mod.Actor(visitor_key=key, ip_hash=visitor_ip_hash())
+
+
+@app.after_request
+def remember_visitor_cookie(response):
+    key = g.get('new_visitor_key')
+    if key:
+        response.set_cookie(
+            VISITOR_COOKIE, key, max_age=VISITOR_COOKIE_DAYS * 86400, httponly=True,
+            secure=request.is_secure or bool(SITE_URL and SITE_URL.startswith('https')), samesite='Lax',
+        )
+    return response
 
 
 def feed_json_error(message, status=400):
@@ -5327,20 +5378,32 @@ def live_highlight_or_404(highlight_id):
     return highlight
 
 
-def comment_payload(comment, highlight):
+def can_delete_comment(comment, highlight, actor):
+    if current_user.is_authenticated and (highlight.user_id == current_user.id or current_user.role == 'System'):
+        return True
+    if actor is None:
+        return False
+    if actor.is_member:
+        return comment.user_id == actor.user_id
+    return comment.user_id is None and comment.visitor_key == actor.visitor_key
+
+
+def comment_payload(comment, highlight, actor):
     author = comment.user
-    can_delete = current_user.is_authenticated and (
-        comment.user_id == current_user.id or highlight.user_id == current_user.id or current_user.role == 'System'
-    )
+    if author:
+        name, role = author.full_name, author.role
+        url = athlete_public_path(author) if author.role == 'Athlete' else url_for('user_profile', user_id=author.id)
+    else:
+        name, role, url = comment.visitor_name or 'Visitor', 'Visitor', ''
     return {
         'id': comment.id,
         'body': comment.body,
-        'author': author.full_name if author else 'Member',
-        'role': author.role if author else '',
-        'author_url': (athlete_public_path(author) if author and author.role == 'Athlete'
-                       else url_for('user_profile', user_id=author.id) if author else ''),
+        'author': name,
+        'role': role,
+        'member': author is not None,
+        'author_url': url,
         'ago': feed_mod.time_ago(comment.created_at),
-        'can_delete': bool(can_delete),
+        'can_delete': bool(can_delete_comment(comment, highlight, actor)),
         'is_athlete': bool(author and author.id == highlight.user_id),
     }
 
@@ -5352,6 +5415,14 @@ app.jinja_env.globals.update(
 )
 
 
+def feed_context():
+    return dict(
+        can_interact=can_interact(current_user),
+        is_member=is_feed_member(current_user),
+        is_super_admin=current_user.is_authenticated and current_user.role == 'System',
+    )
+
+
 @app.route('/feed')
 def feed():
     tab = request.args.get('tab', 'foryou')
@@ -5359,17 +5430,15 @@ def feed():
     sport = request.args.get('sport', '')
     sport = sport if sport in feed_mod.FEED_SPORTS else ''
     page = request.args.get('page', 1, type=int) or 1
+    actor = feed_actor()
 
-    if tab == 'saved' and not current_user.is_authenticated:
-        return redirect(url_for('login', next=url_for('feed', tab='saved')))
-
-    posts, has_more = feed_mod.feed_page(feed_mod.feed_query(tab, sport, current_user), page)
-    state = feed_mod.viewer_state(current_user, [p.id for p in posts])
+    posts, has_more = feed_mod.feed_page(feed_mod.feed_query(tab, sport, actor), page)
+    state = feed_mod.viewer_state(actor, [p.id for p in posts])
+    tab_arg = tab if tab != 'foryou' else None
     context = dict(
-        posts=posts, state=state, has_more=has_more, page=page, tab=tab, sport=sport,
-        can_interact=can_interact(current_user),
-        next_url=url_for('feed', tab=tab if tab != 'foryou' else None, sport=sport or None, page=page + 1, partial=1) if has_more else '',
-        more_url=url_for('feed', tab=tab if tab != 'foryou' else None, sport=sport or None, page=page + 1) if has_more else '',
+        posts=posts, state=state, has_more=has_more, page=page, tab=tab, sport=sport, **feed_context(),
+        next_url=url_for('feed', tab=tab_arg, sport=sport or None, page=page + 1, partial=1) if has_more else '',
+        more_url=url_for('feed', tab=tab_arg, sport=sport or None, page=page + 1) if has_more else '',
     )
 
     if request.args.get('partial') == '1':
@@ -5377,24 +5446,30 @@ def feed():
         response.headers['Cache-Control'] = 'no-store'
         return response
 
-    return render_template(
-        'feed.html', **context,
-        can_post=can_upload_highlights(current_user),
-    )
+    response = make_response(render_template('feed.html', **context, can_post=can_upload_highlights(current_user)))
+    if tab == 'saved':
+        response.headers['Cache-Control'] = 'private, no-store'
+    return response
 
 
 @app.route('/feed/post/<int:highlight_id>')
 def feed_post(highlight_id):
     highlight = live_highlight_or_404(highlight_id)
+    actor = feed_actor()
     comments, more_comments = feed_mod.comments_for(highlight.id)
+    ctx = feed_context()
+    insights = None
+    if ctx['is_super_admin']:
+        insights = feed_mod.engagement_breakdown(highlight_ids=[highlight.id]).get(highlight.id) or feed_mod.empty_engagement()
     return render_template(
         'feed_post.html',
         post=highlight,
-        state=feed_mod.viewer_state(current_user, [highlight.id]),
-        comments=[comment_payload(c, highlight) for c in comments],
+        state=feed_mod.viewer_state(actor, [highlight.id]),
+        comments=[comment_payload(c, highlight, actor) for c in comments],
         more_comments=more_comments,
-        can_interact=can_interact(current_user),
         indexable=seo_indexable(highlight.user),
+        insights=insights,
+        **ctx,
     )
 
 
@@ -5402,27 +5477,22 @@ def feed_post(highlight_id):
 def feed_react(highlight_id, kind):
     if kind not in feed_mod.REACTIONS:
         abort(404)
-    if not current_user.is_authenticated:
-        return feed_json_error('Log in to do that.', 401)
-    if not can_interact(current_user):
-        return feed_json_error('Your account must be verified to do that.', 403)
+    actor = feed_actor(create=True)
+    if actor is None:
+        return feed_json_error('Your account is suspended.', 403)
     highlight = live_highlight_or_404(highlight_id)
-
     on = str((request.get_json(silent=True) or request.form).get('on', '')).lower() in ('1', 'true', 'on')
-    active, count = feed_mod.set_reaction(kind, highlight, current_user, on)
+    if on and feed_mod.visitor_reactions_limited(actor):
+        return feed_json_error('Too many reactions from your network. Please try again later, or log in.', 429)
+    active, count = feed_mod.set_reaction(kind, highlight, actor, on)
     return feed_json({'on': active, 'count': count, 'label': feed_mod.compact_count(count)})
 
 
 @app.route('/feed/post/<int:highlight_id>/share', methods=['POST'])
 def feed_share(highlight_id):
     highlight = live_highlight_or_404(highlight_id)
-    # Counted once per browser session for each post.
-    shared = session.get('feed_shared') or []
-    if highlight.id in shared:
-        count = highlight.share_count
-    else:
-        count = feed_mod.count_share(highlight)
-        session['feed_shared'] = (shared + [highlight.id])[-200:]
+    actor = feed_actor(create=True)
+    count = feed_mod.count_share(highlight, actor) if actor else highlight.share_count
     return feed_json({'count': count, 'label': feed_mod.compact_count(count),
                       'url': site_url(url_for('feed_post', highlight_id=highlight.id))})
 
@@ -5432,44 +5502,92 @@ def feed_comments(highlight_id):
     highlight = live_highlight_or_404(highlight_id)
 
     if request.method == 'GET':
+        actor = feed_actor()
         before = request.args.get('before', type=int)
         comments, has_more = feed_mod.comments_for(highlight.id, before_id=before)
-        return feed_json({'comments': [comment_payload(c, highlight) for c in comments], 'has_more': has_more,
+        return feed_json({'comments': [comment_payload(c, highlight, actor) for c in comments], 'has_more': has_more,
                           'count': highlight.comment_count})
 
-    if not current_user.is_authenticated:
-        return feed_json_error('Log in to comment.', 401)
-    if not can_interact(current_user):
-        return feed_json_error('Your account must be verified to comment.', 403)
-    body, error = feed_mod.clean_comment((request.get_json(silent=True) or request.form).get('body'))
+    actor = feed_actor(create=True)
+    if actor is None:
+        return feed_json_error('Your account is suspended.', 403)
+    data = request.get_json(silent=True) or request.form
+    body, error = feed_mod.clean_comment(data.get('body'))
     if error:
         return feed_json_error(error, 422)
-    if feed_mod.comment_rate_limited(current_user):
+    visitor_name = None
+    if not actor.is_member:
+        visitor_name, error = feed_mod.clean_visitor_name(data.get('name'))
+        if error:
+            return feed_json_error(error, 422)
+    if feed_mod.comment_rate_limited(actor):
         return feed_json_error('You are commenting too fast. Please wait a minute.', 429)
 
-    comment = feed_mod.add_comment(highlight, current_user, body)
+    comment = feed_mod.add_comment(highlight, actor, body, visitor_name)
     db.session.refresh(highlight)
-    return feed_json({'comment': comment_payload(comment, highlight), 'count': highlight.comment_count,
+    return feed_json({'comment': comment_payload(comment, highlight, actor), 'count': highlight.comment_count,
                       'label': feed_mod.compact_count(highlight.comment_count)})
 
 
 @app.route('/feed/comments/<int:comment_id>/delete', methods=['POST'])
-@login_required
 def feed_comment_delete(comment_id):
     comment = db.session.get(HighlightComment, comment_id)
     highlight = db.session.get(AthleteHighlight, comment.highlight_id) if comment else None
-    # The writer, the athlete who posted, or the Super Admin.
-    if not comment or not highlight or not (
-        comment.user_id == current_user.id or highlight.user_id == current_user.id or current_user.role == 'System'
-    ):
+    # The writer (member or visitor), the athlete who posted, or the Super Admin.
+    if not comment or not highlight or not can_delete_comment(comment, highlight, feed_actor()):
         abort(404)
-    if current_user.role == 'System' and comment.user_id != current_user.id:
+    if current_user.is_authenticated and current_user.role == 'System' and comment.user_id != current_user.id:
         create_audit_log(action='feed_comment_removed', actor_user_id=current_user.id,
                          target_type='HighlightComment', target_id=str(comment.id),
-                         details={'highlight_id': highlight.id, 'author_id': comment.user_id, 'body': comment.body})
+                         details={'highlight_id': highlight.id, 'author_id': comment.user_id,
+                                  'visitor': comment.user_id is None, 'body': comment.body})
     feed_mod.delete_comment(comment)
     db.session.refresh(highlight)
     return feed_json({'count': highlight.comment_count, 'label': feed_mod.compact_count(highlight.comment_count)})
+
+
+# ---------- Super Admin: what people do with each post ----------
+ANALYTICS_PERIODS = {'7': 7, '30': 30, '90': 90, 'all': None}
+ANALYTICS_SORTS = ('engagement', 'like', 'comment', 'save', 'share', 'repost')
+ANALYTICS_LIMIT = 50
+
+
+@app.route('/admin/highlights/analytics')
+@login_required
+def admin_feed_analytics():
+    require_super_admin()
+    period = request.args.get('period', '30')
+    period = period if period in ANALYTICS_PERIODS else '30'
+    sort = request.args.get('sort', 'engagement')
+    sort = sort if sort in ANALYTICS_SORTS else 'engagement'
+    audience = request.args.get('audience', 'all')
+    audience = audience if audience in ('all', 'members', 'visitors') else 'all'
+
+    days = ANALYTICS_PERIODS[period]
+    since = datetime.utcnow() - timedelta(days=days) if days else None
+    breakdown = feed_mod.engagement_breakdown(since=since)
+    totals = feed_mod.engagement_totals(breakdown)
+
+    def sort_value(row):
+        if sort == 'engagement':
+            return feed_mod.engagement_score(row)
+        members, visitors = row[sort]
+        return members if audience == 'members' else visitors if audience == 'visitors' else members + visitors
+
+    ranked = sorted(breakdown.items(), key=lambda item: (-sort_value(item[1]), -item[0]))[:ANALYTICS_LIMIT]
+    posts = {
+        h.id: h for h in AthleteHighlight.query.filter(AthleteHighlight.id.in_([hid for hid, _ in ranked]))
+        .options(joinedload(AthleteHighlight.user)).all()
+    } if ranked else {}
+    rows = [{'post': posts[hid], 'stats': stats, 'score': feed_mod.engagement_score(stats)}
+            for hid, stats in ranked if hid in posts]
+
+    live_posts = AthleteHighlight.query.filter(AthleteHighlight.status == 'approved').count()
+    return render_template(
+        'admin_feed_analytics.html',
+        rows=rows, totals=totals, period=period, sort=sort, audience=audience,
+        periods=ANALYTICS_PERIODS, live_posts=live_posts, active_posts=len(breakdown),
+    )
 
 
 @app.route('/admin/users/<int:user_id>/media-restore', methods=['POST'])

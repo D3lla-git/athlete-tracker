@@ -30,135 +30,7 @@
 
   <div class="card-body">
 
-    {% if can_manage %}
-      {% set usage = upload_usage() %}
-      {% set photo_row, video_row = usage.rows[1], usage.rows[2] %}
-      {% if current_user.is_verified %}
-        <div class="hl-usage" aria-label="Uploads this month">
-          {% for row in [photo_row, video_row] %}
-            <span class="hl-usage-item">
-              <i class="fa-solid {{ 'fa-image' if loop.first else 'fa-video' }}"></i>
-              {{ row.label }} this month:
-              <strong>{% if row.limit is none or not usage.active %}Unlimited{% else %}{{ row.used }}/{{ row.limit }}{% endif %}</strong>
-            </span>
-          {% endfor %}
-          {% if not usage.active %}
-            <span class="hl-usage-note">Monthly limits start {{ usage.starts.strftime('%B %d, %Y') }}.</span>
-          {% elif not my_plan %}
-            <a href="{{ url_for('pricing') }}" class="hl-usage-upgrade"><i class="fa-solid fa-crown"></i> Upgrade for more</a>
-          {% endif %}
-        </div>
-      {% endif %}
-
-      {% if not current_user.is_verified %}
-        <div class="hl-notice">
-          <i class="fa-solid fa-lock"></i>
-          Highlights unlock once your account is verified by a coach.
-        </div>
-      {% elif current_user.media_blocked %}
-        <div class="hl-notice hl-notice-blocked" role="alert">
-          <i class="fa-solid fa-ban"></i>
-          Photo and video uploads are blocked on your account because of content that breaks the
-          <a href="{{ url_for('terms_page') }}#content-rules">D.A.R.T. content rules</a>.
-          Contact D.A.R.T. if you think this is a mistake.
-        </div>
-      {% elif usage.active and photo_row.limit is not none and photo_row.used >= photo_row.limit
-             and video_row.limit is not none and video_row.used >= video_row.limit %}
-        <div class="hl-notice">
-          <i class="fa-solid fa-circle-info"></i>
-          You've used this month's photo and video uploads. They reset on {{ usage.resets.strftime('%B %d') }}.
-          {% if not my_plan %}<a href="{{ url_for('pricing') }}">Upgrade to Premium</a> for more.{% endif %}
-        </div>
-      {% else %}
-        {# ---------- Rules ---------- #}
-        <details class="hl-rules" open>
-          <summary><i class="fa-solid fa-shield-halved"></i> What D.A.R.T. accepts <span>Read before uploading</span></summary>
-          <div class="hl-rules-grid">
-            <div class="hl-rule hl-rule-yes">
-              <strong><i class="fa-solid fa-circle-check"></i> Allowed</strong>
-              <ul>
-                <li><b>Photos:</b> you <em>in action</em> on the pitch or court: kicking, shooting, dribbling, saving, defending.</li>
-                <li><b>Videos:</b> a <em>direct highlight</em> of you playing (goals, assists, saves, baskets, home runs). <b>Edit or trim it to the action before uploading.</b></li>
-                <li>Football, basketball or kickball only.</li>
-              </ul>
-            </div>
-            <div class="hl-rule hl-rule-no">
-              <strong><i class="fa-solid fa-circle-xmark"></i> Never allowed</strong>
-              <ul>
-                <li>Nudity, sexual, rude, offensive or violent content: <b>your uploads will be blocked.</b></li>
-                <li>Selfies, mirror pictures, posed or party pictures.</li>
-                <li>Distracted videos: vlogs, talking to the camera, crowds, long clips with little action.</li>
-                <li>Other sports or anything not about your play.</li>
-              </ul>
-            </div>
-          </div>
-          <p class="hl-rules-note"><i class="fa-solid fa-user-shield"></i> Every upload is safety-checked and only appears on your profile after it is approved. Breaking the rules adds a strike; {{ media_strike_limit }} strikes block uploads.</p>
-        </details>
-
-        {# ---------- Uploader ---------- #}
-        <div class="hl-uploader"
-             data-upload-url="{{ url_for('highlight_upload_url') }}"
-             data-complete-url="{{ url_for('highlight_complete') }}"
-             data-csrf="{{ csrf_token() }}"
-             data-photo-max="{{ highlight_photo_max_bytes }}"
-             data-video-max="{{ highlight_video_max_bytes }}"
-             data-video-seconds="{{ highlight_video_max_seconds }}">
-
-          <label class="hl-drop" for="highlightFile">
-            <input type="file" id="highlightFile" class="visually-hidden"
-                   accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime">
-            <span class="hl-drop-icon" aria-hidden="true"><i class="fa-solid fa-cloud-arrow-up"></i></span>
-            <span class="hl-drop-title">Tap to choose a photo or video</span>
-            <span class="hl-drop-hint">
-              or drag it here · JPG, PNG, WEBP up to {{ highlight_photo_max_bytes // 1048576 }} MB
-              · MP4, MOV up to 1 minute and {{ highlight_video_max_bytes // 1048576 }} MB
-            </span>
-          </label>
-
-          <div class="hl-selected" hidden>
-            <div class="hl-preview"></div>
-            <div class="hl-selected-body">
-              <div class="hl-file-name"></div>
-              <div class="hl-file-meta"></div>
-
-              <label class="form-label mt-2" for="highlightSport">
-                Sport <span class="text-danger">*</span> <i class="fa-solid fa-medal"></i>
-              </label>
-              <select id="highlightSport" class="form-select" required>
-                <option value="">Choose the sport</option>
-                {% for s in highlight_sports %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
-              </select>
-
-              <label class="form-label mt-2" for="highlightCaption">
-                Caption <span class="text-muted fw-normal">(optional)</span> <i class="fa-solid fa-pen"></i>
-              </label>
-              <input type="text" id="highlightCaption" class="form-control" maxlength="150"
-                     placeholder="e.g. Free-kick winner vs Rival Academy">
-
-              <label class="hl-confirm mt-3" for="highlightConfirm">
-                <input type="checkbox" id="highlightConfirm" class="form-check-input">
-                <span>I confirm this is <b>me in action</b> playing football, basketball or kickball: no selfie,
-                  nothing rude, and videos are edited to the highlight.</span>
-              </label>
-
-              <div class="progress hl-progress mt-3" hidden role="progressbar" aria-label="Upload progress"
-                   aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                <div class="progress-bar" style="width: 0%">0%</div>
-              </div>
-
-              <div class="hl-actions mt-3">
-                <button type="button" class="btn dart-btn hl-upload-btn">
-                  <i class="fa-solid fa-upload me-1"></i> Upload Highlight
-                </button>
-                <button type="button" class="btn btn-outline-secondary hl-cancel-btn">Cancel</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="hl-message" role="alert" hidden></div>
-        </div>
-      {% endif %}
-    {% endif %}
+    {% if can_manage %}{{ highlight_uploader() }}{% endif %}
 
     {# ---------- Gallery ---------- #}
     {% if highlights %}
@@ -261,6 +133,147 @@
   </div>
 </div>
 
+{{ highlight_assets() }}
+{% endmacro %}
+
+
+{# The upload form: monthly usage, notices, rules and the uploader.
+   Used on the athlete's own pages and in the Highlights feed ("Add post").
+   return_hash: where the page jumps after a successful upload (reloads). #}
+{% macro highlight_uploader(return_hash='highlights') %}
+<div class="hl-upload-area" data-return-hash="{{ return_hash }}">
+  {% set usage = upload_usage() %}
+  {% set photo_row, video_row = usage.rows[1], usage.rows[2] %}
+  {% if current_user.is_verified %}
+    <div class="hl-usage" aria-label="Uploads this month">
+      {% for row in [photo_row, video_row] %}
+        <span class="hl-usage-item">
+          <i class="fa-solid {{ 'fa-image' if loop.first else 'fa-video' }}"></i>
+          {{ row.label }} this month:
+          <strong>{% if row.limit is none or not usage.active %}Unlimited{% else %}{{ row.used }}/{{ row.limit }}{% endif %}</strong>
+        </span>
+      {% endfor %}
+      {% if not usage.active %}
+        <span class="hl-usage-note">Monthly limits start {{ usage.starts.strftime('%B %d, %Y') }}.</span>
+      {% elif not my_plan %}
+        <a href="{{ url_for('pricing') }}" class="hl-usage-upgrade"><i class="fa-solid fa-crown"></i> Upgrade for more</a>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% if not current_user.is_verified %}
+    <div class="hl-notice">
+      <i class="fa-solid fa-lock"></i>
+      Highlights unlock once your account is verified by a coach.
+    </div>
+  {% elif current_user.media_blocked %}
+    <div class="hl-notice hl-notice-blocked" role="alert">
+      <i class="fa-solid fa-ban"></i>
+      Photo and video uploads are blocked on your account because of content that breaks the
+      <a href="{{ url_for('terms_page') }}#content-rules">D.A.R.T. content rules</a>.
+      Contact D.A.R.T. if you think this is a mistake.
+    </div>
+  {% elif usage.active and photo_row.limit is not none and photo_row.used >= photo_row.limit
+         and video_row.limit is not none and video_row.used >= video_row.limit %}
+    <div class="hl-notice">
+      <i class="fa-solid fa-circle-info"></i>
+      You've used this month's photo and video uploads. They reset on {{ usage.resets.strftime('%B %d') }}.
+      {% if not my_plan %}<a href="{{ url_for('pricing') }}">Upgrade to Premium</a> for more.{% endif %}
+    </div>
+  {% else %}
+    {# ---------- Rules ---------- #}
+    <details class="hl-rules" open>
+      <summary><i class="fa-solid fa-shield-halved"></i> What D.A.R.T. accepts <span>Read before uploading</span></summary>
+      <div class="hl-rules-grid">
+        <div class="hl-rule hl-rule-yes">
+          <strong><i class="fa-solid fa-circle-check"></i> Allowed</strong>
+          <ul>
+            <li><b>Photos:</b> you <em>in action</em> on the pitch or court: kicking, shooting, dribbling, saving, defending.</li>
+            <li><b>Videos:</b> a <em>direct highlight</em> of you playing (goals, assists, saves, baskets, home runs). <b>Edit or trim it to the action before uploading.</b></li>
+            <li>Football, basketball or kickball only.</li>
+          </ul>
+        </div>
+        <div class="hl-rule hl-rule-no">
+          <strong><i class="fa-solid fa-circle-xmark"></i> Never allowed</strong>
+          <ul>
+            <li>Nudity, sexual, rude, offensive or violent content: <b>your uploads will be blocked.</b></li>
+            <li>Selfies, mirror pictures, posed or party pictures.</li>
+            <li>Distracted videos: vlogs, talking to the camera, crowds, long clips with little action.</li>
+            <li>Other sports or anything not about your play.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="hl-rules-note"><i class="fa-solid fa-user-shield"></i> Every upload is safety-checked and only appears on your profile after it is approved. Breaking the rules adds a strike; {{ media_strike_limit }} strikes block uploads.</p>
+    </details>
+
+    {# ---------- Uploader ---------- #}
+    <div class="hl-uploader"
+         data-upload-url="{{ url_for('highlight_upload_url') }}"
+         data-complete-url="{{ url_for('highlight_complete') }}"
+         data-csrf="{{ csrf_token() }}"
+         data-photo-max="{{ highlight_photo_max_bytes }}"
+         data-video-max="{{ highlight_video_max_bytes }}"
+         data-video-seconds="{{ highlight_video_max_seconds }}">
+
+      <label class="hl-drop" for="highlightFile">
+        <input type="file" id="highlightFile" class="visually-hidden"
+               accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime">
+        <span class="hl-drop-icon" aria-hidden="true"><i class="fa-solid fa-cloud-arrow-up"></i></span>
+        <span class="hl-drop-title">Tap to choose a photo or video</span>
+        <span class="hl-drop-hint">
+          or drag it here · JPG, PNG, WEBP up to {{ highlight_photo_max_bytes // 1048576 }} MB
+          · MP4, MOV up to 1 minute and {{ highlight_video_max_bytes // 1048576 }} MB
+        </span>
+      </label>
+
+      <div class="hl-selected" hidden>
+        <div class="hl-preview"></div>
+        <div class="hl-selected-body">
+          <div class="hl-file-name"></div>
+          <div class="hl-file-meta"></div>
+
+          <label class="form-label mt-2" for="highlightSport">
+            Sport <span class="text-danger">*</span> <i class="fa-solid fa-medal"></i>
+          </label>
+          <select id="highlightSport" class="form-select" required>
+            <option value="">Choose the sport</option>
+            {% for s in highlight_sports %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+          </select>
+
+          <label class="form-label mt-2" for="highlightCaption">
+            Caption <span class="text-muted fw-normal">(optional)</span> <i class="fa-solid fa-pen"></i>
+          </label>
+          <input type="text" id="highlightCaption" class="form-control" maxlength="150"
+                 placeholder="e.g. Free-kick winner vs Rival Academy">
+
+          <label class="hl-confirm mt-3" for="highlightConfirm">
+            <input type="checkbox" id="highlightConfirm" class="form-check-input">
+            <span>I confirm this is <b>me in action</b> playing football, basketball or kickball: no selfie,
+              nothing rude, and videos are edited to the highlight.</span>
+          </label>
+
+          <div class="progress hl-progress mt-3" hidden role="progressbar" aria-label="Upload progress"
+               aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="progress-bar" style="width: 0%">0%</div>
+          </div>
+
+          <div class="hl-actions mt-3">
+            <button type="button" class="btn dart-btn hl-upload-btn">
+              <i class="fa-solid fa-upload me-1"></i> Upload Highlight
+            </button>
+            <button type="button" class="btn btn-outline-secondary hl-cancel-btn">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="hl-message" role="alert" hidden></div>
+    </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{# Styles + scripts for the gallery, viewer and uploader (once per page). #}
+{% macro highlight_assets() %}
 <style>
   .hl-header {
     display: flex;
@@ -898,7 +911,9 @@
       });
     }).then(function (res) {
       if (!res.ok) throw new Error(res.error);
-      window.location.hash = 'highlights';
+      var area = box.closest('.hl-upload-area');
+      var hash = area ? area.dataset.returnHash : 'highlights';
+      if (hash) window.location.hash = hash;
       window.location.reload();
     }).catch(function (err) {
       setBusy(false);

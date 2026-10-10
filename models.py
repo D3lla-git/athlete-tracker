@@ -332,9 +332,16 @@ class AthleteHighlight(db.Model):
 
 
 class _HighlightReaction:
-    """One row per (highlight, user): a like, a repost or a saved post."""
+    """
+    One row per (highlight, person): a like, a repost or a saved post.
+    The person is a signed-in member (user_id) OR an anonymous visitor
+    (visitor_key: a random id kept in a long-lived cookie). ip_hash is a
+    one-way hash of the visitor's IP, only used to slow down spam.
+    """
     id = db.Column(db.BigInteger, primary_key=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    visitor_key = db.Column(db.String(64), nullable=True)
+    ip_hash = db.Column(db.String(32), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     @declared_attr
     def highlight_id(cls):
@@ -342,11 +349,19 @@ class _HighlightReaction:
 
     @declared_attr
     def user_id(cls):
-        return db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+        return db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=True, index=True)
 
     @declared_attr
     def __table_args__(cls):
-        return (db.UniqueConstraint('highlight_id', 'user_id', name=f'uq_{cls.__tablename__}'),)
+        return (
+            db.UniqueConstraint('highlight_id', 'user_id', name=f'uq_{cls.__tablename__}'),
+            db.UniqueConstraint('highlight_id', 'visitor_key', name=f'uq_{cls.__tablename__}_visitor'),
+            db.Index(f'ix_{cls.__tablename__}_visitor_key', 'visitor_key'),
+        )
+
+    @property
+    def is_member(self):
+        return self.user_id is not None
 
 
 class HighlightLike(_HighlightReaction, db.Model):
@@ -358,20 +373,40 @@ class HighlightRepost(_HighlightReaction, db.Model):
 
 
 class HighlightSave(_HighlightReaction, db.Model):
-    """A post the user bookmarked (only they see their saved posts)."""
+    """A post the person bookmarked (only they see their saved posts)."""
     __tablename__ = 'highlight_save'
 
 
+class HighlightShare(db.Model):
+    """One row each time someone shares a post (counted once per person)."""
+    __tablename__ = 'highlight_share'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    highlight_id = db.Column(db.BigInteger, db.ForeignKey('athlete_highlight.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=True, index=True)
+    visitor_key = db.Column(db.String(64), nullable=True, index=True)
+    ip_hash = db.Column(db.String(32), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
 class HighlightComment(db.Model):
+    """A comment by a member (user_id) or a visitor (visitor_key + the name they typed)."""
     __tablename__ = 'highlight_comment'
 
     id = db.Column(db.BigInteger, primary_key=True)
     highlight_id = db.Column(db.BigInteger, db.ForeignKey('athlete_highlight.id', ondelete='CASCADE'), nullable=False, index=True)
-    user_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=True, index=True)
+    visitor_key = db.Column(db.String(64), nullable=True, index=True)
+    visitor_name = db.Column(db.String(40), nullable=True)
+    ip_hash = db.Column(db.String(32), nullable=True)
     body = db.Column(db.String(300), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     user = db.relationship('User', foreign_keys=[user_id])
+
+    @property
+    def is_member(self):
+        return self.user_id is not None
 
 
 class OrganizationProfile(db.Model):

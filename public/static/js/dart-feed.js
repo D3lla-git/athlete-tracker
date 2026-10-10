@@ -9,7 +9,8 @@
   if (!root) return;
 
   var CSRF = root.dataset.csrf || '';
-  var CAN_INTERACT = root.dataset.canInteract === '1';
+  var CAN_INTERACT = root.dataset.canInteract === '1';     // everyone except suspended accounts
+  var IS_MEMBER = root.dataset.member === '1';
   var SIGNED_IN = root.dataset.signedIn === '1';
   var LOGIN_URL = root.dataset.loginUrl || '/login';
   var SINGLE = root.dataset.single === '1';
@@ -39,8 +40,7 @@
   }
 
   function needAccount() {
-    if (!SIGNED_IN) toast('Log in to do that.', 'Log in', LOGIN_URL);
-    else toast('Your account must be verified to do that.');
+    toast('Your account is suspended, so you cannot react.');
   }
 
   function send(url, payload, method) {
@@ -109,13 +109,15 @@
         if (data.ok) {
           setPressed(id, act, data.on);
           setCount(id, act, data.label);
-          if (act === 'save') toast(data.on ? 'Saved. Find it under Highlights › Saved.' : 'Removed from Saved.');
+          if (act === 'save') {
+            if (data.on && !IS_MEMBER) toast('Saved on this device.', 'Log in', LOGIN_URL);
+            else toast(data.on ? 'Saved. Find it under Highlights › Saved.' : 'Removed from Saved.');
+          }
           if (act === 'repost' && data.on) toast('Reposted.');
         } else {
           setPressed(id, act, !on);
           setCount(id, act, before);
-          if (data._status === 401) toast('Log in to do that.', 'Log in', LOGIN_URL);
-          else toast(data.error || 'Could not save that. Please try again.');
+          toast(data.error || 'Could not save that. Please try again.');
         }
       })
       .catch(function () {
@@ -157,14 +159,14 @@
     li.dataset.comment = c.id;
     var head = document.createElement('div');
     head.className = 'fp-c-head';
-    var name = document.createElement('a');
+    var name = document.createElement(c.author_url ? 'a' : 'span');
     name.className = 'fp-c-name';
-    name.href = c.author_url || '#';
+    if (c.author_url) name.href = c.author_url;
     name.textContent = c.author;
     head.appendChild(name);
-    if (c.is_athlete || ['Coach', 'Scout', 'Organization'].indexOf(c.role) >= 0) {
+    if (c.is_athlete || ['Coach', 'Scout', 'Organization', 'Visitor'].indexOf(c.role) >= 0) {
       var tag = document.createElement('span');
-      tag.className = c.is_athlete ? 'fp-c-tag' : 'fp-c-role';
+      tag.className = c.is_athlete ? 'fp-c-tag' : 'fp-c-role' + (c.member ? '' : ' fp-c-visitor');
       tag.textContent = c.is_athlete ? 'Athlete' : c.role;
       head.appendChild(tag);
     }
@@ -258,8 +260,14 @@
     var err = form.querySelector('.fp-c-error');
     var body = (field.value || '').trim();
     if (!body) { field.focus(); return; }
+    var nameField = form.querySelector('input[name=name]');
+    var payload = { body: body };
+    if (nameField) {
+      payload.name = nameField.value.trim();
+      try { localStorage.setItem('dartVisitorName', payload.name); } catch (err) {}
+    }
     button.disabled = true;
-    send('/feed/post/' + encodeURIComponent(thread.dataset.post) + '/comments', { body: body })
+    send('/feed/post/' + encodeURIComponent(thread.dataset.post) + '/comments', payload)
       .then(function (data) {
         if (!data.ok) {
           err.textContent = data.error || 'Could not post your comment.';
@@ -285,8 +293,41 @@
     }
   });
 
+  // A visitor's name is remembered on this device (convenience only).
+  try {
+    var savedName = localStorage.getItem('dartVisitorName');
+    if (savedName) document.querySelectorAll('[data-comment-form] input[name=name]').forEach(function (i) { i.value = savedName; });
+  } catch (err) {}
+
+  // ---------- Add post (athletes): the uploader in a sheet ----------
+  var composer = document.getElementById('fpComposer');
+  var composerFocus = null;
+  function openComposer() {
+    if (!composer) return;
+    composerFocus = document.activeElement;
+    composer.hidden = false;
+    document.documentElement.classList.add('fp-sheet-open');
+    var first = composer.querySelector('.hl-drop') || composer.querySelector('[data-close-composer]');
+    if (first) first.focus({ preventScroll: true });
+  }
+  function closeComposer() {
+    if (!composer || composer.hidden) return;
+    var uploading = composer.querySelector('.hl-upload-btn[disabled]') && !composer.querySelector('.hl-progress[hidden]');
+    if (uploading && !window.confirm('Your upload is still running. Close anyway?')) return;
+    composer.hidden = true;
+    document.documentElement.classList.remove('fp-sheet-open');
+    if (composerFocus && composerFocus.focus) composerFocus.focus({ preventScroll: true });
+  }
+  if (composer) {
+    composer.addEventListener('click', function (e) { if (e.target === composer) closeComposer(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeComposer(); });
+  }
+
   // ---------- clicks ----------
   document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-open-composer]')) { openComposer(); return; }
+    if (e.target.closest('[data-close-composer]')) { closeComposer(); return; }
+
     var del = e.target.closest('[data-delete-comment]');
     if (del) {
       if (!window.confirm('Delete this comment?')) return;

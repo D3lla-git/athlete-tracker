@@ -204,6 +204,8 @@
                   <li><a class="dropdown-item" href="{{ url_for('admin_highlights') }}">
                     <i class="fa-solid fa-photo-film"></i> Media review
                     {% if media_awaiting %}<span class="badge bg-warning text-dark">{{ media_awaiting }}</span>{% endif %}</a></li>
+                  <li><a class="dropdown-item" href="{{ url_for('admin_feed_analytics') }}">
+                    <i class="fa-solid fa-chart-simple"></i> Highlights analysis</a></li>
                   <li><a class="dropdown-item" href="{{ url_for('admin_coach_review') }}">
                     <i class="fa-solid fa-clipboard-user"></i> Coach review
                     {% if coach_review_awaiting %}<span class="badge bg-warning text-dark">{{ coach_review_awaiting }}</span>{% endif %}</a></li>

@@ -12,6 +12,7 @@
 <div class="feed-page" id="feedRoot"
      data-csrf="{{ csrf_token() }}"
      data-can-interact="{{ '1' if can_interact else '0' }}"
+     data-member="{{ '1' if is_member else '0' }}"
      data-signed-in="{{ '1' if current_user.is_authenticated else '0' }}"
      data-login-url="{{ url_for('login', next=request.path) }}"
      data-single="1">
@@ -22,6 +23,22 @@
     {{ feed_card(post, state, can_interact, full=true) }}
   </div>
 
+  {% if insights %}
+    {# Super Admin only: who engaged with this post. #}
+    <section class="fp-insights" aria-labelledby="fpInsightsTitle">
+      <h2 id="fpInsightsTitle" class="fp-thread-title"><i class="fa-solid fa-chart-simple"></i> Post insights
+        <a href="{{ url_for('admin_feed_analytics') }}" class="fp-insights-all">All posts</a></h2>
+      <table class="fp-insights-table">
+        <thead><tr><th scope="col"></th><th scope="col">Members</th><th scope="col">Visitors</th><th scope="col">Total</th></tr></thead>
+        <tbody>
+          {% for key, label in (('like', 'Likes'), ('comment', 'Comments'), ('save', 'Bookmarks'), ('share', 'Shares'), ('repost', 'Reposts')) %}
+            <tr><th scope="row">{{ label }}</th><td>{{ insights[key][0] }}</td><td>{{ insights[key][1] }}</td><td><strong>{{ insights[key][0] + insights[key][1] }}</strong></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
+
   <section class="fp-thread" aria-labelledby="fpThreadTitle" data-post="{{ post.id }}">
     <h2 id="fpThreadTitle" class="fp-thread-title">Comments</h2>
     {% include '_feed_comment_form.html' %}
@@ -29,8 +46,8 @@
       {% for c in comments %}
         <li class="fp-c" data-comment="{{ c.id }}">
           <div class="fp-c-head">
-            <a href="{{ c.author_url }}" class="fp-c-name">{{ c.author }}</a>
-            {% if c.is_athlete %}<span class="fp-c-tag">Athlete</span>{% elif c.role in ('Coach', 'Scout', 'Organization') %}<span class="fp-c-role">{{ c.role }}</span>{% endif %}
+            {% if c.author_url %}<a href="{{ c.author_url }}" class="fp-c-name">{{ c.author }}</a>{% else %}<span class="fp-c-name">{{ c.author }}</span>{% endif %}
+            {% if c.is_athlete %}<span class="fp-c-tag">Athlete</span>{% elif c.role in ('Coach', 'Scout', 'Organization', 'Visitor') %}<span class="fp-c-role {{ 'fp-c-visitor' if not c.member }}">{{ c.role }}</span>{% endif %}
             <span class="fp-c-ago">· {{ c.ago }}</span>
             {% if c.can_delete %}
               <button type="button" class="fp-c-del" data-delete-comment="{{ c.id }}" aria-label="Delete comment" title="Delete"><i class="fa-solid fa-trash"></i></button>

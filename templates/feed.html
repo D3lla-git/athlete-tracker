@@ -9,6 +9,7 @@
 <div class="feed-page" id="feedRoot"
      data-csrf="{{ csrf_token() }}"
      data-can-interact="{{ '1' if can_interact else '0' }}"
+     data-member="{{ '1' if is_member else '0' }}"
      data-signed-in="{{ '1' if current_user.is_authenticated else '0' }}"
      data-login-url="{{ url_for('login', next=request.full_path if request.query_string else request.path) }}">
 
@@ -29,14 +30,28 @@
       {% for s in ('Football', 'Basketball', 'Kickball') %}
         <a href="{{ url_for('feed', tab=tab if tab != 'foryou' else None, sport=s) }}" class="feed-chip {{ 'active' if sport == s }}">{{ s }}</a>
       {% endfor %}
+      {% if can_post %}
+        <button type="button" class="feed-chip feed-chip-add" data-open-composer aria-haspopup="dialog" aria-label="Add post">
+          <i class="fa-solid fa-plus" aria-hidden="true"></i> <span class="feed-add-long">Add post</span><span class="feed-add-short">Post</span>
+        </button>
+      {% endif %}
     </nav>
   </div>
 
   {% if can_post %}
-    <a href="{{ url_for('student_dashboard') }}#highlights" class="feed-compose">
-      <span class="feed-compose-icon" aria-hidden="true"><i class="fa-solid fa-plus"></i></span>
-      <span><strong>Post a highlight</strong><small>Football, basketball or kickball action · photo or video up to 1 minute</small></span>
-    </a>
+    {# Placeholder bar, like X's "What's happening?" #}
+    <button type="button" class="feed-compose" data-open-composer aria-haspopup="dialog">
+      <span class="fp-avatar feed-compose-avatar" aria-hidden="true">
+        {% if current_user.profile_picture %}
+          <img src="{{ url_for('profile_picture', filename=current_user.profile_picture) }}" alt="" width="44" height="44">
+        {% else %}<span>{{ (current_user.full_name or '?')[0] | upper }}</span>{% endif %}
+      </span>
+      <span class="feed-compose-text">
+        <span class="feed-compose-placeholder">Share your football, basketball or kickball action…</span>
+        <small><i class="fa-solid fa-image"></i> Photo · <i class="fa-solid fa-video"></i> Video ≤ 1 min</small>
+      </span>
+      <span class="feed-compose-btn">Post</span>
+    </button>
   {% elif current_user.is_authenticated and current_user.role == 'Athlete' %}
     <div class="feed-note"><i class="fa-solid fa-lock"></i> You can post highlights once your profile is approved.</div>
   {% endif %}
@@ -63,5 +78,23 @@
 </div>
 
 {% include '_feed_comments.html' %}
+
+{% if can_post %}
+  {# Add post: the same uploader as the athlete dashboard; every post is
+     approved by the Super Admin and the athlete's coach before it shows. #}
+  {% from '_highlights.html' import highlight_uploader, highlight_assets with context %}
+  <div class="fp-sheet fp-composer" id="fpComposer" role="dialog" aria-modal="true" aria-labelledby="fpComposerTitle" hidden>
+    <div class="fp-sheet-card">
+      <div class="fp-sheet-head">
+        <h2 id="fpComposerTitle" class="fp-thread-title"><i class="fa-solid fa-clapperboard"></i> Add a highlight</h2>
+        <button type="button" class="fp-sheet-close" data-close-composer aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="fp-sheet-body fp-composer-body">
+        {{ highlight_uploader(return_hash='') }}
+      </div>
+    </div>
+  </div>
+  {{ highlight_assets() }}
+{% endif %}
 <script src="{{ url_for('static', filename='js/dart-feed.js') }}" defer></script>
 {% endblock %}
