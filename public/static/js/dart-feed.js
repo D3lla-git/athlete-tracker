@@ -73,7 +73,7 @@
       btn.classList.toggle('on', on);
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
       var icon = btn.querySelector('i');
-      if (icon && (act === 'like' || act === 'save')) {
+      if (icon && act === 'save') {
         icon.classList.toggle('fa-solid', on);
         icon.classList.toggle('fa-regular', !on);
       }

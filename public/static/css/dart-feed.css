@@ -116,8 +116,19 @@
 }
 .fp-act i { font-size: 1.1rem; }
 .fp-act .fp-n { min-width: 1ch; font-variant-numeric: tabular-nums; }
-.fp-like:hover, .fp-like.on { color: #f91880; }
-.fp-like:hover { background: rgba(249, 24, 128, 0.1); }
+/* Like = the post's ball. Grey until pressed, then the ball's colour. */
+.fp-ball { width: 1.15rem; height: 1.15rem; font-size: 1.12rem; flex: 0 0 auto; }
+.fp-like .fp-ball { opacity: 0.85; }
+.fp-like.on .fp-ball { opacity: 1; }
+.fp-like { --fp-ball-seam: var(--surface-bg, #fff); }
+.fp-like-football:hover, .fp-like-football.on { color: #16a34a; }
+.fp-like-football:hover { background: rgba(22, 163, 74, 0.12); }
+.fp-like-basketball:hover, .fp-like-basketball.on { color: #f97316; }
+.fp-like-basketball:hover { background: rgba(249, 115, 22, 0.12); }
+.fp-like-kickball:hover, .fp-like-kickball.on { color: #dc2626; }
+.fp-like-kickball:hover { background: rgba(220, 38, 38, 0.12); }
+[data-theme="dark"] .fp-like-football.on, [data-theme="dark"] .fp-like-football:hover { color: #4ade80; }
+[data-theme="dark"] .fp-like-kickball.on, [data-theme="dark"] .fp-like-kickball:hover { color: #f87171; }
 .fp-repost:hover, .fp-repost.on { color: #00ba7c; }
 .fp-repost:hover { background: rgba(0, 186, 124, 0.1); }
 .fp-share:hover, .fp-comment:hover { color: #1d9bf0; background: rgba(29, 155, 240, 0.1); }
@@ -125,6 +136,14 @@
 .fp-save:hover { background: rgba(29, 155, 240, 0.1); }
 .fp-act.pop i { animation: fpPop 0.35s ease; }
 @keyframes fpPop { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+/* The ball bounces and spins when liked. */
+.fp-like.pop .fp-ball { animation: fpBounce 0.55s cubic-bezier(.3, .7, .4, 1.4); }
+@keyframes fpBounce {
+  0% { transform: translateY(0) rotate(0) scale(1); }
+  35% { transform: translateY(-7px) rotate(200deg) scale(1.25); }
+  65% { transform: translateY(1px) rotate(330deg) scale(0.95); }
+  100% { transform: translateY(0) rotate(360deg) scale(1); }
+}
 
 .fp-more { display: flex; justify-content: center; padding: 8px 0 4px; }
 .fp-more.loading .fp-more-btn { pointer-events: none; opacity: 0.6; }
@@ -210,7 +229,7 @@ html.fp-sheet-open, html.fp-sheet-open body { overflow: hidden; }
   .fp-media { border-radius: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .fp-sheet-card, .fp-act.pop i { animation: none; }
+  .fp-sheet-card, .fp-act.pop i, .fp-like.pop .fp-ball { animation: none; }
 }
 
 /* Visitors in comments */
