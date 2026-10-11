@@ -206,31 +206,44 @@
       <p class="hl-rules-note"><i class="fa-solid fa-user-shield"></i> Every upload is safety-checked and only appears on your profile after it is approved. Breaking the rules adds a strike; {{ media_strike_limit }} strikes block uploads.</p>
     </details>
 
-    {# ---------- Uploader ---------- #}
+    {# ---------- Uploader: one post, one or several photos / videos ---------- #}
+    {% set left = upload_remaining() %}
     <div class="hl-uploader"
          data-upload-url="{{ url_for('highlight_upload_url') }}"
          data-complete-url="{{ url_for('highlight_complete') }}"
          data-csrf="{{ csrf_token() }}"
          data-photo-max="{{ highlight_photo_max_bytes }}"
          data-video-max="{{ highlight_video_max_bytes }}"
-         data-video-seconds="{{ highlight_video_max_seconds }}">
+         data-video-seconds="{{ highlight_video_max_seconds }}"
+         data-post-max="{{ highlight_post_max }}"
+         data-left-photos="{{ '' if left.photos is none else left.photos }}"
+         data-left-videos="{{ '' if left.videos is none else left.videos }}"
+         data-pricing-url="{{ url_for('pricing') }}">
 
       <label class="hl-drop" for="highlightFile">
-        <input type="file" id="highlightFile" class="visually-hidden"
+        <input type="file" id="highlightFile" class="visually-hidden" multiple
                accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime">
         <span class="hl-drop-icon" aria-hidden="true"><i class="fa-solid fa-cloud-arrow-up"></i></span>
-        <span class="hl-drop-title">Tap to choose a photo or video</span>
+        <span class="hl-drop-title">Tap to choose photos or videos</span>
         <span class="hl-drop-hint">
-          or drag it here · JPG, PNG, WEBP up to {{ highlight_photo_max_bytes // 1048576 }} MB
-          · MP4, MOV up to 1 minute and {{ highlight_video_max_bytes // 1048576 }} MB
+          Up to {{ highlight_post_max }} in one post: people swipe through them · or drag them here
+          · JPG, PNG, WEBP up to {{ highlight_photo_max_bytes // 1048576 }} MB
+          · MP4, MOV up to 1 minute and {{ highlight_video_max_bytes // 1048576 }} MB each
         </span>
       </label>
 
       <div class="hl-selected" hidden>
-        <div class="hl-preview"></div>
+        <div class="hl-picks" aria-label="Chosen photos and videos">
+          <label class="hl-pick-add" for="highlightMore" title="Add more">
+            <input type="file" id="highlightMore" class="visually-hidden" multiple
+                   accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i><span>Add</span>
+          </label>
+        </div>
         <div class="hl-selected-body">
           <div class="hl-file-name"></div>
           <div class="hl-file-meta"></div>
+          <div class="hl-quota" role="status" hidden></div>
 
           <label class="form-label mt-2" for="highlightSport">
             Sport <span class="text-danger">*</span> <i class="fa-solid fa-medal"></i>
@@ -248,7 +261,7 @@
 
           <label class="hl-confirm mt-3" for="highlightConfirm">
             <input type="checkbox" id="highlightConfirm" class="form-check-input">
-            <span>I confirm this is <b>me in action</b> playing football, basketball or kickball: no selfie,
+            <span>I confirm these show <b>me in action</b> playing football, basketball or kickball: no selfies,
               nothing rude, and videos are edited to the highlight.</span>
           </label>
 
@@ -259,7 +272,7 @@
 
           <div class="hl-actions mt-3">
             <button type="button" class="btn dart-btn hl-upload-btn">
-              <i class="fa-solid fa-upload me-1"></i> Upload Highlight
+              <i class="fa-solid fa-upload me-1"></i> <span class="hl-upload-label">Upload Highlight</span>
             </button>
             <button type="button" class="btn btn-outline-secondary hl-cancel-btn">Cancel</button>
           </div>
@@ -465,6 +478,7 @@
 
   .hl-selected {
     display: flex;
+    flex-wrap: wrap;
     gap: 16px;
     margin-top: 14px;
     padding: 14px;
@@ -473,6 +487,32 @@
   }
 
   .hl-selected[hidden] { display: none; }
+
+  /* Chosen files (one post): thumbnails in order, remove x, "+ Add" */
+  .hl-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; margin-bottom: 12px; flex: 1 1 100%; }
+  .hl-pick, .hl-pick-add { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; }
+  .hl-pick { background: #000; }
+  .hl-pick img, .hl-pick video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .hl-pick-num {
+    position: absolute; left: 5px; top: 5px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
+    display: grid; place-items: center; font-size: 0.72rem; font-weight: 800; color: #fff; background: rgba(0, 0, 0, 0.65);
+  }
+  .hl-pick-badge {
+    position: absolute; left: 5px; bottom: 5px; padding: 1px 6px; border-radius: 6px;
+    font-size: 0.7rem; font-weight: 700; color: #fff; background: rgba(0, 0, 0, 0.65);
+  }
+  .hl-pick-remove {
+    position: absolute; right: 4px; top: 4px; width: 26px; height: 26px; border: 0; border-radius: 50%;
+    display: grid; place-items: center; color: #fff; background: rgba(0, 0, 0, 0.7);
+  }
+  .hl-picks.is-busy .hl-pick-remove, .hl-picks.is-busy .hl-pick-add { display: none; }
+  .hl-pick-add {
+    display: grid; place-content: center; justify-items: center; gap: 2px; cursor: pointer; font-weight: 700; font-size: 0.8rem;
+    color: #198754; border: 2px dashed rgba(25, 135, 84, 0.5); background: rgba(25, 135, 84, 0.06);
+  }
+  .hl-pick-add[hidden] { display: none; }
+  .hl-pick-add i { font-size: 1.2rem; }
+  .hl-quota { margin-top: 8px; padding: 8px 10px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; background: rgba(245, 197, 66, 0.18); }
 
   .hl-preview {
     flex: 0 0 140px;
@@ -674,7 +714,26 @@
     viewer.addEventListener('hidden.bs.modal', function () { mediaBox.innerHTML = ''; });
   }
 
-  // ---------- Uploader ----------
+  // ---------- Uploader: one post, one or several photos / videos ----------
+  // Leftover notes from the last upload (e.g. one file of a post refused).
+  try {
+    var notes = JSON.parse(sessionStorage.getItem('dartUploadNotes') || 'null');
+    if (notes && notes.length) {
+      sessionStorage.removeItem('dartUploadNotes');
+      var host = document.querySelector('.container');
+      if (host) {
+        var alert = document.createElement('div');
+        alert.className = 'alert alert-warning alert-dismissible fade show';
+        alert.setAttribute('role', 'alert');
+        notes.forEach(function (n) { var d = document.createElement('div'); d.textContent = n; alert.appendChild(d); });
+        var x = document.createElement('button');
+        x.type = 'button'; x.className = 'btn-close'; x.setAttribute('data-bs-dismiss', 'alert'); x.setAttribute('aria-label', 'Close');
+        alert.appendChild(x);
+        host.insertBefore(alert, host.firstChild);
+      }
+    }
+  } catch (e) {}
+
   var box = document.querySelector('.hl-uploader');
   if (!box || box.dataset.ready) return;
   box.dataset.ready = '1';
@@ -685,27 +744,64 @@
   };
   var PHOTO_MAX = +box.dataset.photoMax, VIDEO_MAX = +box.dataset.videoMax;
   var VIDEO_SECONDS = +box.dataset.videoSeconds;
+  var POST_MAX = +box.dataset.postMax || 10;
+  // What the plan still allows this month ('' = no limit).
+  var LEFT = {
+    photo: box.dataset.leftPhotos === '' ? Infinity : +box.dataset.leftPhotos,
+    video: box.dataset.leftVideos === '' ? Infinity : +box.dataset.leftVideos
+  };
 
   var input = box.querySelector('#highlightFile');
+  var more = box.querySelector('#highlightMore');
   var drop = box.querySelector('.hl-drop');
   var selected = box.querySelector('.hl-selected');
-  var preview = box.querySelector('.hl-preview');
+  var picks = box.querySelector('.hl-picks');
+  var addTile = box.querySelector('.hl-pick-add');
   var nameEl = box.querySelector('.hl-file-name');
   var metaEl = box.querySelector('.hl-file-meta');
+  var quotaEl = box.querySelector('.hl-quota');
   var caption = box.querySelector('#highlightCaption');
   var sportSelect = box.querySelector('#highlightSport');
   var confirmBox = box.querySelector('#highlightConfirm');
   var progress = box.querySelector('.hl-progress');
   var bar = progress.querySelector('.progress-bar');
   var uploadBtn = box.querySelector('.hl-upload-btn');
+  var uploadLabel = box.querySelector('.hl-upload-label');
   var cancelBtn = box.querySelector('.hl-cancel-btn');
   var message = box.querySelector('.hl-message');
 
-  var file = null, duration = null, previewUrl = null, busy = false, durationReady = true;
+  // Each chosen file: { file, type, kind, url, duration, ready }
+  var items = [], busy = false;
 
-  // Upload only when a file, the sport and the confirmation are all there.
+  function counts() {
+    var c = { photo: 0, video: 0 };
+    items.forEach(function (it) { c[it.kind] += 1; });
+    return c;
+  }
+  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+
+  // What is over this month's plan limit, or ''.
+  function quotaProblem() {
+    var c = counts(), parts = [];
+    ['photo', 'video'].forEach(function (k) {
+      if (c[k] > LEFT[k]) parts.push(LEFT[k] === 0 ? 'no more ' + k + 's' : plural(LEFT[k], k) + ' more');
+    });
+    return parts.length ? 'Your plan allows ' + parts.join(' and ') + ' this month. Remove some files to upload.' : '';
+  }
+
   function refreshButton() {
-    uploadBtn.disabled = busy || !file || !durationReady || !sportSelect.value || !confirmBox.checked;
+    var waiting = items.some(function (it) { return !it.ready; });
+    var problem = quotaProblem();
+    quotaEl.hidden = !problem;
+    quotaEl.textContent = '';
+    if (problem) {
+      quotaEl.appendChild(document.createTextNode(problem + ' '));
+      var a = document.createElement('a');
+      a.href = box.dataset.pricingUrl; a.textContent = 'See Premium (unlimited)';
+      quotaEl.appendChild(a);
+    }
+    uploadBtn.disabled = busy || !items.length || waiting || !!problem || !sportSelect.value || !confirmBox.checked;
+    uploadLabel.textContent = items.length > 1 ? 'Post ' + items.length + ' as one highlight' : 'Upload Highlight';
   }
   sportSelect.addEventListener('change', refreshButton);
   confirmBox.addEventListener('change', refreshButton);
@@ -725,14 +821,65 @@
              mp4: 'video/mp4', mov: 'video/quicktime' }[ext] || '';
   }
 
+  function summary() {
+    var c = counts(), bits = [];
+    if (c.photo) bits.push(plural(c.photo, 'photo'));
+    if (c.video) bits.push(plural(c.video, 'video'));
+    nameEl.textContent = items.length === 1 ? items[0].file.name : bits.join(' + ') + ' in one post';
+    var size = items.reduce(function (t, it) { return t + it.file.size; }, 0);
+    metaEl.textContent = items.length === 1
+      ? (items[0].kind === 'video' ? 'Video' + (items[0].duration ? ' · ' + clock(items[0].duration) : '') : 'Photo') + ' · ' + mb(size)
+      : mb(size) + ' in total · people swipe through them in this order';
+    addTile.hidden = items.length >= POST_MAX;
+  }
+
+  function render() {
+    picks.querySelectorAll('.hl-pick').forEach(function (n) { n.remove(); });
+    items.forEach(function (it, i) {
+      var tile = document.createElement('div');
+      tile.className = 'hl-pick';
+      var el = document.createElement(it.kind === 'video' ? 'video' : 'img');
+      if (it.kind === 'video') { el.muted = true; el.playsInline = true; el.preload = 'metadata'; el.src = it.url + '#t=0.1'; }
+      else { el.src = it.url; el.alt = 'Photo ' + (i + 1); }
+      tile.appendChild(el);
+      var num = document.createElement('span');
+      num.className = 'hl-pick-num'; num.textContent = i + 1;
+      tile.appendChild(num);
+      if (it.kind === 'video') {
+        var badge = document.createElement('span');
+        badge.className = 'hl-pick-badge';
+        badge.innerHTML = '<i class="fa-solid fa-video" aria-hidden="true"></i> ';
+        badge.appendChild(document.createTextNode(it.duration ? clock(it.duration) : '…'));
+        tile.appendChild(badge);
+      }
+      var rm = document.createElement('button');
+      rm.type = 'button'; rm.className = 'hl-pick-remove';
+      rm.setAttribute('aria-label', 'Remove ' + (it.kind === 'video' ? 'video ' : 'photo ') + (i + 1));
+      rm.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
+      rm.addEventListener('click', function () { if (!busy) removeItem(i); });
+      tile.appendChild(rm);
+      picks.insertBefore(tile, addTile);
+    });
+    var any = items.length > 0;
+    drop.hidden = any;
+    selected.hidden = !any;
+    if (any) summary();
+    refreshButton();
+  }
+
+  function removeItem(i) {
+    var it = items.splice(i, 1)[0];
+    if (it) URL.revokeObjectURL(it.url);
+    clearError();
+    if (!items.length) reset(); else render();
+  }
+
   function reset() {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    file = null; duration = null; previewUrl = null;
-    input.value = ''; caption.value = ''; sportSelect.value = ''; confirmBox.checked = false;
-    preview.innerHTML = '';
-    selected.hidden = true;
+    items.forEach(function (it) { URL.revokeObjectURL(it.url); });
+    items = [];
+    input.value = ''; more.value = ''; caption.value = ''; sportSelect.value = ''; confirmBox.checked = false;
     progress.hidden = true;
-    drop.hidden = false;
+    render();
   }
 
   function videoDuration(url) {
@@ -748,53 +895,48 @@
     });
   }
 
-  function choose(f) {
+  function add(fileList) {
     clearError();
-    if (!f) return;
-    var type = typeOf(f), kind = TYPES[type];
-    if (!kind) { reset(); return showError('Please choose a JPG, PNG or WEBP photo, or an MP4 or MOV video.'); }
-
-    var max = kind === 'video' ? VIDEO_MAX : PHOTO_MAX;
-    if (f.size > max) {
-      reset();
-      return showError((kind === 'video' ? 'Videos' : 'Photos') + ' can be up to ' + Math.round(max / 1048576) +
-        ' MB. This file is ' + mb(f.size) + '.' + (kind === 'video' ? ' Try recording in 720p or trimming it.' : ''));
+    var problems = [];
+    Array.prototype.forEach.call(fileList || [], function (f) {
+      if (items.length >= POST_MAX) {
+        if (problems.indexOf('max') < 0) problems.push('max');
+        return;
+      }
+      var type = typeOf(f), kind = TYPES[type];
+      if (!kind) { problems.push(f.name + ': choose a JPG, PNG or WEBP photo, or an MP4 or MOV video.'); return; }
+      var max = kind === 'video' ? VIDEO_MAX : PHOTO_MAX;
+      if (f.size > max) {
+        problems.push(f.name + ': ' + (kind === 'video' ? 'videos' : 'photos') + ' can be up to ' + Math.round(max / 1048576) +
+          ' MB (this one is ' + mb(f.size) + ').');
+        return;
+      }
+      var it = { file: f, type: type, kind: kind, url: URL.createObjectURL(f), duration: null, ready: kind !== 'video' };
+      items.push(it);
+      if (kind === 'video') {
+        videoDuration(it.url).then(function (seconds) {
+          if (items.indexOf(it) < 0) return;
+          it.duration = seconds;
+          if (seconds && seconds > VIDEO_SECONDS + 0.5) {
+            removeItem(items.indexOf(it));
+            showError(f.name + ' is ' + clock(seconds) + ' long. Videos can be 1 minute at most: trim it to the highlight.');
+            return;
+          }
+          it.ready = true;
+          render();
+        });
+      }
+    });
+    if (problems.length) {
+      showError(problems.map(function (p) {
+        return p === 'max' ? 'A post can have up to ' + POST_MAX + ' photos and videos.' : p;
+      }).join(' '));
     }
-
-    reset();
-    file = f;
-    file.dartType = type;
-    previewUrl = URL.createObjectURL(f);
-    nameEl.textContent = f.name;
-    metaEl.textContent = (kind === 'video' ? 'Video' : 'Photo') + ' · ' + mb(f.size);
-
-    var el = document.createElement(kind === 'video' ? 'video' : 'img');
-    if (kind === 'video') { el.muted = true; el.playsInline = true; el.controls = true; el.preload = 'metadata'; }
-    else { el.alt = 'Selected photo'; }
-    el.src = previewUrl;
-    preview.appendChild(el);
-
-    drop.hidden = true;
-    selected.hidden = false;
-    durationReady = kind !== 'video';
-    refreshButton();
-
-    if (kind === 'video') {
-      videoDuration(previewUrl).then(function (seconds) {
-        if (file !== f) return;
-        duration = seconds;
-        if (seconds && seconds > VIDEO_SECONDS + 0.5) {
-          reset();
-          return showError('This video is ' + clock(seconds) + ' long. Videos can be 1 minute at most. Please trim it to the highlight and try again.');
-        }
-        if (seconds) metaEl.textContent = 'Video · ' + clock(seconds) + ' · ' + mb(f.size);
-        durationReady = true;
-        refreshButton();
-      });
-    }
+    render();
   }
 
-  input.addEventListener('change', function () { choose(input.files[0]); });
+  input.addEventListener('change', function () { add(input.files); input.value = ''; });
+  more.addEventListener('change', function () { add(more.files); more.value = ''; });
 
   ['dragenter', 'dragover'].forEach(function (ev) {
     drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('is-dragging'); });
@@ -802,7 +944,7 @@
   ['dragleave', 'drop'].forEach(function (ev) {
     drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('is-dragging'); });
   });
-  drop.addEventListener('drop', function (e) { choose(e.dataTransfer.files[0]); });
+  drop.addEventListener('drop', function (e) { add(e.dataTransfer.files); });
 
   cancelBtn.addEventListener('click', function () { if (!busy) { clearError(); reset(); } });
 
@@ -846,14 +988,18 @@
 
   function setBusy(on) {
     busy = on;
-    uploadBtn.disabled = on;
     cancelBtn.disabled = on;
     caption.disabled = on;
     sportSelect.disabled = on;
     confirmBox.disabled = on;
-    uploadBtn.innerHTML = on
-      ? '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span> Uploading…'
-      : '<i class="fa-solid fa-upload me-1"></i> Upload Highlight';
+    picks.classList.toggle('is-busy', on);
+    if (on) {
+      uploadBtn.disabled = true;
+      uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span> <span class="hl-upload-label">Uploading…</span>';
+    } else {
+      uploadBtn.innerHTML = '<i class="fa-solid fa-upload me-1"></i> <span class="hl-upload-label"></span>';
+    }
+    uploadLabel = box.querySelector('.hl-upload-label');
   }
 
   function postJson(url, body) {
@@ -867,50 +1013,83 @@
     });
   }
 
-  function putFile(url, f, type) {
+  function putFile(url, f, type, onProgress) {
     return new Promise(function (resolve, reject) {
       var xhr = new XMLHttpRequest();
       xhr.open('PUT', url);
       xhr.setRequestHeader('Content-Type', type);
-      xhr.upload.onprogress = function (e) {
-        if (!e.lengthComputable) return;
-        var pct = Math.round(e.loaded / e.total * 100);
-        bar.style.width = pct + '%';
-        bar.textContent = pct + '%';
-        progress.setAttribute('aria-valuenow', pct);
-      };
+      xhr.upload.onprogress = function (e) { if (e.lengthComputable) onProgress(e.loaded / e.total); };
       xhr.onload = function () { xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(xhr.status); };
       xhr.onerror = function () { reject(0); };
       xhr.send(f);
     });
   }
 
+  // Uploads every file of the post, one after the other (all share one post key).
   uploadBtn.addEventListener('click', function () {
-    if (!file || busy) return;
+    if (!items.length || busy) return;
     clearError();
     if (!navigator.onLine) return showError("You're offline. Connect to the internet to upload highlights.");
+    var problem = quotaProblem();
+    if (problem) return showError(problem);
 
     setBusy(true);
     progress.hidden = false;
-    bar.style.width = '0%'; bar.textContent = '0%';
+    var total = items.length, doneCount = 0, saved = 0, notesOut = [], postKey = '';
+    var c = counts();
+    var totalBytes = items.reduce(function (t, it) { return t + it.file.size; }, 0), doneBytes = 0;
 
-    var framesPromise = TYPES[file.dartType] === 'video' ? videoFrames(previewUrl) : Promise.resolve([]);
+    function show(fraction, label) {
+      var pct = Math.min(100, Math.round(fraction * 100));
+      bar.style.width = pct + '%';
+      bar.textContent = label || pct + '%';
+      progress.setAttribute('aria-valuenow', pct);
+    }
 
-    postJson(box.dataset.uploadUrl, {
-      content_type: file.dartType, size: file.size, duration: duration, caption: caption.value.trim(),
-      sport: sportSelect.value, confirm: confirmBox.checked === true
-    }).then(function (res) {
-      if (!res.ok) throw new Error(res.error);
-      return putFile(res.upload_url, file, file.dartType).then(function () { return res.path; }, function () {
-        throw new Error('The upload failed. Please check your connection and try again.');
+    function one(it, index) {
+      var framesPromise = it.kind === 'video' ? videoFrames(it.url) : Promise.resolve([]);
+      var body = {
+        content_type: it.type, size: it.file.size, duration: it.duration, caption: caption.value.trim(),
+        sport: sportSelect.value, confirm: confirmBox.checked === true
+      };
+      if (postKey) body.post_key = postKey;
+      else body.batch = { photos: c.photo, videos: c.video };
+      var label = total > 1 ? 'File ' + (index + 1) + ' of ' + total : '';
+      return postJson(box.dataset.uploadUrl, body).then(function (res) {
+        if (!res.ok) throw new Error(res.error);
+        postKey = res.post_key || postKey;
+        return putFile(res.upload_url, it.file, it.type, function (part) {
+          show((doneBytes + part * it.file.size) / totalBytes, label ? label + ' · ' + Math.round(part * 100) + '%' : '');
+        }).then(function () { return res.path; }, function () {
+          throw new Error('The upload failed. Please check your connection and try again.');
+        });
+      }).then(function (path) {
+        doneBytes += it.file.size;
+        show(doneBytes / totalBytes, 'Safety check' + (label ? ' · ' + label : '') + '…');
+        return framesPromise.then(function (frames) {
+          return postJson(box.dataset.completeUrl, { path: path, frames: frames });
+        });
+      }).then(function (res) {
+        if (!res.ok) throw new Error(res.error);
+        saved += 1;
       });
-    }).then(function (path) {
-      bar.textContent = 'Safety check…';
-      return framesPromise.then(function (frames) {
-        return postJson(box.dataset.completeUrl, { path: path, frames: frames });
-      });
-    }).then(function (res) {
-      if (!res.ok) throw new Error(res.error);
+    }
+
+    // One after the other; a refused file doesn't stop the rest of the post
+    // (unless nothing was saved yet and it's a limit / setup problem).
+    var chain = Promise.resolve();
+    items.forEach(function (it, index) {
+      chain = chain.then(function () {
+        return one(it, index).catch(function (err) {
+          notesOut.push((total > 1 ? 'File ' + (index + 1) + ' (' + it.file.name + '): ' : '') + (err.message || 'Something went wrong.'));
+          if (!postKey) throw err;            // the post never started (e.g. monthly limit)
+        });
+      }).then(function () { doneCount += 1; });
+    });
+
+    chain.then(function () {
+      if (!saved) throw new Error(notesOut.join(' ') || 'Nothing was uploaded. Please try again.');
+      try { if (notesOut.length) sessionStorage.setItem('dartUploadNotes', JSON.stringify(notesOut)); } catch (e) {}
       var area = box.closest('.hl-upload-area');
       var hash = area ? area.dataset.returnHash : 'highlights';
       if (hash) window.location.hash = hash;
@@ -922,6 +1101,8 @@
       showError(err.message || 'Something went wrong. Please try again.');
     });
   });
+
+  render();
 })();
 </script>
 {% endmacro %}

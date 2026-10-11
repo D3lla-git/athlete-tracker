@@ -2,6 +2,7 @@
 {% block title %}Settings · {{ org.org_name }}{% endblock %}
 
 {% block content %}
+{% from '_gov_name.html' import gov_name_note, gov_name_assets %}
 <div class="os-page">
   <a href="{{ url_for('organization_dashboard') }}" class="os-back"><i class="fa-solid fa-arrow-left"></i> Team HQ</a>
   <h1 class="os-title"><i class="fa-solid fa-gear"></i> Organization settings</h1>
@@ -23,7 +24,9 @@
             <div class="row g-3 mb-3">
               <div class="col-md-6">
                 <label class="form-label" for="osContact">Contact person <i class="fa-solid fa-user-tie"></i></label>
-                <input type="text" class="form-control" id="osContact" name="contact_name" required maxlength="150" value="{{ org.contact_name }}">
+                <input type="text" class="form-control" id="osContact" name="contact_name" required maxlength="100" value="{{ org.contact_name }}"
+                       autocomplete="name" autocapitalize="words" spellcheck="false" data-gov-name aria-describedby="osContactNote osContactError">
+                {{ gov_name_note('osContact') }}
               </div>
               <div class="col-md-6">
                 <label class="form-label" for="osTitle">Title / role <i class="fa-solid fa-id-badge"></i></label>
@@ -99,4 +102,5 @@
   .os-links a { text-decoration: none; font-weight: 600; }
   .os-links i { color: #198754; width: 1.3em; }
 </style>
+{{ gov_name_assets() }}
 {% endblock %}

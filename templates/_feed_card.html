@@ -1,10 +1,36 @@
 {# One post in the Highlights feed.
-   feed_card(h, state, can_interact, full=false)
-     state - viewer_state(): which posts the viewer liked / reposted / saved
-     full  - the post's own page (video starts with sound controls, no link) #}
-{% macro feed_card(h, state, can_interact, full=false) %}
+   feed_card(h, state, can_interact, full=false, slides=none)
+     state  - viewer_state(): which posts the viewer liked / reposted / saved
+     full   - the post's own page (video starts with sound controls, no link)
+     slides - post_slides(): {post_key: [files]} for posts with several
+              photos / videos (swipe left / right through them) #}
+
+{# One photo or video (a whole post, or one slide of it). #}
+{% macro feed_media(item, athlete, post_url, full, eager, label='') %}
+{% set url = highlight_url(item) %}
+{% if item.is_video %}
+  <div class="fp-frame fp-media-video" data-video-box>
+    <video class="fp-video" data-src="{{ url }}" {% if full and eager %}src="{{ url }}"{% endif %} muted playsinline loop
+           preload="{{ 'metadata' if full and eager else 'none' }}" aria-label="{{ label or item.caption or 'Highlight video' }}"></video>
+    <button type="button" class="fp-sound" aria-label="Turn sound on" aria-pressed="false"><i class="fa-solid fa-volume-xmark"></i></button>
+    <span class="fp-badge">{{ item.duration_label }}</span>
+    <span class="fp-paused" aria-hidden="true"><i class="fa-solid fa-play"></i></span>
+  </div>
+{% else %}
+  <div class="fp-frame">
+    {% set alt = label or item.caption or 'Highlight photo of ' ~ athlete.full_name %}
+    {% if full %}
+      <img src="{{ url }}" alt="{{ alt }}" decoding="async" {% if not eager %}loading="lazy"{% endif %}>
+    {% else %}
+      <a href="{{ post_url }}" tabindex="-1"><img src="{{ url }}" alt="{{ alt }}" loading="lazy" decoding="async"></a>
+    {% endif %}
+  </div>
+{% endif %}
+{% endmacro %}
+
+{% macro feed_card(h, state, can_interact, full=false, slides=none) %}
 {% set athlete = h.user %}
-{% set url = highlight_url(h) %}
+{% set items = (slides or {}).get(h.post_key) or [h] if h.post_key else [h] %}
 {% set post_url = url_for('feed_post', highlight_id=h.id) %}
 {% set liked = h.id in state.like %}
 {% set reposted = h.id in state.repost %}
@@ -27,6 +53,7 @@
         <a href="{{ post_url }}" class="fp-time"><time datetime="{{ when.isoformat() }}Z" title="{{ when.strftime('%b %d, %Y %H:%M') }} UTC">{{ time_ago(when) }}</time></a>
       </div>
       <div class="fp-sub">
+        {% if athlete.username %}<span class="fp-handle" translate="no">@{{ athlete.username }}</span>{% endif %}
         {% if athlete.school %}<span>{{ athlete.school }}</span>{% endif %}
         {% if h.sport %}<span class="fp-sport fp-sport-{{ h.sport | lower }}">{{ h.sport }}</span>{% endif %}
       </div>
@@ -35,21 +62,28 @@
 
   {% if h.caption %}<p class="fp-caption">{{ h.caption }}</p>{% endif %}
 
-  <div class="fp-media {{ 'fp-media-video' if h.is_video else '' }}">
-    {% if h.is_video %}
-      <video class="fp-video" data-src="{{ url }}" {% if full %}src="{{ url }}"{% endif %} muted playsinline loop
-             preload="{{ 'metadata' if full else 'none' }}" aria-label="{{ h.caption or 'Highlight video' }}"></video>
-      <button type="button" class="fp-sound" aria-label="Turn sound on" aria-pressed="false"><i class="fa-solid fa-volume-xmark"></i></button>
-      <span class="fp-badge">{{ h.duration_label }}</span>
-      <span class="fp-paused" aria-hidden="true"><i class="fa-solid fa-play"></i></span>
-    {% else %}
-      {% if full %}
-        <img src="{{ url }}" alt="{{ h.caption or 'Highlight photo of ' ~ athlete.full_name }}" decoding="async">
-      {% else %}
-        <a href="{{ post_url }}" tabindex="-1"><img src="{{ url }}" alt="{{ h.caption or 'Highlight photo of ' ~ athlete.full_name }}" loading="lazy" decoding="async"></a>
-      {% endif %}
-    {% endif %}
-  </div>
+  {% if items | length > 1 %}
+    {# Several photos / videos: swipe (or use the arrows) to see the next one. #}
+    <div class="fp-media fp-carousel" data-carousel aria-roledescription="carousel" aria-label="{{ items | length }} photos and videos">
+      <div class="fp-track" tabindex="0">
+        {% for item in items %}
+          <div class="fp-slide" role="group" aria-roledescription="slide" aria-label="{{ loop.index }} of {{ items | length }}">
+            {{ feed_media(item, athlete, post_url, full, loop.first, (h.caption or 'Highlight') ~ ' (' ~ loop.index ~ ' of ' ~ (items | length) ~ ')') }}
+          </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="fp-nav fp-prev" aria-label="Previous" hidden><i class="fa-solid fa-chevron-left"></i></button>
+      <button type="button" class="fp-nav fp-next" aria-label="Next"><i class="fa-solid fa-chevron-right"></i></button>
+      <span class="fp-count" aria-hidden="true">1/{{ items | length }}</span>
+      <div class="fp-dots" aria-hidden="true">
+        {% for item in items %}<span class="{{ 'on' if loop.first }}"></span>{% endfor %}
+      </div>
+    </div>
+  {% else %}
+    <div class="fp-media">
+      {{ feed_media(h, athlete, post_url, full, true) }}
+    </div>
+  {% endif %}
 
   <footer class="fp-actions" role="group" aria-label="Post actions">
     {# "Like" is the post's own ball: football, basketball or kickball. #}

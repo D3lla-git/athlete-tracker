@@ -4,6 +4,7 @@
 {% block meta_description %}Schools, universities, clubs, academies and community teams: register on D.A.R.T. to see every verified athlete who plays for you, with coach-approved records and highlights.{% endblock %}
 
 {% block content %}
+{% from '_gov_name.html' import gov_name_note, gov_name_assets %}
 <div class="ro-page">
 
   <section class="ro-hero">
@@ -97,8 +98,10 @@
         <div class="row g-3 mb-3">
           <div class="col-md-6">
             <label class="form-label" for="contactName">Full name <span class="text-danger">*</span> <i class="fa-solid fa-user"></i></label>
-            <input type="text" class="form-control" id="contactName" name="contact_name" required maxlength="150"
-                   value="{{ form.get('contact_name', '') or (google_signup.name if google_signup else '') }}" placeholder="e.g. John Brown">
+            <input type="text" class="form-control" id="contactName" name="contact_name" required maxlength="100"
+                   value="{{ form.get('contact_name', '') or (google_signup.name if google_signup else '') }}" placeholder="e.g. John Felix Brown"
+                   autocomplete="name" autocapitalize="words" spellcheck="false" data-gov-name aria-describedby="contactNameNote contactNameError">
+            {{ gov_name_note('contactName') }}
           </div>
           <div class="col-md-6">
             <label class="form-label" for="contactTitle">Title / role <span class="text-danger">*</span> <i class="fa-solid fa-id-badge"></i></label>
@@ -251,4 +254,5 @@
     }
   });
 </script>
+{{ gov_name_assets() }}
 {% endblock %}

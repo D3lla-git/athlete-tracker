@@ -12,6 +12,10 @@ db = SQLAlchemy()
 class User(UserMixin, db.Model):
     id = db.Column(db.BigInteger, primary_key=True)
     full_name = db.Column(db.String(150), nullable=False)
+    # Unique @handle (lowercase) for athletes, coaches and scouts: tells
+    # people with the same full name apart. See usernames.py.
+    username = db.Column(db.String(20), nullable=True, unique=True, index=True)
+    username_changed_at = db.Column(db.DateTime, nullable=True)
     school = db.Column(db.String(150), nullable=False)
     # Athlete / Coach category permissions
     athlete_category = db.Column(db.String(50), nullable=True)
@@ -80,7 +84,8 @@ class User(UserMixin, db.Model):
     suspended_at = db.Column(db.DateTime, nullable=True)
     suspension_reason = db.Column(db.String(200), nullable=True)
 
-    __table_args__ = (db.UniqueConstraint('full_name', 'school', name='unique_student_school'),)
+    # (No "same name + same team" rule any more: two people can share a full
+    # name, even on one team. Their unique username tells them apart.)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -299,6 +304,10 @@ class AthleteHighlight(db.Model):
     # coach of the athlete's team - when that team has a coach on D.A.R.T.
     # coach_approval: pending / approved / not_required (None = older upload).
     team_name = db.Column(db.String(150), nullable=True)
+    # Several photos / videos posted together share a post_key (swipe
+    # through them in one feed post); post_position is their order.
+    post_key = db.Column(db.String(32), nullable=True, index=True)
+    post_position = db.Column(db.SmallInteger, nullable=False, default=0, server_default='0')
     admin_approved_at = db.Column(db.DateTime, nullable=True)
     coach_approval = db.Column(db.String(12), nullable=True)
     coach_reviewed_by = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)

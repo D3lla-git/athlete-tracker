@@ -12,6 +12,9 @@ from config import Config
 from itsdangerous import URLSafeSerializer, BadSignature
 import moderation
 import feed as feed_mod
+from names import validate_full_name, NAME_HELP, client_rules as name_client_rules
+import usernames as uname
+from markupsafe import Markup, escape
 
 
 # PDF and card-image libraries are big: load them only when someone
@@ -40,6 +43,7 @@ from plans import (
     current_plan, is_premium, plan_for_user, eligibility_error,
     can_use_advanced_search, shows_ads, scout_has_full_dashboard,
     limit_reached, usage_summary, apply_record_visibility, activate_plan,
+    remaining_uploads, batch_limit_error,
     clear_plan_cache, is_coach_pro, pin_limit, FREE_SHOWCASE_RECORDS,
     full_visibility_athlete_ids, active_plan_user_ids,
 )
@@ -76,7 +80,7 @@ import hashlib
 from flask_mail import Mail, Message
 from sqlalchemy import or_, and_, case, func, select, true as sa_true, false as sa_false
 from sqlalchemy.orm import contains_eager, joinedload
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, IntegrityError
 from authlib.integrations.flask_client import OAuth
 import time
 from flask import abort
@@ -832,10 +836,10 @@ def suggest_names():
         User.role == role,
         User.is_verified == True,
         User.is_suspended == False if role == 'Coach' else sa_true(),
-        name_suggestion_filter(User.full_name, q)
-    ).order_by(*suggestion_order(User.full_name, q)).limit(8).all()
+        name_or_username_suggestion(q)
+    ).order_by(*suggestion_order(User.full_name, q.lstrip('@'))).limit(8).all()
 
-    return jsonify([{'full_name': u.full_name} for u in users])
+    return jsonify([{'full_name': u.full_name, 'username': u.username or ''} for u in users])
 
 # ==========================================================
 # PWA: SERVICE WORKER
@@ -885,7 +889,7 @@ def suggest_message_recipients():
             User.id != current_user.id,
             User.role.in_(allowed_roles),
             User.is_verified == True,
-            text_matches(User.full_name, query[:80])
+            name_or_username(query[:80])
         )
         .order_by(*suggestion_order(User.full_name, query))
         .limit(10)
@@ -903,6 +907,7 @@ def suggest_message_recipients():
         results.append({
             'id': user.id,
             'full_name': user.full_name,
+            'username': user.username or '',
             'role': user.role,
             'school': user.school or ''
         })
@@ -1747,6 +1752,31 @@ def suggestion_order(column, text):
 app.jinja_env.globals['search_words'] = search_words
 
 
+def name_or_username(text):
+    """
+    Search condition on people: "@musu_kollie" finds exactly that username;
+    plain words match the full name (any order / case) or a username.
+    """
+    raw = (text or '').strip()[:80]
+    handle = uname.normalize_username(raw)
+    if raw.startswith('@'):
+        return func.lower(User.username) == handle if handle else sa_false()
+    condition = text_matches(User.full_name, raw)
+    if handle and ' ' not in handle:
+        condition = or_(condition, func.lower(User.username) == handle)
+    return condition
+
+
+def name_or_username_suggestion(text):
+    """As-you-type: a word of the name starts with it, or the username does."""
+    handle = uname.normalize_username(text)
+    by_name = name_suggestion_filter(User.full_name, (text or '').lstrip('@'))
+    if not handle or ' ' in handle:
+        return by_name
+    return or_(by_name, User.username.like(_escape_like(handle) + '%', escape='\\'))
+app.jinja_env.globals['gov_name_rules'] = name_client_rules()
+
+
 def coach_search():
     args = request.args
     name = args.get('name', '').strip()[:80]
@@ -1773,7 +1803,7 @@ def coach_search():
 
     query = User.query.filter(User.role == 'Coach', User.is_verified.is_(True), User.is_suspended.is_(False))
     if name:
-        query = query.filter(text_matches(User.full_name, name))
+        query = query.filter(name_or_username(name))
     if team:
         # Current team, any team they coached, or a team in their records.
         query = query.filter(or_(
@@ -2054,7 +2084,7 @@ def search():
 
     # ---------- Basic ----------
     if name:
-        query = query.filter(text_matches(User.full_name, name[:80]))
+        query = query.filter(name_or_username(name[:80]))
 
     # Team: record team or athlete school.
     if school:
@@ -2590,7 +2620,11 @@ def register(registration_category=None):
 
     if request.method == 'POST':
 
-        full_name = request.form['full_name'].strip()
+        # Full government name (as on the ID / passport), never a nickname.
+        full_name, name_error = validate_full_name(request.form.get('full_name'))
+        if name_error:
+            flash(name_error, 'danger')
+            return redirect(url_for('register', registration_category=registration_category))
         school = request.form['school'].strip()
         gender = request.form.get('gender', '').strip()
         nationality = request.form.get('nationality', '').strip()
@@ -2761,6 +2795,18 @@ def register(registration_category=None):
         existing = User.query.filter_by(email=email).first()
 
         # ==========================================================
+        # USERNAME (unique @handle; an existing account keeps its own)
+        # ==========================================================
+        if existing is not None and existing.username:
+            username = existing.username
+        else:
+            username, username_error = check_new_username(
+                request.form.get('username'), exclude_user_id=existing.id if existing is not None else None)
+            if username_error:
+                flash(username_error, 'danger')
+                return redirect(url_for('register', registration_category=registration_category))
+
+        # ==========================================================
         # EXISTING ACCOUNT VALIDATION
         # ==========================================================
 
@@ -2843,27 +2889,8 @@ def register(registration_category=None):
 
         else:
 
-            # ======================================================
-            # NEW USER — PREVENT DUPLICATE NAME + SCHOOL
-            # ======================================================
-
-            duplicate_name_school = User.query.filter_by(
-                full_name=full_name,
-                school=school
-            ).first()
-
-            if duplicate_name_school:
-                flash(
-                    'A student with this name and school already exists.',
-                    'danger'
-                )
-                return redirect(
-                    url_for(
-                        'register',
-                        registration_category=registration_category
-                    )
-                )
-
+            # Two athletes may share a full name (even on the same team):
+            # the unique username tells them apart, and emails are unique.
             user = None
 
         # ==========================================================
@@ -3023,6 +3050,7 @@ def register(registration_category=None):
 )
 
             user.set_password(password)
+            user.username = username
             attach_google_signup(user)
             # New rule: coach + the team's organization (if on D.A.R.T.).
             user.coach_verified = False
@@ -3032,6 +3060,9 @@ def register(registration_category=None):
             record_account_created(user)
 
         else: 
+
+            if not existing.username:
+                existing.username = username
 
             # Existing unverified user uploaded a new ID.
             # Keep the account's existing password/name/school.
@@ -3427,6 +3458,24 @@ def continue_login(user):
     return redirect(url_for('login'))
 
 
+def find_login_user(identifier, password):
+    """
+    The account to sign in: by username ("@musu_kollie" or "musu_kollie"),
+    otherwise by full name. Several people can share a full name, so then
+    the one whose password matches is used (each password is checked).
+    """
+    ident = (identifier or '').strip()
+    handle = uname.normalize_username(ident)
+    if handle and ' ' not in handle:
+        user = User.query.filter(func.lower(User.username) == handle).first()
+        if user:
+            return user
+    candidates = User.query.filter_by(full_name=ident).order_by(User.id).limit(20).all()
+    if len(candidates) <= 1:
+        return candidates[0] if candidates else None
+    return next((c for c in candidates if c.check_password(password)), candidates[0])
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     # Remember where the user was going (Flask-Login adds ?next= when a
@@ -3473,7 +3522,7 @@ def login():
             )
             return redirect(url_for('login'))
 
-        user = User.query.filter_by(full_name=full_name).first()
+        user = find_login_user(full_name, password)
 
         # Invalid username or password
         if not user or not user.check_password(password):
@@ -3491,7 +3540,7 @@ def login():
                 15
             )
 
-            flash('Invalid full name or password.', 'danger')
+            flash('Invalid username / full name or password.', 'danger')
             return redirect(url_for('login'))
 
         # Password was correct — reset failed login attempts
@@ -4315,7 +4364,7 @@ def message_recipients():
     users = User.query.filter(
         User.id != current_user.id,
         User.role.in_(allowed_roles),
-        text_matches(User.full_name, q[:80])
+        name_or_username(q[:80])
     ).order_by(
         *suggestion_order(User.full_name, q)
     ).limit(12).all()
@@ -4330,6 +4379,7 @@ def message_recipients():
         recipients.append({
             'id': user.id,
             'full_name': user.full_name,
+            'username': user.username or '',
             'role': user.role,
             'school': user.school or '',
             'nationality': (user.nationality or '') if personal_visible(user, current_user) else '',
@@ -4493,6 +4543,9 @@ HIGHLIGHT_VIDEO_MAX_SECONDS = 60
 # Small allowance for rounding in phone recordings (60.4 s shows as 1:00).
 HIGHLIGHT_DURATION_TOLERANCE = 0.5
 HIGHLIGHT_CAPTION_MAX = 150
+# One post can hold several photos / videos (swipe through them).
+HIGHLIGHT_POST_MAX = 10
+_POST_KEY_RE = re.compile(r'^[a-f0-9]{24}$')
 HIGHLIGHT_PENDING_SECONDS = 2 * 60 * 60
 
 
@@ -4667,7 +4720,22 @@ def highlight_media_url(highlight):
         return ''
 
 
+def post_part(highlight):
+    """(position 1-based, files in the post) for a file of a multi-file post, else None."""
+    if not highlight.post_key:
+        return None
+    sizes = g.setdefault('_post_sizes', {})
+    if highlight.post_key not in sizes:
+        sizes[highlight.post_key] = AthleteHighlight.query.filter(
+            AthleteHighlight.post_key == highlight.post_key, AthleteHighlight.status != 'rejected').count()
+    size = sizes[highlight.post_key]
+    return (highlight.post_position + 1, size) if size > 1 else None
+
+
 app.jinja_env.globals.update(
+    post_part=post_part,
+    highlight_post_max=HIGHLIGHT_POST_MAX,
+    upload_remaining=lambda: remaining_uploads(current_user),
     highlight_url=highlight_media_url,
     highlight_photo_max_bytes=HIGHLIGHT_PHOTO_MAX_BYTES,
     highlight_video_max_bytes=HIGHLIGHT_VIDEO_MAX_BYTES,
@@ -4920,6 +4988,45 @@ def highlight_upload_url():
     if limit_error:
         return highlight_error(limit_error)
 
+    # ---------- One post, several files ----------
+    # The first file of a post gets a new post key (and the whole selection
+    # is checked against this month's plan limits before anything uploads);
+    # the next files send that key back. Keys live in this session only.
+    now = time.time()
+    posts = {
+        key: value for key, value in (session.get('highlight_posts') or {}).items()
+        if now - value.get('at', 0) < HIGHLIGHT_PENDING_SECONDS
+    }
+    post_key = str(data.get('post_key') or '')
+    if post_key:
+        post = posts.get(post_key)
+        if not _POST_KEY_RE.match(post_key) or not post:
+            return highlight_error('This post has expired. Please choose the files again.')
+        if post['count'] >= min(post['total'], HIGHLIGHT_POST_MAX):
+            return highlight_error(f'A post can have up to {HIGHLIGHT_POST_MAX} photos and videos.')
+    else:
+        batch = data.get('batch') or {}
+        try:
+            batch_photos = max(0, int(batch.get('photos') or 0))
+            batch_videos = max(0, int(batch.get('videos') or 0))
+        except (TypeError, ValueError, AttributeError):
+            batch_photos = batch_videos = 0
+        # A single file still counts as a batch of one.
+        if not batch_photos and not batch_videos:
+            batch_photos, batch_videos = (0, 1) if media_type == 'video' else (1, 0)
+        total = batch_photos + batch_videos
+        if total > HIGHLIGHT_POST_MAX:
+            return highlight_error(f'A post can have up to {HIGHLIGHT_POST_MAX} photos and videos. Please remove some.')
+        batch_error = batch_limit_error(current_user, batch_photos, batch_videos)
+        if batch_error:
+            return highlight_error(batch_error)
+        post_key = secrets.token_hex(12)
+        post = {'at': now, 'count': 0, 'total': total}
+    position = post['count']
+    post['count'] += 1
+    posts[post_key] = post
+    session['highlight_posts'] = dict(list(posts.items())[-5:])
+
     caption = str(data.get('caption') or '').strip()[:HIGHLIGHT_CAPTION_MAX]
     path = f'{current_user.id}/{uuid.uuid4().hex}.{extension}'
 
@@ -4935,7 +5042,6 @@ def highlight_upload_url():
         return highlight_error('Uploads are unavailable right now. Please try again later.', 503)
 
     # Remember what was requested; step 2 only accepts these paths.
-    now = time.time()
     pending = {
         key: value
         for key, value in (session.get('pending_highlights') or {}).items()
@@ -4946,12 +5052,14 @@ def highlight_upload_url():
         'caption': caption,
         'duration': duration,
         'sport': sport,
+        'post_key': post_key,
+        'position': position,
         'at': now,
     }
     # Keep the session small.
     session['pending_highlights'] = dict(list(pending.items())[-5:])
 
-    return jsonify({'ok': True, 'upload_url': upload_url, 'path': path})
+    return jsonify({'ok': True, 'upload_url': upload_url, 'path': path, 'post_key': post_key})
 
 
 @app.route('/highlights/complete', methods=['POST'])
@@ -5101,6 +5209,8 @@ def highlight_complete():
         admin_approved_at=now if auto_ok else None,
         coach_approval='pending' if coach_needed else 'not_required',
         published_at=now if published else None,
+        post_key=pending.get('post_key') or None,
+        post_position=int(pending.get('position') or 0),
     )
     db.session.add(highlight)
     db.session.commit()
@@ -5110,9 +5220,12 @@ def highlight_complete():
               else 'Your photo passed the safety check and is live! 📸', 'success')
     else:
         # Pop-up: who still has to approve it before it goes live.
+        in_post = (AthleteHighlight.query.filter(AthleteHighlight.post_key == highlight.post_key,
+                                                 AthleteHighlight.status != 'rejected').count()
+                   if highlight.post_key else 1)
         queue_approval_prompt(
             'highlight', media=media_type, team=highlight.team_name or '',
-            admin_done=bool(auto_ok), coach=highlight.coach_approval,
+            admin_done=bool(auto_ok), coach=highlight.coach_approval, count=in_post,
         )
 
     return jsonify({'ok': True, 'id': highlight.id, 'status': highlight.status})
@@ -5131,7 +5244,10 @@ def delete_highlight(highlight_id):
 
     if highlight.status != 'rejected':      # rejected files are already gone
         remove_highlight_file(highlight.storage_path, highlight.storage_bucket)
-    feed_mod.delete_children(highlight.id)
+    # Deleting the first file of a multi-file post: its likes, comments...
+    # move to the next file, which now leads the post.
+    if not feed_mod.hand_over_post(highlight):
+        feed_mod.delete_children(highlight.id)
     db.session.delete(highlight)
     db.session.commit()
 
@@ -5401,6 +5517,7 @@ def comment_payload(comment, highlight, actor):
         'author': name,
         'role': role,
         'member': author is not None,
+        'handle': user_handle(author),
         'author_url': url,
         'ago': feed_mod.time_ago(comment.created_at),
         'can_delete': bool(can_delete_comment(comment, highlight, actor)),
@@ -5437,6 +5554,7 @@ def feed():
     tab_arg = tab if tab != 'foryou' else None
     context = dict(
         posts=posts, state=state, has_more=has_more, page=page, tab=tab, sport=sport, **feed_context(),
+        slides=feed_mod.post_slides(posts),
         next_url=url_for('feed', tab=tab_arg, sport=sport or None, page=page + 1, partial=1) if has_more else '',
         more_url=url_for('feed', tab=tab_arg, sport=sport or None, page=page + 1) if has_more else '',
     )
@@ -5454,7 +5572,13 @@ def feed():
 
 @app.route('/feed/post/<int:highlight_id>')
 def feed_post(highlight_id):
-    highlight = live_highlight_or_404(highlight_id)
+    highlight = feed_mod.get_live(highlight_id)
+    if not highlight:
+        # A link to the 2nd, 3rd... file of a post opens the whole post.
+        lead = feed_mod.lead_of(highlight_id)
+        if not lead:
+            abort(404)
+        return redirect(url_for('feed_post', highlight_id=lead.id), code=301)
     actor = feed_actor()
     comments, more_comments = feed_mod.comments_for(highlight.id)
     ctx = feed_context()
@@ -5464,6 +5588,7 @@ def feed_post(highlight_id):
     return render_template(
         'feed_post.html',
         post=highlight,
+        slides=feed_mod.post_slides([highlight]),
         state=feed_mod.viewer_state(actor, [highlight.id]),
         comments=[comment_payload(c, highlight, actor) for c in comments],
         more_comments=more_comments,
@@ -6228,8 +6353,12 @@ def register_organization():
             return back('Please enter your country (and city, optional).')
         if website and (len(website) > 255 or not re.match(r'^https?://[^\s]+\.[^\s]+$', website)):
             return back('Please enter a full website address starting with https://, or leave it empty.')
-        if not contact_name or len(contact_name) > 150 or not contact_title or len(contact_title) > 100:
-            return back("Please enter the contact person's name and title.")
+        if not contact_title or len(contact_title) > 100:
+            return back("Please enter the contact person's title.")
+        # The contact person's full government name, never a nickname.
+        contact_name, name_error = validate_full_name(contact_name)
+        if name_error:
+            return back('Contact person: ' + name_error[0].lower() + name_error[1:])
         if not PAYER_PHONE_PATTERN.match(contact_phone):
             return back('Please enter a valid contact phone number, e.g. +231 77 000 0000.')
         if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email) or len(email) > 255:
@@ -6509,8 +6638,12 @@ def organization_settings():
         if not PAYER_PHONE_PATTERN.match(contact_phone):
             flash('Please enter a valid contact phone number.', 'danger')
             return redirect(url_for('organization_settings'))
-        if not contact_name or len(contact_name) > 150 or not contact_title or len(contact_title) > 100:
-            flash("Please enter the contact person's name and title.", 'danger')
+        if not contact_title or len(contact_title) > 100:
+            flash("Please enter the contact person's title.", 'danger')
+            return redirect(url_for('organization_settings'))
+        contact_name, name_error = validate_full_name(contact_name)
+        if name_error:
+            flash('Contact person: ' + name_error[0].lower() + name_error[1:], 'danger')
             return redirect(url_for('organization_settings'))
 
         org.website = website or None
@@ -7016,7 +7149,10 @@ TERMS_OPEN_ENDPOINTS = {
     'accept_terms', 'logout', 'static', 'service_worker', 'offline',
     'privacy_page', 'terms_page', 'cookies_page', 'legal_page', 'organization_terms',
     'robots_txt', 'sitemap_xml', 'profile_picture', 'record_sync_status', 'session_keepalive',
+    'username_check',
 }
+# Pages an account without a username can still open.
+USERNAME_OPEN_ENDPOINTS = {'choose_username', 'username_check'}
 
 TERMS_DOCUMENTS = {
     'terms': ('Terms of Use', 'terms_page', 'fa-file-contract'),
@@ -7024,6 +7160,52 @@ TERMS_DOCUMENTS = {
     'cookies': ('Cookie Policy', 'cookies_page', 'fa-cookie-bite'),
     'organizations': ('Organization Data Use Terms', 'organization_terms', 'fa-building-shield'),
 }
+
+
+# ---------- Usernames (@handles) ----------
+# Athletes, coaches and scouts must have a unique username. New accounts
+# choose it when registering; older accounts are sent to /choose-username
+# (once) before they can use the app.
+def needs_username(user):
+    return user.is_authenticated and user.role in uname.USERNAME_ROLES and not user.username
+
+
+def username_taken(name, exclude_user_id=None):
+    query = User.query.filter(func.lower(User.username) == name.lower())
+    if exclude_user_id:
+        query = query.filter(User.id != exclude_user_id)
+    return db.session.query(query.exists()).scalar()
+
+
+def check_new_username(raw, exclude_user_id=None):
+    """(clean username, error or None): format, reserved words and uniqueness."""
+    name, error = uname.validate_username(raw)
+    if error:
+        return '', error
+    if username_taken(name, exclude_user_id):
+        return '', f'@{name} is already taken. Please choose another.'
+    return name, None
+
+
+def username_suggestions(full_name, exclude_user_id=None):
+    return uname.suggestions(full_name, lambda name: username_taken(name, exclude_user_id))
+
+
+def user_handle(user):
+    """'@musu_kollie', or '' when the account has no username."""
+    return f'@{user.username}' if user is not None and getattr(user, 'username', None) else ''
+
+
+def handle_tag(user, cls=''):
+    """<span class="dart-handle">@musu_kollie</span> beside a name ('' if none)."""
+    handle = user_handle(user)
+    if not handle:
+        return ''
+    return Markup(f'<span class="dart-handle {escape(cls)}" translate="no">{escape(handle)}</span>')
+
+
+app.jinja_env.globals.update(handle=user_handle, handle_tag=handle_tag, username_help=uname.USERNAME_HELP,
+                             username_min=uname.USERNAME_MIN, username_max=uname.USERNAME_MAX)
 
 
 def needs_terms_acceptance(user):
@@ -7126,7 +7308,7 @@ def require_terms_acceptance():
         return None
 
     if not needs_terms_acceptance(current_user):
-        return None
+        return require_username_choice()
 
     if request.path.startswith('/api/'):
         return _no_store_json({
@@ -7137,6 +7319,118 @@ def require_terms_acceptance():
 
     next_url = request.full_path.rstrip('?') if request.method == 'GET' else None
     return redirect(url_for('accept_terms', next=next_url))
+
+
+def require_username_choice():
+    """Athletes, coaches and scouts without a username choose one first."""
+    if request.endpoint in USERNAME_OPEN_ENDPOINTS or not needs_username(current_user):
+        return None
+    if request.path.startswith('/api/') or request.is_json or is_background_request():
+        return _no_store_json({'ok': False, 'reason': 'username_required',
+                               'error': 'Please choose your D.A.R.T. username first.'}, 403)
+    next_url = request.full_path.rstrip('?') if request.method == 'GET' else None
+    return redirect(url_for('choose_username', next=next_url))
+
+
+@app.route('/choose-username', methods=['GET', 'POST'])
+@login_required
+def choose_username():
+    next_url = safe_next_url(request.values.get('next'))
+    if next_url and next_url.startswith('/choose-username'):
+        next_url = None
+    if current_user.role not in uname.USERNAME_ROLES or current_user.username:
+        return redirect(next_url or url_for(dashboard_endpoint_for(current_user)))
+
+    error = None
+    typed = ''
+    if request.method == 'POST':
+        typed = (request.form.get('username') or '').strip()[:40]
+        name, error = check_new_username(typed, exclude_user_id=current_user.id)
+        if not error:
+            current_user.username = name
+            try:
+                db.session.commit()
+            except IntegrityError:            # someone took it a moment ago
+                db.session.rollback()
+                error = f'@{name} is already taken. Please choose another.'
+            else:
+                create_audit_log(action='username_chosen', actor_user_id=current_user.id,
+                                 target_type='User', target_id=str(current_user.id), details={'username': name})
+                db.session.commit()
+                flash(f'Your username is @{name}.', 'success')
+                return redirect(next_url or url_for(dashboard_endpoint_for(current_user)))
+
+    return render_template(
+        'choose_username.html', error=error, typed=typed, next_url=next_url,
+        suggestions=username_suggestions(current_user.full_name, current_user.id),
+    ), (400 if error else 200)
+
+
+def username_change_wait(user):
+    """Days until this user may change their username again (0 = now)."""
+    if not user.username_changed_at:
+        return 0
+    seconds = (user.username_changed_at + timedelta(days=uname.USERNAME_CHANGE_DAYS) - datetime.utcnow()).total_seconds()
+    return -int(-seconds // 86400) if seconds > 0 else 0     # whole days, rounded up
+
+
+app.jinja_env.globals['username_change_wait'] = username_change_wait
+
+
+@app.route('/profile/username', methods=['POST'])
+@login_required
+def change_username():
+    """Change the @username (once every 30 days)."""
+    back = redirect(url_for('profile') + '#username')
+    if current_user.role not in uname.USERNAME_ROLES:
+        abort(404)
+    wait = username_change_wait(current_user)
+    if wait:
+        flash(f'You can change your username again in {wait} day{"s" if wait != 1 else ""}.', 'warning')
+        return back
+    name, error = check_new_username(request.form.get('username'), exclude_user_id=current_user.id)
+    if not error and name == current_user.username:
+        error = 'That is already your username.'
+    if error:
+        flash(error, 'danger')
+        return back
+    old = current_user.username
+    current_user.username = name
+    current_user.username_changed_at = datetime.utcnow()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        flash(f'@{name} was just taken. Please choose another.', 'danger')
+        return back
+    create_audit_log(action='username_changed', actor_user_id=current_user.id, target_type='User',
+                     target_id=str(current_user.id), details={'from': old, 'to': name})
+    db.session.commit()
+    flash(f'Your username is now @{name}.', 'success')
+    return back
+
+
+@app.route('/api/username-check')
+def username_check():
+    """Live "is this username free?" check for the registration and username forms."""
+    raw = (request.args.get('u') or '')[:40]
+    exclude = current_user.id if current_user.is_authenticated else None
+    name, error = check_new_username(raw, exclude_user_id=exclude)
+    payload = {'ok': True, 'available': not error, 'username': name or uname.normalize_username(raw), 'error': error}
+    if error and request.args.get('name'):
+        payload['suggestions'] = username_suggestions(request.args.get('name', '')[:150], exclude)
+    return _no_store_json(payload)
+
+
+@app.route('/@<username>')
+def profile_by_username(username):
+    """Short profile link: dart.example/@musu_kollie"""
+    user = User.query.filter(func.lower(User.username) == uname.normalize_username(username)).first()
+    if not user:
+        abort(404)
+    if user.role == 'Athlete':
+        return redirect(athlete_public_path(user))
+    return redirect(url_for('user_profile', user_id=user.id))
 
 
 @app.route('/accept-terms', methods=['GET', 'POST'])
@@ -7313,6 +7607,7 @@ def profile_card_info(user, viewer=None):
     info = {
         'id': user.id,
         'name': user.full_name,
+        'username': user.username or '',
         'role': user.role,
         'verified': bool(user.is_verified),
         'picture': user.profile_picture,
@@ -10493,7 +10788,16 @@ def register_coach(registration_category=None):
         selected_category = 'All Coach'
 
     if request.method == 'POST':
-        full_name = request.form['full_name'].strip()
+        # Full government name (as on the ID / passport), never a nickname.
+        full_name, name_error = validate_full_name(request.form.get('full_name'))
+        if name_error:
+            flash(name_error, 'danger')
+            return redirect(url_for('register_coach', registration_category=registration_category))
+        # Unique @username (tells coaches with the same name apart).
+        username, username_error = check_new_username(request.form.get('username'))
+        if username_error:
+            flash(username_error, 'danger')
+            return redirect(url_for('register_coach', registration_category=registration_category))
         school = request.form['school'].strip()
         gender = request.form.get('gender', '').strip()
         nationality = request.form.get('nationality', '').strip()
@@ -10554,19 +10858,8 @@ def register_coach(registration_category=None):
                 registration_category=registration_category
             ))
 
-        # Check duplicate coach name + school/team.
-        existing = User.query.filter_by(
-            full_name=full_name,
-            school=school,
-            role='Coach'
-        ).first()
-
-        if existing:
-            flash('A coach with this name and school already exists.', 'danger')
-            return redirect(url_for(
-                'register_coach',
-                registration_category=registration_category
-            ))
+        # Two coaches may share a full name (even on the same team): the
+        # unique username tells them apart, and emails are unique.
 
         coach = User(
             full_name=full_name,
@@ -10576,6 +10869,7 @@ def register_coach(registration_category=None):
             email=email,
             role='Coach',
             coach_category=selected_category,
+            username=username,
             is_verified=False          # Pending Super Admin approval
         )
         coach.set_password(password)
@@ -10633,8 +10927,15 @@ def register_scout():
         # -----------------------------
         # Required-field validation
         # -----------------------------
-        if not full_name:
-            flash('Full name is required.', 'danger')
+        # Full government name (as on the ID / passport), never a nickname.
+        full_name, name_error = validate_full_name(full_name)
+        if name_error:
+            flash(name_error, 'danger')
+            return redirect(url_for('register_scout'))
+        # Unique @username (tells scouts with the same name apart).
+        username, username_error = check_new_username(request.form.get('username'))
+        if username_error:
+            flash(username_error, 'danger')
             return redirect(url_for('register_scout'))
 
         if not organization:
@@ -10732,6 +11033,7 @@ def register_scout():
             nationality=nationality or None,
             email=email,
             role='Scout',
+            username=username,
             is_verified=False
         )
 

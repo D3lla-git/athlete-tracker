@@ -20,7 +20,7 @@
   <a href="{{ url_for('feed') }}" class="feed-back"><i class="fa-solid fa-arrow-left"></i> Highlights</a>
 
   <div class="feed-list">
-    {{ feed_card(post, state, can_interact, full=true) }}
+    {{ feed_card(post, state, can_interact, full=true, slides=slides) }}
   </div>
 
   {% if insights %}
@@ -47,6 +47,7 @@
         <li class="fp-c" data-comment="{{ c.id }}">
           <div class="fp-c-head">
             {% if c.author_url %}<a href="{{ c.author_url }}" class="fp-c-name">{{ c.author }}</a>{% else %}<span class="fp-c-name">{{ c.author }}</span>{% endif %}
+            {% if c.handle %}<span class="fp-c-handle" translate="no">{{ c.handle }}</span>{% endif %}
             {% if c.is_athlete %}<span class="fp-c-tag">Athlete</span>{% elif c.role in ('Coach', 'Scout', 'Organization', 'Visitor') %}<span class="fp-c-role {{ 'fp-c-visitor' if not c.member }}">{{ c.role }}</span>{% endif %}
             <span class="fp-c-ago">· {{ c.ago }}</span>
             {% if c.can_delete %}

@@ -393,6 +393,41 @@ def limit_reached(user, kind, today=None):
     )
 
 
+def remaining_uploads(user, today=None):
+    """{'photos': n or None, 'videos': n or None}: what is left this month (None = no limit)."""
+    if not limits_active(today):
+        return {'photos': None, 'videos': None}
+    limits = upload_limits(user)
+    used = monthly_usage(user, today)
+    return {kind: (None if getattr(limits, kind) is None else max(0, getattr(limits, kind) - used[kind]))
+            for kind in ('photos', 'videos')}
+
+
+def batch_limit_error(user, photos, videos, today=None):
+    """
+    None if `photos` photos and `videos` videos fit in what is left this
+    month (one post with several files), else a friendly message.
+    """
+    left = remaining_uploads(user, today)
+    wanted = {'photos': photos, 'videos': videos}
+    over = [kind for kind in ('photos', 'videos') if left[kind] is not None and wanted[kind] > left[kind]]
+    if not over:
+        return None
+
+    def amount(kind):
+        n = left[kind]
+        word = kind if n != 1 else kind[:-1]
+        return f'{n} more {word}' if n else f'no more {kind}'
+
+    resets = next_month_start(today).strftime('%B %d')
+    plan = current_plan(user)
+    you_can = ' and '.join(amount(kind) for kind in over)
+    if plan:
+        return f'You can upload {you_can} this month on {plan.name} (resets {resets}). Remove some files and try again.'
+    return (f'Free accounts can upload {you_can} this month. Remove some files, '
+            f'upgrade to Premium for unlimited uploads, or wait until {resets}.')
+
+
 def usage_summary(user, today=None):
     """For the athlete dashboard meter."""
     limits = upload_limits(user)

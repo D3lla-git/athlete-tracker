@@ -49,7 +49,7 @@
         {% for a in athletes_to_confirm %}
           <li>
             <div class="oh-confirm-who">
-              <strong>{{ a.full_name }}</strong>
+              <strong>{{ a.full_name }}</strong> {{ handle_tag(a) }}
               <span>Team typed: “{{ a.school }}” · {{ a.athlete_category or 'Athlete' }} · registered {{ a.created_at.strftime('%b %d, %Y') if a.created_at else '' }}</span>
               <span class="oh-confirm-coach {{ 'is-done' if a.coach_verified }}">
                 <i class="fa-solid {{ 'fa-circle-check' if a.coach_verified else 'fa-hourglass-half' }}"></i>
@@ -200,7 +200,7 @@
         {% for r in data.recent %}
           <div class="oh-feed-row">
             <div class="oh-feed-main">
-              <a href="{{ url_for('user_profile', user_id=r.user.id) }}" class="oh-feed-name">{{ r.user.full_name }}</a>
+              <a href="{{ url_for('user_profile', user_id=r.user.id) }}" class="oh-feed-name">{{ r.user.full_name }}</a> {{ handle_tag(r.user) }}
               <span class="oh-sport-chip">{{ r.sport }}</span>
               <div class="oh-feed-sub">
                 vs {{ r.team_played_against or '-' }} · {{ r.competition_display }}
@@ -234,7 +234,7 @@
             {% for row in board.rows %}
               <div class="oh-board-row">
                 <span class="oh-rank oh-rank-{{ loop.index }}">{{ loop.index }}</span>
-                <a href="{{ url_for('user_profile', user_id=row.athlete.id) }}">{{ row.athlete.full_name }}</a>
+                <a href="{{ url_for('user_profile', user_id=row.athlete.id) }}">{{ row.athlete.full_name }}</a> {{ handle_tag(row.athlete) }}
                 <strong>{{ row.total }}</strong>
               </div>
             {% else %}

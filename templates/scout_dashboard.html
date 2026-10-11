@@ -611,8 +611,14 @@
               b.className = 'list-group-item list-group-item-action';
               b.setAttribute('role', 'option');
               b.textContent = s.full_name;
+              if (s.username) {
+                var tag = document.createElement('span');
+                tag.className = 'dart-handle ms-2';
+                tag.textContent = '@' + s.username;
+                b.appendChild(tag);
+              }
               b.addEventListener('mousedown', function (e) { e.preventDefault(); });
-              b.addEventListener('click', function () { choose(s.full_name); });
+              b.addEventListener('click', function () { choose(s.username ? '@' + s.username : s.full_name); });
               list.appendChild(b);
             });
             place();
@@ -719,7 +725,7 @@
                 <span class="sd-rank sd-rank-{{ loop.index }}">{{ loop.index }}</span>
                 {{ avatar(row.athlete, 'sm') }}
                 <div class="sd-person">
-                  <a href="{{ url_for('user_profile', user_id=row.athlete.id) }}">{{ row.athlete.full_name }}</a>
+                  <a href="{{ url_for('user_profile', user_id=row.athlete.id) }}">{{ row.athlete.full_name }}</a> {{ handle_tag(row.athlete) }}
                   {% if row.athlete.nationality and show_personal(row.athlete) %}<span class="ms-1">{{ country_flag(row.athlete.nationality) }}</span>{% endif %}
                   <div class="sd-sub">
                     <i class="fa-solid fa-school"></i> {{ row.athlete.school }}
@@ -763,7 +769,7 @@
         <div class="sd-feed-item">
           {{ avatar(r.user, 'md') }}
           <div class="sd-person">
-            <a href="{{ url_for('user_profile', user_id=r.user.id) }}">{{ r.user.full_name }}</a>
+            <a href="{{ url_for('user_profile', user_id=r.user.id) }}">{{ r.user.full_name }}</a> {{ handle_tag(r.user) }}
             <span class="sd-sport-badge {{ r.sport }} ms-1">
               <i class="fa-solid {{ {'Football': 'fa-futbol', 'Basketball': 'fa-basketball', 'Kickball': 'fa-baseball'}.get(r.sport, 'fa-medal') }}"></i> {{ r.sport }}
             </span>
@@ -869,7 +875,7 @@
         <div class="sd-leader">
           {{ avatar(row.athlete, 'sm') }}
           <div class="sd-person">
-            <a href="{{ url_for('user_profile', user_id=row.athlete.id) }}">{{ row.athlete.full_name }}</a>
+            <a href="{{ url_for('user_profile', user_id=row.athlete.id) }}">{{ row.athlete.full_name }}</a> {{ handle_tag(row.athlete) }}
             <div class="sd-sub">{% if row.athlete.age and show_personal(row.athlete) %}{{ row.athlete.age }} yrs · {% endif %}{{ row.games }} game{{ 's' if row.games != 1 }}</div>
           </div>
           <div class="sd-metric">

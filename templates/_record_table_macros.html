@@ -169,7 +169,7 @@
             {% endif %}
             <div>
               <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}"
-                 class="rt-strong text-decoration-none">{{ r.user.full_name }}</a>
+                 class="rt-strong text-decoration-none">{{ r.user.full_name }}</a> {{ handle_tag(r.user) }}
               <div class="rt-muted">
                 <i class="fa-solid fa-school" aria-hidden="true"></i> {{ r.user.school or '-' }}
               </div>

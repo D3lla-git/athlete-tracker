@@ -3,6 +3,8 @@
 {% block title %}Scout Registration | D.A.R.T{% endblock %}
 
 {% block content %}
+{% from '_gov_name.html' import gov_name_note, gov_name_assets %}
+{% from '_username_field.html' import username_field, username_assets %}
 
 <div class="container py-5">
 
@@ -84,12 +86,22 @@
                                 class="form-control"
                                 id="full_name"
                                 name="full_name"
-                                maxlength="150"
+                                maxlength="100"
                                 value="{{ google_signup.name if google_signup else '' }}"
                                 required
                                 autocomplete="name"
+                                autocapitalize="words"
+                                spellcheck="false"
+                                placeholder="Example: John Felix Brown"
+                                data-gov-name
+                                aria-describedby="full_nameNote full_nameError"
                             >
+                            {{ gov_name_note('full_name') }}
 
+                        </div>
+
+                        <div class="mb-3">
+                            {{ username_field('scoutUsername', name_source_id='full_name') }}
                         </div>
 
                         <div class="row">
@@ -423,4 +435,6 @@
 
 </div>
 
+{{ gov_name_assets() }}
+{{ username_assets() }}
 {% endblock %}

@@ -25,7 +25,7 @@
     <article class="cv-card">
       <div class="cv-main">
         <strong>{{ t.team_name }}</strong> · {{ t.role }} · {{ t.coach_category }}
-        <div class="cv-muted">Coach: <a href="{{ url_for('user_profile', user_id=t.coach_id) }}">{{ t.coach.full_name }}</a> (main team: {{ t.coach.school }}) · requested {{ t.created_at.strftime('%b %d, %Y') }}</div>
+        <div class="cv-muted">Coach: <a href="{{ url_for('user_profile', user_id=t.coach_id) }}">{{ t.coach.full_name }}</a> {{ handle_tag(t.coach) }} (main team: {{ t.coach.school }}) · requested {{ t.created_at.strftime('%b %d, %Y') }}</div>
       </div>
       {{ decide('teams', t) }}
     </article>

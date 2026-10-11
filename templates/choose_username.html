@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Choose your username · D.A.R.T.{% endblock %}
+
+{% block content %}
+{% from '_username_field.html' import username_field, username_assets %}
+<div class="cu-page">
+  <div class="cu-card">
+    <div class="cu-icon" aria-hidden="true"><i class="fa-solid fa-at"></i></div>
+    <h1 class="cu-title">Choose your username</h1>
+    <p class="cu-lead">
+      More than one person can have the name <strong>{{ current_user.full_name }}</strong>. Your username is yours alone:
+      it shows next to your name everywhere on D.A.R.T. so scouts, coaches and teammates find the right person.
+      You can also log in with it.
+    </p>
+
+    {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+
+    <form method="POST" action="{{ url_for('choose_username') }}" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+      {{ username_field('cuUsername', value=typed, label='Your username') }}
+
+      {% if suggestions %}
+        <div class="cu-ideas">
+          <span>Ideas that are free:</span>
+          {% for s in suggestions %}
+            <button type="button" class="cu-idea" data-fill="{{ s }}">@{{ s }}</button>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <button type="submit" class="btn dart-btn cu-btn"><i class="fa-solid fa-check me-1"></i> Save username</button>
+    </form>
+    <p class="cu-note"><i class="fa-solid fa-circle-info"></i> You can change it later in My Profile (once every 30 days).</p>
+  </div>
+</div>
+{{ username_assets() }}
+<script>
+  document.querySelectorAll('.cu-idea').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var input = document.getElementById('cuUsername');
+      input.value = b.dataset.fill;
+      input.dispatchEvent(new Event('input'));
+      input.focus();
+    });
+  });
+</script>
+<style>
+  .cu-page { max-width: 560px; margin: 0 auto; }
+  .cu-card {
+    padding: 24px 20px; border-radius: 22px;
+    background: var(--surface-bg, #fff); border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  }
+  .cu-icon {
+    width: 60px; height: 60px; margin: 0 auto 12px; display: grid; place-items: center; border-radius: 50%;
+    font-size: 1.6rem; color: #fff; background: var(--dart-primary-gradient, #198754);
+  }
+  .cu-title { font-size: 1.4rem; font-weight: 800; text-align: center; }
+  .cu-lead { color: var(--muted-text, #6c757d); font-size: 0.95rem; }
+  .cu-ideas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0 0; font-size: 0.85rem; }
+  .cu-idea {
+    padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: 0.85rem;
+    border: 1px solid rgba(25, 135, 84, 0.5); background: rgba(25, 135, 84, 0.08); color: inherit;
+  }
+  .cu-btn { width: 100%; margin-top: 18px; border-radius: 999px; color: #fff; }
+  .cu-note { margin: 12px 0 0; font-size: 0.82rem; color: var(--muted-text, #6c757d); text-align: center; }
+</style>
+{% endblock %}

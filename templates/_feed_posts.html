@@ -1,7 +1,7 @@
 {# A page of feed posts (first page inside feed.html; later pages are fetched while scrolling). #}
 {% from '_feed_card.html' import feed_card %}
 {% for h in posts %}
-  {{ feed_card(h, state, can_interact) }}
+  {{ feed_card(h, state, can_interact, slides=slides) }}
 {% endfor %}
 {% if next_url %}
   <div class="fp-more" data-next="{{ next_url }}">

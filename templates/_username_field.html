@@ -1,0 +1,116 @@
+{# Username (@handle) input with a live "is it free?" check.
+   username_field(field_id, value='', name_source_id='')
+     name_source_id: the Full Name input, used to suggest free usernames.
+   username_assets(): styles + script (once per page). The server always
+   checks again (format, reserved words, taken). #}
+{% macro username_field(field_id, value='', name_source_id='', label='Username') %}
+<div class="uname-field">
+  <label class="form-label" for="{{ field_id }}">{{ label }} <span class="text-danger">*</span> <i class="fa-solid fa-at" aria-hidden="true"></i></label>
+  <div class="input-group uname-group">
+    <span class="input-group-text" aria-hidden="true">@</span>
+    <input type="text" class="form-control" id="{{ field_id }}" name="username" value="{{ value }}" required
+           minlength="{{ username_min }}" maxlength="{{ username_max + 1 }}" autocomplete="username" autocapitalize="none"
+           spellcheck="false" placeholder="e.g. musu_kollie" data-username-input
+           {% if name_source_id %}data-name-source="{{ name_source_id }}"{% endif %}
+           aria-describedby="{{ field_id }}Note {{ field_id }}Status">
+  </div>
+  <small class="uname-note" id="{{ field_id }}Note">
+    <i class="fa-solid fa-fingerprint" aria-hidden="true"></i> {{ username_help }}
+  </small>
+  <div class="uname-status" id="{{ field_id }}Status" role="status" aria-live="polite" hidden></div>
+  <div class="uname-suggest" id="{{ field_id }}Suggest" hidden></div>
+</div>
+{% endmacro %}
+
+{% macro username_assets() %}
+<style>
+  .uname-group .input-group-text { font-weight: 800; color: #198754; }
+  .uname-note { display: block; margin-top: 6px; font-size: 0.8rem; line-height: 1.35; color: var(--muted-text, #6c757d); }
+  .uname-note i { color: #198754; margin-right: 3px; }
+  .uname-status { margin-top: 4px; font-size: 0.85rem; font-weight: 700; }
+  .uname-status.is-ok { color: #198754; }
+  .uname-status.is-bad { color: #dc3545; }
+  [data-theme="dark"] .uname-status.is-ok { color: #5dd39e; }
+  .uname-suggest { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; font-size: 0.82rem; }
+  .uname-suggest button {
+    padding: 3px 10px; border-radius: 999px; font-weight: 700; font-size: 0.82rem;
+    border: 1px solid rgba(25, 135, 84, 0.5); background: rgba(25, 135, 84, 0.08); color: inherit;
+  }
+</style>
+<script>
+(function () {
+  document.querySelectorAll('[data-username-input]').forEach(function (input) {
+    var status = document.getElementById(input.id + 'Status');
+    var suggestBox = document.getElementById(input.id + 'Suggest');
+    var nameSource = input.dataset.nameSource ? document.getElementById(input.dataset.nameSource) : null;
+    var timer = null, seq = 0, lastOk = '';
+
+    function show(text, ok) {
+      status.textContent = text;
+      status.hidden = !text;
+      status.className = 'uname-status ' + (ok ? 'is-ok' : 'is-bad');
+      input.classList.toggle('is-invalid', !ok && !!text);
+      input.classList.toggle('is-valid', !!ok);
+    }
+
+    function suggest(list) {
+      suggestBox.textContent = '';
+      if (!list || !list.length) { suggestBox.hidden = true; return; }
+      var label = document.createElement('span');
+      label.textContent = 'Free:';
+      suggestBox.appendChild(label);
+      list.forEach(function (name) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = '@' + name;
+        b.addEventListener('click', function () { input.value = name; check(); input.focus(); });
+        suggestBox.appendChild(b);
+      });
+      suggestBox.hidden = false;
+    }
+
+    function check() {
+      clearTimeout(timer);
+      var value = input.value.trim().replace(/^@/, '');
+      if (input.value !== value && /^@/.test(input.value.trim())) input.value = value;
+      if (!value) { show('', false); input.setCustomValidity('Choose a username.'); suggest([]); return; }
+      timer = setTimeout(function () {
+        var mine = ++seq;
+        var url = '/api/username-check?u=' + encodeURIComponent(value)
+          + (nameSource && nameSource.value.trim() ? '&name=' + encodeURIComponent(nameSource.value.trim()) : '');
+        fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (mine !== seq) return;
+            if (data.available) {
+              lastOk = data.username;
+              input.setCustomValidity('');
+              show('✓ @' + data.username + ' is available', true);
+              suggest([]);
+            } else {
+              input.setCustomValidity(data.error || 'Choose another username.');
+              show(data.error || 'Choose another username.', false);
+              suggest(data.suggestions);
+            }
+          })
+          .catch(function () { input.setCustomValidity(''); show('', false); });   // offline: the server checks on submit
+      }, 300);
+    }
+
+    input.addEventListener('input', check);
+    if (input.value) check();
+
+    // Offer free usernames from the full name once it's typed.
+    if (nameSource) {
+      nameSource.addEventListener('blur', function () {
+        if (input.value.trim() || !nameSource.value.trim()) return;
+        fetch('/api/username-check?u=&name=' + encodeURIComponent(nameSource.value.trim()), { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (data) { if (!input.value.trim()) suggest(data.suggestions); })
+          .catch(function () {});
+      });
+    }
+  });
+})();
+</script>
+{% endmacro %}

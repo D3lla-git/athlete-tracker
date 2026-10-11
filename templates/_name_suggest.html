@@ -28,8 +28,14 @@
             btn.type = 'button';
             btn.className = 'list-group-item list-group-item-action';
             btn.textContent = item.full_name;
+            if (item.username) {
+              var tag = document.createElement('span');
+              tag.className = 'dart-handle ms-2';
+              tag.textContent = '@' + item.username;
+              btn.appendChild(tag);
+            }
             btn.addEventListener('click', function () {
-              input.value = item.full_name;
+              input.value = item.username ? '@' + item.username : item.full_name;
               hide();
               if (input.form) input.form.requestSubmit ? input.form.requestSubmit() : input.form.submit();
             });

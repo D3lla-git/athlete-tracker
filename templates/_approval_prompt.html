@@ -37,9 +37,12 @@
       </div>
 
     {% elif p.kind == 'highlight' %}
-      <h2 id="approvalPromptTitle">{{ 'Video' if p.media == 'video' else 'Photo' }} sent for approval</h2>
+      <h2 id="approvalPromptTitle">
+        {% if (p.count or 1) > 1 %}Your post ({{ p.count }} photos &amp; videos) was sent for approval
+        {% else %}{{ 'Video' if p.media == 'video' else 'Photo' }} sent for approval{% endif %}
+      </h2>
       <div id="approvalPromptBody">
-        <p>It goes live on your profile and in the <strong>Highlights</strong> feed once {{ 'both approve' if p.coach == 'pending' else 'it is approved' }}:</p>
+        <p>{{ 'Each file is checked. The post' if (p.count or 1) > 1 else 'It' }} goes live on your profile and in the <strong>Highlights</strong> feed once {{ 'both approve' if p.coach == 'pending' else 'it is approved' }}:</p>
         <ul class="approval-prompt-steps">
           <li class="is-done"><i class="fa-solid fa-circle-check"></i>
             <span><strong>Uploaded</strong> · passed the first safety check</span></li>

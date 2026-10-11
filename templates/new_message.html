@@ -528,6 +528,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         <span class="recipient-suggestion-name">
           ${escapeHtml(user.full_name)}
+          ${user.username ? `<span class="dart-handle ms-1">@${escapeHtml(user.username)}</span>` : ''}
         </span>
 
         <span class="recipient-suggestion-meta">
@@ -781,6 +782,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       <span>
         ${escapeHtml(user.full_name)}
+        ${user.username ? `<span class="dart-handle">@${escapeHtml(user.username)}</span>` : ''}
         <small class="text-muted">
           (${escapeHtml(user.role)})
         </small>

@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Register{% endblock %}
 {% block content %}
+{% from '_gov_name.html' import gov_name_note, gov_name_assets %}
+{% from '_username_field.html' import username_field, username_assets %}
 <div class="row justify-content-center">
   <div class="col-md-6">
     <div class="card shadow">
@@ -26,8 +28,14 @@
         <form method="POST" enctype="multipart/form-data">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="mb-3">
-            <label>Full Name <i class="fa-solid fa-user"></i></label>
-            <input type="text" name="full_name" placeholder="Example: John Brown" class="form-control" value="{{ google_signup.name if google_signup else '' }}" required>
+            <label for="regFullName">Full Name <i class="fa-solid fa-user"></i></label>
+            <input type="text" name="full_name" id="regFullName" placeholder="Example: John Felix Brown" class="form-control"
+                   value="{{ google_signup.name if google_signup else '' }}" required maxlength="100" autocomplete="name"
+                   autocapitalize="words" spellcheck="false" data-gov-name aria-describedby="regFullNameNote regFullNameError">
+            {{ gov_name_note('regFullName') }}
+          </div>
+          <div class="mb-3">
+            {{ username_field('regUsername', name_source_id='regFullName') }}
           </div>
           <div class="mb-3">
             <label for="regTeam">Team Name <i class="fa-solid fa-users"></i></label>
@@ -261,4 +269,6 @@
     }
   }
 </style>
+{{ gov_name_assets() }}
+{{ username_assets() }}
 {% endblock %}

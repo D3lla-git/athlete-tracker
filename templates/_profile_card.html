@@ -33,6 +33,7 @@
             {{ info.name }}
             {% if info.verified %}<i class="fa-solid fa-circle-check pc-badge" title="Verified by D.A.R.T." aria-label="Verified"></i>{% endif %}
           </h1>
+          {% if info.username %}<div class="pc-handle" translate="no">@{{ info.username }}</div>{% endif %}
           <div class="pc-sub">{{ info.subtitle }}</div>
           {% if info.pill %}<span class="pc-pill">{{ info.pill }}</span>{% endif %}
         </div>
@@ -212,6 +213,7 @@
     color: #fff;
     overflow-wrap: anywhere;
   }
+  .pc-handle { margin: 0 0 4px; font-size: 0.95rem; font-weight: 700; color: #7fe0ae; overflow-wrap: anywhere; }
   .pc-badge { margin-left: 6px; font-size: 0.75em; color: #4cd38a; vertical-align: 0.05em; }
   .pc-sub { font-size: 1.05rem; color: #e1ebe5; }
   .pc-pill {

@@ -171,7 +171,7 @@
   <label class="form-label">Full Name <i class="fa-solid fa-user"></i></label>
 
   <div class="form-control bg-light">
-    {{ current_user.full_name }}
+    {{ current_user.full_name }} {{ handle_tag(current_user) }}
 
     {% if current_user.gender == 'Male' %}
       <i class="fa-solid fa-mars" title="Male" style="color: #0d6efd;"></i>
@@ -488,6 +488,38 @@
 
           </div>
         </form>
+
+{% if current_user.role in ('Athlete', 'Coach', 'Scout') %}
+  {# Username (@handle): unique, tells people with the same name apart. #}
+  {% from '_username_field.html' import username_field, username_assets %}
+  {% set wait_days = username_change_wait(current_user) %}
+  <div class="card mt-4 mp-username" id="username">
+    <div class="card-body">
+      <h5 class="card-title"><i class="fa-solid fa-at"></i> Username</h5>
+      <p class="mb-2">Your username: <strong class="mp-handle" translate="no">@{{ current_user.username }}</strong>
+        <span class="text-muted small">· share your profile: <span translate="no">{{ site_url('/@' ~ current_user.username) }}</span></span></p>
+      {% if wait_days %}
+        <p class="text-muted small mb-0"><i class="fa-solid fa-clock"></i> You can change it again in {{ wait_days }} day{{ 's' if wait_days != 1 }}.</p>
+      {% else %}
+        <details>
+          <summary class="mp-username-toggle">Change username</summary>
+          <form method="POST" action="{{ url_for('change_username') }}" class="mt-3" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {{ username_field('mpUsername', label='New username') }}
+            <p class="text-muted small mt-2 mb-2">After a change you have to wait 30 days to change it again. Your old username becomes free for others.</p>
+            <button type="submit" class="btn dart-btn btn-sm"><i class="fa-solid fa-check me-1"></i> Save username</button>
+          </form>
+        </details>
+        {{ username_assets() }}
+      {% endif %}
+    </div>
+  </div>
+  <style>
+    .mp-handle { color: #198754; }
+    [data-theme="dark"] .mp-handle { color: #5dd39e; }
+    .mp-username-toggle { cursor: pointer; font-weight: 700; color: #198754; }
+  </style>
+{% endif %}
 <!-- Change Password -->
 <div class="mt-4">
     <button type="button"

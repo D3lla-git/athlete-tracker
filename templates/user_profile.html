@@ -24,6 +24,7 @@
 {% else %}
   <section class="up-plain">
     <h1>{{ user.full_name }}</h1>
+    {% if user.username %}<div class="dart-handle dart-handle-lg" translate="no">@{{ user.username }}</div>{% endif %}
     <span class="up-plain-role">{{ user.role }}</span>
   </section>
 {% endif %}
@@ -347,7 +348,7 @@
         {% endif %}
 
         <div>
-          <h4 class="mb-1">{{ user.full_name }}</h4>
+          <h4 class="mb-1">{{ user.full_name }} {{ handle_tag(user) }}</h4>
 
           <div class="text-muted">
             {% if current_category %}

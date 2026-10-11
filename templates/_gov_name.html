@@ -1,0 +1,69 @@
+{# Full government name on the registration forms.
+   gov_name_note(field_id): the note + error under the input. The input gets
+     data-gov-name and aria-describedby="<id>Note <id>Error".
+   gov_name_assets(): the live check (same rules as names.py; the server
+     always checks again). #}
+{% macro gov_name_note(field_id) %}
+<small class="gov-name-note" id="{{ field_id }}Note">
+  <i class="fa-solid fa-id-card" aria-hidden="true"></i>
+  <strong>Full government name</strong>, exactly as on your ID or passport: first and last name (and middle name if you have one).
+  No nicknames, titles, numbers or emoji.
+</small>
+<div class="gov-name-error" id="{{ field_id }}Error" role="alert" hidden></div>
+{% endmacro %}
+
+{% macro gov_name_assets() %}
+<style>
+  .gov-name-note { display: block; margin-top: 6px; font-size: 0.8rem; line-height: 1.35; color: var(--muted-text, #6c757d); }
+  .gov-name-note i { color: #198754; margin-right: 3px; }
+  .gov-name-error { margin-top: 4px; font-size: 0.82rem; font-weight: 600; color: #dc3545; }
+</style>
+<script>
+(function () {
+  var RULES = {{ gov_name_rules | tojson }};
+  var BLOCKED = new Set(RULES.blocked), SUFFIXES = new Set(RULES.suffixes);
+  var PART = /^\p{L}+(?:[-']\p{L}+)*$/u, INITIAL = /^\p{L}\.?$/u, REPEAT = /(\p{L})\1\1/iu;
+  var NICK = 'Nicknames, titles and made-up names are not allowed. Use your full government name exactly as on your ID or passport.';
+
+  function check(raw) {
+    var text = (raw || '').normalize('NFC').replace(/[‘’]/g, "'").replace(/[‐‑–]/g, '-').trim().split(/\s+/).join(' ');
+    if (!text) return 'Full name is required.';
+    if (text.length > RULES.max) return 'Full name can be up to ' + RULES.max + ' characters.';
+    var parts = text.split(' ');
+    var core = parts.length > 2 && SUFFIXES.has(parts[parts.length - 1].toLowerCase()) ? parts.slice(0, -1) : parts;
+    if (core.length < 2) return 'Enter your first AND last name, exactly as on your ID or passport.';
+    if (parts.length > 6) return 'That is too many names. Use your name exactly as on your ID or passport.';
+    for (var i = 0; i < core.length; i++) {
+      var p = core[i], edge = i === 0 || i === core.length - 1;
+      if (BLOCKED.has(p.replace(/\.+$/, '').toLowerCase())) return NICK;
+      if (INITIAL.test(p)) { if (edge) return 'Write your first and last name in full (initials only for a middle name).'; continue; }
+      if (!PART.test(p)) return 'Names can only contain letters, a hyphen or an apostrophe (no numbers, emoji, symbols or brackets).';
+      if (p.replace(/[-']/g, '').length < 2) return 'Each name must have at least 2 letters.';
+      if (p.split(/[-']/).some(function (w) { return BLOCKED.has(w.toLowerCase()); })) return NICK;
+      if (REPEAT.test(p)) return 'Please check the spelling of your name (no letter 3 times in a row).';
+    }
+    if (new Set(core.map(function (p) { return p.toLowerCase(); })).size === 1) return 'Enter your real first and last name.';
+    return '';
+  }
+
+  document.querySelectorAll('input[data-gov-name]').forEach(function (input) {
+    var box = document.getElementById(input.id + 'Error');
+    var touched = false;
+    function run(show) {
+      var msg = check(input.value);
+      input.setCustomValidity(msg);
+      if (box && (show || touched)) {
+        box.textContent = msg;
+        box.hidden = !msg;
+        input.classList.toggle('is-invalid', !!msg);
+      }
+      return msg;
+    }
+    input.addEventListener('blur', function () { if (input.value.trim()) { touched = true; run(true); } });
+    input.addEventListener('input', function () { run(false); });
+    input.addEventListener('invalid', function () { touched = true; run(true); });
+    if (input.value) run(false);
+  });
+})();
+</script>
+{% endmacro %}

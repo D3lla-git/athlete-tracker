@@ -15,9 +15,9 @@ Admin's analysis (engagement_breakdown) tells the two apart.
 import re
 from datetime import datetime, timedelta
 
-from sqlalchemy import and_, case, func, literal, or_, select, union_all, update
+from sqlalchemy import and_, case, exists, func, literal, or_, select, union_all, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import contains_eager
+from sqlalchemy.orm import aliased, contains_eager
 
 from models import (db, User, AthleteHighlight, HighlightLike, HighlightRepost,
                     HighlightSave, HighlightShare, HighlightComment)
@@ -81,8 +81,27 @@ def published_col():
     return func.coalesce(AthleteHighlight.published_at, AthleteHighlight.reviewed_at, AthleteHighlight.created_at)
 
 
+def _post_lead_conditions():
+    """
+    A post with several files is ONE feed item, led by its first approved
+    file (likes, comments... belong to it), and shows only once every file
+    in it has been reviewed (none still pending).
+    """
+    sibling = aliased(AthleteHighlight)
+    first_approved = (
+        select(func.min(sibling.id))
+        .where(sibling.post_key == AthleteHighlight.post_key, sibling.status == 'approved')
+        .scalar_subquery()
+    )
+    still_pending = exists().where(sibling.post_key == AthleteHighlight.post_key, sibling.status == 'pending')
+    return or_(
+        AthleteHighlight.post_key.is_(None),
+        and_(AthleteHighlight.id == first_approved, ~still_pending),
+    )
+
+
 def live_query():
-    """Highlights everyone may see, with their athlete loaded in the same query."""
+    """Feed posts everyone may see, with their athlete loaded in the same query."""
     return (
         AthleteHighlight.query
         .join(User, User.id == AthleteHighlight.user_id)
@@ -91,6 +110,7 @@ def live_query():
             User.role == 'Athlete',
             User.is_verified.is_(True),
             User.is_suspended.is_(False),
+            _post_lead_conditions(),
         )
         .options(contains_eager(AthleteHighlight.user))
     )
@@ -98,6 +118,58 @@ def live_query():
 
 def get_live(highlight_id):
     return live_query().filter(AthleteHighlight.id == highlight_id).first()
+
+
+def lead_of(highlight_id):
+    """The feed post a file belongs to (its lead), or None if not live."""
+    item = db.session.get(AthleteHighlight, highlight_id)
+    if not item or item.status != 'approved':
+        return None
+    if not item.post_key:
+        return get_live(item.id)
+    return live_query().filter(AthleteHighlight.post_key == item.post_key).first()
+
+
+def post_slides(posts):
+    """{post_key: [approved files in order]} for the multi-file posts on a page (one query)."""
+    keys = {p.post_key for p in posts if p.post_key}
+    if not keys:
+        return {}
+    slides = {}
+    rows = (
+        AthleteHighlight.query
+        .filter(AthleteHighlight.post_key.in_(keys), AthleteHighlight.status == 'approved')
+        .order_by(AthleteHighlight.post_position, AthleteHighlight.id)
+        .all()
+    )
+    for row in rows:
+        slides.setdefault(row.post_key, []).append(row)
+    return slides
+
+
+def hand_over_post(highlight):
+    """
+    The lead file of a multi-file post is being deleted: give its likes,
+    reposts, saves, shares, comments and counters to the next approved file.
+    Returns True if they were handed over. Caller deletes + commits.
+    """
+    if not highlight.post_key or highlight.status != 'approved':
+        return False
+    approved = (
+        AthleteHighlight.query
+        .filter(AthleteHighlight.post_key == highlight.post_key, AthleteHighlight.status == 'approved')
+        .order_by(AthleteHighlight.id)
+        .all()
+    )
+    if not approved or approved[0].id != highlight.id or len(approved) < 2:
+        return False
+    heir = approved[1]
+    for model in (HighlightLike, HighlightRepost, HighlightSave, HighlightShare, HighlightComment):
+        model.query.filter_by(highlight_id=highlight.id).update({'highlight_id': heir.id}, synchronize_session=False)
+    for column in ('like_count', 'repost_count', 'comment_count', 'save_count', 'share_count'):
+        setattr(heir, column, (getattr(heir, column) or 0) + (getattr(highlight, column) or 0))
+    heir.published_at = highlight.published_at or heir.published_at
+    return True
 
 
 def feed_query(tab, sport, actor):

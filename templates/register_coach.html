@@ -2,6 +2,8 @@
 {% block title %}Register as Coach{% endblock %}
 
 {% block content %}
+{% from '_gov_name.html' import gov_name_note, gov_name_assets %}
+{% from '_username_field.html' import username_field, username_assets %}
 <div class="row justify-content-center">
   <div class="col-md-6 col-lg-5">
     <div class="card shadow">
@@ -19,8 +21,14 @@
         <form method="POST">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="mb-3">
-            <label class="form-label">Coach Name  <i class="fa-solid fa-user-tie"></i></i></label>
-            <input type="text" name="full_name" placeholder="Example: 'Coach John'" class="form-control" value="{{ google_signup.name if google_signup else '' }}" required>
+            <label class="form-label" for="coachFullName">Full Name <i class="fa-solid fa-user-tie"></i></label>
+            <input type="text" name="full_name" id="coachFullName" placeholder="Example: John Felix Brown" class="form-control"
+                   value="{{ google_signup.name if google_signup else '' }}" required maxlength="100" autocomplete="name"
+                   autocapitalize="words" spellcheck="false" data-gov-name aria-describedby="coachFullNameNote coachFullNameError">
+            {{ gov_name_note('coachFullName') }}
+          </div>
+          <div class="mb-3">
+            {{ username_field('coachUsername', name_source_id='coachFullName') }}
           </div>
 
           <div class="mb-3">
@@ -124,4 +132,6 @@
     }
   }
 </style>
+{{ gov_name_assets() }}
+{{ username_assets() }}
 {% endblock %}

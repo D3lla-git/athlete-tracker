@@ -786,6 +786,7 @@
                    class="search-athlete-name">
                   {{ a.full_name }} <i class="fa-solid fa-user" aria-hidden="true"></i>
                 </a>
+                {{ handle_tag(a) }}
                 <div class="rt-muted">
                   <i class="fa-solid fa-school" aria-hidden="true"></i> {{ a.school }}
                 </div>
@@ -902,7 +903,7 @@
 <div class="d-md-none">
   {% for item in results %}
     <div class="mb-5">
-      <h5 class="mb-1"><a href="{% if current_user.is_authenticated and current_user.id == item.student.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=item.student.id) }}{% endif %}" class="text-decoration-none">{{ item.student.full_name }} <i class="fa-solid fa-user"></i></a></h5>
+      <h5 class="mb-1"><a href="{% if current_user.is_authenticated and current_user.id == item.student.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=item.student.id) }}{% endif %}" class="text-decoration-none">{{ item.student.full_name }} <i class="fa-solid fa-user"></i></a> {{ handle_tag(item.student) }}</h5>
       <p class="text-muted small mb-2">{{ item.student.school }} <i class="fa-solid fa-school"></i></p>
 
       {% if item.student.role == 'Athlete' %}
@@ -952,7 +953,7 @@
 {% if r.status == 'approved' %}<div class="text-center mb-3">{{ share_button(r) }}</div>{% endif %}
 
                    <div class="text-center mb-3">
-              <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}" class="text-decoration-none"><strong>{{ r.user.full_name }}</strong></a><br>
+              <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}" class="text-decoration-none"><strong>{{ r.user.full_name }}</strong></a> {{ handle_tag(r.user) }}<br>
               <small class="text-muted">{{ r.team or r.user.school }} <i class="fa-solid fa-school"></i></small><br>
               <small class="text-muted">vs. {{ r.team_played_against or '-' }} <i class="fa-solid fa-shield-halved"></i></small><br>
               
@@ -1011,8 +1012,15 @@ if (nameInput) {
       btn.type = 'button';
       btn.className = 'list-group-item list-group-item-action';
       btn.textContent = student.full_name;
+      if (student.username) {
+        // Same names are told apart by the @username; picking one searches that exact person.
+        const tag = document.createElement('span');
+        tag.className = 'dart-handle ms-2';
+        tag.textContent = '@' + student.username;
+        btn.appendChild(tag);
+      }
       btn.addEventListener('click', () => {
-        nameInput.value = student.full_name;
+        nameInput.value = student.username ? '@' + student.username : student.full_name;
         suggestions.style.display = 'none';
       });
       suggestions.appendChild(btn);

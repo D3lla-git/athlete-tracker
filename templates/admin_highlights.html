@@ -36,12 +36,13 @@
           </div>
           <div class="mr-body">
             <div class="mr-who">
-              <a href="{{ url_for('user_profile', user_id=h.user_id) }}"><strong>{{ h.user.full_name if h.user else 'Athlete' }}</strong></a>
+              <a href="{{ url_for('user_profile', user_id=h.user_id) }}"><strong>{{ h.user.full_name if h.user else 'Athlete' }}</strong></a> {{ handle_tag(h.user) }}
               <span>{{ h.user.school if h.user else '' }}</span>
             </div>
             <div class="mr-meta">
               <span><i class="fa-solid {{ 'fa-video' if h.is_video else 'fa-image' }}"></i> {{ 'Video ' ~ h.duration_label if h.is_video else 'Photo' }}</span>
               <span><i class="fa-solid fa-medal"></i> {{ h.sport or 'Sport not given' }}</span>
+              {% set part = post_part(h) %}{% if part %}<span class="mr-part"><i class="fa-solid fa-layer-group"></i> File {{ part[0] }} of {{ part[1] }} in one post</span>{% endif %}
               <span><i class="fa-regular fa-clock"></i> {{ h.created_at.strftime('%b %d, %H:%M') }}</span>
               {% if h.user and h.user.media_strikes %}<span class="mr-strikes"><i class="fa-solid fa-flag"></i> {{ h.user.media_strikes }} strike{{ 's' if h.user.media_strikes != 1 }}</span>{% endif %}
             </div>
@@ -84,7 +85,7 @@
         <div class="mr-wait">
           <div class="mr-wait-who">
             <i class="fa-solid {{ 'fa-video' if h.is_video else 'fa-image' }}"></i>
-            <a href="{{ url_for('user_profile', user_id=h.user_id) }}"><strong>{{ h.user.full_name if h.user else 'Athlete' }}</strong></a>
+            <a href="{{ url_for('user_profile', user_id=h.user_id) }}"><strong>{{ h.user.full_name if h.user else 'Athlete' }}</strong></a> {{ handle_tag(h.user) }}
             <span>· coach at {{ h.team_name or 'their team' }} · approved by you {{ time_ago(h.admin_approved_at) }} ago</span>
           </div>
           <div class="mr-actions">
@@ -192,6 +193,7 @@
   .mr-who { display: flex; flex-direction: column; }
   .mr-who span { font-size: 0.8rem; color: var(--muted-text, #6c757d); }
   .mr-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.8rem; color: var(--muted-text, #6c757d); }
+  .mr-part { font-weight: 700; color: #198754; }
   .mr-strikes { color: #dc3545; font-weight: 700; }
   .mr-caption { font-size: 0.88rem; font-style: italic; }
   .mr-check { padding: 8px 10px; border-radius: 10px; font-size: 0.82rem; }

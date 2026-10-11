@@ -293,7 +293,7 @@
                       {% endif %}
                       <div>
                         <div class="rt-strong">
-                          {{ a.full_name }}
+                          {{ a.full_name }} {{ handle_tag(a) }}
                           {% if a.nationality %}<span class="ms-1">{{ country_flag(a.nationality) }}</span>{% endif %}
                         </div>
                         <div class="rt-muted">

@@ -24,10 +24,11 @@
             {% endif %}
           </div>
           <div class="chr-body">
-            <div class="chr-who"><strong>{{ h.user.full_name }}</strong> · {{ h.team_name }}</div>
+            <div class="chr-who"><strong>{{ h.user.full_name }}</strong> {{ handle_tag(h.user) }} · {{ h.team_name }}</div>
             <div class="chr-meta">
               <span><i class="fa-solid {{ 'fa-video' if h.is_video else 'fa-image' }}"></i> {{ 'Video ' ~ h.duration_label if h.is_video else 'Photo' }}</span>
               <span><i class="fa-solid fa-medal"></i> {{ h.sport or 'Sport not given' }}</span>
+              {% set part = post_part(h) %}{% if part %}<span><i class="fa-solid fa-layer-group"></i> File {{ part[0] }} of {{ part[1] }} in one post</span>{% endif %}
               <span><i class="fa-regular fa-clock"></i> {{ time_ago(h.created_at) }}</span>
             </div>
             {% if h.caption %}<div class="chr-caption">“{{ h.caption }}”</div>{% endif %}

@@ -99,7 +99,7 @@
           <span class="cs-avatar" aria-hidden="true">{{ (c.full_name or '?')[0] | upper }}</span>
         {% endif %}
         <div class="cs-who">
-          <a href="{{ url_for('user_profile', user_id=c.id) }}" class="cs-name">{{ c.full_name }}</a>
+          <a href="{{ url_for('user_profile', user_id=c.id) }}" class="cs-name">{{ c.full_name }}</a> {{ handle_tag(c) }}
           {% if item.pro %}<span class="cs-pro"><i class="fa-solid fa-crown"></i> Coach Pro</span>{% endif %}
           <div class="cs-sub"><i class="fa-solid fa-people-group"></i> {{ c.school }} · {{ c.coach_category or 'Coach' }}</div>
           {% if item.summary.teams | length > 1 %}<div class="cs-sub">Teams coached: {{ item.summary.teams | join(', ') }}</div>{% endif %}

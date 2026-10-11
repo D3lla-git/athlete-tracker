@@ -164,6 +164,13 @@
     if (c.author_url) name.href = c.author_url;
     name.textContent = c.author;
     head.appendChild(name);
+    if (c.handle) {
+      var h = document.createElement('span');
+      h.className = 'fp-c-handle';
+      h.setAttribute('translate', 'no');
+      h.textContent = c.handle;
+      head.appendChild(h);
+    }
     if (c.is_athlete || ['Coach', 'Scout', 'Organization', 'Visitor'].indexOf(c.role) >= 0) {
       var tag = document.createElement('span');
       tag.className = c.is_athlete ? 'fp-c-tag' : 'fp-c-role' + (c.member ? '' : ' fp-c-visitor');
@@ -363,7 +370,10 @@
     }
 
     var sound = e.target.closest('.fp-sound');
-    if (sound) { toggleSound(sound.closest('.fp-media').querySelector('video')); return; }
+    if (sound) { toggleSound(sound.closest('[data-video-box]').querySelector('video')); return; }
+
+    var nav = e.target.closest('.fp-nav');
+    if (nav) { slideBy(nav.closest('[data-carousel]'), nav.classList.contains('fp-next') ? 1 : -1); return; }
 
     var media = e.target.closest('.fp-media-video');
     if (media) {
@@ -376,7 +386,7 @@
   // ---------- videos ----------
   var soundOn = false;
   function updateSoundButton(video) {
-    var b = video.closest('.fp-media').querySelector('.fp-sound');
+    var b = video.closest('[data-video-box]').querySelector('.fp-sound');
     if (!b) return;
     b.setAttribute('aria-pressed', video.muted ? 'false' : 'true');
     b.setAttribute('aria-label', video.muted ? 'Turn sound on' : 'Turn sound off');
@@ -415,13 +425,68 @@
     scope.querySelectorAll('.fp-video').forEach(function (v) {
       if (v.dataset.watched) return;
       v.dataset.watched = '1';
-      v.addEventListener('play', function () { v.closest('.fp-media').classList.remove('is-paused'); });
-      v.addEventListener('pause', function () { v.closest('.fp-media').classList.add('is-paused'); });
-      v.closest('.fp-media').classList.add('is-paused');
+      var frame = v.closest('[data-video-box]');
+      v.addEventListener('play', function () { frame.classList.remove('is-paused'); });
+      v.addEventListener('pause', function () { frame.classList.add('is-paused'); });
+      frame.classList.add('is-paused');
       if (nearObserver) nearObserver.observe(v); else ensureSrc(v);
       if (playObserver) playObserver.observe(v);
     });
     scope.querySelectorAll('.fp-more').forEach(function (m) { if (moreObserver) moreObserver.observe(m); });
+    scope.querySelectorAll('[data-carousel]').forEach(setupCarousel);
+  }
+
+  // ---------- several photos / videos in one post: swipe left / right ----------
+  function slideIndex(track) {
+    return track.clientWidth ? Math.round(track.scrollLeft / track.clientWidth) : 0;
+  }
+
+  function slideBy(carousel, step) {
+    if (!carousel) return;
+    var track = carousel.querySelector('.fp-track');
+    var last = track.children.length - 1;
+    var to = Math.max(0, Math.min(last, slideIndex(track) + step));
+    track.scrollTo({ left: to * track.clientWidth, behavior: reduceMotion ? 'auto' : 'smooth' });
+  }
+
+  function setupCarousel(carousel) {
+    if (carousel.dataset.ready) return;
+    carousel.dataset.ready = '1';
+    var track = carousel.querySelector('.fp-track');
+    var total = track.children.length;
+    var count = carousel.querySelector('.fp-count');
+    var dots = carousel.querySelectorAll('.fp-dots span');
+    var prev = carousel.querySelector('.fp-prev'), next = carousel.querySelector('.fp-next');
+    var shown = -1, ticking = false;
+
+    function update() {
+      ticking = false;
+      var i = Math.max(0, Math.min(total - 1, slideIndex(track)));
+      if (i === shown) return;
+      shown = i;
+      count.textContent = (i + 1) + '/' + total;
+      dots.forEach(function (d, n) { d.classList.toggle('on', n === i); });
+      prev.hidden = i === 0;
+      next.hidden = i === total - 1;
+      // The next slide's photo / video starts loading before it is swiped in.
+      [i, i + 1].forEach(function (n) {
+        var slide = track.children[n];
+        if (!slide) return;
+        var img = slide.querySelector('img[loading="lazy"]');
+        if (img) img.loading = 'eager';
+        var v = slide.querySelector('.fp-video');
+        if (v) ensureSrc(v);
+      });
+    }
+    track.addEventListener('scroll', function () {
+      if (!ticking) { ticking = true; requestAnimationFrame(update); }
+    }, { passive: true });
+    track.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight') { e.preventDefault(); slideBy(carousel, 1); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); slideBy(carousel, -1); }
+    });
+    window.addEventListener('resize', function () { shown = -1; update(); });
+    update();
   }
 
   var hasIO = 'IntersectionObserver' in window;
