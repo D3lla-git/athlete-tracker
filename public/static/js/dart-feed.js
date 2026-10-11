@@ -481,6 +481,18 @@
     track.addEventListener('scroll', function () {
       if (!ticking) { ticking = true; requestAnimationFrame(update); }
     }, { passive: true });
+    // At the first / last photo, pushing further out must not become the
+    // browser's "swipe back / forward" (or switch Home | Highlights).
+    var sx = 0, sy = 0;
+    track.addEventListener('touchstart', function (e) {
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+    }, { passive: true });
+    track.addEventListener('touchmove', function (e) {
+      var mx = e.touches[0].clientX - sx, my = e.touches[0].clientY - sy;
+      if (Math.abs(mx) <= Math.abs(my)) return;                     // scrolling the page: leave it
+      var atStart = track.scrollLeft <= 0, atEnd = track.scrollLeft >= track.scrollWidth - track.clientWidth - 1;
+      if ((mx > 0 && atStart) || (mx < 0 && atEnd)) e.preventDefault();
+    }, { passive: false });
     track.addEventListener('keydown', function (e) {
       if (e.key === 'ArrowRight') { e.preventDefault(); slideBy(carousel, 1); }
       if (e.key === 'ArrowLeft') { e.preventDefault(); slideBy(carousel, -1); }

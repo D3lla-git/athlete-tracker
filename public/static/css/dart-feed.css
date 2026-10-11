@@ -262,7 +262,7 @@ span.fp-c-name { font-weight: 800; }
 .fp-carousel { position: relative; }
 .fp-track {
   display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
-  scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; outline: none;
+  scrollbar-width: none; overscroll-behavior-x: none; -webkit-overflow-scrolling: touch; outline: none;   /* no "swipe back" when at the first / last photo */
 }
 .fp-track::-webkit-scrollbar { display: none; }
 .fp-track:focus-visible { box-shadow: inset 0 0 0 3px rgba(25, 135, 84, 0.6); }

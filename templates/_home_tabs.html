@@ -1,6 +1,8 @@
 {# Top tabs, like X's "For you | Following": Home (the home page) | Highlights (the feed).
    Set `home_tab` to 'home' or 'highlights' before including. #}
-<nav class="home-tabs" aria-label="Home sections">
+{# Swipe left on Home -> Highlights; swipe right on Highlights -> Home (dart-home-swipe.js). #}
+<nav class="home-tabs" aria-label="Home sections"
+     {% if home_tab == 'home' %}data-swipe-next="{{ url_for('feed') }}"{% else %}data-swipe-prev="{{ url_for('index') }}"{% endif %}>
   <a href="{{ url_for('index') }}" class="home-tab {{ 'active' if home_tab == 'home' }}" {% if home_tab == 'home' %}aria-current="page"{% endif %}>
     <span>Home</span>
   </a>
@@ -8,6 +10,7 @@
     <span><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> Highlights</span>
   </a>
 </nav>
+<script src="{{ url_for('static', filename='js/dart-home-swipe.js') }}" defer></script>
 <style>
   .home-tabs {
     display: flex; margin: -8px 0 18px; border-bottom: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
