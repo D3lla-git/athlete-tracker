@@ -1048,7 +1048,9 @@ def pin_premium_record(record_id):
         )
         return redirect(url_for('profile'))
 
-    next_order = pinned_count + 1
+    # Lowest free position (1..3), so an old gap can't clash.
+    used = {o for (o,) in db.session.query(PinnedSportRecord.display_order).filter_by(user_id=current_user.id)}
+    next_order = next(i for i in range(1, pinned_count + 2) if i not in used)
 
     pinned = PinnedSportRecord(
         user_id=current_user.id,
@@ -1115,15 +1117,7 @@ def unpin_premium_record(record_id):
     db.session.commit()
 
     # Re-number remaining pins.
-    remaining = PinnedSportRecord.query.filter_by(
-        user_id=current_user.id
-    ).order_by(
-        PinnedSportRecord.display_order.asc()
-    ).all()
-
-    for index, item in enumerate(remaining, start=1):
-        item.display_order = index
-
+    renumber_pins(current_user.id)
     db.session.commit()
 
     flash(
@@ -1160,7 +1154,10 @@ def pin_record(record_id):
               + ('' if limit > FREE_SHOWCASE_RECORDS else ', or go Premium to pin 3 and show all your records') + '.', 'warning')
         return redirect(back)
 
-    db.session.add(PinnedSportRecord(user_id=current_user.id, sport_record_id=record.id, display_order=len(pins) + 1))
+    # Lowest free position (old gaps from a failed unpin can't cause a clash).
+    used = {p.display_order for p in pins}
+    position = next(i for i in range(1, len(pins) + 2) if i not in used)
+    db.session.add(PinnedSportRecord(user_id=current_user.id, sport_record_id=record.id, display_order=position))
     create_audit_log(action='record_pinned', actor_user_id=current_user.id, target_type='SportRecord', target_id=str(record.id))
     db.session.commit()
     flash('Pinned: searchers see this record first.', 'success')
@@ -1178,16 +1175,25 @@ def unpin_record(record_id):
         return redirect(back)
     db.session.delete(pin)
     db.session.flush()
-    remaining = PinnedSportRecord.query.filter_by(user_id=current_user.id).order_by(PinnedSportRecord.display_order).all()
-    # Renumber without clashing with the unique (user, order) constraint.
-    for offset, item in enumerate(remaining, start=1):
-        item.display_order = 100 + offset
-    db.session.flush()
-    for offset, item in enumerate(remaining, start=1):
-        item.display_order = offset
+    renumber_pins(current_user.id)
     db.session.commit()
     flash('Unpinned.', 'info')
     return redirect(back)
+
+
+def renumber_pins(user_id):
+    """
+    Close the gap left by an unpinned record (1, 3 -> 1, 2). Pins move DOWN one
+    at a time, lowest first, so every value stays inside the database's
+    allowed range (chk_pinned_record_display_order) and never clashes with
+    another pin (uq_pinned_record_user_order). Caller commits.
+    """
+    remaining = (PinnedSportRecord.query.filter_by(user_id=user_id)
+                 .order_by(PinnedSportRecord.display_order.asc(), PinnedSportRecord.id.asc()).all())
+    for position, item in enumerate(remaining, start=1):
+        if item.display_order != position:
+            item.display_order = position      # always lower: that slot is free
+            db.session.flush()
 
 
 def pinned_record_ids(user_id):
@@ -7260,13 +7266,29 @@ def needs_terms_acceptance(user):
 
 def terms_update_pending(user):
     """Accepted an earlier version: show the non-blocking "Terms updated" notice."""
-    return (
-        getattr(user, 'is_authenticated', False)
-        and user.role not in TERMS_EXEMPT_ROLES
-        and bool(user.terms_version or user.terms_accepted_at)
-        and user.terms_version != TERMS_VERSION
-        and user.role != 'Organization' or False
-    ) if getattr(user, 'is_authenticated', False) else False
+    if not getattr(user, 'is_authenticated', False) or user.role in TERMS_EXEMPT_ROLES:
+        return False
+    accepted_before = bool(user.terms_version or user.terms_accepted_at)
+    return accepted_before and user.terms_version != TERMS_VERSION
+
+
+def record_terms_acceptance(user, documents, personal_choice=None):
+    """Store an acceptance of the current version (permanent history). Caller commits."""
+    now = datetime.utcnow()
+    acceptance = TermsAcceptance.query.filter_by(user_id=user.id, terms_version=TERMS_VERSION).first()
+    if acceptance is None:
+        acceptance = TermsAcceptance(user_id=user.id, terms_version=TERMS_VERSION)
+        db.session.add(acceptance)
+    acceptance.role = user.role or 'Athlete'
+    acceptance.full_name = user.full_name
+    acceptance.documents = ','.join(documents)
+    acceptance.accepted_at = now
+    acceptance.ip_address = get_client_ip()[:64]
+    acceptance.user_agent = (request.headers.get('User-Agent') or '')[:300]
+    acceptance.personal_visibility = personal_choice
+    user.terms_version = TERMS_VERSION
+    user.terms_accepted_at = now
+    return acceptance
 
 
 def terms_documents_for(user):
@@ -7508,25 +7530,7 @@ def accept_terms():
         elif request.form.get('agree') != 'yes':
             error = 'Please tick the box to confirm you have read and agree to the terms.'
         else:
-            now = datetime.utcnow()
-            acceptance = TermsAcceptance.query.filter_by(
-                user_id=current_user.id, terms_version=TERMS_VERSION
-            ).first()
-
-            if acceptance is None:
-                acceptance = TermsAcceptance(user_id=current_user.id, terms_version=TERMS_VERSION)
-                db.session.add(acceptance)
-
-            acceptance.role = current_user.role or 'Athlete'
-            acceptance.full_name = current_user.full_name
-            acceptance.documents = ','.join(documents)
-            acceptance.accepted_at = now
-            acceptance.ip_address = get_client_ip()[:64]
-            acceptance.user_agent = (request.headers.get('User-Agent') or '')[:300]
-            acceptance.personal_visibility = personal_choice if asks_personal else None
-
-            current_user.terms_version = TERMS_VERSION
-            current_user.terms_accepted_at = now
+            record_terms_acceptance(current_user, documents, personal_choice if asks_personal else None)
             if asks_personal:
                 current_user.personal_visibility = personal_choice
 
@@ -7699,7 +7703,8 @@ def profile_card_info(user, viewer=None):
                 ('Position', main_position or '—'),
                 ('Shirt', f'#{user.shirt_number}' if user.shirt_number else '—'),
             ],
-            'extra': [('Team', user.school)] if user.school else [],
+            'extra': [],
+            'teams': athlete_teams(user, approved),
             'career': career_summary(public_records_for(user, current_user)),
         })
     elif user.role == 'Coach':
@@ -7724,7 +7729,54 @@ def profile_card_info(user, viewer=None):
 
     info['share_path'] = profile_share_path(user)
     info['contacts'] = profile_contacts(user)
+    teams = info.get('teams') or []
+    if len(teams) == 1:
+        info['extra'] = [('Team', teams[0][0])] + info['extra']
     return info
+
+
+# What each competition says about the team an athlete played for.
+TEAM_KIND_BY_COMPETITION = {
+    'High School': 'School', 'University League': 'University', 'Club League': 'Club',
+    'Community/Area League': 'Community team', 'Grassroots League': 'Grassroots team', 'County Meet': 'County team',
+    'AFCON': 'National team', 'WAFU': 'National team', 'World Cup': 'National team',
+}
+TEAM_KIND_BY_CATEGORY = {
+    'High School Athlete': 'School', 'University Athlete': 'University', 'Club League Athlete': 'Club',
+    'Community/Area League Athlete': 'Community team', 'County Meet Athlete': 'County team',
+}
+
+
+def athlete_teams(user, approved=None, limit=3):
+    """
+    [(team name, kind)] the athlete plays for, e.g.
+    [('St. Patrick High School', 'School'), ('Lions FC', 'Club')]. Taken from
+    APPROVED records (verified by coaches), registered team first, then the
+    team with the most games. An All Athlete playing for a school and a
+    club / community team shows both.
+    """
+    if approved is None:
+        approved = SportRecord.query.filter_by(user_id=user.id, status='approved').all()
+    by_key = {}
+    for r in approved:
+        name = ' '.join((r.team or '').split())
+        if not name:
+            continue
+        entry = by_key.setdefault(name.casefold(), {'name': name, 'games': 0, 'kinds': {}})
+        entry['games'] += 1
+        kind = TEAM_KIND_BY_COMPETITION.get(r.competition_category)
+        if kind:
+            entry['kinds'][kind] = entry['kinds'].get(kind, 0) + 1
+    home_key = ' '.join((user.school or '').split()).casefold()
+    if home_key and home_key not in by_key:
+        by_key[home_key] = {'name': ' '.join(user.school.split()), 'games': 0,
+                            'kinds': {TEAM_KIND_BY_CATEGORY.get(user.athlete_category, 'Team'): 1}}
+    ordered = sorted(by_key.items(), key=lambda kv: (kv[0] != home_key, -kv[1]['games'], kv[1]['name'].casefold()))
+    teams = []
+    for _, entry in ordered[:limit]:
+        kind = max(entry['kinds'], key=entry['kinds'].get) if entry['kinds'] else 'Team'
+        teams.append((entry['name'], kind))
+    return teams
 
 
 def format_phone(phone):
@@ -7736,14 +7788,12 @@ def format_phone(phone):
 
 def profile_contacts(user):
     """
-    Phone contacts shown on a profile card, to signed-in members only (never
-    on the public share image / PDF). A coach shows their own number; an
+    Phone contacts shown on a profile card, its shareable image and the
+    profile PDF. A coach shows their own number; an
     athlete shows the number of each coach of their team. The numbers come
     from the coaches' accounts, so athletes can't edit them (coaches can't
     either: only the D.A.R.T Admin changes a coach's number).
     """
-    if not (has_request_context() and current_user.is_authenticated):
-        return []
     if user.role == 'Coach':
         if user.phone and not user.license_revoked:
             return [{'label': 'Contact', 'name': '', 'phone': format_phone(user.phone), 'tel': user.phone}]
@@ -7788,6 +7838,8 @@ def profile_card_png(user):
         nationality=info['nationality'],
         country_code=info['code'],
         extra=info['extra'],
+        teams=info.get('teams') or [],
+        contacts=[(f"{c['label']}: " + (f"{c['name']} · " if c['name'] else '') + c['phone']) for c in info.get('contacts') or []],
         verified=info['verified'],
         photo=_fetch_profile_photo(user),
     ))
@@ -12315,6 +12367,56 @@ def federation_notice(coach_id):
     federations = sorted({integrity.FEDERATION.get(r.sport, r.sport) for r in records}) or ['Liberia Football Association (LFA)']
     return render_template('federation_notice.html', coach=coach, records=records, events=events, federations=federations,
                            today=utc_today())
+
+
+# ==========================================================
+# TERMS UPDATED (non-blocking) + NOTIFICATIONS (the bell)
+# ==========================================================
+@app.route('/terms/acknowledge', methods=['POST'])
+@login_required
+def acknowledge_terms_update():
+    """'Got it' on the "Terms updated" notice: records acceptance of the new version."""
+    if terms_update_pending(current_user):
+        record_terms_acceptance(current_user, terms_documents_for(current_user),
+                                current_user.personal_visibility if current_user.role in ('Athlete', 'Coach', 'Scout') else None)
+        create_audit_log(action='terms_update_acknowledged', actor_user_id=current_user.id, target_type='User',
+                         target_id=str(current_user.id), details={'terms_version': TERMS_VERSION})
+        db.session.commit()
+    if request.headers.get('X-Requested-With') == 'fetch':
+        return _no_store_json({'ok': True})
+    return redirect(safe_next_url(request.form.get('next')) or url_for(dashboard_endpoint_for(current_user)))
+
+
+@app.route('/notifications')
+@login_required
+def notifications_page():
+    items = notif.latest(current_user)
+    unread_ids = {n.id for n in items if n.read_at is None}
+    page = render_template('notifications.html', items=items, unread_ids=unread_ids)
+    if unread_ids:
+        notif.mark_all_read(current_user)       # opening the list reads them
+        db.session.commit()
+    response = make_response(page)
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@app.route('/notifications/count')
+@login_required
+def notifications_count():
+    return _no_store_json({'unread': notif.unread_count(current_user)})
+
+
+def _bell_count():
+    if not current_user.is_authenticated or current_user.role == 'System':
+        return 0
+    if 'bell_count' not in g:
+        g.bell_count = notif.unread_count(current_user)
+    return g.bell_count
+
+
+app.jinja_env.globals.update(bell_count=_bell_count, terms_update_pending=lambda: terms_update_pending(current_user),
+                             terms_version_label=TERMS_VERSION)
 
 
 if __name__ == '__main__':

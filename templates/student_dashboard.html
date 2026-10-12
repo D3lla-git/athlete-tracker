@@ -100,7 +100,8 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="next" value="{{ url_for('student_dashboard') }}#my-records">
       <button type="submit" class="btn btn-sm pin-btn {{ 'is-pinned' if pinned }}"
-              {% if not pinned and my_pins | length >= my_pin_limit %}disabled title="You can pin {{ my_pin_limit }} records"{% endif %}
+              {% if not pinned and my_pins | length >= my_pin_limit %}disabled title="You can pin {{ my_pin_limit }} records. Click Pinned on one to unpin it and free a slot."{% endif %}
+              {% if pinned %}title="Pinned. Click to unpin"{% endif %}
               aria-pressed="{{ 'true' if pinned else 'false' }}">
         <i class="fa-solid fa-thumbtack" aria-hidden="true"></i> {{ 'Pinned' if pinned else 'Pin' }}
       </button>

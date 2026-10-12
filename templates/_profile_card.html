@@ -55,7 +55,12 @@
           {% for label, value in info.extra %}
             <div class="pc-stat"><span>{{ label }}</span><strong>{{ value }}</strong></div>
           {% endfor %}
-          {# Phone numbers: members only; read-only (taken from the coach's account). #}
+          {# All Athlete playing for a school AND a club / community team: both, from approved records. #}
+          {% if info.teams and info.teams | length > 1 %}
+            <div class="pc-stat pc-teams"><span><i class="fa-solid fa-people-group" aria-hidden="true"></i> Plays for</span>
+              <strong>{% for team, kind in info.teams %}<span class="pc-team">{{ team }} <em>{{ kind }}</em></span>{% endfor %}</strong></div>
+          {% endif %}
+          {# Phone numbers: read-only (taken from the coach's account), also on the shareable card. #}
           {% for ct in info.contacts or [] %}
             <div class="pc-stat pc-contact"><span><i class="fa-solid fa-phone" aria-hidden="true"></i> {{ ct.label }}</span>
               <strong>{% if ct.name %}<span class="pc-contact-name">{{ ct.name }}</span>{% endif %}<a href="tel:{{ ct.tel }}" translate="no">{{ ct.phone }}</a></strong></div>
@@ -115,7 +120,9 @@
 
 <style>
   .pc-hero { margin-bottom: 22px; }
-  .pc-card .pc-contact strong { display: flex; flex-direction: column; }
+  .pc-card .pc-contact strong, .pc-card .pc-teams strong { display: flex; flex-direction: column; }
+  .pc-card .pc-teams .pc-team { all: unset; display: block; color: inherit; font: inherit; }
+  .pc-card .pc-team em { font-style: normal; font-size: 0.75em; font-weight: 700; color: #4cd38a; margin-left: 4px; }
   .pc-card .pc-contact .pc-contact-name { all: unset; display: block; color: inherit; font: inherit; }
   .pc-card .pc-contact a { color: #4cd38a !important; text-decoration: none; white-space: nowrap; }
   .pc-card .pc-contact a:hover { text-decoration: underline; }

@@ -33,6 +33,8 @@ class CardData:
     nationality: str = ''
     country_code: str = ''            # ISO alpha-2, e.g. "LR"
     extra: list = field(default_factory=list)   # [(label, value)] next to nationality
+    teams: list = field(default_factory=list)   # [(team, kind)]: 2+ -> "PLAYS FOR" block
+    contacts: list = field(default_factory=list)  # ["Coach contact: Name · +231 ..."] footer line
     verified: bool = False
     photo: bytes | None = None
 
@@ -191,10 +193,24 @@ def render_card(data: CardData) -> bytes:
         nat, ns = _fit(draw, data.nationality, 360, 36, 22)
         _text(draw, (x, 502), nat, ns, WHITE)
 
-    for (label, value), x in zip(data.extra[:2], [520, 790]):
-        _text(draw, (x, 470), label.upper(), 20, LABEL, spacing=3)
-        value, vs = _fit(draw, str(value), 250, 36, 22)
-        _text(draw, (x, 502), value, vs, WHITE)
+    if len(data.teams) > 1:
+        # e.g. an All Athlete: school + club / community team, one per line.
+        _text(draw, (520, 470), 'PLAYS FOR', 20, LABEL, spacing=3)
+        for i, (team, kind) in enumerate(data.teams[:2]):
+            line, ls = _fit(draw, f'{team} ({kind})', 350, 28, 18)
+            _text(draw, (520, 500 + i * 34), line, ls, WHITE)
+    else:
+        for (label, value), x in zip(data.extra[:2], [520, 790]):
+            _text(draw, (x, 470), label.upper(), 20, LABEL, spacing=3)
+            value, vs = _fit(draw, str(value), 250, 36, 22)
+            _text(draw, (x, 502), value, vs, WHITE)
+
+    # Coach contact (footer line)
+    if data.contacts:
+        label, _, rest = data.contacts[0].partition(': ')
+        end = _text(draw, (64, 578), label.upper() + '  ', 20, GREEN_LIGHT, spacing=2)
+        value, vs = _fit(draw, rest, 820 - (end - 64), 26, 18)
+        _text(draw, (end, 575), value, vs, WHITE)
 
     # D.A.R.T. mark (bottom right)
     brand_font = _font(50)

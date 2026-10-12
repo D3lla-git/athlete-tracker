@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Notifications | D.A.R.T{% endblock %}
+
+{% block content %}
+<style>
+  .nt-wrap { max-width: 720px; margin: 0 auto; }
+  .nt-hero {
+    padding: 22px; border-radius: 22px; color: #fff; margin-bottom: 16px;
+    background: var(--dart-primary-gradient); background-color: #0d2413; border: 1px solid rgba(57, 185, 114, 0.35);
+  }
+  .nt-hero h1 { font-size: 1.5rem; font-weight: 800; margin: 0 0 4px; }
+  .nt-hero p { margin: 0; color: rgba(255, 255, 255, 0.8); }
+  .nt-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .nt-item {
+    display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: 16px;
+    background: var(--surface-bg, #fff); color: var(--surface-text, #111); border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    text-decoration: none;
+  }
+  a.nt-item:hover { border-color: #198754; color: var(--surface-text, #111); }
+  .nt-item.is-new { border-left: 4px solid #198754; background: rgba(25, 135, 84, 0.07); }
+  .nt-icon { flex: 0 0 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: #198754; }
+  .nt-icon.nt-record { background: #0b5ed7; }
+  .nt-body { flex: 1; min-width: 0; }
+  .nt-msg { font-weight: 600; overflow-wrap: anywhere; color: var(--surface-text, #111); }
+  [data-theme="dark"] .nt-msg { color: #f0efec; }
+  .nt-when { font-size: 0.8rem; color: var(--muted-text, #6c757d); }
+  .nt-new { font-size: 0.7rem; font-weight: 800; color: #fff; background: #198754; border-radius: 999px; padding: 1px 8px; margin-left: 6px; }
+  .nt-empty { text-align: center; padding: 34px 16px; color: var(--muted-text, #6c757d); }
+  .nt-empty i { font-size: 2rem; display: block; margin-bottom: 8px; color: #198754; }
+</style>
+<div class="nt-wrap">
+  <section class="nt-hero" aria-label="Notifications">
+    <h1><i class="fa-solid fa-bell" aria-hidden="true"></i> Notifications</h1>
+    <p>Approvals of your {{ 'profile and records' if current_user.role == 'Athlete' else 'account' }}.</p>
+  </section>
+
+  {% if items %}
+    <ul class="nt-list">
+      {% for n in items %}
+        {% set new = n.id in unread_ids %}
+        <li>
+          <a class="nt-item{{ ' is-new' if new }}" href="{{ n.link or '#' }}">
+            <span class="nt-icon{{ ' nt-record' if n.kind == 'record_approved' }}" aria-hidden="true">
+              <i class="fa-solid {{ 'fa-file-circle-check' if n.kind == 'record_approved' else 'fa-circle-check' }}"></i>
+            </span>
+            <span class="nt-body">
+              <span class="nt-msg">{{ n.message }}</span>{% if new %}<span class="nt-new">New</span>{% endif %}
+              <span class="nt-when d-block">{{ n.created_at.strftime('%d %b %Y, %H:%M') }} UTC</span>
+            </span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="nt-empty">
+      <i class="fa-regular fa-bell" aria-hidden="true"></i>
+      No notifications yet. You'll be told here when your {{ 'profile or records are' if current_user.role == 'Athlete' else 'account is' }} approved.
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -120,6 +120,9 @@
   html[data-theme="dark"] .dart-share-btn:hover { color: #071208; background: #4cd38a; }
 
   .dart-share-modal { border-radius: 22px; }
+  /* Close (X): black in light mode, white in dark mode. */
+  .dart-share-modal .btn-close { opacity: 1; filter: none; }
+  html[data-theme="dark"] .dart-share-modal .btn-close { filter: invert(1) grayscale(1) brightness(2); }
   .dart-share-modal .modal-title i { color: #198754; }
   .dart-share-preview { margin-top: 4px; font-size: 0.85rem; }
   .dart-share-preview strong { display: block; }

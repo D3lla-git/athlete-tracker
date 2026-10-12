@@ -122,6 +122,16 @@
     <span class="pwa-install-label d-none d-lg-inline">Install App</span>
 </button>
 
+<!-- Notifications bell: always on screen when signed in (outside the collapsing menu) -->
+{% if current_user.is_authenticated and current_user.role != 'System' %}
+  {% set _bell = bell_count() %}
+  <a href="{{ url_for('notifications_page') }}" class="nav-bell me-2{{ ' has-unread' if _bell }}" id="navBell"
+     aria-label="Notifications{{ ', %d unread' % _bell if _bell }}" title="Notifications">
+    <i class="fa-solid fa-bell" aria-hidden="true"></i>
+    {% if _bell %}<span class="nav-bell-count" aria-hidden="true">{{ '9+' if _bell > 9 else _bell }}</span>{% endif %}
+  </a>
+{% endif %}
+
 <!-- Hamburger -->
 <button class="navbar-toggler"
         type="button"
@@ -294,6 +304,19 @@
       {% endfor %}
     {% endwith %}
     {% include '_approval_prompt.html' %}
+    {# Terms changed since the user accepted: a small notice, never a blocking page. #}
+    {% if not is_prefetch() and terms_update_pending() %}
+      <div class="alert alert-info d-flex flex-wrap align-items-center gap-2 terms-update-note" role="status">
+        <i class="fa-solid fa-file-signature" aria-hidden="true"></i>
+        <span class="flex-grow-1">We updated our <a href="{{ url_for('terms_page') }}">Terms of Use</a> and
+          <a href="{{ url_for('privacy_page') }}">Privacy Policy</a> (version {{ terms_version_label }}). By continuing to use D.A.R.T. you agree to them.</span>
+        <form method="POST" action="{{ url_for('acknowledge_terms_update') }}" class="m-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+          <button type="submit" class="btn btn-sm dart-btn">Got it</button>
+        </form>
+      </div>
+    {% endif %}
     <!--dart-flash-end-->
 
     {% block content %}{% endblock %}

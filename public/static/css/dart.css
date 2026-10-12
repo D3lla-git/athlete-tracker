@@ -1325,6 +1325,27 @@ html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item):not(.dart
   }
 }
 
+/* ===== Notifications bell (navbar, outside the collapsing menu) ===== */
+.nav-bell {
+  position: relative; display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
+  color: #fff; font-size: 1.15rem; text-decoration: none; background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14); flex-shrink: 0;
+}
+.nav-bell, .nav-bell:visited, .nav-bell i { color: #fff !important; }
+.nav-bell:hover, .nav-bell:focus-visible { background: rgba(57, 185, 114, 0.25); }
+.nav-bell.has-unread i { animation: dart-bell 1.2s ease 1; transform-origin: 50% 0; }
+.nav-bell-count {
+  position: absolute; top: -4px; right: -4px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 800; line-height: 19px; text-align: center; color: #fff; background: #dc3545;
+  border: 2px solid #0d2413;
+}
+@keyframes dart-bell { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(14deg); } 40% { transform: rotate(-12deg); } 60% { transform: rotate(8deg); } 80% { transform: rotate(-4deg); } }
+@media (prefers-reduced-motion: reduce) { .nav-bell.has-unread i { animation: none; } }
+/* Phones: logo | theme | bell + menu on the right. Desktop: the bell sits at the end of the menu bar. */
+.navbar .nav-bell { margin-left: auto; }
+@media (min-width: 992px) { .navbar-expand-lg .nav-bell { order: 5; margin-left: 10px; } }
+@media (min-width: 1200px) { .navbar-expand-xl .nav-bell { order: 5; margin-left: 10px; } }
+
 /* In-page links (dashboard buttons, Review menu) stop below the sticky
    navbar instead of hiding the section title under it. */
 html { scroll-padding-top: 96px; }
