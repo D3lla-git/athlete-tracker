@@ -104,33 +104,61 @@ def entry_error(contest, athlete, highlight):
     return None
 
 
+VISITOR_VOTES_PER_NETWORK = 5     # per award: visitors on one network (shared Wi-Fi) / cleared cookies
+
+
+def _vote_of(contest, voter):
+    """The vote already cast by this voter (an Actor: member user_id or visitor_key), or None."""
+    if voter is None:
+        return None
+    if voter.user_id is not None:
+        return AwardVote.query.filter_by(contest_id=contest.id, voter_id=voter.user_id).first()
+    if voter.visitor_key:
+        return AwardVote.query.filter_by(contest_id=contest.id, voter_id=None, visitor_key=voter.visitor_key).first()
+    return None
+
+
 def vote_error(contest, entry, voter):
+    """Why this member / visitor can't vote for this entry now (None = OK). `voter` is an Actor (or None)."""
     if phase(contest) != 'voting':
-        return 'Voting is not open for this award.'
+        return 'Voting for this award has not started yet.' if phase(contest) in ('upcoming', 'entries') else 'Voting for this award has closed.'
     if not entry or entry.contest_id != contest.id or entry.status != 'approved':
         return 'This entry is not in the vote.'
-    if not getattr(voter, 'is_authenticated', False) or voter.is_suspended:
-        return 'Please log in to vote.'
-    if entry.athlete_id == voter.id:
+    if voter is None:
+        return 'This account cannot vote.'
+    if voter.user_id is not None and entry.athlete_id == voter.user_id:
         return "You can't vote for your own entry."
+    if _vote_of(contest, voter):
+        return 'You have already voted in this award. Each person votes once.'
+    if voter.user_id is None and voter.ip_hash:
+        same_network = AwardVote.query.filter_by(contest_id=contest.id, voter_id=None, ip_hash=voter.ip_hash).count()
+        if same_network >= VISITOR_VOTES_PER_NETWORK:
+            return 'Too many votes from this network. Log in to vote with your D.A.R.T. account.'
     return None
 
 
 def cast_vote(contest, entry, voter):
-    """One vote per member per contest; voting again moves it. Caller commits."""
-    vote = AwardVote.query.filter_by(contest_id=contest.id, voter_id=voter.id).first()
-    if vote:
-        vote.entry_id = entry.id
-        vote.created_at = datetime.utcnow()
-    else:
-        db.session.add(AwardVote(contest_id=contest.id, entry_id=entry.id, voter_id=voter.id))
+    """Record ONE final vote (member or visitor). Caller commits (and handles a duplicate-vote IntegrityError)."""
+    fields = ({'voter_id': voter.user_id} if voter.user_id is not None
+              else {'visitor_key': voter.visitor_key, 'ip_hash': voter.ip_hash})
+    db.session.add(AwardVote(contest_id=contest.id, entry_id=entry.id, **fields))
 
 
 def my_vote(contest, voter):
-    if not getattr(voter, 'is_authenticated', False):
-        return None
-    vote = AwardVote.query.filter_by(contest_id=contest.id, voter_id=voter.id).first()
+    vote = _vote_of(contest, voter)
     return vote.entry_id if vote else None
+
+
+def vote_breakdown(contest_id):
+    """{entry_id: {'members': n, 'visitors': n, 'total': n}} for the D.A.R.T Admin."""
+    rows = (db.session.query(AwardVote.entry_id, AwardVote.voter_id.is_(None), func.count(AwardVote.id))
+            .filter(AwardVote.contest_id == contest_id).group_by(AwardVote.entry_id, AwardVote.voter_id.is_(None)).all())
+    out = {}
+    for entry_id, is_visitor, n in rows:
+        d = out.setdefault(entry_id, {'members': 0, 'visitors': 0, 'total': 0})
+        d['visitors' if is_visitor else 'members'] += n
+        d['total'] += n
+    return out
 
 
 def eligible_highlights(athlete, contest):

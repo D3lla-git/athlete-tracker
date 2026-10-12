@@ -1097,16 +1097,25 @@ class AwardEntry(db.Model):
 
 
 class AwardVote(db.Model):
-    """One vote per signed-in member per contest (changeable while voting is open)."""
+    """
+    ONE final vote per contest, by a signed-in member (voter_id) or by a
+    visitor (visitor_key: the anonymous 'dart_vid' cookie; ip_hash: one-way
+    hash of their IP, to limit cookie-clearing abuse).
+    """
     __tablename__ = 'award_vote'
 
     id = db.Column(db.BigInteger, primary_key=True)
     contest_id = db.Column(db.BigInteger, db.ForeignKey('award_contest.id', ondelete='CASCADE'), nullable=False, index=True)
     entry_id = db.Column(db.BigInteger, db.ForeignKey('award_entry.id', ondelete='CASCADE'), nullable=False, index=True)
-    voter_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    voter_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=True)
+    visitor_key = db.Column(db.String(32), nullable=True)
+    ip_hash = db.Column(db.String(32), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
-    __table_args__ = (db.UniqueConstraint('contest_id', 'voter_id', name='uq_award_vote_contest_voter'),)
+    __table_args__ = (
+        db.UniqueConstraint('contest_id', 'voter_id', name='uq_award_vote_contest_voter'),
+        db.UniqueConstraint('contest_id', 'visitor_key', name='uq_award_vote_contest_visitor'),
+    )
 
 
 class Notification(db.Model):

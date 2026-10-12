@@ -75,8 +75,63 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm btn-outline-warning" type="submit"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> Close &amp; announce</button>
           </form>
+        {% elif p == 'entries' %}
+          <form method="POST" action="{{ url_for('admin_award_open_voting', contest_id=c.id) }}"
+                onsubmit="return confirm('Close entries now and open the vote?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-primary" type="submit"><i class="fa-solid fa-check-to-slot" aria-hidden="true"></i> Open voting now</button>
+          </form>
         {% endif %}
       </div>
+
+      {% if not c.decided_at %}
+        {# Only the D.A.R.T Admin edits a posted award (until its winner is decided). #}
+        <details class="aw-edit mb-3">
+          <summary class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit award</summary>
+          <form method="POST" action="{{ url_for('admin_award_edit', contest_id=c.id) }}" class="row g-2 align-items-end mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-6 col-md-3">
+              <label class="form-label small" for="ea{{ c.id }}">Award</label>
+              <select class="form-select" id="ea{{ c.id }}" name="award">
+                {% for key, (label, sport, icon) in awards.items() %}<option value="{{ key }}" {% if key == c.award %}selected{% endif %}>{{ label }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="form-label small" for="ep{{ c.id }}">Of the</label>
+              <select class="form-select" id="ep{{ c.id }}" name="period">
+                {% for key, label in periods.items() %}<option value="{{ key }}" {% if key == c.period %}selected{% endif %}>{{ label }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-12 col-md-2">
+              <label class="form-label small" for="es{{ c.id }}">Sport</label>
+              <select class="form-select" id="es{{ c.id }}" name="sport">
+                <option value="">Any sport</option>
+                {% for sp in sports %}<option value="{{ sp }}" {% if sp == c.sport %}selected{% endif %}>{{ sp }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-6 col-md-auto">
+              <label class="form-label small" for="eo{{ c.id }}">Entries open (UTC)</label>
+              <input class="form-control" type="datetime-local" id="eo{{ c.id }}" name="opens_at" required value="{{ c.opens_at.strftime('%Y-%m-%dT%H:%M') }}">
+            </div>
+            <div class="col-6 col-md-auto">
+              <label class="form-label small" for="ed{{ c.id }}">Entries close</label>
+              <input class="form-control" type="datetime-local" id="ed{{ c.id }}" name="entry_deadline" required value="{{ c.entry_deadline.strftime('%Y-%m-%dT%H:%M') }}">
+            </div>
+            <div class="col-6 col-md-auto">
+              <label class="form-label small" for="ev{{ c.id }}">Voting closes</label>
+              <input class="form-control" type="datetime-local" id="ev{{ c.id }}" name="voting_ends_at" required value="{{ c.voting_ends_at.strftime('%Y-%m-%dT%H:%M') }}">
+            </div>
+            <div class="col-6 col-md-auto d-flex gap-2">
+              <button type="submit" class="btn dart-btn"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save</button>
+            </div>
+          </form>
+          <form method="POST" action="{{ url_for('admin_award_delete', contest_id=c.id) }}" class="mt-2"
+                onsubmit="return confirm('Delete {{ c.title }}? Its entries and votes are removed too.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash" aria-hidden="true"></i> Delete award</button>
+          </form>
+        </details>
+      {% endif %}
 
       {% if pending %}
         <h3 class="h6 fw-bold">Entries to review <span class="badge text-bg-warning">{{ pending | length }}</span></h3>
@@ -106,16 +161,24 @@
 
       {% set rows = ranked(c) %}
       {% if rows %}
-        <h3 class="h6 fw-bold">{{ 'Result' if p == 'closed' else 'Votes so far' }}</h3>
+        {% set bd = breakdown(c.id) %}
+        {% set ns = namespace(m=0, v=0) %}
+        {% for k, d in bd.items() %}{% set ns.m = ns.m + d.members %}{% set ns.v = ns.v + d.visitors %}{% endfor %}
+        <h3 class="h6 fw-bold">{{ 'Result' if p == 'closed' else 'Votes so far' }}
+          <span class="aw-vote-totals">{{ ns.m + ns.v }} votes · {{ ns.m }} members · {{ ns.v }} visitors</span></h3>
         <div class="table-responsive">
-          <table class="table table-sm align-middle mb-0">
-            <thead><tr><th scope="col">#</th><th scope="col">Athlete</th><th scope="col">Note</th><th scope="col" class="text-end">Votes</th></tr></thead>
+          <table class="table table-sm align-middle mb-0 aw-vote-table">
+            <thead><tr><th scope="col">#</th><th scope="col">Athlete</th><th scope="col">Note</th>
+              <th scope="col" class="text-end">Members</th><th scope="col" class="text-end">Visitors</th><th scope="col" class="text-end">Total</th></tr></thead>
             <tbody>
               {% for e, votes in rows %}
+                {% set d = bd.get(e.id, {'members': 0, 'visitors': 0, 'total': 0}) %}
                 <tr>
                   <td>{{ loop.index }}</td>
                   <td>{{ e.athlete.full_name }}{% if c.winner_entry_id == e.id %} <span class="aw-winner-badge"><i class="fa-solid fa-trophy"></i> Winner</span>{% endif %}</td>
                   <td class="small text-muted">{{ e.note or '' }}</td>
+                  <td class="text-end">{{ d.members }}</td>
+                  <td class="text-end">{{ d.visitors }}</td>
                   <td class="text-end fw-bold">{{ votes }}</td>
                 </tr>
               {% endfor %}
@@ -130,6 +193,11 @@
     <p class="aw-empty">No awards yet. Create the first one above.</p>
   {% endfor %}
 </div>
+<style>
+  .aw-edit summary { list-style: none; }
+  .aw-edit summary::-webkit-details-marker { display: none; }
+  .aw-vote-totals { margin-left: 8px; font-size: 0.8rem; font-weight: 700; color: var(--muted-text, #6c757d); }
+</style>
 <script>
   // Picking "Goal" suggests Football, "Dunk" Basketball, "Home Run" Kickball.
   (function () {

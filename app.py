@@ -12617,15 +12617,28 @@ def _contests_by_phase():
     return groups
 
 
+def award_voter(create=False):
+    """
+    Who is voting: any signed-in account (by its id) or a visitor (anonymous
+    'dart_vid' cookie + hashed IP). None: suspended account, or a visitor
+    without a cookie when create=False.
+    """
+    if current_user.is_authenticated:
+        return None if current_user.is_suspended else feed_mod.Actor(user_id=current_user.id)
+    return feed_actor(create=create)
+
+
 @app.route('/awards')
 def awards_page():
     groups = _contests_by_phase()
     mine = {}
     if current_user.is_authenticated and current_user.role == 'Athlete' and current_user.is_verified:
         mine = {c.id: awards_mod.eligible_highlights(current_user, c) for c in groups['entries']}
+    voter = award_voter()
     return render_template('awards.html', groups=groups, awards=awards_mod.AWARDS, phase=awards_mod.phase,
-                           ranked=awards_mod.ranked, my_vote=lambda c: awards_mod.my_vote(c, current_user),
-                           my_highlights=mine, highlight_url=highlight_media_url)
+                           ranked=awards_mod.ranked, my_vote=lambda c: awards_mod.my_vote(c, voter),
+                           my_highlights=mine, highlight_url=highlight_media_url,
+                           can_vote=current_user.is_anonymous or not current_user.is_suspended)
 
 
 @app.route('/awards/<int:contest_id>/enter', methods=['POST'])
@@ -12654,21 +12667,22 @@ def award_enter(contest_id):
 
 
 @app.route('/awards/entries/<int:entry_id>/vote', methods=['POST'])
-@login_required
 def award_vote(entry_id):
+    """Everyone can vote (members and visitors), ONCE per award; the vote is final."""
     entry = AwardEntry.query.get_or_404(entry_id)
     contest = entry.contest
-    error = awards_mod.vote_error(contest, entry, current_user)
+    voter = award_voter(create=True)
+    error = awards_mod.vote_error(contest, entry, voter)
     if error:
         flash(error, 'warning')
     else:
-        awards_mod.cast_vote(contest, entry, current_user)
+        awards_mod.cast_vote(contest, entry, voter)
         try:
             db.session.commit()
-            flash(f'Vote counted for {entry.athlete.full_name}. You can move your vote until voting closes.', 'success')
+            flash(f'Thank you! Your vote for {entry.athlete.full_name} is counted. Each person votes once per award.', 'success')
         except IntegrityError:
             db.session.rollback()
-            flash('Your vote was already counted.', 'info')
+            flash('You have already voted in this award. Each person votes once.', 'info')
     return redirect(url_for('awards_page') + f'#contest{contest.id}')
 
 
@@ -12677,23 +12691,11 @@ def award_vote(entry_id):
 def admin_awards():
     require_super_admin()
     if request.method == 'POST':
-        award, period = request.form.get('award'), request.form.get('period')
-        sport = request.form.get('sport') or None
-        try:
-            opens = datetime.strptime(request.form.get('opens_at', ''), '%Y-%m-%dT%H:%M')
-            deadline = datetime.strptime(request.form.get('entry_deadline', ''), '%Y-%m-%dT%H:%M')
-            ends = datetime.strptime(request.form.get('voting_ends_at', ''), '%Y-%m-%dT%H:%M')
-        except ValueError:
-            opens = deadline = ends = None
-        if award not in awards_mod.AWARDS or period not in awards_mod.PERIODS or (sport and sport not in awards_mod.SPORTS):
-            flash('Choose the award, period and sport.', 'danger')
-        elif not (opens and deadline and ends) or not (opens < deadline < ends):
-            flash('Dates must be in order: entries open, entries close, voting closes.', 'danger')
-        elif (ends - opens).days > 62:
-            flash('A contest can run for at most two months.', 'danger')
+        values, error = _award_form_values()
+        if error:
+            flash(error, 'danger')
         else:
-            contest = AwardContest(award=award, period=period, sport=sport, title=awards_mod.title_for(award, period, sport),
-                                   opens_at=opens, entry_deadline=deadline, voting_ends_at=ends, created_by=current_user.id)
+            contest = AwardContest(created_by=current_user.id, **values)
             db.session.add(contest)
             db.session.flush()
             sent = notif.notify_new_award(contest)
@@ -12706,7 +12708,84 @@ def admin_awards():
     contests = groups['entries'] + groups['voting'] + groups['upcoming'] + groups['closed']
     return render_template('admin_awards.html', contests=contests, awards=awards_mod.AWARDS, periods=awards_mod.PERIODS,
                            sports=awards_mod.SPORTS, phase=awards_mod.phase, ranked=awards_mod.ranked,
-                           highlight_url=highlight_media_url, now=datetime.utcnow())
+                           breakdown=awards_mod.vote_breakdown, highlight_url=highlight_media_url, now=datetime.utcnow())
+
+
+def _award_form_values():
+    """(values dict, error) from the award form (create / edit)."""
+    award, period = request.form.get('award'), request.form.get('period')
+    sport = request.form.get('sport') or None
+    try:
+        opens = datetime.strptime(request.form.get('opens_at', ''), '%Y-%m-%dT%H:%M')
+        deadline = datetime.strptime(request.form.get('entry_deadline', ''), '%Y-%m-%dT%H:%M')
+        ends = datetime.strptime(request.form.get('voting_ends_at', ''), '%Y-%m-%dT%H:%M')
+    except ValueError:
+        return None, 'Enter all three dates.'
+    if award not in awards_mod.AWARDS or period not in awards_mod.PERIODS or (sport and sport not in awards_mod.SPORTS):
+        return None, 'Choose the award, period and sport.'
+    if not (opens < deadline < ends):
+        return None, 'Dates must be in order: entries open, entries close, voting closes.'
+    if (ends - opens).days > 62:
+        return None, 'A contest can run for at most two months.'
+    return {'award': award, 'period': period, 'sport': sport, 'title': awards_mod.title_for(award, period, sport),
+            'opens_at': opens, 'entry_deadline': deadline, 'voting_ends_at': ends}, None
+
+
+@app.route('/admin/awards/<int:contest_id>/edit', methods=['POST'])
+@login_required
+def admin_award_edit(contest_id):
+    """Only the D.A.R.T Admin edits a posted award (until its winner is decided)."""
+    require_super_admin()
+    contest = AwardContest.query.get_or_404(contest_id)
+    if contest.decided_at:
+        flash('This award is decided; it can no longer be edited.', 'warning')
+        return redirect(url_for('admin_awards') + f'#contest{contest.id}')
+    values, error = _award_form_values()
+    if error:
+        flash(error, 'danger')
+        return redirect(url_for('admin_awards') + f'#contest{contest.id}')
+    before = {k: str(getattr(contest, k)) for k in values}
+    for k, v in values.items():
+        setattr(contest, k, v)
+    create_audit_log(action='award_contest_edited', actor_user_id=current_user.id, target_type='award_contest',
+                     target_id=str(contest.id), details={'before': before, 'after': {k: str(v) for k, v in values.items()}})
+    db.session.commit()
+    flash(f'{contest.title} updated.', 'success')
+    return redirect(url_for('admin_awards') + f'#contest{contest.id}')
+
+
+@app.route('/admin/awards/<int:contest_id>/open-voting', methods=['POST'])
+@login_required
+def admin_award_open_voting(contest_id):
+    """Close entries now and start the vote."""
+    require_super_admin()
+    contest = AwardContest.query.get_or_404(contest_id)
+    now = datetime.utcnow()
+    if awards_mod.phase(contest, now) != 'entries':
+        flash('Only an award taking entries can move to voting.', 'warning')
+    elif not awards_mod.approved_entries(contest):
+        flash('Approve at least one entry before opening the vote.', 'warning')
+    else:
+        contest.entry_deadline = now
+        create_audit_log(action='award_voting_opened', actor_user_id=current_user.id, target_type='award_contest',
+                         target_id=str(contest.id))
+        db.session.commit()
+        flash(f'Voting is open for {contest.title}.', 'success')
+    return redirect(url_for('admin_awards') + f'#contest{contest.id}')
+
+
+@app.route('/admin/awards/<int:contest_id>/delete', methods=['POST'])
+@login_required
+def admin_award_delete(contest_id):
+    require_super_admin()
+    contest = AwardContest.query.get_or_404(contest_id)
+    title = contest.title
+    create_audit_log(action='award_contest_deleted', actor_user_id=current_user.id, target_type='award_contest',
+                     target_id=str(contest.id), details={'title': title, 'entries': len(contest.entries)})
+    db.session.delete(contest)
+    db.session.commit()
+    flash(f'{title} deleted.', 'info')
+    return redirect(url_for('admin_awards'))
 
 
 @app.route('/admin/awards/entries/<int:entry_id>/<action>', methods=['POST'])

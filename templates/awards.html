@@ -33,16 +33,22 @@
   <section class="aw-hero" aria-label="Awards">
     <i class="fa-solid fa-trophy aw-trophy" aria-hidden="true"></i>
     <h1><i class="fa-solid fa-trophy" aria-hidden="true"></i> D.A.R.T. Awards</h1>
-    <p>Highlight, Goal, Assist… of the Week and of the Month. Athletes (with a team or individual) enter their best approved highlight;
-       D.A.R.T. members vote. One vote per member per award, and you can move it until voting closes.</p>
+    <p>Highlight, Goal, Assist… of the Week and of the Month. Athletes (with a team or individual) enter their best approved highlight,
+       and <strong>everyone can vote</strong>: members and visitors, no account needed.</p>
+    <ol class="aw-how">
+      <li><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> Find an award under <a href="#voteNow">Vote now</a></li>
+      <li><i class="fa-solid fa-hand-pointer" aria-hidden="true"></i> Press <strong>Vote</strong> under your favourite photo / video</li>
+      <li><i class="fa-solid fa-lock" aria-hidden="true"></i> One vote per person per award. It is final</li>
+    </ol>
   </section>
 
   {# ---------- Vote now ---------- #}
-  <h2 class="aw-section"><i class="fa-solid fa-check-to-slot" aria-hidden="true"></i> Vote now</h2>
+  <h2 class="aw-section" id="voteNow"><i class="fa-solid fa-check-to-slot" aria-hidden="true"></i> Vote now</h2>
   {% for c in groups.voting %}
     {% set voted = my_vote(c) %}
     <article class="aw-contest" id="contest{{ c.id }}">
       {{ contest_head(c, 'voting') }}
+      {% if voted %}<p class="aw-voted-note"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Thank you, you have voted in this award.</p>{% endif %}
       {% set rows = ranked(c) %}
       {% if rows %}
         <div class="aw-grid">
@@ -53,24 +59,22 @@
                 <a class="aw-name text-decoration-none" href="{{ url_for('user_profile', user_id=e.athlete_id) }}">{{ e.athlete.full_name }}</a>
                 {% if e.note %}<div class="aw-note">{{ e.note }}</div>{% endif %}
                 <div class="aw-votes">{{ votes }} vote{{ '' if votes == 1 else 's' }}</div>
-                {% if current_user.is_authenticated %}
-                  {% if current_user.id == e.athlete_id %}
-                    <span class="small text-muted">Your entry</span>
-                    <button type="button" class="btn btn-sm btn-outline-warning mt-auto aw-share" data-aw-share
-                            data-url="{{ url_for('awards_page', _external=True) }}#contest{{ c.id }}"
-                            data-text="Vote for me ({{ e.athlete.full_name }}) in {{ c.title }} on D.A.R.T.!">
-                      <i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Share &amp; ask for votes
-                    </button>
-                  {% elif voted == e.id %}
-                    <span class="badge text-bg-primary">Your vote</span>
-                  {% else %}
-                    <form method="POST" action="{{ url_for('award_vote', entry_id=e.id) }}" class="mt-auto">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <button type="submit" class="btn btn-sm dart-btn w-100"><i class="fa-solid fa-check-to-slot" aria-hidden="true"></i> {{ 'Move my vote here' if voted else 'Vote' }}</button>
-                    </form>
-                  {% endif %}
-                {% else %}
-                  <a class="btn btn-sm btn-outline-success mt-auto" href="{{ url_for('login', next=url_for('awards_page')) }}">Log in to vote</a>
+                {% if current_user.is_authenticated and current_user.id == e.athlete_id %}
+                  <span class="small text-muted">Your entry</span>
+                  <button type="button" class="btn btn-sm btn-outline-warning mt-auto aw-share" data-aw-share
+                          data-url="{{ url_for('awards_page', _external=True) }}#contest{{ c.id }}"
+                          data-text="Vote for me ({{ e.athlete.full_name }}) in {{ c.title }} on D.A.R.T.!">
+                    <i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Share &amp; ask for votes
+                  </button>
+                {% elif voted == e.id %}
+                  <span class="badge text-bg-primary mt-auto"><i class="fa-solid fa-check" aria-hidden="true"></i> Your vote</span>
+                {% elif not voted and can_vote %}
+                  {# Everyone can vote: members and visitors (no account needed). One final vote per award. #}
+                  <form method="POST" action="{{ url_for('award_vote', entry_id=e.id) }}" class="mt-auto"
+                        onsubmit="return confirm('Vote for this athlete? You can vote only once in this award.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm dart-btn w-100 aw-vote-btn"><i class="fa-solid fa-check-to-slot" aria-hidden="true"></i> Vote</button>
+                  </form>
                 {% endif %}
               </div>
             </div>
@@ -80,6 +84,28 @@
     </article>
   {% else %}
     <p class="aw-empty">No award is in its voting stage right now.</p>
+  {% endfor %}
+
+  {# ---------- Coming to the vote (entries still open) ---------- #}
+  {% for c in groups.entries %}
+    {% set approved = c.entries | selectattr('status', 'equalto', 'approved') | list %}
+    {% if approved %}
+      <article class="aw-contest aw-preview" id="preview{{ c.id }}">
+        {{ contest_head(c, 'entries') }}
+        <p class="aw-voted-note aw-soon"><i class="fa-regular fa-clock" aria-hidden="true"></i> Voting opens {{ c.entry_deadline.strftime('%d %b, %H:%M') }} UTC. Come back to vote!</p>
+        <div class="aw-grid">
+          {% for e in approved %}
+            <div class="aw-entry">
+              {{ entry_media(e.highlight) }}
+              <div class="aw-entry-body">
+                <a class="aw-name text-decoration-none" href="{{ url_for('user_profile', user_id=e.athlete_id) }}">{{ e.athlete.full_name }}</a>
+                {% if e.note %}<div class="aw-note">{{ e.note }}</div>{% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </article>
+    {% endif %}
   {% endfor %}
 
   {# ---------- Enter ---------- #}
