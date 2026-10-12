@@ -2,6 +2,8 @@
 {% block title %}My Records{% endblock %}
 
 {% block content %}
+{% from '_integrity.html' import record_status_badge, proof_form with context %}
+{% set proof_clips = (highlights or []) | selectattr('status', 'equalto', 'approved') | selectattr('media_type', 'equalto', 'video') | list %}
 <div class="d-flex align-items-center mb-4">
   <!-- Profile Picture (Student ID) -->
   <div class="me-3">
@@ -133,13 +135,8 @@
 
         <!-- Status -->
         <td class="text-center">
-          {% if r.status == 'approved' %}
-            <span class="badge dart-pill">Approved</span>
-          {% elif r.status == 'rejected' %}
-            <span class="badge dart-status-rejected">Rejected{% if r.rejection_reason in record_reject_reasons %} · {{ record_reject_reasons[r.rejection_reason][0] }}{% endif %}</span>
-          {% else %}
-            <span class="badge dart-status-pending">Pending</span>
-          {% endif %}
+          {{ record_status_badge(r) }}
+          {{ proof_form(r, proof_clips) }}
         </td>
 
         <!-- Actions -->
@@ -216,14 +213,9 @@
 
           <!-- Status -->
 <div class="d-flex justify-content-center align-items-center gap-2 mt-3 flex-wrap">
-  {% if r.status == 'approved' %}
-    <span class="badge dart-pill px-3 py-2">Approved</span>
-    {{ pin_button(r, my_pins, my_pin_limit) }}
-  {% elif r.status == 'rejected' %}
-    <span class="badge dart-status-rejected px-3 py-2">Rejected{% if r.rejection_reason in record_reject_reasons %} · {{ record_reject_reasons[r.rejection_reason][0] }}{% endif %}</span>
-  {% else %}
-    <span class="badge dart-status-pending px-3 py-2">Pending</span>
-  {% endif %}
+  {{ record_status_badge(r, 'px-3 py-2') }}
+  {% if r.status == 'approved' %}{{ pin_button(r, my_pins, my_pin_limit) }}{% endif %}
+  {{ proof_form(r, proof_clips) }}
 
  {% if r.status == 'rejected' %}
 

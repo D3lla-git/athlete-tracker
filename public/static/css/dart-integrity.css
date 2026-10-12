@@ -1,0 +1,85 @@
+/* Record integrity: counter-sign queues, Verification Center, match officials.
+   Heroes use the D.A.R.T. primary gradient; cards follow light / dark surfaces. */
+.integrity-hero {
+  position: relative;
+  overflow: hidden;
+  margin: 18px 0 20px;
+  padding: 24px 22px;
+  border-radius: 22px;
+  color: #fff;
+  background: var(--dart-primary-gradient);
+  background-color: #0d2413;
+  border: 1px solid rgba(57, 185, 114, 0.35);
+  box-shadow: 0 14px 34px rgba(4, 20, 8, 0.28);
+}
+.integrity-hero h2 { margin: 0 0 4px; font-weight: 800; font-size: clamp(1.3rem, 3.5vw, 1.8rem); }
+.integrity-hero p { margin: 0; color: rgba(255, 255, 255, 0.82); max-width: 760px; }
+.integrity-hero .integrity-chips span { background: rgba(255, 255, 255, 0.12); color: #fff; border-color: rgba(255, 255, 255, 0.2); }
+.integrity-hero a.btn-light { font-weight: 700; }
+
+.integrity-panel {
+  margin: 18px 0;
+  padding: 18px;
+  border-radius: 18px;
+  background: var(--surface-bg, #fff);
+  color: var(--surface-text, #111);
+  border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.06);
+}
+.integrity-panel h4 { font-weight: 800; font-size: 1.1rem; margin-bottom: 6px; }
+.integrity-panel h4 .badge { background: #0b5ed7; vertical-align: middle; }
+.integrity-panel > p { color: var(--muted-text, #6c757d); font-size: 0.9rem; }
+.integrity-phone { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between;
+  background: var(--dart-primary-gradient); background-color: #0d2413; color: #fff; border-color: rgba(57, 185, 114, 0.35); }
+.integrity-phone p { color: rgba(255, 255, 255, 0.82) !important; margin: 0; max-width: 620px; font-size: 0.9rem; }
+.integrity-phone-form { display: flex; gap: 8px; flex: 1 1 260px; max-width: 380px; }
+
+.integrity-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.integrity-chips span {
+  display: inline-flex; gap: 6px; align-items: center; padding: 6px 12px; border-radius: 999px; font-size: 0.85rem;
+  border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.12)); background: rgba(25, 135, 84, 0.08);
+}
+.integrity-chips em { color: #c2410c; font-style: normal; font-weight: 700; }
+
+.integrity-cs-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+.integrity-cs-card {
+  display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 14px;
+  border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.12)); background: var(--surface-bg, #fff);
+}
+.integrity-cs-card header { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.integrity-sport { margin-left: auto; font-size: 0.75rem; font-weight: 800; color: #198754; text-transform: uppercase; }
+.integrity-cs-match { font-size: 0.85rem; color: var(--muted-text, #6c757d); }
+.integrity-cs-stats { font-size: 1.05rem; font-weight: 800; }
+.integrity-cs-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; margin-top: 4px; }
+.integrity-dispute summary { list-style: none; }
+.integrity-dispute summary::-webkit-details-marker { display: none; }
+.integrity-dispute[open] { flex-basis: 100%; }
+.integrity-dispute form { margin-top: 8px; }
+.integrity-overdue { display: inline-block; font-size: 0.75rem; font-weight: 800; color: #fff; background: #c2410c; border-radius: 999px; padding: 1px 8px; }
+
+.integrity-note {
+  display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; padding: 8px 10px; border-radius: 10px;
+  font-size: 0.82rem; text-align: left; color: #4a2a8a; background: rgba(111, 66, 193, 0.1);
+}
+html[data-theme="dark"] .integrity-note { color: #d6c4ff; background: rgba(111, 66, 193, 0.22); }
+.integrity-note a { font-weight: 700; color: inherit; }
+
+.integrity-table { width: 100%; font-size: 0.88rem; }
+.integrity-table th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-text, #6c757d); }
+.integrity-table td, .integrity-table th { padding: 8px; border-bottom: 1px solid var(--surface-border, rgba(0, 0, 0, 0.08)); vertical-align: top; }
+.integrity-table-wrap { overflow-x: auto; }
+.integrity-hash { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.75rem; word-break: break-all; }
+.integrity-ok { color: #198754; font-weight: 800; }
+.integrity-bad { color: #dc3545; font-weight: 800; }
+.integrity-revoked { display: inline-block; font-size: 0.75rem; font-weight: 800; color: #fff; background: #dc3545; border-radius: 999px; padding: 1px 8px; }
+.integrity-section-title { display: flex; align-items: center; gap: 8px; margin: 26px 0 10px; font-weight: 800; font-size: 1.15rem; }
+.integrity-section-title .badge { background: #0d2413; }
+
+/* Match report lines */
+.mr-lines { display: grid; gap: 8px; }
+.mr-line { display: grid; gap: 6px; grid-template-columns: minmax(130px, 1.6fr) repeat(3, minmax(64px, 1fr)) auto; align-items: center; }
+.mr-line .form-control { min-width: 0; }
+@media (max-width: 575.98px) {
+  .mr-line { grid-template-columns: 1fr 1fr 1fr; }
+  .mr-line .mr-handle { grid-column: 1 / -1; }
+}

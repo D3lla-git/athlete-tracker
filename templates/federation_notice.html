@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Federation Notice | D.A.R.T{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-integrity.css') }}">
+<style>
+  .notice-letter { max-width: 820px; margin: 0 auto; background: #fff; color: #111; padding: 32px; border-radius: 12px; border: 1px solid #ddd; }
+  .notice-letter h1 { font-size: 1.35rem; font-weight: 800; }
+  .notice-letter table { width: 100%; font-size: 0.85rem; border-collapse: collapse; }
+  .notice-letter th, .notice-letter td { border: 1px solid #ccc; padding: 6px; vertical-align: top; }
+  @media print { nav, footer, .no-print { display: none !important; } .notice-letter { border: 0; padding: 0; } }
+</style>
+<div class="container py-3">
+  <div class="no-print d-flex gap-2 mb-3">
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('verification_center') }}#coaches"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Verification Center</a>
+    <button class="btn btn-sm dart-btn" type="button" onclick="window.print()"><i class="fa-solid fa-print" aria-hidden="true"></i> Print / save as PDF</button>
+  </div>
+
+  <article class="notice-letter">
+    <p class="text-end">{{ today.strftime('%d %B %Y') }}</p>
+    <p>To: {% for f in federations %}{{ f }}{% if not loop.last %}; {% endif %}{% endfor %}<br>From: D.A.R.T. (D3ll Athlete Records Tracker), D.A.R.T Admin</p>
+    <h1>Notice: fraudulent approval of athlete records by a coach</h1>
+    <p>
+      Coach <strong>{{ coach.full_name }}</strong>{% if coach.username %} (@{{ coach.username }}){% endif %}, of
+      <strong>{{ coach.school }}</strong>{% if coach.phone %}, mobile {{ coach.phone }}{% endif %}, approved athlete records on D.A.R.T.
+      that were independently found to be false (counter-signature by the opposing team / a match official, followed by a D.A.R.T Admin review).
+    </p>
+    <p>
+      Number of upheld findings: <strong>{{ coach.fraud_flags }}</strong>.
+      {% if coach.license_revoked %}
+        Under D.A.R.T.'s Terms of Service, the coach's licence to use D.A.R.T. was <strong>permanently revoked</strong> on
+        {{ coach.license_revoked_at.strftime('%d %B %Y') if coach.license_revoked_at }}.
+      {% else %}
+        The coach has been warned; a further finding permanently revokes their D.A.R.T. licence.
+      {% endif %}
+    </p>
+    <table>
+      <thead><tr><th>Record</th><th>Sport / game</th><th>Teams</th><th>History fingerprint (last step)</th></tr></thead>
+      <tbody>
+      {% for r in records %}
+        <tr>
+          <td>#{{ r.id }}</td>
+          <td>{{ r.sport }} · {{ r.game_date.strftime('%d %b %Y') if r.game_date else r.year }}<br>{{ r.competition_display or r.competition_category }}</td>
+          <td>{{ r.team }} vs {{ r.team_played_against }}</td>
+          <td style="font-family: monospace; word-break: break-all;">{{ events[r.id][-1].event_hash if events[r.id] else '—' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4">No records listed.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="mt-3 small">Every step of these records (submission, approvals, dispute, decision) is kept in D.A.R.T.'s permanent, tamper-evident history and can be shared with the federation on request. This notice is provided for the federation's own disciplinary process.</p>
+    <p class="mt-4">Signed,<br><br>______________________<br>D.A.R.T Admin</p>
+  </article>
+</div>
+{% endblock %}

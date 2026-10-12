@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Record History | D.A.R.T{% endblock %}
+
+{% block content %}
+{% from '_integrity.html' import record_status_badge, record_line with context %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-integrity.css') }}">
+<div class="container py-3">
+  <section class="integrity-hero" aria-label="Record history">
+    <h2><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Record #{{ record.id }} history</h2>
+    <p>{{ record.user.full_name }} · {{ record.sport }} · {{ record.game_date.strftime('%d %b %Y') if record.game_date else record.year }} ·
+       {{ record.team }} vs {{ record.team_played_against }} · {{ record_line(record) }}</p>
+    <div class="mt-2">{{ record_status_badge(record) }}</div>
+  </section>
+
+  <div class="integrity-panel">
+    <p class="mb-1">
+      {% if chain_ok %}<span class="integrity-ok"><i class="fa-solid fa-link" aria-hidden="true"></i> Chain intact</span> — every step points at the one before it; nothing was removed or reordered.
+      {% else %}<span class="integrity-bad"><i class="fa-solid fa-link-slash" aria-hidden="true"></i> Chain broken</span> — a step is missing or out of order. Report this to the D.A.R.T Admin.{% endif %}
+    </p>
+    <p class="small text-muted mb-0">Each step stores a fingerprint of the numbers at that moment. A different fingerprint between steps means the numbers were edited in between.</p>
+  </div>
+
+  <div class="integrity-panel integrity-table-wrap">
+    <table class="integrity-table">
+      <thead><tr><th scope="col">When (UTC)</th><th scope="col">Step</th><th scope="col">By</th><th scope="col">Numbers fingerprint</th><th scope="col">Step fingerprint</th></tr></thead>
+      <tbody>
+      {% for e in events %}
+        <tr>
+          <td>{{ e.created_at.strftime('%d %b %Y %H:%M') }}</td>
+          <td><strong>{{ e.action | replace('_', ' ') | capitalize }}</strong>{% if e.detail %}<br><small class="text-muted">{{ e.detail }}</small>{% endif %}</td>
+          <td>{% if e.actor_id in actors %}{{ actors[e.actor_id].display_name }}<br><small class="text-muted">{{ actors[e.actor_id].role_label }}</small>{% else %}{{ e.actor_role or 'Automatic' }}{% endif %}</td>
+          <td class="integrity-hash">{{ e.stats_hash[:12] }}…{% if e.stats_hash == current_hash %} <span class="integrity-ok" title="Same numbers as now">=</span>{% endif %}</td>
+          <td class="integrity-hash">{{ e.event_hash[:12] }}…</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="text-muted">No steps recorded (record made before the history started).</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -5,7 +5,7 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import MultiDict
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare, RecordVerificationEvent, MatchReport, MatchReportLine)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
@@ -48,6 +48,7 @@ from plans import (
     full_visibility_athlete_ids, active_plan_user_ids,
 )
 import coaching
+import integrity
 from competitions import (
     ALL_COMPETITIONS,
     ATHLETE_CATEGORIES,
@@ -1751,7 +1752,7 @@ def suggestion_order(column, text):
 
 app.jinja_env.globals['search_words'] = search_words
 # The platform role 'System' is shown as "D.A.R.T Admin" everywhere.
-app.jinja_env.filters['role_label'] = lambda role: 'D.A.R.T Admin' if role == 'System' else role
+app.jinja_env.filters['role_label'] = lambda role: {'System': 'D.A.R.T Admin', 'Statistician': 'Match Official'}.get(role, role)
 
 
 def name_or_username(text):
@@ -3379,7 +3380,7 @@ def redirect_after_login(default_endpoint):
 
 
 # Roles that must use two-factor authentication (authenticator app).
-TWO_FACTOR_ROLES = ('Coach', 'System', 'Scout', 'Organization')
+TWO_FACTOR_ROLES = ('Coach', 'System', 'Scout', 'Organization', 'Statistician')
 
 
 def dashboard_endpoint_for(user):
@@ -3418,6 +3419,11 @@ def continue_login(user):
             'Your Scout account is pending D.A.R.T. administrator verification.',
             'warning'
         )
+        return redirect(url_for('login'))
+
+    # Match officials (counter-sign records) are checked by the D.A.R.T Admin first.
+    if user.role == 'Statistician' and not user.is_verified:
+        flash('Your match official account is waiting for D.A.R.T Admin verification.', 'warning')
         return redirect(url_for('login'))
 
     # Organizations must be verified by the D.A.R.T Admin first.
@@ -4040,6 +4046,7 @@ ROLE_DASHBOARDS = {
     'Coach': ('admin_dashboard', 'Dashboard', 'Dashboard', 'fa-solid fa-gauge-high'),
     'System': ('admin_dashboard', 'Admin', 'Admin', 'fa-solid fa-user-shield'),
     'Organization': ('organization_dashboard', 'Team HQ', 'Team', 'fa-solid fa-building-shield'),
+    'Statistician': ('official_dashboard', 'Match Official', 'Official', 'fa-solid fa-clipboard-check'),
 }
 
 
@@ -5758,6 +5765,10 @@ def admin_unsuspend(user_id):
     user = db.session.get(User, user_id)
     if not user:
         abort(404)
+    # Revoked for fraudulent record approvals: permanent (Terms 3b).
+    if user.license_revoked:
+        flash(f"{user.full_name}'s D.A.R.T. licence was permanently revoked for fraudulent record approvals and can't be restored.", 'danger')
+        return redirect(url_for('admin_highlights'))
     user.is_suspended = False
     user.suspended_at = None
     user.suspension_reason = None
@@ -7126,7 +7137,7 @@ def sitemap_xml():
 
 
 # ---------- Legal pages ----------
-LEGAL_UPDATED = 'October 7, 2026'
+LEGAL_UPDATED = 'October 12, 2026'
 
 
 @app.route('/privacy')
@@ -7160,7 +7171,7 @@ def organization_terms():
 # registering, or on their next login for existing accounts). Raise
 # TERMS_VERSION when the terms change: everyone is asked again, and each
 # acceptance is stored in TermsAcceptance as a permanent record.
-TERMS_VERSION = '2026-10-07'
+TERMS_VERSION = '2026-10-12'
 
 # The D.A.R.T Admin runs the platform and is not asked.
 TERMS_EXEMPT_ROLES = ('System',)
@@ -8367,7 +8378,7 @@ def build_sport_record_from_form(form):
         SportRecord.game_date == game_date,
         SportRecord.competition_category == competition_category,
         SportRecord.team == team,
-        SportRecord.status.in_(['approved', 'pending'])
+        SportRecord.status.in_(LIVE_RECORD_STATUSES)
     ).first()
 
     if existing:
@@ -8510,9 +8521,11 @@ def submit_record():
         return redirect(url_for('student_dashboard'))
 
     db.session.add(record)
+    held = integrity.on_submit(record, current_user, check_anomalies=integrity_enabled())
     db.session.commit()
 
     queue_record_prompt(record, 'submitted')
+    flash_proof_needed(held)
     return redirect(url_for('student_dashboard'))
 
 # ==========================================================
@@ -8584,6 +8597,7 @@ def api_submit_record():
         }, 422)
 
     db.session.add(record)
+    held = integrity.on_submit(record, current_user, check_anomalies=integrity_enabled())
     db.session.commit()
 
     if request.headers.get('X-DART-Submit-Mode') == 'online':
@@ -8591,10 +8605,14 @@ def api_submit_record():
         # pop-up after the page redirects back to the dashboard.
         queue_record_prompt(record, 'submitted')
 
+    if held and request.headers.get('X-DART-Submit-Mode') == 'online':
+        flash_proof_needed(held)
+
     return _no_store_json({
         'ok': True,
         'status': 'created',
-        'record_id': record.id
+        'record_id': record.id,
+        'proof_required': bool(held)
     }, 201)
 
 # ========== Delete route ==========#
@@ -8649,9 +8667,10 @@ def resubmit_record(record_id):
     # The reason goes; a fake-record strike stays on the account.
     record.rejection_reason = None
     record.rejection_note = None
-    record.status = 'pending'
+    held = integrity.on_submit(record, current_user, check_anomalies=integrity_enabled())
     db.session.commit()
     queue_record_prompt(record, 'resubmitted')
+    flash_proof_needed(held)
     return redirect(url_for('student_dashboard'))
 
 # ========== Edit route ==========#
@@ -8665,6 +8684,11 @@ def edit_record(record_id):
     # =========================================================
     if record.user_id != current_user.id:
         flash('You can only edit your own records.', 'danger')
+        return redirect(url_for('student_dashboard'))
+
+    # A disputed record is frozen until the D.A.R.T Admin decides.
+    if record.status == 'disputed':
+        flash('This record is disputed and under review by the D.A.R.T Admin. It can\'t be edited until a decision is made.', 'warning')
         return redirect(url_for('student_dashboard'))
 
     current_year = str(datetime.now().year)
@@ -8858,7 +8882,7 @@ def edit_record(record_id):
             SportRecord.game_date == game_date,
             SportRecord.competition_category == edited_competition,
             SportRecord.team == edited_team,
-            SportRecord.status.in_(['approved', 'pending'])
+            SportRecord.status.in_(LIVE_RECORD_STATUSES)
         ).first()
 
         if duplicate:
@@ -9185,7 +9209,8 @@ def edit_record(record_id):
         # EDITED RECORD GOES BACK TO PENDING
         # =====================================================
 
-        record.status = 'pending'
+        # Every sign-off starts again (logged in the record's history).
+        held = integrity.on_submit(record, current_user, check_anomalies=integrity_enabled())
 
         # =====================================================
         # SAVE
@@ -9194,6 +9219,7 @@ def edit_record(record_id):
         db.session.commit()
 
         queue_record_prompt(record, 'edited')
+        flash_proof_needed(held)
 
         return redirect(
             url_for('student_dashboard')
@@ -9802,6 +9828,9 @@ def admin_dashboard():
         approved_records_total=approved_records_total,
         dashboard_list_limit=DASHBOARD_LIST_LIMIT,
         highlight_queue=coach_highlight_queue(current_user) if current_user.role == 'Coach' else [],
+        countersign_queue=countersign_queue_for(current_user) if current_user.role == 'Coach' else [],
+        integrity_on=integrity_enabled(),
+        verification_counts=verification_counts() if current_user.role == 'System' else None,
         analytics=super_admin_analytics() if current_user.role == 'System' else None,
         role_dash=(role_analytics(current_user, highlight_queue=coach_highlight_queue(current_user),
                                   athletes_managed=dashboard_stats.get('athletes_managed', 0),
@@ -10882,10 +10911,52 @@ def approve_record(record_id):
             flash('You can only manage records of your own team(s), in competitions your category covers.', 'danger')
             return redirect(url_for('admin_dashboard'))
 
+    if record.status != 'pending':
+        flash('Only records waiting for approval can be approved.', 'info')
+        return redirect(url_for('admin_dashboard'))
 
-    record.status = 'approved'
+    if current_user.role == 'System':
+        # The D.A.R.T Admin is independent of every team: one decision is final.
+        record.status = 'approved'
+        record.countersigned_by = current_user.id
+        record.countersigned_at = datetime.utcnow()
+        record.countersign_role = 'admin'
+        integrity.log_event(record, current_user, 'admin_approved')
+        db.session.commit()
+        flash('Record approved.', 'success')
+        return redirect(request.form.get('next') == 'verification' and url_for('verification_center') or url_for('admin_dashboard'))
+
+    if not integrity_enabled():
+        record.coach_approved_by = current_user.id
+        record.coach_approved_at = datetime.utcnow()
+        record.status = 'approved'
+        integrity.log_event(record, current_user, 'coach_approved')
+        db.session.commit()
+        flash('Record approved.', 'success')
+        return redirect(url_for('admin_dashboard'))
+
+    # Coaches are tied to a Liberian mobile number before they can sign off.
+    if not current_user.phone:
+        flash('Add your Orange or Lonestar mobile number (on your dashboard) before approving records.', 'warning')
+        return redirect(url_for('admin_dashboard') + '#coachPhone')
+
+    if record.needs_proof:
+        flash('These numbers are far above normal, so the athlete must first attach a match sheet or a video as proof.', 'warning')
+        return redirect(url_for('admin_dashboard'))
+
+    status = integrity.on_coach_approve(record, current_user)
+    create_audit_log(action='record_coach_approved', actor_user_id=current_user.id, target_type='sport_record',
+                     target_id=str(record.id), details={'athlete_id': record.user_id, 'status': status,
+                                                        'countersign_target': record.countersign_target})
     db.session.commit()
-    flash('Record approved.', 'success')
+    if status == 'approved':
+        flash('Record approved and confirmed by a match official\'s report. It is now on the athlete\'s CV.', 'success')
+    elif status == 'disputed':
+        flash('A match official\'s report of this game shows different numbers, so the record went to the D.A.R.T Admin\'s Dispute Queue.', 'warning')
+    elif record.countersign_target == 'opposing_coach':
+        flash(f'Approved. {record.team_played_against}\'s coach must now counter-sign it before it goes public.', 'success')
+    else:
+        flash('Approved. A verified match official (or the D.A.R.T Admin) must now counter-sign it before it goes public.', 'success')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/reject_record/<int:record_id>', methods=['POST'])
@@ -10914,6 +10985,10 @@ def reject_record(record_id):
         if record.status == 'approved':
             flash("Approved records can't be rejected.", 'warning')
             return redirect(url_for('admin_dashboard'))
+        # Once signed off, only the counter-signer / D.A.R.T Admin decide.
+        if record.status in ('verifying', 'disputed'):
+            flash('This record is already with the counter-signer / D.A.R.T Admin.', 'info')
+            return redirect(url_for('admin_dashboard'))
 
     if record.status == 'rejected':
         flash('This record is already rejected.', 'info')
@@ -10934,6 +11009,7 @@ def reject_record(record_id):
     outcome = None
     if reason == 'fake' and athlete:
         outcome = add_fake_record_strike(athlete, record)
+    integrity.log_event(record, current_user, 'rejected_' + reason, record.rejection_note or '')
 
     create_audit_log(
         action='record_rejected',
@@ -10989,6 +11065,7 @@ def record_rejection_mistake(record_id):
     record.rejection_note = None
     record.rejected_by = None
     record.rejected_at = None
+    integrity.log_event(record, current_user, 'rejection_undone', previous or '')
 
     create_audit_log(
         action='record_rejection_mistake',
@@ -11668,6 +11745,499 @@ def setup_2fa():
         qr_code=qr_code,
         secret=user.two_factor_secret
     )
+
+# ==========================================================
+# RECORD INTEGRITY (anti-bribery) - see integrity.py
+# ==========================================================
+# A record reaches the athlete's public CV only after two independent
+# sign-offs: their coach, then the opposing coach / a verified match
+# official / the D.A.R.T Admin. Suspicious numbers need proof first, every
+# step is written to a permanent chained history, and coaches found
+# approving fake records twice lose their D.A.R.T. licence.
+
+# Statuses that still count as "this game is on file" (no duplicates).
+LIVE_RECORD_STATUSES = ('approved', 'pending', 'verifying', 'disputed')
+PROOF_MAX_BYTES = 4 * 1024 * 1024
+MATCH_REPORT_MAX_LINES = 40
+MATCH_REPORT_DAILY_LIMIT = 20
+MATCH_REPORT_STAT_MAX = 200
+DISPUTE_DECISIONS = {
+    'true': 'The numbers are right: approve',
+    'inaccurate': 'Honest mistake: reject as inaccurate (no strike)',
+    'fraud': 'Fake: reject, warn the athlete and flag the approving coach',
+}
+
+
+def integrity_enabled():
+    """Counter-signature + proof holds. On in production (DART_RECORD_COUNTERSIGN=0 turns it off)."""
+    return bool(app.config.get('RECORD_COUNTERSIGN', True))
+
+
+app.config.setdefault('RECORD_COUNTERSIGN', os.environ.get('DART_RECORD_COUNTERSIGN', '1') != '0')
+app.jinja_env.globals.update(
+    official_types=integrity.OFFICIAL_TYPES,
+    dispute_decisions=DISPUTE_DECISIONS,
+    fraud_flag_limit=integrity.FRAUD_FLAG_LIMIT,
+)
+
+
+def flash_proof_needed(flags):
+    if flags:
+        flash('Your record is held for proof: ' + '; '.join(flags) + '. Attach the match sheet or a highlight video '
+              'of the game (Proof button on the record) so your coach can approve it.', 'warning')
+
+
+def countersign_queue_for(coach):
+    """Records waiting for THIS coach as the opposing team's coach."""
+    keys = coaching.team_keys(coach)
+    if not keys or not integrity_enabled():
+        return []
+    rows = SportRecord.query.options(joinedload(SportRecord.user)).filter(
+        SportRecord.status == 'verifying', SportRecord.countersign_target == 'opposing_coach',
+        func.lower(func.trim(SportRecord.team_played_against)).in_(keys),
+    ).order_by(SportRecord.coach_approved_at.asc()).limit(100).all()
+    return [r for r in rows if integrity.can_countersign(coach, r)]
+
+
+def official_queue_for(official):
+    rows = SportRecord.query.options(joinedload(SportRecord.user)).filter(
+        SportRecord.status == 'verifying', SportRecord.countersign_target == 'official',
+    ).order_by(SportRecord.coach_approved_at.asc()).limit(200).all()
+    return [r for r in rows if integrity.can_countersign(official, r)]
+
+
+def verification_counts():
+    overdue = datetime.utcnow() - timedelta(days=integrity.COUNTERSIGN_ESCALATE_DAYS)
+    return {
+        'verifying': SportRecord.query.filter_by(status='verifying').count(),
+        'overdue': SportRecord.query.filter(SportRecord.status == 'verifying', SportRecord.coach_approved_at < overdue).count(),
+        'disputed': SportRecord.query.filter_by(status='disputed').count(),
+        'proof': SportRecord.query.filter(SportRecord.status == 'pending', SportRecord.proof_required.is_(True)).count(),
+        'officials': User.query.filter_by(role='Statistician', is_verified=False, is_suspended=False).count(),
+        'flagged': User.query.filter(User.role == 'Coach', User.fraud_flags > 0).count(),
+    }
+
+
+def can_view_record_trail(user, record):
+    """Owner, the D.A.R.T Admin, the managing / approving coach, the counter-signer."""
+    if not user.is_authenticated:
+        return False
+    if user.role == 'System' or user.id in (record.user_id, record.coach_approved_by, record.countersigned_by):
+        return True
+    if user.role == 'Coach' and coaching.manages_record(user, record, coach_can_manage_competition):
+        return True
+    return integrity.can_countersign(user, record)
+
+
+def _back_to(where):
+    return {'official': url_for('official_dashboard'), 'verification': url_for('verification_center')}.get(
+        where, url_for('admin_dashboard'))
+
+
+@app.route('/account/phone', methods=['POST'])
+@login_required
+def save_phone():
+    """Coaches / match officials tie their account to an Orange or Lonestar number (once)."""
+    if current_user.role not in ('Coach', 'Statistician'):
+        abort(403)
+    back = _back_to('official' if current_user.role == 'Statistician' else '')
+    if current_user.phone:
+        flash('Your mobile number is already on file. To change it, contact the D.A.R.T Admin.', 'info')
+        return redirect(back)
+    phone = integrity.clean_phone(request.form.get('phone'))
+    if not phone:
+        flash('Enter a Liberian Orange (077) or Lonestar (088 / 055) mobile number, e.g. 0770 123 456.', 'danger')
+        return redirect(back)
+    if integrity.phone_taken(phone, current_user.id):
+        flash('This number is already tied to another D.A.R.T. account.', 'danger')
+        return redirect(back)
+    current_user.phone = phone
+    current_user.phone_verified_at = None
+    create_audit_log(action='phone_added', actor_user_id=current_user.id, target_type='User',
+                     target_id=str(current_user.id), details={'phone_last4': phone[-4:]})
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        flash('This number is already tied to another D.A.R.T. account.', 'danger')
+        return redirect(back)
+    flash('Mobile number saved. The D.A.R.T Admin may call it to confirm it is yours.', 'success')
+    return redirect(back)
+
+
+# ---------- proof (match sheet / highlight video) ----------
+@app.route('/records/<int:record_id>/proof', methods=['GET', 'POST'])
+@login_required
+def record_proof(record_id):
+    record = SportRecord.query.get_or_404(record_id)
+
+    if request.method == 'GET':
+        if not can_view_record_trail(current_user, record):
+            abort(404)
+        if record.proof_highlight_id:
+            return redirect(url_for('feed_post', highlight_id=record.proof_highlight_id))
+        if not record.proof_path:
+            abort(404)
+        try:
+            result = supabase.storage.from_('id-documents').create_signed_url(record.proof_path, 600)
+            signed = isinstance(result, dict) and (result.get('signedURL') or result.get('signedUrl') or result.get('signed_url'))
+        except Exception as e:
+            app.logger.warning('Proof link failed: %s', e)
+            signed = None
+        if not signed:
+            flash('The proof could not be opened. Please try again.', 'danger')
+            return redirect(url_for(dashboard_endpoint_for(current_user)))
+        return redirect(signed)
+
+    if record.user_id != current_user.id:
+        abort(403)
+    if record.status != 'pending' or not record.proof_required:
+        flash('This record does not need proof.', 'info')
+        return redirect(url_for('student_dashboard'))
+
+    highlight_id = request.form.get('highlight_id', type=int)
+    file = request.files.get('proof_file')
+    if highlight_id:
+        clip = db.session.get(AthleteHighlight, highlight_id)
+        if not clip or clip.user_id != current_user.id or clip.status != 'approved' or clip.media_type != 'video':
+            flash('Choose one of your own approved highlight videos.', 'danger')
+            return redirect(url_for('student_dashboard'))
+        integrity.attach_proof(record, current_user, highlight_id=clip.id)
+    elif file and file.filename:
+        file.stream.seek(0, os.SEEK_END)
+        size = file.stream.tell()
+        file.stream.seek(0)
+        kind = valid_file_content(file)        # checks the real bytes, not the name
+        if not kind or size > PROOF_MAX_BYTES or size == 0:
+            flash('The match sheet must be a photo (JPG / PNG) or a PDF up to 4 MB.', 'danger')
+            return redirect(url_for('student_dashboard'))
+        path = f'match-proofs/{record.id}/{uuid.uuid4().hex}.{kind}'
+        try:
+            upload_to_supabase(file, 'id-documents', path)
+        except Exception as e:
+            app.logger.exception('Proof upload failed: %s', e)
+            flash('We could not upload the match sheet. Please try again.', 'danger')
+            return redirect(url_for('student_dashboard'))
+        integrity.attach_proof(record, current_user, path=path)
+    else:
+        flash('Attach a match sheet (photo / PDF) or choose a highlight video.', 'warning')
+        return redirect(url_for('student_dashboard'))
+
+    db.session.commit()
+    flash('Proof attached. Your coach can now review the record.', 'success')
+    return redirect(url_for('student_dashboard'))
+
+
+# ---------- counter-sign / dispute ----------
+@app.route('/records/<int:record_id>/countersign', methods=['POST'])
+@login_required
+def countersign_record(record_id):
+    record = SportRecord.query.get_or_404(record_id)
+    back = _back_to(request.form.get('next', ''))
+    if not integrity.can_countersign(current_user, record):
+        flash('You can\'t counter-sign this record (it may already be settled, or you are tied to one of the teams).', 'warning')
+        return redirect(back)
+
+    decision = request.form.get('decision')
+    if decision == 'confirm':
+        integrity.countersign(record, current_user)
+        msg = ('Counter-signed. The record is now on the athlete\'s CV.', 'success')
+    elif decision == 'dispute':
+        reason = ' '.join((request.form.get('reason') or '').split())[:300]
+        if len(reason) < 10:
+            flash('Say what is wrong with the numbers (at least 10 characters).', 'warning')
+            return redirect(back)
+        integrity.dispute(record, current_user, reason)
+        msg = ('Disputed. The record went to the D.A.R.T Admin\'s Dispute Queue and stays off the athlete\'s CV.', 'info')
+    else:
+        abort(400)
+    create_audit_log(action='record_' + ('countersigned' if decision == 'confirm' else 'disputed'), actor_user_id=current_user.id,
+                     target_type='sport_record', target_id=str(record.id), details={'athlete_id': record.user_id})
+    db.session.commit()
+    flash(*msg)
+    return redirect(back)
+
+
+@app.route('/records/<int:record_id>/history')
+@login_required
+def record_history(record_id):
+    record = SportRecord.query.get_or_404(record_id)
+    if not can_view_record_trail(current_user, record):
+        abort(404)
+    events = integrity.history(record.id)
+    actors = {u.id: u for u in User.query.filter(User.id.in_({e.actor_id for e in events if e.actor_id} or {0})).all()}
+    return render_template('record_history.html', record=record, events=events, actors=actors,
+                           chain_ok=integrity.chain_intact(events), current_hash=integrity._stats_hash(record))
+
+
+# ---------- match officials ----------
+@app.route('/register-official', methods=['GET', 'POST'])
+def register_official():
+    if current_user.is_authenticated:
+        return redirect(url_for(dashboard_endpoint_for(current_user)))
+    if request.method == 'GET':
+        return render_template('register_official.html', form={})
+
+    form = request.form
+
+    def back(message):
+        flash(message, 'danger')
+        return render_template('register_official.html', form=form), 400
+
+    full_name, name_error = validate_full_name(form.get('full_name', ''))
+    if name_error:
+        return back(name_error)
+    username, username_error = check_new_username(form.get('username'))
+    if username_error:
+        return back(username_error)
+    email = (form.get('email') or '').strip().lower()
+    if not email or len(email) > 150 or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+        return back('Enter a valid email address.')
+    password = form.get('password', '')
+    if password != form.get('confirm_password', ''):
+        return back('Passwords do not match.')
+    if not is_strong_password(password):
+        return back('Password must meet the required security requirements.')
+    official_type = form.get('official_type', '')
+    if official_type not in integrity.OFFICIAL_TYPES:
+        return back('Choose what kind of match official you are.')
+    organization = ' '.join((form.get('organization') or '').split())[:150]
+    if len(organization) < 3:
+        return back('Enter the newspaper, league, school or community group you work with.')
+    phone = integrity.clean_phone(form.get('phone'))
+    if not phone:
+        return back('Enter a Liberian Orange (077) or Lonestar (088 / 055) mobile number.')
+    if integrity.phone_taken(phone):
+        return back('This number is already tied to another D.A.R.T. account.')
+    if User.query.filter_by(email=email).first():
+        return back('An account with this email address already exists.')
+
+    document = request.files.get('id_document')
+    if not document or not document.filename:
+        return back('Upload your national ID, passport or press / league card.')
+    document.stream.seek(0, os.SEEK_END)
+    size = document.stream.tell()
+    document.stream.seek(0)
+    kind = valid_file_content(document)
+    if not kind or size > 5 * 1024 * 1024:
+        return back('The ID document must be a JPG, PNG or PDF up to 5 MB.')
+    document_path = f'officials/{uuid.uuid4().hex}.{kind}'
+    try:
+        upload_to_supabase(document, 'id-documents', document_path)
+    except Exception as e:
+        app.logger.exception('Official ID upload failed: %s', e)
+        return back('We could not upload your ID document. Please try again.')
+
+    official = User(full_name=full_name, username=username, email=email, role='Statistician', school=organization,
+                    official_type=official_type, phone=phone, id_document=document_path, is_verified=False)
+    official.set_password(password)
+    try:
+        db.session.add(official)
+        db.session.flush()
+        record_account_created(official)
+        create_audit_log(action='official_registration_created', actor_user_id=official.id, target_type='User',
+                         target_id=str(official.id), details={'official_type': official_type, 'organization': organization})
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return back('This email, username or phone number is already in use.')
+    flash('Match official account created. The D.A.R.T Admin will check your ID before you can sign in.', 'success')
+    return redirect(url_for('login'))
+
+
+def _official_only():
+    return current_user.role == 'Statistician' and current_user.is_verified and not current_user.is_suspended
+
+
+@app.route('/official')
+@login_required
+def official_dashboard():
+    if not _official_only():
+        return redirect(url_for(dashboard_endpoint_for(current_user)))
+    reports = (MatchReport.query.filter_by(official_id=current_user.id)
+               .order_by(MatchReport.match_date.desc(), MatchReport.id.desc()).limit(30).all())
+    return render_template('official_dashboard.html', queue=official_queue_for(current_user), reports=reports,
+                           sports=('Football', 'Basketball', 'Kickball'), today=utc_today().isoformat())
+
+
+@app.route('/official/reports', methods=['POST'])
+@login_required
+def official_new_report():
+    if not _official_only():
+        abort(403)
+    form = request.form
+    sport = form.get('sport')
+    if sport not in ('Football', 'Basketball', 'Kickball'):
+        flash('Choose the sport.', 'danger')
+        return redirect(url_for('official_dashboard'))
+    try:
+        match_date = datetime.strptime(form.get('match_date', ''), '%Y-%m-%d').date()
+    except ValueError:
+        flash('Enter the match date.', 'danger')
+        return redirect(url_for('official_dashboard'))
+    if match_date > utc_today() or (utc_today() - match_date).days > 730:
+        flash('The match date must be in the last two years, not in the future.', 'danger')
+        return redirect(url_for('official_dashboard'))
+    home, away = (coaching.clean_text(form.get(k), 150) for k in ('home_team', 'away_team'))
+    if not home or not away or coaching._key(home) == coaching._key(away):
+        flash('Enter both teams.', 'danger')
+        return redirect(url_for('official_dashboard'))
+    if coaching._key(current_user.school) in (coaching._key(home), coaching._key(away)):
+        flash('You can\'t report a match of a team you are tied to.', 'danger')
+        return redirect(url_for('official_dashboard'))
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    if MatchReport.query.filter(MatchReport.official_id == current_user.id, MatchReport.created_at >= today_start).count() >= MATCH_REPORT_DAILY_LIMIT:
+        flash('Daily limit reached. Please file more reports tomorrow.', 'warning')
+        return redirect(url_for('official_dashboard'))
+
+    report = MatchReport(official_id=current_user.id, sport=sport, match_date=match_date, home_team=home, away_team=away,
+                         competition=coaching.clean_text(form.get('competition'), 60) or None,
+                         notes=coaching.clean_text(form.get('notes'), 300) or None)
+    handles = form.getlist('line_username')[:MATCH_REPORT_MAX_LINES]
+    seen = set()
+    for i, raw in enumerate(handles):
+        handle = uname.normalize_username(raw or '')
+        if not handle:
+            continue
+        athlete = User.query.filter(func.lower(User.username) == handle, User.role == 'Athlete').first()
+        if not athlete or athlete.id in seen:
+            flash(f'@{handle} is not an athlete on D.A.R.T. (or is listed twice). Fix the line and file it again.', 'danger')
+            return redirect(url_for('official_dashboard'))
+        seen.add(athlete.id)
+
+        def num(field):
+            values = form.getlist('line_' + field)
+            try:
+                return max(0, min(MATCH_REPORT_STAT_MAX, int(values[i]))) if i < len(values) and values[i] != '' else 0
+            except ValueError:
+                return 0
+        report.lines.append(MatchReportLine(athlete_id=athlete.id, **{f: num(f) for f in
+                                                                     ('goals', 'assists', 'points', 'rebounds', 'blocks', 'home_runs')}))
+    if not report.lines:
+        flash('Add at least one athlete (by @username) to the report.', 'warning')
+        return redirect(url_for('official_dashboard'))
+    db.session.add(report)
+    db.session.flush()
+    confirmed, disputed = integrity.apply_match_report(report, current_user)
+    create_audit_log(action='match_report_filed', actor_user_id=current_user.id, target_type='match_report',
+                     target_id=str(report.id), details={'lines': len(report.lines), 'confirmed': confirmed, 'disputed': disputed})
+    db.session.commit()
+    flash(f'Match report filed ({len(report.lines)} athletes). Records settled now: {confirmed} confirmed, {disputed} disputed. '
+          'Records submitted later for this game are checked against it automatically.', 'success')
+    return redirect(url_for('official_dashboard'))
+
+
+# ---------- D.A.R.T Admin: Verification Center ----------
+def _admin_only():
+    if current_user.role != 'System':
+        abort(403)
+
+
+@app.route('/admin/verification')
+@login_required
+def verification_center():
+    _admin_only()
+    overdue_before = datetime.utcnow() - timedelta(days=integrity.COUNTERSIGN_ESCALATE_DAYS)
+    load = SportRecord.query.options(joinedload(SportRecord.user))
+    verifying = load.filter(SportRecord.status == 'verifying').order_by(SportRecord.coach_approved_at.asc()).limit(200).all()
+    disputed = load.filter(SportRecord.status == 'disputed').order_by(SportRecord.disputed_at.asc()).limit(200).all()
+    proofs = load.filter(SportRecord.status == 'pending', SportRecord.proof_required.is_(True)).order_by(SportRecord.created_at.asc()).limit(200).all()
+    people_ids = {i for r in verifying + disputed for i in (r.coach_approved_by, r.disputed_by) if i}
+    people = {u.id: u for u in User.query.filter(User.id.in_(people_ids or {0})).all()}
+    officials = User.query.filter_by(role='Statistician', is_verified=False, is_suspended=False).order_by(User.created_at).all()
+    coaches = (User.query.filter(User.role == 'Coach', or_(User.fraud_flags > 0, User.license_revoked.is_(True)))
+               .order_by(User.fraud_flags.desc(), User.full_name).all())
+    phones = (User.query.filter(User.role.in_(('Coach', 'Statistician')), User.phone.isnot(None), User.phone_verified_at.is_(None))
+              .order_by(User.full_name).limit(100).all())
+    events = RecordVerificationEvent.query.order_by(RecordVerificationEvent.id.desc()).limit(40).all()
+    return render_template('admin_verification.html', verifying=verifying, disputed=disputed, proofs=proofs, people=people,
+                           officials=officials, coaches=coaches, phones=phones, events=events, overdue_before=overdue_before,
+                           counts=verification_counts())
+
+
+@app.route('/admin/verification/disputes/<int:record_id>', methods=['POST'])
+@login_required
+def resolve_dispute(record_id):
+    _admin_only()
+    record = SportRecord.query.get_or_404(record_id)
+    decision = request.form.get('decision')
+    if record.status != 'disputed' or decision not in DISPUTE_DECISIONS:
+        flash('Choose a decision for a disputed record.', 'warning')
+        return redirect(url_for('verification_center'))
+    note = ' '.join((request.form.get('note') or '').split())[:200]
+    revoked = integrity.resolve_dispute(record, current_user, decision, note)
+    athlete = db.session.get(User, record.user_id)
+    outcome = add_fake_record_strike(athlete, record) if decision == 'fraud' and athlete else None
+    create_audit_log(action='record_dispute_resolved', actor_user_id=current_user.id, target_type='sport_record',
+                     target_id=str(record.id), details={'decision': decision, 'athlete_outcome': outcome,
+                                                        'coach_licence_revoked': revoked.id if revoked else None})
+    db.session.commit()
+    if revoked:
+        flash(f'Decision saved. {revoked.full_name} reached {integrity.FRAUD_FLAG_LIMIT} fraud findings: their D.A.R.T. licence is '
+              'permanently revoked. Send the federation notice below.', 'warning')
+    else:
+        flash('Decision saved.', 'success')
+    return redirect(url_for('verification_center'))
+
+
+@app.route('/admin/verification/officials/<int:user_id>', methods=['POST'])
+@login_required
+def review_official(user_id):
+    _admin_only()
+    official = User.query.get_or_404(user_id)
+    if official.role != 'Statistician' or official.is_verified:
+        abort(400)
+    if request.form.get('action') == 'approve':
+        official.is_verified = True
+        official.phone_verified_at = datetime.utcnow() if request.form.get('phone_checked') else None
+        flash(f'{official.full_name} is now a verified match official.', 'success')
+    else:
+        official.is_suspended = True
+        official.suspended_at = datetime.utcnow()
+        official.suspension_reason = 'Match official application not accepted'
+        flash('Application declined.', 'info')
+    create_audit_log(action='official_reviewed', actor_user_id=current_user.id, target_type='User', target_id=str(official.id),
+                     details={'action': request.form.get('action')})
+    db.session.commit()
+    return redirect(url_for('verification_center'))
+
+
+@app.route('/admin/verification/phones/<int:user_id>', methods=['POST'])
+@login_required
+def review_phone(user_id):
+    _admin_only()
+    user = User.query.get_or_404(user_id)
+    if user.role not in ('Coach', 'Statistician'):
+        abort(400)
+    action = request.form.get('action')
+    if action == 'verify' and user.phone:
+        user.phone_verified_at = datetime.utcnow()
+    elif action == 'clear':
+        user.phone = None
+        user.phone_verified_at = None
+    else:
+        abort(400)
+    create_audit_log(action='phone_' + action, actor_user_id=current_user.id, target_type='User', target_id=str(user.id))
+    db.session.commit()
+    flash('Saved.', 'success')
+    return redirect(url_for('verification_center'))
+
+
+@app.route('/admin/verification/notice/<int:coach_id>')
+@login_required
+def federation_notice(coach_id):
+    """Printable notice to the LFA / LBA about a coach whose licence was revoked."""
+    _admin_only()
+    coach = User.query.get_or_404(coach_id)
+    if coach.role != 'Coach' or not coach.fraud_flags:
+        abort(404)
+    records = SportRecord.query.filter(SportRecord.coach_approved_by == coach.id, SportRecord.status == 'rejected',
+                                       SportRecord.rejection_reason == 'fake').order_by(SportRecord.game_date).all()
+    events = {r.id: integrity.history(r.id) for r in records}
+    federations = sorted({integrity.FEDERATION.get(r.sport, r.sport) for r in records}) or ['Liberia Football Association (LFA)']
+    return render_template('federation_notice.html', coach=coach, records=records, events=events, federations=federations,
+                           today=utc_today())
+
 
 if __name__ == '__main__':
     app.run(debug=False)

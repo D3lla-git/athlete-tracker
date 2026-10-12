@@ -100,18 +100,21 @@
           <li><h6 class="dropdown-header">Content reviews</h6></li>
           <li><a class="dropdown-item" href="#pendingRecords"><i class="fa-solid fa-file-lines"></i> Sports records <span class="adx-menu-count">{{ s.records_pending }}</span></a></li>
           <li><a class="dropdown-item" href="{{ url_for('admin_highlights') }}"><i class="fa-solid fa-photo-film"></i> Photos &amp; videos <span class="adx-menu-count">{{ media_awaiting or 0 }}</span></a></li>
+          <li><a class="dropdown-item" href="{{ url_for('verification_center') }}"><i class="fa-solid fa-scale-balanced"></i> Record verification &amp; disputes <span class="adx-menu-count">{{ (verification_counts.verifying + verification_counts.disputed + verification_counts.proof) if verification_counts else 0 }}</span></a></li>
           <li><a class="dropdown-item" href="#pendingAthletes"><i class="fa-solid fa-user-clock"></i> Athletes not live yet <span class="adx-menu-count">{{ s.athletes_pending }}</span></a></li>
           <li><hr class="dropdown-divider"></li>
           <li><h6 class="dropdown-header">Accounts</h6></li>
           <li><a class="dropdown-item" href="#pendingCoaches"><i class="fa-solid fa-user-tie"></i> Coaches <span class="adx-menu-count">{{ s.coaches_pending }}</span></a></li>
           <li><a class="dropdown-item" href="{{ url_for('admin_coach_review') }}"><i class="fa-solid fa-clipboard-user"></i> Coach teams &amp; careers <span class="adx-menu-count">{{ coach_review_awaiting or 0 }}</span></a></li>
           <li><a class="dropdown-item" href="#pendingScouts"><i class="fa-solid fa-binoculars"></i> Scouts <span class="adx-menu-count">{{ s.scouts_pending }}</span></a></li>
+          <li><a class="dropdown-item" href="{{ url_for('verification_center') }}#officials"><i class="fa-solid fa-clipboard-check"></i> Match officials <span class="adx-menu-count">{{ verification_counts.officials if verification_counts else 0 }}</span></a></li>
           <li><a class="dropdown-item" href="{{ url_for('admin_organizations') }}"><i class="fa-solid fa-building-shield"></i> Organizations <span class="adx-menu-count">{{ s.orgs_pending }}</span></a></li>
           <li><hr class="dropdown-divider"></li>
           <li><a class="dropdown-item" href="{{ url_for('admin_payments') }}"><i class="fa-solid fa-money-check-dollar"></i> Payments <span class="adx-menu-count">{{ payments_awaiting or 0 }}</span></a></li>
           <li><a class="dropdown-item" href="{{ url_for('admin_terms_acceptances') }}"><i class="fa-solid fa-file-signature"></i> Agreements</a></li>
         </ul>
       </div>
+      <a class="adx-action" href="{{ url_for('verification_center') }}"><i class="fa-solid fa-scale-balanced"></i> Verification{% if verification_counts and verification_counts.disputed %} <span class="badge rounded-pill">{{ verification_counts.disputed }}</span>{% endif %}</a>
       <a class="adx-action" href="{{ url_for('admin_highlights') }}"><i class="fa-solid fa-photo-film"></i> Media{% if media_awaiting %} <span class="badge rounded-pill">{{ media_awaiting }}</span>{% endif %}</a>
       <a class="adx-action" href="{{ url_for('admin_coach_review') }}"><i class="fa-solid fa-clipboard-user"></i> Coach review{% if coach_review_awaiting %} <span class="badge rounded-pill">{{ coach_review_awaiting }}</span>{% endif %}</a>
       <a class="adx-action" href="{{ url_for('admin_organizations') }}"><i class="fa-solid fa-building-shield"></i> Organizations</a>

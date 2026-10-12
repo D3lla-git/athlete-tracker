@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Match Official Registration | D.A.R.T{% endblock %}
+
+{% block content %}
+{% from '_gov_name.html' import gov_name_note, gov_name_assets %}
+{% from '_username_field.html' import username_field, username_assets %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-integrity.css') }}">
+<div class="container py-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-8 col-xl-7">
+
+      <section class="integrity-hero text-center" aria-label="Match official registration">
+        <i class="fa-solid fa-clipboard-check fa-2x mb-2" aria-hidden="true"></i>
+        <h2>Become a Match Official</h2>
+        <p class="mx-auto">For sports journalists, league secretaries, school sports coordinators, community youth leaders and referees.
+           Officials independently confirm athletes' records, so coaches can't publish fake numbers. Free.</p>
+      </section>
+
+      <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+          <div class="alert alert-info small">
+            <i class="fa-solid fa-shield-halved me-1" aria-hidden="true"></i>
+            The D.A.R.T Admin checks your ID and may call your number before you can sign in. You can never confirm records of a team you are tied to, and every confirmation is kept permanently with your name.
+          </div>
+
+          <form method="POST" action="{{ url_for('register_official') }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="mb-3">
+              <label class="form-label" for="full_name">Full name (as on your ID)</label>
+              <input type="text" class="form-control" id="full_name" name="full_name" maxlength="100" required autocomplete="name"
+                     autocapitalize="words" spellcheck="false" placeholder="Example: John Felix Brown" data-gov-name
+                     value="{{ form.get('full_name', '') }}" aria-describedby="full_nameNote full_nameError">
+              {{ gov_name_note('full_name') }}
+            </div>
+
+            <div class="mb-3">{{ username_field('officialUsername', value=form.get('username', ''), name_source_id='full_name') }}</div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label" for="official_type">I am a</label>
+                <select class="form-select" id="official_type" name="official_type" required>
+                  <option value="">Choose…</option>
+                  {% for t in official_types %}<option value="{{ t }}" {% if form.get('official_type') == t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label" for="organization">Newspaper / league / school / group</label>
+                <input class="form-control" id="organization" name="organization" maxlength="150" required value="{{ form.get('organization', '') }}">
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label" for="email">Email</label>
+                <input class="form-control" type="email" id="email" name="email" maxlength="150" required autocomplete="email" value="{{ form.get('email', '') }}">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label" for="phone">Mobile number (Orange / Lonestar)</label>
+                <input class="form-control" type="tel" id="phone" name="phone" maxlength="20" required inputmode="tel" autocomplete="tel"
+                       placeholder="0770 123 456" value="{{ form.get('phone', '') }}">
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label" for="id_document">National ID, passport or press / league card</label>
+              <input class="form-control" type="file" id="id_document" name="id_document" required accept="image/jpeg,image/png,application/pdf">
+              <small class="text-muted">JPG, PNG or PDF, up to 5 MB. Only the D.A.R.T Admin can see it.</small>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label" for="password">Password</label>
+                <input class="form-control" type="password" id="password" name="password" required autocomplete="new-password" minlength="8">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label" for="confirm_password">Confirm password</label>
+                <input class="form-control" type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password" minlength="8">
+              </div>
+            </div>
+            <p class="small text-muted">At least 8 characters with upper and lower case letters, a number and a symbol. Two-factor authentication is required at first sign-in.</p>
+
+            <button type="submit" class="btn dart-btn w-100 py-2"><i class="fa-solid fa-user-plus" aria-hidden="true"></i> Create match official account</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{{ gov_name_assets() }}
+{{ username_assets() }}
+{% endblock %}

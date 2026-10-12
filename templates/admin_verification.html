@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Verification Center | D.A.R.T{% endblock %}
+
+{% block content %}
+{% from '_integrity.html' import countersign_card, record_line, proof_note with context %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-integrity.css') }}">
+<div class="container-xl py-3">
+
+  <section class="integrity-hero" aria-label="Verification Center">
+    <h2><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i> Verification Center</h2>
+    <p>Every record needs two independent sign-offs before it reaches an athlete's CV. Settle what is waiting, decide disputes, verify match officials and watch coaches with fraud findings.</p>
+    <div class="integrity-chips mt-3">
+      <span>Awaiting counter-signature <strong>{{ counts.verifying }}</strong>{% if counts.overdue %} · <em>{{ counts.overdue }} overdue</em>{% endif %}</span>
+      <span>Disputes <strong>{{ counts.disputed }}</strong></span>
+      <span>Proof holds <strong>{{ counts.proof }}</strong></span>
+      <span>Officials to verify <strong>{{ counts.officials }}</strong></span>
+      <span>Coaches flagged <strong>{{ counts.flagged }}</strong></span>
+    </div>
+    <a class="btn btn-light btn-sm mt-3" href="{{ url_for('admin_dashboard') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Dashboard</a>
+  </section>
+
+  {# ---------- Dispute Queue ---------- #}
+  <h3 class="integrity-section-title" id="disputes"><i class="fa-solid fa-flag" aria-hidden="true"></i> Dispute Queue <span class="badge rounded-pill">{{ disputed | length }}</span></h3>
+  {% if disputed %}
+  <div class="integrity-cs-grid">
+    {% for r in disputed %}
+    <article class="integrity-cs-card">
+      <header><strong>{{ r.user.full_name }}</strong>{% if r.user.username %} <span class="text-muted">@{{ r.user.username }}</span>{% endif %}<span class="integrity-sport">{{ r.sport }}</span></header>
+      <div class="integrity-cs-match">{{ r.game_date.strftime('%d %b %Y') if r.game_date else r.year }} · {{ r.team }} <span class="text-muted">vs</span> {{ r.team_played_against }}</div>
+      <div class="integrity-cs-stats">{{ record_line(r) }}</div>
+      <div class="small">
+        Approved by coach <strong>{{ people[r.coach_approved_by].full_name if r.coach_approved_by in people else '—' }}</strong>{% if r.coach_approved_by in people and people[r.coach_approved_by].fraud_flags %} <span class="integrity-revoked">{{ people[r.coach_approved_by].fraud_flags }} fraud flag(s)</span>{% endif %}<br>
+        Disputed by <strong>{{ people[r.disputed_by].display_name if r.disputed_by in people else 'a match report' }}</strong>{% if r.disputed_by in people %} ({{ people[r.disputed_by].role_label }}){% endif %}:
+        <em>“{{ r.dispute_reason }}”</em>
+      </div>
+      {{ proof_note(r) }}
+      <a class="small" href="{{ url_for('record_history', record_id=r.id) }}"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Full history</a>
+      <form method="POST" action="{{ url_for('resolve_dispute', record_id=r.id) }}" class="mt-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% for key, label in dispute_decisions.items() %}
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="decision" value="{{ key }}" id="d{{ r.id }}{{ key }}" required>
+          <label class="form-check-label small" for="d{{ r.id }}{{ key }}">{{ label }}</label>
+        </div>
+        {% endfor %}
+        <input class="form-control form-control-sm my-2" name="note" maxlength="200" placeholder="Note for the history (what you checked)">
+        <button class="btn btn-sm dart-btn" type="submit" onclick="return confirm('Save this decision? It is final and recorded permanently.');">Save decision</button>
+      </form>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}<p class="text-muted">No disputes.</p>{% endif %}
+
+  {# ---------- Counter-sign queue (oldest first) ---------- #}
+  <h3 class="integrity-section-title" id="verifying"><i class="fa-solid fa-user-check" aria-hidden="true"></i> Awaiting counter-signature <span class="badge rounded-pill">{{ verifying | length }}</span></h3>
+  <p class="text-muted small">Oldest first. Requests unanswered after {{ 7 }} days are marked overdue: check them yourself (call the other team or a match official) and confirm or dispute.</p>
+  {% if verifying %}
+  <div class="integrity-cs-grid">
+    {% for r in verifying %}
+      <div>
+        {% if r.coach_approved_at and r.coach_approved_at < overdue_before %}<span class="integrity-overdue">Overdue</span>{% endif %}
+        <span class="small text-muted">Waiting for: {{ 'the opposing coach' if r.countersign_target == 'opposing_coach' else 'a match official' }}</span>
+        {{ countersign_card(r, 'verification', people) }}
+      </div>
+    {% endfor %}
+  </div>
+  {% else %}<p class="text-muted">Nothing waiting.</p>{% endif %}
+
+  {# ---------- Held for proof ---------- #}
+  <h3 class="integrity-section-title" id="proofs"><i class="fa-solid fa-file-circle-exclamation" aria-hidden="true"></i> Held for proof <span class="badge rounded-pill">{{ proofs | length }}</span></h3>
+  {% if proofs %}
+  <div class="integrity-panel integrity-table-wrap">
+    <table class="integrity-table">
+      <thead><tr><th scope="col">Athlete</th><th scope="col">Game</th><th scope="col">Numbers</th><th scope="col">Why</th><th scope="col">Proof</th></tr></thead>
+      <tbody>
+      {% for r in proofs %}
+        <tr>
+          <td>{{ r.user.full_name }}{% if r.user.username %}<br><small class="text-muted">@{{ r.user.username }}</small>{% endif %}</td>
+          <td>{{ r.sport }} · {{ r.game_date.strftime('%d %b %Y') if r.game_date else r.year }}<br><small class="text-muted">{{ r.team }} vs {{ r.team_played_against }}</small></td>
+          <td>{{ record_line(r) }}</td>
+          <td class="small">{{ r.anomaly_flags }}</td>
+          <td>{% if r.needs_proof %}<span class="text-muted small">Not yet</span>{% else %}<a href="{{ url_for('record_proof', record_id=r.id) }}" target="_blank" rel="noopener">View</a>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="text-muted">No records held.</p>{% endif %}
+
+  {# ---------- Match officials ---------- #}
+  <h3 class="integrity-section-title" id="officials"><i class="fa-solid fa-clipboard-check" aria-hidden="true"></i> Match officials to verify <span class="badge rounded-pill">{{ officials | length }}</span></h3>
+  {% if officials %}
+  <div class="integrity-cs-grid">
+    {% for o in officials %}
+    <article class="integrity-cs-card">
+      <header><strong>{{ o.full_name }}</strong>{% if o.username %} <span class="text-muted">@{{ o.username }}</span>{% endif %}</header>
+      <div class="small">{{ o.official_type }} · {{ o.school }}<br>{{ o.email }} · {{ o.phone or 'no phone' }}<br>Registered {{ o.created_at.strftime('%d %b %Y') if o.created_at }}</div>
+      {% if o.id_document %}<a class="small" href="{{ url_for('id_document', filename=o.id_document) }}" target="_blank" rel="noopener"><i class="fa-solid fa-id-card" aria-hidden="true"></i> View ID document</a>{% endif %}
+      <form method="POST" action="{{ url_for('review_official', user_id=o.id) }}" class="d-flex flex-wrap gap-2 align-items-center mt-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-check small w-100">
+          <input class="form-check-input" type="checkbox" name="phone_checked" value="1" id="pc{{ o.id }}">
+          <label class="form-check-label" for="pc{{ o.id }}">I called the number and it is theirs</label>
+        </div>
+        <button class="btn btn-sm dart-btn" name="action" value="approve" type="submit">Verify</button>
+        <button class="btn btn-sm btn-outline-danger" name="action" value="reject" type="submit" onclick="return confirm('Decline this application?');">Decline</button>
+      </form>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}<p class="text-muted">No applications.</p>{% endif %}
+
+  {# ---------- Coaches with fraud findings ---------- #}
+  <h3 class="integrity-section-title" id="coaches"><i class="fa-solid fa-user-slash" aria-hidden="true"></i> Coaches with fraud findings</h3>
+  <p class="text-muted small">{{ fraud_flag_limit }} upheld findings permanently revoke a coach's D.A.R.T. licence. Send the federation notice to the LFA / LBA.</p>
+  {% if coaches %}
+  <div class="integrity-panel integrity-table-wrap">
+    <table class="integrity-table">
+      <thead><tr><th scope="col">Coach</th><th scope="col">Team</th><th scope="col">Phone</th><th scope="col">Findings</th><th scope="col">Status</th><th scope="col"></th></tr></thead>
+      <tbody>
+      {% for c in coaches %}
+        <tr>
+          <td>{{ c.full_name }}{% if c.username %}<br><small class="text-muted">@{{ c.username }}</small>{% endif %}</td>
+          <td>{{ c.school }}</td>
+          <td>{{ c.phone or '—' }}</td>
+          <td><strong>{{ c.fraud_flags }}</strong> of {{ fraud_flag_limit }}</td>
+          <td>{% if c.license_revoked %}<span class="integrity-revoked">Licence revoked</span>{% else %}Warned{% endif %}</td>
+          <td><a class="btn btn-sm btn-outline-success" href="{{ url_for('federation_notice', coach_id=c.id) }}"><i class="fa-solid fa-envelope-open-text" aria-hidden="true"></i> Federation notice</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="text-muted">No coach has a fraud finding.</p>{% endif %}
+
+  {# ---------- Phone numbers not yet confirmed ---------- #}
+  <h3 class="integrity-section-title" id="phones"><i class="fa-solid fa-mobile-screen-button" aria-hidden="true"></i> Numbers to confirm <span class="badge rounded-pill">{{ phones | length }}</span></h3>
+  {% if phones %}
+  <div class="integrity-panel integrity-table-wrap">
+    <table class="integrity-table">
+      <thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Number</th><th scope="col"></th></tr></thead>
+      <tbody>
+      {% for u in phones %}
+        <tr>
+          <td>{{ u.full_name }}</td><td>{{ u.role_label }}</td><td>{{ u.phone }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('review_phone', user_id=u.id) }}" class="d-flex gap-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm dart-btn" name="action" value="verify" type="submit">Confirmed by call</button>
+              <button class="btn btn-sm btn-outline-danger" name="action" value="clear" type="submit" onclick="return confirm('Remove this number? They must add a new one before approving records.');">Remove</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="text-muted">All numbers confirmed.</p>{% endif %}
+
+  {# ---------- Latest history ---------- #}
+  <h3 class="integrity-section-title"><i class="fa-solid fa-link" aria-hidden="true"></i> Latest verification steps</h3>
+  <div class="integrity-panel integrity-table-wrap">
+    <table class="integrity-table">
+      <thead><tr><th scope="col">When (UTC)</th><th scope="col">Record</th><th scope="col">Step</th><th scope="col">By</th><th scope="col">Fingerprint</th></tr></thead>
+      <tbody>
+      {% for e in events %}
+        <tr>
+          <td>{{ e.created_at.strftime('%d %b %Y %H:%M') }}</td>
+          <td><a href="{{ url_for('record_history', record_id=e.record_id) }}">#{{ e.record_id }}</a></td>
+          <td>{{ e.action | replace('_', ' ') }}{% if e.detail %}<br><small class="text-muted">{{ e.detail | truncate(90) }}</small>{% endif %}</td>
+          <td>{{ e.actor_role or 'system' }}</td>
+          <td class="integrity-hash">{{ e.event_hash[:16] }}…</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="text-muted">Nothing yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

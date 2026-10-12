@@ -53,6 +53,7 @@
             <a href="{{ url_for('register_scout') }}"><i class="fa-solid fa-binoculars"></i> Scout</a>
             <a href="{{ url_for('register_organization') }}"><i class="fa-solid fa-building-shield"></i> Organization</a>
           </div>
+          <a class="login-register-official" href="{{ url_for('register_official') }}"><i class="fa-solid fa-clipboard-check"></i> Journalist, league secretary or referee? Become a match official</a>
         </div>
       </div>
     </div>
@@ -84,6 +85,9 @@
     background: rgba(25, 135, 84, 0.06);
   }
   #loginRegister .login-register-grid a:hover { background: rgba(25, 135, 84, 0.14); }
+  #loginRegister .login-register-official { display: block; margin-top: 10px; font-size: 0.85rem; font-weight: 700; color: #198754; text-align: center; text-decoration: none; }
+  #loginRegister .login-register-official:hover { text-decoration: underline; }
+  html[data-theme="dark"] #loginRegister .login-register-official { color: #4cd38a; }
   html[data-theme="dark"] #loginRegister .login-register-grid a { color: #4cd38a; border-color: rgba(76, 211, 138, 0.35); }
 </style>
 {% endblock %}

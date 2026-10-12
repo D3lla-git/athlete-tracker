@@ -747,6 +747,30 @@ html[data-theme="dark"] .dart-file-clear { background: rgba(255, 255, 255, 0.08)
   color: #ffffff !important;
 }
 
+/* Record integrity: coach approved, waiting for the other side (blue);
+   disputed (deep orange); held until proof is attached (purple). */
+.dart-status-verifying,
+.dart-status-disputed,
+.dart-status-proof {
+  display: inline-block;
+  padding: 0.4em 0.9em;
+  font-weight: 600;
+  border: 1.5px solid #000000 !important;
+  border-radius: 2rem !important;
+  background-image: none !important;
+  white-space: normal;
+}
+
+.dart-status-verifying { background-color: #0b5ed7 !important; color: #ffffff !important; }
+.dart-status-disputed { background-color: #c2410c !important; color: #ffffff !important; }
+.dart-status-proof { background-color: #6f42c1 !important; color: #ffffff !important; }
+
+/* Athlete: attach proof under a held record */
+.integrity-proof { margin-top: 8px; text-align: left; max-width: 340px; }
+.integrity-proof summary { cursor: pointer; font-weight: 700; font-size: 0.85rem; color: #6f42c1; }
+html[data-theme="dark"] .integrity-proof summary { color: #c4a5ff; }
+.integrity-proof p { color: var(--surface-text); }
+
 /* ===== MODERN RECORDS TABLE (desktop) ===== */
 .records-table-wrap {
   overflow-x: auto;

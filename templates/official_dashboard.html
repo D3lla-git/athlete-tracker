@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Match Official | D.A.R.T{% endblock %}
+
+{% block content %}
+{% from '_integrity.html' import countersign_card, record_line with context %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-integrity.css') }}">
+<div class="container py-3">
+
+  <section class="integrity-hero" aria-label="Match official">
+    <h2><i class="fa-solid fa-clipboard-check" aria-hidden="true"></i> Match Official</h2>
+    <p>{{ current_user.display_name }} · {{ current_user.official_type or 'Match official' }}{% if current_user.school %} · {{ current_user.school }}{% endif %}.
+       You are the independent check: confirm records only when they match what happened, and file your own match reports. D.A.R.T. compares them with what coaches approve.</p>
+    <div class="integrity-chips mt-3">
+      <span>Waiting for you <strong>{{ queue | length }}</strong></span>
+      <span>Your reports <strong>{{ reports | length }}</strong></span>
+    </div>
+  </section>
+
+  <h3 class="integrity-section-title" id="queue"><i class="fa-solid fa-user-check" aria-hidden="true"></i> Records to counter-sign <span class="badge rounded-pill">{{ queue | length }}</span></h3>
+  <p class="text-muted small">Records approved by the athlete's coach where the other team's coach isn't on D.A.R.T. Records of a team you are tied to ({{ current_user.school or 'none' }}) are never shown to you.</p>
+  {% if queue %}
+    <div class="integrity-cs-grid">{% for r in queue %}{{ countersign_card(r, 'official') }}{% endfor %}</div>
+  {% else %}
+    <p class="text-muted">Nothing waiting right now.</p>
+  {% endif %}
+
+  <h3 class="integrity-section-title" id="newReport"><i class="fa-solid fa-file-pen" aria-hidden="true"></i> File a match report</h3>
+  <section class="integrity-panel">
+    <p>Write down who did what in a game you watched. Athletes' records for that game are confirmed automatically when they match, and sent to the Dispute Queue when they don't.</p>
+    <form method="POST" action="{{ url_for('official_new_report') }}" id="matchReportForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="row g-2">
+        <div class="col-6 col-md-3">
+          <label class="form-label small" for="mrSport">Sport</label>
+          <select class="form-select" id="mrSport" name="sport" required>
+            {% for sp in sports %}<option value="{{ sp }}">{{ sp }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label small" for="mrDate">Match date</label>
+          <input class="form-control" type="date" id="mrDate" name="match_date" max="{{ today }}" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small" for="mrCompetition">Competition (optional)</label>
+          <input class="form-control" id="mrCompetition" name="competition" maxlength="60" placeholder="e.g. County Meet">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small" for="mrHome">Home team</label>
+          <input class="form-control" id="mrHome" name="home_team" maxlength="150" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small" for="mrAway">Away team</label>
+          <input class="form-control" id="mrAway" name="away_team" maxlength="150" required>
+        </div>
+      </div>
+
+      <h5 class="mt-3 mb-2 small fw-bold text-uppercase">Athletes</h5>
+      <div class="mr-lines" id="mrLines">
+        {% for i in range(3) %}
+        <div class="mr-line">
+          <input class="form-control mr-handle" name="line_username" placeholder="@username" aria-label="Athlete username" autocapitalize="none" spellcheck="false" maxlength="31">
+          <input class="form-control" type="number" min="0" max="200" name="line_goals" placeholder="Goals" aria-label="Goals" data-sports="Football">
+          <input class="form-control" type="number" min="0" max="200" name="line_assists" placeholder="Assists" aria-label="Assists" data-sports="Football">
+          <input class="form-control" type="number" min="0" max="200" name="line_points" placeholder="Points" aria-label="Points" data-sports="Basketball" hidden>
+          <input class="form-control" type="number" min="0" max="200" name="line_rebounds" placeholder="Rebounds" aria-label="Rebounds" data-sports="Basketball" hidden>
+          <input class="form-control" type="number" min="0" max="200" name="line_blocks" placeholder="Blocks" aria-label="Blocks" data-sports="Basketball" hidden>
+          <input class="form-control" type="number" min="0" max="200" name="line_home_runs" placeholder="Home runs" aria-label="Home runs" data-sports="Kickball" hidden>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-success mt-2" id="mrAdd"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add athlete</button>
+
+      <div class="mt-3">
+        <label class="form-label small" for="mrNotes">Notes (optional)</label>
+        <input class="form-control" id="mrNotes" name="notes" maxlength="300">
+      </div>
+      <button type="submit" class="btn dart-btn mt-3"
+              onclick="return confirm('File this match report? It is signed with your name and kept permanently.');">
+        <i class="fa-solid fa-file-signature" aria-hidden="true"></i> File report
+      </button>
+    </form>
+  </section>
+
+  <h3 class="integrity-section-title"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> Your match reports</h3>
+  {% if reports %}
+  <div class="integrity-panel integrity-table-wrap">
+    <table class="integrity-table">
+      <thead><tr><th scope="col">Date</th><th scope="col">Match</th><th scope="col">Sport</th><th scope="col">Athletes</th></tr></thead>
+      <tbody>
+        {% for rep in reports %}
+        <tr>
+          <td>{{ rep.match_date.strftime('%d %b %Y') }}</td>
+          <td>{{ rep.home_team }} <span class="text-muted">vs</span> {{ rep.away_team }}{% if rep.competition %}<br><small class="text-muted">{{ rep.competition }}</small>{% endif %}</td>
+          <td>{{ rep.sport }}</td>
+          <td>{% for line in rep.lines %}@{{ line.athlete.username or line.athlete.full_name }}{% if rep.sport == 'Football' %} {{ line.goals }}G {{ line.assists }}A{% elif rep.sport == 'Basketball' %} {{ line.points }}P {{ line.rebounds }}R {{ line.blocks }}B{% else %} {{ line.home_runs }}HR{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="text-muted">You haven't filed a report yet.</p>
+  {% endif %}
+
+  {% if not current_user.phone %}
+  <section class="integrity-panel integrity-phone mt-4" aria-label="Mobile number">
+    <div><h4>Add your mobile number</h4><p>Orange (077) or Lonestar (088 / 055).</p></div>
+    <form method="POST" action="{{ url_for('save_phone') }}" class="integrity-phone-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input class="form-control" name="phone" type="tel" maxlength="20" required placeholder="0770 123 456" aria-label="Mobile number">
+      <button type="submit" class="btn dart-btn">Save</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+
+<script>
+(function () {
+  var form = document.getElementById('matchReportForm');
+  if (!form) return;
+  var sport = document.getElementById('mrSport');
+  var lines = document.getElementById('mrLines');
+  function sync() {
+    lines.querySelectorAll('[data-sports]').forEach(function (input) {
+      var show = input.getAttribute('data-sports') === sport.value;
+      input.hidden = !show;
+      if (!show) input.value = '';
+    });
+  }
+  sport.addEventListener('change', sync);
+  document.getElementById('mrAdd').addEventListener('click', function () {
+    if (lines.children.length >= {{ 40 }}) return;
+    var copy = lines.firstElementChild.cloneNode(true);
+    copy.querySelectorAll('input').forEach(function (i) { i.value = ''; });
+    lines.appendChild(copy);
+    sync();
+    copy.querySelector('.mr-handle').focus();
+  });
+  sync();
+})();
+</script>
+{% endblock %}

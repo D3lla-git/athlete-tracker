@@ -313,6 +313,47 @@
   html[data-theme="dark"] .approval-wait { color: #4cd38a; }
 </style>
 
+{% from '_integrity.html' import record_status_badge, proof_note, countersign_card with context %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-integrity.css') }}">
+{% if current_user.role == 'Coach' and integrity_on %}
+  {% if not current_user.phone %}
+  <section class="integrity-panel integrity-phone" id="coachPhone" aria-label="Mobile number">
+    <div>
+      <h4><i class="fa-solid fa-mobile-screen-button" aria-hidden="true"></i> Tie your account to your mobile number</h4>
+      <p>Before you approve records, add your Orange (077) or Lonestar (088 / 055) number. One number per coach, it can't be changed without the D.A.R.T Admin, and every approval is recorded against it.</p>
+    </div>
+    <form method="POST" action="{{ url_for('save_phone') }}" class="integrity-phone-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="visually-hidden" for="coachPhoneInput">Mobile number</label>
+      <input class="form-control" id="coachPhoneInput" name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" required placeholder="0770 123 456">
+      <button type="submit" class="btn dart-btn">Save number</button>
+    </form>
+  </section>
+  {% endif %}
+  {% if countersign_queue %}
+  <section class="integrity-panel" id="countersignQueue" aria-label="Counter-sign requests">
+    <h4><i class="fa-solid fa-user-check" aria-hidden="true"></i> Counter-sign requests <span class="badge rounded-pill">{{ countersign_queue | length }}</span></h4>
+    <p>Your team played these games. The other coach approved their athlete's numbers: confirm them only if they are true, or dispute them. Your decision is recorded permanently.</p>
+    <div class="integrity-cs-grid">
+      {% for r in countersign_queue %}{{ countersign_card(r) }}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+{% elif current_user.role == 'System' and verification_counts %}
+  {% set vc = verification_counts %}
+  <section class="integrity-panel" aria-label="Record verification">
+    <h4><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Record verification</h4>
+    <p>Counter-signatures, disputes, proof holds, match officials and coach fraud flags.</p>
+    <div class="integrity-chips">
+      <span>Awaiting counter-signature <strong>{{ vc.verifying }}</strong>{% if vc.overdue %} · <em>{{ vc.overdue }} overdue</em>{% endif %}</span>
+      <span>Disputes <strong>{{ vc.disputed }}</strong></span>
+      <span>Proof holds <strong>{{ vc.proof }}</strong></span>
+      <span>Officials to verify <strong>{{ vc.officials }}</strong></span>
+    </div>
+    <a class="btn dart-btn mt-2" href="{{ url_for('verification_center') }}"><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i> Open Verification Center</a>
+  </section>
+{% endif %}
+
 <!-- ==================== MOBILE VIEW - PENDING RECORDS SLIDER ==================== -->
 <div class="d-md-none">
   <h4 class="mt-4 mb-3" id="pendingRecords">Pending Sports Records</h4>
@@ -398,9 +439,13 @@
             </div>
 
             <!-- Status + Action Buttons (approve/reject only while pending) -->
+            {{ proof_note(r) }}
             {% if r.status == 'pending' %}
             {# Equal Approve / Reject pair; Reject opens its reasons full width below. #}
             <div class="rec-card-actions mt-3">
+              {% if r.needs_proof and current_user.role != 'System' and integrity_on %}
+              <span class="badge dart-status-proof rec-approve-btn"><i class="fa-solid fa-file-circle-exclamation" aria-hidden="true"></i> Proof needed</span>
+              {% else %}
               <form method="POST" action="{{ url_for('approve_record', record_id=r.id) }}"
                     onsubmit="return confirm('Approve this sports record?');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -408,6 +453,7 @@
                   <i class="fa-solid fa-check" aria-hidden="true"></i> Approve
                 </button>
               </form>
+              {% endif %}
               {{ reject_controls(r) }}
             </div>
             {% else %}
@@ -494,11 +540,13 @@
                 {{ rejection_badge(r) }}
                 {{ reject_controls(r) }}
               {% else %}
-                <span class="badge dart-status-pending">Pending</span>
+                {{ record_status_badge(r) }}
               {% endif %}
+              {{ proof_note(r) }}
 
               {% if r.status == 'pending' %}
                 <div class="rt-actions justify-content-center">
+                  {% if not (r.needs_proof and current_user.role != 'System' and integrity_on) %}
                   <form method="POST" action="{{ url_for('approve_record', record_id=r.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit"
@@ -507,6 +555,7 @@
                       <i class="fa-solid fa-check" aria-hidden="true"></i> Approve
                     </button>
                   </form>
+                  {% endif %}
 
                   {{ reject_controls(r) }}
                 </div>

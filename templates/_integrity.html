@@ -1,0 +1,112 @@
+{# Record integrity widgets (see integrity.py).
+   record_status_badge(r, cls)  - Approved / Pending / Proof needed / Awaiting counter-signature / Disputed / Rejected
+   proof_form(r, clips)         - athlete: attach a match sheet or one of their approved highlight videos
+   proof_note(r)                - coach / admin: why the record is held, and the proof link
+   countersign_actions(r, next) - confirm / dispute buttons (opposing coach, match official, D.A.R.T Admin) #}
+
+{% macro record_status_badge(r, cls='') %}
+  {% if r.status == 'approved' %}
+    <span class="badge dart-pill {{ cls }}">Approved{% if r.countersign_role %} <i class="fa-solid fa-check-double" title="Counter-signed" aria-label="counter-signed"></i>{% endif %}</span>
+  {% elif r.status == 'rejected' %}
+    <span class="badge dart-status-rejected {{ cls }}">Rejected{% if r.rejection_reason in record_reject_reasons %} · {{ record_reject_reasons[r.rejection_reason][0] }}{% endif %}</span>
+  {% elif r.status == 'verifying' %}
+    <span class="badge dart-status-verifying {{ cls }}" title="Your coach approved it. The other team's coach or a match official must confirm it.">
+      <i class="fa-solid fa-user-check" aria-hidden="true"></i> Awaiting counter-signature</span>
+  {% elif r.status == 'disputed' %}
+    <span class="badge dart-status-disputed {{ cls }}" title="Someone says these numbers are wrong. The D.A.R.T Admin is reviewing it.">
+      <i class="fa-solid fa-scale-balanced" aria-hidden="true"></i> Disputed</span>
+  {% elif r.needs_proof %}
+    <span class="badge dart-status-proof {{ cls }}"><i class="fa-solid fa-file-circle-exclamation" aria-hidden="true"></i> Proof needed</span>
+  {% else %}
+    <span class="badge dart-status-pending {{ cls }}">Pending</span>
+  {% endif %}
+{% endmacro %}
+
+
+{% macro proof_form(r, clips) %}
+  {% if r.status == 'pending' and r.proof_required %}
+  <details class="integrity-proof" {% if r.needs_proof %}open{% endif %}>
+    <summary>
+      <i class="fa-solid fa-file-shield" aria-hidden="true"></i>
+      {% if r.needs_proof %}Attach proof{% else %}Proof attached <i class="fa-solid fa-circle-check text-success" aria-hidden="true"></i>{% endif %}
+    </summary>
+    <p class="small mb-2">These numbers are far above your usual ({{ r.anomaly_flags }}). Attach the official match sheet or a video of the game so your coach can approve it.</p>
+    <form method="POST" action="{{ url_for('record_proof', record_id=r.id) }}" enctype="multipart/form-data" class="integrity-proof-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="form-label small mb-1" for="proofFile{{ r.id }}">Match sheet (photo or PDF, up to 4 MB)</label>
+      <input class="form-control form-control-sm mb-2" type="file" id="proofFile{{ r.id }}" name="proof_file" accept="image/jpeg,image/png,application/pdf">
+      {% if clips %}
+        <label class="form-label small mb-1" for="proofClip{{ r.id }}">…or one of your highlight videos</label>
+        <select class="form-select form-select-sm mb-2" id="proofClip{{ r.id }}" name="highlight_id">
+          <option value="">Choose a video</option>
+          {% for c in clips %}<option value="{{ c.id }}">{{ (c.caption or 'Video') | truncate(40) }} · {{ c.created_at.strftime('%d %b %Y') if c.created_at else '' }}</option>{% endfor %}
+        </select>
+      {% endif %}
+      <button type="submit" class="btn btn-sm dart-btn"><i class="fa-solid fa-upload" aria-hidden="true"></i> Send proof</button>
+    </form>
+  </details>
+  {% endif %}
+{% endmacro %}
+
+
+{% macro proof_note(r) %}
+  {% if r.proof_required %}
+    <div class="integrity-note">
+      <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+      <span><strong>Unusual numbers:</strong> {{ r.anomaly_flags }}.
+      {% if r.needs_proof %}Waiting for the athlete to attach a match sheet or video.
+      {% else %}<a href="{{ url_for('record_proof', record_id=r.id) }}" target="_blank" rel="noopener">View proof <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>{% endif %}</span>
+    </div>
+  {% endif %}
+{% endmacro %}
+
+
+{% macro countersign_actions(r, next='') %}
+  <div class="integrity-cs-actions">
+    <form method="POST" action="{{ url_for('countersign_record', record_id=r.id) }}"
+          onsubmit="return confirm('Confirm these numbers are true? Your name is recorded permanently in the record\'s history.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ next }}">
+      <input type="hidden" name="decision" value="confirm">
+      <button type="submit" class="btn btn-sm dart-btn"><i class="fa-solid fa-check-double" aria-hidden="true"></i> Confirm</button>
+    </form>
+    <details class="integrity-dispute">
+      <summary class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-flag" aria-hidden="true"></i> Dispute</summary>
+      <form method="POST" action="{{ url_for('countersign_record', record_id=r.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="{{ next }}">
+        <input type="hidden" name="decision" value="dispute">
+        <label class="form-label small" for="dispute{{ r.id }}">What is wrong?</label>
+        <textarea class="form-control form-control-sm mb-2" id="dispute{{ r.id }}" name="reason" rows="2" minlength="10" maxlength="300" required
+                  placeholder="e.g. He scored 1 goal, not 3. Our match sheet shows…"></textarea>
+        <button type="submit" class="btn btn-sm btn-danger">Send to Dispute Queue</button>
+      </form>
+    </details>
+  </div>
+{% endmacro %}
+
+
+{% macro record_line(r) %}
+  {%- if r.sport == 'Football' -%}{{ r.goals or 0 }} goals · {{ r.assists or 0 }} assists
+  {%- elif r.sport == 'Basketball' -%}{{ r.points or 0 }} pts · {{ (r.offensive_rebounds or 0) + (r.defensive_rebounds or 0) }} reb · {{ r.blocks or 0 }} blk
+  {%- else -%}{{ r.home_runs or 0 }} home runs · {{ r.cut_base or 0 }} cut base{%- endif -%}
+{% endmacro %}
+
+
+{% macro countersign_card(r, next='', people=none) %}
+  <article class="integrity-cs-card">
+    <header>
+      <strong>{{ r.user.full_name }}</strong> {% if r.user.username %}<span class="text-muted">@{{ r.user.username }}</span>{% endif %}
+      <span class="integrity-sport">{{ r.sport }}</span>
+    </header>
+    <div class="integrity-cs-match">
+      <i class="fa-regular fa-calendar-days" aria-hidden="true"></i> {{ r.game_date.strftime('%d %b %Y') if r.game_date else r.year }}
+      · {{ r.team }} <span class="text-muted">vs</span> {{ r.team_played_against }}
+      · {{ r.competition_display or r.competition_category }}
+    </div>
+    <div class="integrity-cs-stats">{{ record_line(r) }}{% if r.games_played and r.games_played > 1 %} ({{ r.games_played }} games){% endif %}</div>
+    {% if people and r.coach_approved_by in people %}<div class="small text-muted">Approved by coach {{ people[r.coach_approved_by].full_name }} · {{ r.coach_approved_at.strftime('%d %b %Y') if r.coach_approved_at }}</div>{% endif %}
+    {{ proof_note(r) }}
+    {{ countersign_actions(r, next) }}
+  </article>
+{% endmacro %}

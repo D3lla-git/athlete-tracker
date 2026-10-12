@@ -28,7 +28,7 @@ class User(UserMixin, db.Model):
 
     @property
     def role_label(self):
-        return 'D.A.R.T Admin' if self.role == 'System' else self.role
+        return {'System': 'D.A.R.T Admin', 'Statistician': 'Match Official'}.get(self.role, self.role)
     school = db.Column(db.String(150), nullable=False)
     # Athlete / Coach category permissions
     athlete_category = db.Column(db.String(50), nullable=True)
@@ -81,6 +81,16 @@ class User(UserMixin, db.Model):
     # Records a coach rejected as FAKE (kept even if the athlete deletes the
     # record). 1st = warning, 2nd = final warning, 3rd = account suspended.
     fake_record_strikes = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+    # Record integrity (anti-bribery). Coaches and match officials are tied to
+    # a Liberian mobile number (one account per number). A coach whose record
+    # approvals are found fraudulent twice loses the right to use D.A.R.T.
+    phone = db.Column(db.String(20), nullable=True)
+    phone_verified_at = db.Column(db.DateTime, nullable=True)
+    fraud_flags = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+    license_revoked = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    license_revoked_at = db.Column(db.DateTime, nullable=True)
+    # Match officials (role 'Statistician'): journalist, league secretary...
+    official_type = db.Column(db.String(40), nullable=True)
     # Two-step approval for NEW athletes (None = account from before this
     # rule: the coach alone verified it). The profile goes live
     # (is_verified) once the coach approved it AND the organization of
@@ -198,6 +208,33 @@ class SportRecord(db.Model):
     rejection_note = db.Column(db.String(200), nullable=True)
     rejected_by = db.Column(db.BigInteger, nullable=True)     # coach / D.A.R.T Admin user id
     rejected_at = db.Column(db.DateTime, nullable=True)
+
+    # ---------- Integrity: two independent sign-offs ----------
+    # status 'pending'   -> waiting for the athlete's coach
+    #        'verifying' -> coach approved; waiting for a counter-signature
+    #                       (opposing coach, a match official or the D.A.R.T Admin)
+    #        'disputed'  -> the other side says it is false; the D.A.R.T Admin decides
+    #        'approved'  -> public; 'rejected' -> refused
+    coach_approved_by = db.Column(db.BigInteger, nullable=True)
+    coach_approved_at = db.Column(db.DateTime, nullable=True)
+    countersign_target = db.Column(db.String(16), nullable=True)     # opposing_coach / official
+    countersigned_by = db.Column(db.BigInteger, nullable=True)
+    countersigned_at = db.Column(db.DateTime, nullable=True)
+    countersign_role = db.Column(db.String(16), nullable=True)       # opposing_coach / official / admin
+    dispute_reason = db.Column(db.String(300), nullable=True)
+    disputed_by = db.Column(db.BigInteger, nullable=True)
+    disputed_at = db.Column(db.DateTime, nullable=True)
+    # Numbers far above the athlete's usual (or extreme for one game): held
+    # until a match sheet or a highlight video is attached as proof.
+    anomaly_flags = db.Column(db.String(300), nullable=True)
+    proof_required = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    proof_path = db.Column(db.String(255), nullable=True)
+    proof_highlight_id = db.Column(db.BigInteger, nullable=True)
+    proof_uploaded_at = db.Column(db.DateTime, nullable=True)
+
+    @property
+    def needs_proof(self):
+        return bool(self.proof_required and not (self.proof_path or self.proof_highlight_id))
 
     user = db.relationship('User', backref='records')
 
@@ -1005,6 +1042,64 @@ class Entitlement(db.Model):
             name='unique_user_entitlement'
         ),
     )
+
+
+class RecordVerificationEvent(db.Model):
+    """
+    Append-only history of every step a sports record goes through (submit,
+    approve, counter-sign, dispute, edit, decision). Each row stores a hash
+    of the record's numbers and is chained to the previous row of the same
+    record (prev_hash -> event_hash), so any later change is detectable. The
+    database refuses UPDATE and DELETE on this table (see the migration).
+    record_id is not a foreign key on purpose: the history outlives the record.
+    """
+    __tablename__ = 'record_verification_event'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    record_id = db.Column(db.BigInteger, nullable=False, index=True)
+    actor_id = db.Column(db.BigInteger, nullable=True, index=True)
+    actor_role = db.Column(db.String(20), nullable=True)
+    action = db.Column(db.String(30), nullable=False)
+    detail = db.Column(db.String(400), nullable=True)
+    stats_hash = db.Column(db.String(64), nullable=False)
+    prev_hash = db.Column(db.String(64), nullable=True)
+    event_hash = db.Column(db.String(64), nullable=False, unique=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class MatchReport(db.Model):
+    """A match official's own record of a game (who scored what)."""
+    __tablename__ = 'match_report'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    official_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    sport = db.Column(db.String(20), nullable=False)
+    match_date = db.Column(db.Date, nullable=False, index=True)
+    home_team = db.Column(db.String(150), nullable=False)
+    away_team = db.Column(db.String(150), nullable=False)
+    competition = db.Column(db.String(60), nullable=True)
+    notes = db.Column(db.String(300), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    official = db.relationship('User', foreign_keys=[official_id])
+    lines = db.relationship('MatchReportLine', backref='report', cascade='all, delete-orphan', lazy='selectin')
+
+
+class MatchReportLine(db.Model):
+    """One athlete's numbers in a match report."""
+    __tablename__ = 'match_report_line'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    report_id = db.Column(db.BigInteger, db.ForeignKey('match_report.id', ondelete='CASCADE'), nullable=False, index=True)
+    athlete_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    goals = db.Column(db.Integer, nullable=False, default=0)
+    assists = db.Column(db.Integer, nullable=False, default=0)
+    points = db.Column(db.Integer, nullable=False, default=0)
+    rebounds = db.Column(db.Integer, nullable=False, default=0)
+    blocks = db.Column(db.Integer, nullable=False, default=0)
+    home_runs = db.Column(db.Integer, nullable=False, default=0)
+
+    athlete = db.relationship('User', foreign_keys=[athlete_id])
 
 
 class AuditLog(db.Model):

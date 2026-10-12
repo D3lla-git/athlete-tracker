@@ -15,7 +15,7 @@ import unicodedata
 
 USERNAME_MIN = 3
 USERNAME_MAX = 20
-USERNAME_ROLES = ('Athlete', 'Coach', 'Scout')
+USERNAME_ROLES = ('Athlete', 'Coach', 'Scout', 'Statistician')
 USERNAME_CHANGE_DAYS = 30
 
 _FORMAT_RE = re.compile(r'^[a-z][a-z0-9_]*$')
