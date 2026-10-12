@@ -116,9 +116,11 @@
     var body = document.body;
     if (!body || body.dataset.dartAuth !== '1') return;
 
-    var IDLE = (+body.dataset.idleSeconds || 1800) * 1000;
-    var WARN = (+body.dataset.warningSeconds || 120) * 1000;
-    var PING_EVERY = 4 * 60 * 1000;
+    var IDLE = (+body.dataset.idleSeconds || 300) * 1000;
+    var WARN = (+body.dataset.warningSeconds || 60) * 1000;
+    // While someone is using the page, tell the server at least every minute
+    // (well inside the 5-minute window), so active people are never signed out.
+    var PING_EVERY = Math.min(60 * 1000, IDLE / 4);
     var KEY = 'dartLastActivity';
     var lastPing = Date.now();
     var prompt = null;

@@ -292,8 +292,10 @@ def plan_for_user(user):
 
     if audience == 'athlete':
         if user.athlete_category == CLUB_LEAGUE:
-            # No club record yet: the 1st Division price until a division is on file.
-            return CLUB_PLAN_BY_DIVISION.get(club_division_of(user) or '1st Division')
+            # Club records first, then the division chosen at registration;
+            # nothing on file: the 1st Division price.
+            division = club_division_of(user) or getattr(user, 'club_division', None)
+            return CLUB_PLAN_BY_DIVISION.get(division if division in CLUB_DIVISION_ORDER else '1st Division')
         return ATHLETE_PLAN_BY_CATEGORY.get(user.athlete_category)
     if audience == 'scout':
         return PLANS['scout_pro']

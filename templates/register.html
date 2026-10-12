@@ -139,6 +139,20 @@
       required>
 </div>
 
+{% if selected_category in ('Club League Athlete', 'All Athlete') %}
+{# Club League division: required for Club League Athletes; optional for All Athletes who also play club league. #}
+<div class="mb-3">
+  <label for="reg_club_division" class="form-label">
+    Club League Division <i class="fa-solid fa-layer-group"></i>{% if selected_category == 'Club League Athlete' %} <span class="text-danger">*</span>{% endif %}
+  </label>
+  <select class="form-select" id="reg_club_division" name="club_division" {% if selected_category == 'Club League Athlete' %}required{% endif %}>
+    <option value="">{{ '-- Select Division --' if selected_category == 'Club League Athlete' else "I don't play club league" }}</option>
+    {% for d in club_divisions %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+  </select>
+  <small class="text-muted">The division your club plays in. It is also pre-selected when you upload Club League records.</small>
+</div>
+{% endif %}
+
 {# Under 17: parent / guardian contact (shown once the date of birth says so). #}
 <fieldset class="mb-3 reg-guardian" id="regGuardian" hidden>
   <legend class="h6 fw-bold"><i class="fa-solid fa-people-roof"></i> Parent / guardian (under {{ guardian_age }})</legend>

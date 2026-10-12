@@ -412,9 +412,9 @@
 
 {% endif %}
 
-{% if current_user.role == 'Athlete' %}
-{# Parent / guardian contact: required under 17; only coaches of the team and the D.A.R.T Admin see it. #}
-{% set minor = is_minor_athlete(current_user) %}
+{% if is_minor_athlete(current_user) %}
+{# Parent / guardian contact: only for athletes under 17 (required); only coaches of the team and the D.A.R.T Admin see it. #}
+{% set minor = true %}
 <fieldset class="mb-3 gd-profile" id="guardianContact">
   <legend class="form-label fw-bold fs-6 mb-1"><i class="fa-solid fa-people-roof"></i> Parent / guardian contact
     {% if minor %}<span class="badge text-bg-warning ms-1">Required under {{ guardian_age }}</span>{% else %}<span class="text-muted small">(optional)</span>{% endif %}</legend>
@@ -475,20 +475,44 @@
               {% if current_user.role == 'Athlete' %}
               <div class="mb-3">
                 <label class="form-label">Athlete Registration Category <i class="fa-solid fa-person-running"></i></label>
-                <select name="athlete_category" class="form-select" required>
+                <select name="athlete_category" class="form-select" id="profileAthleteCategory" required>
                   {% for category in [
                     'All Athlete',
                     'County Meet Athlete',
                     'Club League Athlete',
                     'University Athlete',
                     'Community/Area League Athlete',
-                    'High School Athlete'
+                    'High School Athlete',
+                    'Individual Athlete'
                   ] %}
                     <option value="{{ category }}" {% if current_user.athlete_category == category %}selected{% endif %}>{{ category }}</option>
                   {% endfor %}
                 </select>
                 <small class="text-muted">This controls future competition eligibility. Previous approved records remain unchanged.</small>
               </div>
+              {# Club League division: Club League (required) and All Athletes (optional). #}
+              <div class="mb-3" id="profileClubDivision">
+                <label class="form-label" for="profileClubDivisionSelect">Club League Division <i class="fa-solid fa-layer-group"></i></label>
+                <select name="club_division" class="form-select" id="profileClubDivisionSelect">
+                  <option value="" data-blank>I don't play club league</option>
+                  {% for d in club_divisions %}<option value="{{ d }}" {% if current_user.club_division == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+                </select>
+              </div>
+              <script>
+                (function () {
+                  var cat = document.getElementById('profileAthleteCategory'), box = document.getElementById('profileClubDivision');
+                  if (!cat || !box) return;
+                  var sel = box.querySelector('select'), blank = sel.querySelector('[data-blank]');
+                  function sync() {
+                    var club = cat.value === 'Club League Athlete', all = cat.value === 'All Athlete';
+                    box.hidden = !(club || all);
+                    sel.disabled = box.hidden;
+                    sel.required = club;
+                    blank.textContent = club ? '-- Select Division --' : "I don't play club league";
+                  }
+                  cat.addEventListener('change', sync); sync();
+                })();
+              </script>
               {% elif current_user.role == 'Coach' %}
               <div class="mb-3">
                 <label class="form-label">Coach Registration Category <i class="fa-solid fa-user-tie"></i></label>

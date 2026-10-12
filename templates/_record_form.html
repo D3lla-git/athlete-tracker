@@ -175,9 +175,7 @@
         class="form-select"
     >
         <option value="">-- Select Division --</option>
-        <option value="1st Division">1st Division</option>
-        <option value="2nd Division">2nd Division</option>
-        <option value="3rd Division">3rd Division</option>
+        {% for d in club_divisions %}<option value="{{ d }}" {% if current_user.is_authenticated and current_user.club_division == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
     </select>
 </div>
 

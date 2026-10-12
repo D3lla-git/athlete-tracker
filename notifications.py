@@ -1,5 +1,6 @@
 """
-The bell: in-app notifications about the user's own approvals.
+The bell: in-app notifications about the user's own approvals, plus new
+awards (Highlight / Goal / Assist of the Week / Month) for every athlete.
 
   Athletes       - profile approved (live), each record approved
   Coaches        - coach account approved
@@ -55,6 +56,63 @@ def _create_notifications(session, flush_context, instances):
         elif isinstance(obj, SportRecord) and obj.id and obj.user_id and _became_approved(obj):
             session.add(Notification(user_id=obj.user_id, kind='record_approved', message=_record_message(obj)[:300],
                                      link='/student#my-records'))
+
+
+def notify_new_award(contest):
+    """
+    A new award (e.g. Goal of the Week) reaches every athlete on D.A.R.T.
+    (team and individual): one bell notification each, inserted in one go.
+    Returns how many were sent. Caller commits.
+    """
+    athlete_ids = [uid for (uid,) in db.session.query(User.id).filter(
+        User.role == 'Athlete', User.is_verified.is_(True), User.is_suspended.is_(False))]
+    return _insert_award_notices(contest, athlete_ids)
+
+
+def award_message(contest):
+    deadline = contest.entry_deadline.strftime('%d %b, %H:%M')
+    return (f'The D.A.R.T Admin posted a new award: {contest.title}! Enter your best approved highlight by '
+            f'{deadline} UTC, then ask your supporters, family and fans to vote for you.')[:300]
+
+
+def _award_link(contest):
+    return f'/awards#contest{contest.id}'
+
+
+def _insert_award_notices(contest, user_ids):
+    from sqlalchemy import insert
+    if not user_ids:
+        return 0
+    now = datetime.utcnow()
+    db.session.execute(insert(Notification), [
+        {'user_id': uid, 'kind': 'award_new', 'message': award_message(contest), 'link': _award_link(contest), 'created_at': now}
+        for uid in user_ids])
+    return len(user_ids)
+
+
+def catch_up_award_notices(user):
+    """
+    Athletes who haven't entered an award that is still taking entries, and
+    were never told about it (awards created before the bell, or athletes who
+    joined / went live later), get its notification now. Returns how many.
+    Caller commits.
+    """
+    if getattr(user, 'role', None) != 'Athlete' or not user.is_verified or user.is_suspended:
+        return 0
+    from models import AwardContest, AwardEntry
+    now = datetime.utcnow()
+    open_contests = AwardContest.query.filter(AwardContest.opens_at <= now, AwardContest.entry_deadline > now).all()
+    if not open_contests:
+        return 0
+    entered = {cid for (cid,) in db.session.query(AwardEntry.contest_id).filter(
+        AwardEntry.athlete_id == user.id, AwardEntry.contest_id.in_([c.id for c in open_contests]))}
+    told = {link for (link,) in db.session.query(Notification.link).filter(
+        Notification.user_id == user.id, Notification.kind == 'award_new')}
+    sent = 0
+    for c in open_contests:
+        if c.id not in entered and _award_link(c) not in told:
+            sent += _insert_award_notices(c, [user.id])
+    return sent
 
 
 def unread_count(user):

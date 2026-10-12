@@ -13,7 +13,10 @@ class Config:
     SESSION_COOKIE_SAMESITE = "Lax"
 
     # Session lifetime
-    PERMANENT_SESSION_LIFETIME = 30 * 60  # 30 minutes
+    # Every account (athletes, individual athletes, coaches, scouts,
+    # organizations, officials, admin) is signed out after 5 minutes without
+    # activity; while they keep using D.A.R.T. the session keeps renewing.
+    PERMANENT_SESSION_LIFETIME = 5 * 60  # 5 minutes
     SESSION_REFRESH_EACH_REQUEST = True
 
     UPLOAD_FOLDER = 'uploads'

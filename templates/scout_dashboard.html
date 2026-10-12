@@ -651,6 +651,7 @@
 {# Analytics (same design as the D.A.R.T Admin dashboard): the talent pool. #}
 {% from '_role_analytics.html' import role_analytics_block %}
 <div class="sd-analytics">{{ role_analytics_block(role_dash, banner=false) }}</div>
+{% include '_award_winners.html' %}
 
 {# (The KPI strip is now part of the analytics above.) #}
 

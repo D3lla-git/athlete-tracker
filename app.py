@@ -53,6 +53,7 @@ import notifications as notif
 import guardian as guardian_mod
 import awards as awards_mod
 from competitions import (
+    CLUB_DIVISIONS,
     ALL_COMPETITIONS,
     ATHLETE_CATEGORIES,
     COACH_CATEGORIES,
@@ -2767,6 +2768,18 @@ def register(registration_category=None):
                 )
             )
 
+        # Club League division: required for Club League Athletes; All Athletes
+        # who also play club league choose it too (blank = no club league).
+        club_division = (request.form.get('club_division') or '').strip() or None
+        if club_division and club_division not in CLUB_DIVISIONS:
+            flash('Choose a valid Club League division.', 'danger')
+            return redirect(url_for('register', registration_category=registration_category))
+        if selected_category == 'Club League Athlete' and not club_division:
+            flash('Choose the Club League division you play in (1st, 2nd or 3rd).', 'danger')
+            return redirect(url_for('register', registration_category=registration_category))
+        if selected_category not in ('Club League Athlete', 'All Athlete'):
+            club_division = None
+
         # Under 17: a parent / guardian contact (also asked at first login if skipped).
         guardian_data = None
         if guardian_mod.is_minor(calculated_age) and (request.form.get('guardian_phone') or '').strip():
@@ -3086,6 +3099,7 @@ def register(registration_category=None):
 
             user.set_password(password)
             user.username = username
+            user.club_division = club_division
             if guardian_data:
                 for _k, _v in guardian_data.items():
                     setattr(user, _k, _v)
@@ -3113,6 +3127,8 @@ def register(registration_category=None):
         # ==========================================================
         # UPDATE EXISTING ATHLETE PERSONAL INFORMATION
         # ==========================================================
+            if club_division:
+                existing.club_division = club_division
             existing.gender = gender
             existing.age = age
             existing.date_of_birth = date_of_birth
@@ -7346,10 +7362,11 @@ NO_ACCOUNT_ENDPOINTS = {'static', 'service_worker', 'offline', 'robots_txt', 'si
 # browser pings /session/keepalive while someone is reading or typing).
 # Background requests never count as activity: the dashboards' live
 # refresh, link prefetching, offline sync and service-worker saves.
-SESSION_IDLE_SECONDS = int(app.permanent_session_lifetime.total_seconds())   # config.py: 30 minutes
-SESSION_WARNING_SECONDS = 2 * 60
+SESSION_IDLE_SECONDS = int(app.permanent_session_lifetime.total_seconds())   # config.py: 5 minutes
+SESSION_WARNING_SECONDS = 60          # "Stay signed in" prompt in the last minute
 BACKGROUND_ENDPOINTS = {'admin_dashboard_stats', 'record_sync_status'}
-IDLE_SIGNOUT_MESSAGE = 'For your security you were signed out after 30 minutes without activity. Please log in again.'
+IDLE_SIGNOUT_MESSAGE = (f'For your security you were signed out after {SESSION_IDLE_SECONDS // 60} minutes without activity. '
+                        'Please log in again.')
 
 
 def is_background_request():
@@ -7465,6 +7482,8 @@ def can_see_guardian(viewer, athlete):
     """The athlete, coaches of the athlete's team and the D.A.R.T Admin. Never the public or scouts."""
     if not getattr(viewer, 'is_authenticated', False) or not athlete or not athlete.guardian_phone:
         return False
+    if not is_minor_athlete(athlete):          # only for athletes under 17
+        return False
     if viewer.id == athlete.id or viewer.role == 'System':
         return True
     return viewer.role == 'Coach' and coaching.manages_athlete(viewer, athlete)
@@ -7495,7 +7514,8 @@ def save_guardian(user, data):
 def guardian_contact():
     """Under-17 athletes: parent / guardian contact + 'a parent, guardian or coach helps manage my page'."""
     next_url = safe_next_url(request.values.get('next'))
-    if current_user.role != 'Athlete':
+    if not is_minor_athlete(current_user):
+        # Only for athletes under 17.
         return redirect(next_url or url_for(dashboard_endpoint_for(current_user)))
     age = athlete_age(current_user)
     error = None
@@ -7802,7 +7822,7 @@ def profile_card_info(user, viewer=None):
         info.update({
             'eyebrow': 'Athlete Profile',
             'subtitle': ' · '.join(sub),
-            'pill': user.athlete_category or 'Athlete',
+            'pill': (user.athlete_category or 'Athlete') + (f' · {user.club_division}' if user.athlete_category == 'Club League Athlete' and user.club_division else ''),
             'stats': [
                 ('Age', f'{age} yrs' if age is not None else '—'),
                 ('Weight', f'{float(user.weight_kg):g} kg' if user.weight_kg else '—'),
@@ -8353,7 +8373,7 @@ def game_date_future_error(game_date):
 
 
 app.jinja_env.globals['today_iso'] = lambda: utc_today().isoformat()
-app.jinja_env.globals.update(athlete_categories=ATHLETE_CATEGORIES, coach_categories=COACH_CATEGORIES,
+app.jinja_env.globals.update(athlete_categories=ATHLETE_CATEGORIES, coach_categories=COACH_CATEGORIES, club_divisions=CLUB_DIVISIONS,
                              is_individual_athlete=is_individual_athlete)
 app.jinja_env.globals['athlete_allowed_competitions'] = lambda user: athlete_allowed_competitions(user)
 
@@ -10646,16 +10666,12 @@ def update_profile():
         current_user.preferred_foot = new_preferred_foot or None
 
     # ---------- PARENT / GUARDIAN CONTACT (athletes; required under 17) ----------
-    if current_user.role == 'Athlete' and 'guardian_phone' in request.form:
-        if (request.form.get('guardian_phone') or '').strip() or guardian_mod.is_minor(athlete_age(current_user)):
-            data, error = guardian_mod.validate(request.form, current_user)
-            if error:
-                flash(error, 'danger')
-                return redirect(url_for('profile') + '#guardianContact')
-            save_guardian(current_user, data)
-        else:
-            for k in ('guardian_name', 'guardian_relationship', 'guardian_phone'):
-                setattr(current_user, k, None)
+    if 'guardian_phone' in request.form and is_minor_athlete(current_user):
+        data, error = guardian_mod.validate(request.form, current_user)
+        if error:
+            flash(error, 'danger')
+            return redirect(url_for('profile') + '#guardianContact')
+        save_guardian(current_user, data)
 
     # ---------- WHO SEES MY PERSONAL DETAILS ----------
     if current_user.role in ('Athlete', 'Coach', 'Scout') and 'personal_visibility' in request.form:
@@ -10765,6 +10781,24 @@ def update_profile():
                     ))
 
             current_user.athlete_category = new_athlete_category
+
+        # Club League division (Club League / All Athlete). Premium for Club
+        # League is priced by division, so it can't change while a plan runs.
+        if 'club_division' in request.form:
+            new_division = (request.form.get('club_division') or '').strip() or None
+            if new_division and new_division not in CLUB_DIVISIONS:
+                flash('Choose a valid Club League division.', 'danger')
+                return redirect(url_for('profile'))
+            if current_user.athlete_category == 'Club League Athlete' and not new_division:
+                flash('Club League Athletes must choose their division.', 'danger')
+                return redirect(url_for('profile'))
+            running = current_plan(current_user)
+            if running and running.division and new_division != current_user.club_division:
+                flash(f'Your division can be changed after your {running.name} plan ends, because it is priced by division.', 'warning')
+                return redirect(url_for('profile'))
+            current_user.club_division = new_division
+        if current_user.athlete_category not in ('Club League Athlete', 'All Athlete'):
+            current_user.club_division = None
 
         # Individual athletes have no team; joining a team means choosing a
         # team category AND the team's name (its coach approves from then on).
@@ -12547,6 +12581,15 @@ def _bell_count():
     if not current_user.is_authenticated or current_user.role == 'System':
         return 0
     if 'bell_count' not in g:
+        # Open awards the athlete hasn't entered (checked at most every 10 minutes).
+        if current_user.role == 'Athlete' and time.time() - float(session.get('_award_notice_check', 0)) > 600:
+            session['_award_notice_check'] = time.time()
+            try:
+                if notif.catch_up_award_notices(current_user):
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+                app.logger.exception('Award catch-up notices failed')
         g.bell_count = notif.unread_count(current_user)
     return g.bell_count
 
@@ -12653,10 +12696,11 @@ def admin_awards():
                                    opens_at=opens, entry_deadline=deadline, voting_ends_at=ends, created_by=current_user.id)
             db.session.add(contest)
             db.session.flush()
+            sent = notif.notify_new_award(contest)
             create_audit_log(action='award_contest_created', actor_user_id=current_user.id, target_type='award_contest',
-                             target_id=str(contest.id), details={'title': contest.title})
+                             target_id=str(contest.id), details={'title': contest.title, 'athletes_notified': sent})
             db.session.commit()
-            flash(f'{contest.title} created.', 'success')
+            flash(f'{contest.title} created. {sent} athlete{"s" if sent != 1 else ""} notified.', 'success')
         return redirect(url_for('admin_awards'))
     groups = _contests_by_phase()
     contests = groups['entries'] + groups['voting'] + groups['upcoming'] + groups['closed']
@@ -12704,6 +12748,8 @@ def awards_pending_count():
 
 
 app.jinja_env.globals['awards_pending_count'] = awards_pending_count
+app.jinja_env.globals['award_results'] = awards_mod.recent_results
+app.jinja_env.globals['highlight_media_url'] = highlight_media_url
 
 
 if __name__ == '__main__':

@@ -20,6 +20,7 @@
   .nt-item.is-new { border-left: 4px solid #198754; background: rgba(25, 135, 84, 0.07); }
   .nt-icon { flex: 0 0 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: #198754; }
   .nt-icon.nt-record { background: #0b5ed7; }
+  .nt-icon.nt-award { background: #d4a514; }
   .nt-body { flex: 1; min-width: 0; }
   .nt-msg { font-weight: 600; overflow-wrap: anywhere; color: var(--surface-text, #111); }
   [data-theme="dark"] .nt-msg { color: #f0efec; }
@@ -31,7 +32,7 @@
 <div class="nt-wrap">
   <section class="nt-hero" aria-label="Notifications">
     <h1><i class="fa-solid fa-bell" aria-hidden="true"></i> Notifications</h1>
-    <p>Approvals of your {{ 'profile and records' if current_user.role == 'Athlete' else 'account' }}.</p>
+    <p>{% if current_user.role == 'Athlete' %}Approvals of your profile and records, and new awards you can enter.{% else %}Approvals of your account.{% endif %}</p>
   </section>
 
   {% if items %}
@@ -40,8 +41,8 @@
         {% set new = n.id in unread_ids %}
         <li>
           <a class="nt-item{{ ' is-new' if new }}" href="{{ n.link or '#' }}">
-            <span class="nt-icon{{ ' nt-record' if n.kind == 'record_approved' }}" aria-hidden="true">
-              <i class="fa-solid {{ 'fa-file-circle-check' if n.kind == 'record_approved' else 'fa-circle-check' }}"></i>
+            <span class="nt-icon{{ ' nt-record' if n.kind == 'record_approved' }}{{ ' nt-award' if n.kind == 'award_new' }}" aria-hidden="true">
+              <i class="fa-solid {{ 'fa-file-circle-check' if n.kind == 'record_approved' else 'fa-trophy' if n.kind == 'award_new' else 'fa-circle-check' }}"></i>
             </span>
             <span class="nt-body">
               <span class="nt-msg">{{ n.message }}</span>{% if new %}<span class="nt-new">New</span>{% endif %}

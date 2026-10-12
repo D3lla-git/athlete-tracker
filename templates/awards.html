@@ -56,6 +56,11 @@
                 {% if current_user.is_authenticated %}
                   {% if current_user.id == e.athlete_id %}
                     <span class="small text-muted">Your entry</span>
+                    <button type="button" class="btn btn-sm btn-outline-warning mt-auto aw-share" data-aw-share
+                            data-url="{{ url_for('awards_page', _external=True) }}#contest{{ c.id }}"
+                            data-text="Vote for me ({{ e.athlete.full_name }}) in {{ c.title }} on D.A.R.T.!">
+                      <i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Share &amp; ask for votes
+                    </button>
                   {% elif voted == e.id %}
                     <span class="badge text-bg-primary">Your vote</span>
                   {% else %}
@@ -84,18 +89,42 @@
       {{ contest_head(c, 'entries') }}
       {% set mine = c.entries | selectattr('athlete_id', 'equalto', current_user.id if current_user.is_authenticated else 0) | first %}
       {% if mine %}
-        <p class="mb-0"><i class="fa-solid fa-circle-check text-success" aria-hidden="true"></i> You entered this award
-          ({{ {'pending': 'waiting for D.A.R.T Admin review', 'approved': 'approved, in the vote', 'rejected': 'not accepted'}[mine.status] }}).</p>
+        <p class="mb-2"><i class="fa-solid fa-circle-check text-success" aria-hidden="true"></i> You entered this award
+          ({{ {'pending': 'waiting for D.A.R.T Admin review', 'approved': 'approved, in the vote', 'rejected': 'not accepted'}[mine.status] }}).
+          {% if mine.status != 'rejected' %}Voting opens {{ c.entry_deadline.strftime('%d %b, %H:%M') }} UTC: tell your supporters now!{% endif %}</p>
+        {% if mine.status != 'rejected' %}
+          <button type="button" class="btn btn-sm btn-outline-warning aw-share" data-aw-share
+                  data-url="{{ url_for('awards_page', _external=True) }}#contest{{ c.id }}"
+                  data-text="I entered {{ c.title }} on D.A.R.T.! Voting opens {{ c.entry_deadline.strftime('%d %b') }}: please vote for me ({{ current_user.full_name }}).">
+            <i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Share &amp; ask for votes
+          </button>
+        {% endif %}
       {% elif current_user.is_authenticated and current_user.role == 'Athlete' and current_user.is_verified %}
         {% set clips = my_highlights.get(c.id) or [] %}
         {% if clips %}
           <form method="POST" action="{{ url_for('award_enter', contest_id=c.id) }}" class="aw-enter">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <label class="visually-hidden" for="awClip{{ c.id }}">Your highlight</label>
-            <select class="form-select" id="awClip{{ c.id }}" name="highlight_id" required>
-              <option value="">Choose one of your approved highlights…</option>
-              {% for h in clips %}<option value="{{ h.id }}">{{ (h.caption or ('Video' if h.is_video else 'Photo')) | truncate(50) }} · {{ h.created_at.strftime('%d %b') }}</option>{% endfor %}
-            </select>
+            {# Pick by seeing the photo / video itself, not only its caption. #}
+            <fieldset class="aw-pick-set">
+              <legend class="aw-pick-legend">Choose one of your approved highlights</legend>
+              <div class="aw-pick-grid">
+              {% for h in clips %}
+                <label class="aw-pick">
+                  <input type="radio" name="highlight_id" value="{{ h.id }}" required>
+                  <span class="aw-pick-media">
+                    {% if h.is_video %}
+                      <video src="{{ highlight_url(h) }}#t=0.5" muted playsinline preload="metadata" aria-hidden="true"></video>
+                      <span class="aw-pick-kind"><i class="fa-solid fa-play" aria-hidden="true"></i> {{ h.duration_label }}</span>
+                    {% else %}
+                      <img src="{{ highlight_url(h) }}" alt="" loading="lazy" decoding="async">
+                    {% endif %}
+                    <span class="aw-pick-check" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+                  </span>
+                  <span class="aw-pick-caption">{{ (h.caption or ('Video' if h.is_video else 'Photo')) | truncate(40) }}<small>{{ h.created_at.strftime('%d %b %Y') }}{% if h.sport %} · {{ h.sport }}{% endif %}</small></span>
+                </label>
+              {% endfor %}
+              </div>
+            </fieldset>
             <label class="visually-hidden" for="awNote{{ c.id }}">Note</label>
             <input class="form-control" id="awNote{{ c.id }}" name="note" maxlength="150" placeholder="e.g. Free kick vs LPRC, 88th minute (optional)">
             <button type="submit" class="btn dart-btn"><i class="fa-solid fa-trophy" aria-hidden="true"></i> Enter</button>
@@ -140,4 +169,21 @@
   </div>
   {% if not ns.any %}<p class="aw-empty">Winners appear here when voting closes.</p>{% endif %}
 </div>
+<script>
+  // "Share & ask for votes": the phone's share sheet, otherwise copy the link.
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-aw-share]');
+    if (!b) return;
+    var url = b.getAttribute('data-url'), text = b.getAttribute('data-text');
+    if (navigator.share) {
+      navigator.share({ title: 'D.A.R.T. Awards', text: text, url: url }).catch(function () {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text + ' ' + url).then(function () {
+        var old = b.innerHTML;
+        b.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i> Link copied: send it to your supporters';
+        setTimeout(function () { b.innerHTML = old; }, 2500);
+      });
+    }
+  });
+</script>
 {% endblock %}

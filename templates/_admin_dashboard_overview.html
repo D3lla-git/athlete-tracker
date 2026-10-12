@@ -207,6 +207,7 @@
   {# Coach: the same analytics dashboard as the D.A.R.T Admin's, for their teams. #}
   {% from '_role_analytics.html' import role_analytics_block %}
   {{ role_analytics_block(role_dash) }}
+  {% include '_award_winners.html' %}
 
   <!-- ===== ATHLETES THIS COACH MANAGES ===== -->
   <div class="dash-section">

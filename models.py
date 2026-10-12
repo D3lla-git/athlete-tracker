@@ -93,6 +93,8 @@ class User(UserMixin, db.Model):
     official_type = db.Column(db.String(40), nullable=True)
     # Athletes under 17: a parent / guardian contact is required, and the
     # athlete confirms a parent, guardian or coach helps manage the page.
+    # Club League division the athlete plays in (Club League / All Athlete), from registration.
+    club_division = db.Column(db.String(20), nullable=True)
     guardian_name = db.Column(db.String(100), nullable=True)
     guardian_relationship = db.Column(db.String(30), nullable=True)
     guardian_phone = db.Column(db.String(20), nullable=True)

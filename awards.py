@@ -70,6 +70,25 @@ def decide(contest, now=None):
     return winner
 
 
+def recent_results(limit=6):
+    """
+    Finished awards with their podium, newest first:
+    [{'contest': c, 'podium': [(entry, votes), ...up to 3], 'winner': entry or None}].
+    Read-only (the winner is the most-voted entry), for coach / scout / organization dashboards.
+    """
+    now = datetime.utcnow()
+    contests = (AwardContest.query.filter(AwardContest.voting_ends_at <= now)
+                .order_by(AwardContest.voting_ends_at.desc()).limit(limit).all())
+    results = []
+    for c in contests:
+        podium = [(e, v) for e, v in ranked(c) if v > 0][:3]
+        if not podium:
+            continue
+        winner = next((e for e, _ in podium if e.id == c.winner_entry_id), podium[0][0])
+        results.append({'contest': c, 'podium': podium, 'winner': winner})
+    return results
+
+
 def entry_error(contest, athlete, highlight):
     """Why this athlete can't enter this highlight now (None = OK)."""
     if phase(contest) != 'entries':
