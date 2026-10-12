@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Parent / Guardian | D.A.R.T{% endblock %}
+
+{% block content %}
+{% from '_gov_name.html' import gov_name_note, gov_name_assets %}
+<style>
+  .gd-wrap { max-width: 680px; margin: 0 auto; }
+  .gd-hero {
+    padding: 24px 22px; border-radius: 22px; color: #fff; margin-bottom: 16px;
+    background: var(--dart-primary-gradient); background-color: #0d2413; border: 1px solid rgba(57, 185, 114, 0.35);
+    box-shadow: 0 14px 34px rgba(4, 20, 8, 0.28);
+  }
+  .gd-hero h1 { font-size: clamp(1.3rem, 4vw, 1.7rem); font-weight: 800; margin: 0 0 6px; }
+  .gd-hero p { margin: 0; color: rgba(255, 255, 255, 0.85); }
+  .gd-warn {
+    display: flex; gap: 12px; padding: 14px 16px; margin-bottom: 16px; border-radius: 16px;
+    background: rgba(245, 197, 66, 0.14); border: 1px solid rgba(245, 197, 66, 0.55); color: var(--surface-text, #111);
+  }
+  .gd-warn i { color: #d4a514; font-size: 1.3rem; margin-top: 2px; }
+  .gd-warn ul { margin: 6px 0 0; padding-left: 18px; }
+  .gd-card { padding: 20px; border-radius: 18px; background: var(--surface-bg, #fff); color: var(--surface-text, #111);
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1)); }
+  .gd-ack { padding: 12px 14px; border-radius: 12px; background: rgba(25, 135, 84, 0.08); border: 1px solid rgba(25, 135, 84, 0.3); }
+</style>
+<div class="gd-wrap">
+  <section class="gd-hero" aria-label="Young athlete safety">
+    <h1><i class="fa-solid fa-people-roof" aria-hidden="true"></i> {{ 'You are under %d' % guardian_age if is_minor else 'Parent / guardian contact' }}</h1>
+    <p>{% if is_minor %}D.A.R.T. keeps young athletes safe. Before you continue, add your parent's or guardian's contact.{% else %}Add or update a parent / guardian contact.{% endif %}</p>
+  </section>
+
+  {% if is_minor %}
+  <div class="gd-warn" role="note">
+    <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+    <div>
+      <strong>Let your parent, guardian or coach handle your page with you.</strong>
+      <ul class="small">
+        <li>Show them your D.A.R.T. page and let them check your records before you submit them.</li>
+        <li>Never share your password, home address or money details with anyone, including scouts.</li>
+        <li>Real scouts contact young athletes through their parent / guardian, coach, school or club. Tell an adult about any message that makes you uncomfortable.</li>
+        <li>Your parent's / guardian's contact is seen only by your coaches and the D.A.R.T Admin, never by the public or scouts.</li>
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
+  <form method="POST" action="{{ url_for('guardian_contact') }}" class="gd-card" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+    {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+
+    <div class="mb-3">
+      <label class="form-label" for="guardian_name">Parent / guardian's full name</label>
+      <input class="form-control" id="guardian_name" name="guardian_name" maxlength="100" required autocomplete="off"
+             autocapitalize="words" spellcheck="false" data-gov-name value="{{ form.get('guardian_name', '') }}"
+             placeholder="Example: Mary Wleh Kollie" aria-describedby="guardian_nameNote guardian_nameError">
+      {{ gov_name_note('guardian_name') }}
+    </div>
+    <div class="row">
+      <div class="col-sm-5 mb-3">
+        <label class="form-label" for="guardian_relationship">Relationship</label>
+        <select class="form-select" id="guardian_relationship" name="guardian_relationship" required>
+          <option value="">Choose…</option>
+          {% for r in guardian_relationships %}<option value="{{ r }}" {% if form.get('guardian_relationship') == r %}selected{% endif %}>{{ r }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-7 mb-3">
+        <label class="form-label" for="guardian_phone">Phone number</label>
+        <input class="form-control" type="tel" id="guardian_phone" name="guardian_phone" maxlength="20" required inputmode="tel"
+               value="{{ form.get('guardian_phone', '') }}" placeholder="0770 123 456 or +1 202 555 0100">
+      </div>
+    </div>
+
+    {% if is_minor %}
+    <div class="form-check gd-ack mb-3">
+      <input class="form-check-input" type="checkbox" name="ack" value="yes" id="gdAck" required>
+      <label class="form-check-label" for="gdAck">
+        I understand. My parent, guardian or coach knows about my D.A.R.T. page and will help me manage it.
+      </label>
+    </div>
+    {% endif %}
+
+    <button type="submit" class="btn dart-btn w-100 py-2"><i class="fa-solid fa-shield-heart" aria-hidden="true"></i> Save and continue</button>
+  </form>
+</div>
+{{ gov_name_assets() }}
+{% endblock %}

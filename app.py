@@ -50,6 +50,7 @@ from plans import (
 import coaching
 import integrity
 import notifications as notif
+import guardian as guardian_mod
 from competitions import (
     ALL_COMPETITIONS,
     ATHLETE_CATEGORIES,
@@ -2750,6 +2751,14 @@ def register(registration_category=None):
                 )
             )
 
+        # Under 17: a parent / guardian contact (also asked at first login if skipped).
+        guardian_data = None
+        if guardian_mod.is_minor(calculated_age) and (request.form.get('guardian_phone') or '').strip():
+            guardian_data, guardian_error = guardian_mod.validate(request.form)
+            if guardian_error:
+                flash(guardian_error, 'danger')
+                return redirect(url_for('register', registration_category=registration_category))
+
         if not nationality:
             flash('Nationality is required.', 'danger')
             return redirect(
@@ -3061,6 +3070,12 @@ def register(registration_category=None):
 
             user.set_password(password)
             user.username = username
+            if guardian_data:
+                for _k, _v in guardian_data.items():
+                    setattr(user, _k, _v)
+                user.guardian_updated_at = datetime.utcnow()
+                if request.form.get('guardian_ack') == 'yes':
+                    user.minor_notice_ack_at = datetime.utcnow()
             attach_google_signup(user)
             # New rule: coach + the team's organization (if on D.A.R.T.).
             user.coach_verified = False
@@ -7398,13 +7413,90 @@ def require_terms_acceptance():
 
 def require_username_choice():
     """Athletes, coaches and scouts without a username choose one first."""
-    if request.endpoint in USERNAME_OPEN_ENDPOINTS or not needs_username(current_user):
+    if request.endpoint in USERNAME_OPEN_ENDPOINTS:
         return None
+    if not needs_username(current_user):
+        return require_guardian_contact()
     if request.path.startswith('/api/') or request.is_json or is_background_request():
         return _no_store_json({'ok': False, 'reason': 'username_required',
                                'error': 'Please choose your D.A.R.T. username first.'}, 403)
     next_url = request.full_path.rstrip('?') if request.method == 'GET' else None
     return redirect(url_for('choose_username', next=next_url))
+
+
+# ---------- Athletes under 17: parent / guardian contact + safeguarding notice ----------
+GUARDIAN_OPEN_ENDPOINTS = {'guardian_contact'}
+
+
+def needs_guardian(user):
+    return (getattr(user, 'is_authenticated', False) and user.role == 'Athlete'
+            and guardian_mod.needs_setup(user, athlete_age(user)))
+
+
+def require_guardian_contact():
+    if request.endpoint in GUARDIAN_OPEN_ENDPOINTS or not needs_guardian(current_user):
+        return None
+    if request.path.startswith('/api/') or request.is_json or is_background_request():
+        return _no_store_json({'ok': False, 'reason': 'guardian_required',
+                               'error': 'Please add your parent or guardian contact first.'}, 403)
+    next_url = request.full_path.rstrip('?') if request.method == 'GET' else None
+    return redirect(url_for('guardian_contact', next=next_url))
+
+
+def can_see_guardian(viewer, athlete):
+    """The athlete, coaches of the athlete's team and the D.A.R.T Admin. Never the public or scouts."""
+    if not getattr(viewer, 'is_authenticated', False) or not athlete or not athlete.guardian_phone:
+        return False
+    if viewer.id == athlete.id or viewer.role == 'System':
+        return True
+    return viewer.role == 'Coach' and coaching.manages_athlete(viewer, athlete)
+
+
+def is_minor_athlete(user):
+    return getattr(user, 'role', None) == 'Athlete' and guardian_mod.is_minor(athlete_age(user))
+
+
+app.jinja_env.globals.update(can_see_guardian=can_see_guardian, is_minor_athlete=is_minor_athlete,
+                             guardian_relationships=guardian_mod.RELATIONSHIPS, guardian_age=guardian_mod.GUARDIAN_AGE)
+
+
+def save_guardian(user, data):
+    """Caller commits."""
+    changed = any(getattr(user, k) != v for k, v in data.items())
+    for k, v in data.items():
+        setattr(user, k, v)
+    if changed:
+        user.guardian_updated_at = datetime.utcnow()
+        create_audit_log(action='guardian_contact_saved', actor_user_id=getattr(current_user, 'id', None) or user.id,
+                         target_type='User', target_id=str(user.id),
+                         details={'relationship': data['guardian_relationship'], 'phone_last4': data['guardian_phone'][-4:]})
+
+
+@app.route('/guardian', methods=['GET', 'POST'])
+@login_required
+def guardian_contact():
+    """Under-17 athletes: parent / guardian contact + 'a parent, guardian or coach helps manage my page'."""
+    next_url = safe_next_url(request.values.get('next'))
+    if current_user.role != 'Athlete':
+        return redirect(next_url or url_for(dashboard_endpoint_for(current_user)))
+    age = athlete_age(current_user)
+    error = None
+    form = request.form if request.method == 'POST' else {
+        'guardian_name': current_user.guardian_name or '', 'guardian_relationship': current_user.guardian_relationship or '',
+        'guardian_phone': current_user.guardian_phone or ''}
+    if request.method == 'POST':
+        data, error = guardian_mod.validate(request.form, current_user)
+        if not error and guardian_mod.is_minor(age) and request.form.get('ack') != 'yes':
+            error = 'Please confirm that your parent, guardian or coach will help manage your D.A.R.T. page.'
+        if not error:
+            save_guardian(current_user, data)
+            if request.form.get('ack') == 'yes' and not current_user.minor_notice_ack_at:
+                current_user.minor_notice_ack_at = datetime.utcnow()
+            db.session.commit()
+            flash('Parent / guardian contact saved. Thank you for keeping your page safe.', 'success')
+            return redirect(next_url or url_for('student_dashboard'))
+    return render_template('guardian.html', form=form, error=error, age=age, next_url=next_url,
+                           is_minor=guardian_mod.is_minor(age)), (400 if error else 200)
 
 
 @app.route('/choose-username', methods=['GET', 'POST'])
@@ -10529,6 +10621,18 @@ def update_profile():
 
     if 'preferred_foot' in request.form:
         current_user.preferred_foot = new_preferred_foot or None
+
+    # ---------- PARENT / GUARDIAN CONTACT (athletes; required under 17) ----------
+    if current_user.role == 'Athlete' and 'guardian_phone' in request.form:
+        if (request.form.get('guardian_phone') or '').strip() or guardian_mod.is_minor(athlete_age(current_user)):
+            data, error = guardian_mod.validate(request.form, current_user)
+            if error:
+                flash(error, 'danger')
+                return redirect(url_for('profile') + '#guardianContact')
+            save_guardian(current_user, data)
+        else:
+            for k in ('guardian_name', 'guardian_relationship', 'guardian_phone'):
+                setattr(current_user, k, None)
 
     # ---------- WHO SEES MY PERSONAL DETAILS ----------
     if current_user.role in ('Athlete', 'Coach', 'Scout') and 'personal_visibility' in request.form:

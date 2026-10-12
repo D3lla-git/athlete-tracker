@@ -412,6 +412,26 @@
 
 {% endif %}
 
+{% if current_user.role == 'Athlete' %}
+{# Parent / guardian contact: required under 17; only coaches of the team and the D.A.R.T Admin see it. #}
+{% set minor = is_minor_athlete(current_user) %}
+<fieldset class="mb-3 gd-profile" id="guardianContact">
+  <legend class="form-label fw-bold fs-6 mb-1"><i class="fa-solid fa-people-roof"></i> Parent / guardian contact
+    {% if minor %}<span class="badge text-bg-warning ms-1">Required under {{ guardian_age }}</span>{% else %}<span class="text-muted small">(optional)</span>{% endif %}</legend>
+  <small class="text-muted d-block mb-2">Seen only by your coaches and the D.A.R.T Admin, never by the public or scouts.</small>
+  <div class="row g-2">
+    <div class="col-md-5"><input class="form-control" name="guardian_name" maxlength="100" aria-label="Parent / guardian's full name"
+         placeholder="Full name" value="{{ current_user.guardian_name or '' }}" {% if minor %}required{% endif %}></div>
+    <div class="col-md-3"><select class="form-select" name="guardian_relationship" aria-label="Relationship" {% if minor %}required{% endif %}>
+         <option value="">Relationship</option>
+         {% for r in guardian_relationships %}<option value="{{ r }}" {% if current_user.guardian_relationship == r %}selected{% endif %}>{{ r }}</option>{% endfor %}
+       </select></div>
+    <div class="col-md-4"><input class="form-control" type="tel" name="guardian_phone" maxlength="20" inputmode="tel" aria-label="Phone number"
+         placeholder="0770 123 456" value="{{ current_user.guardian_phone or '' }}" {% if minor %}required{% endif %}></div>
+  </div>
+</fieldset>
+{% endif %}
+
 {% if current_user.role in ('Athlete', 'Coach', 'Scout') %}
 {# Personal details are only shown with the user's permission. #}
 <div class="mb-3 pv-choice" id="personalPrivacy">

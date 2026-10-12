@@ -91,6 +91,13 @@ class User(UserMixin, db.Model):
     license_revoked_at = db.Column(db.DateTime, nullable=True)
     # Match officials (role 'Statistician'): journalist, league secretary...
     official_type = db.Column(db.String(40), nullable=True)
+    # Athletes under 17: a parent / guardian contact is required, and the
+    # athlete confirms a parent, guardian or coach helps manage the page.
+    guardian_name = db.Column(db.String(100), nullable=True)
+    guardian_relationship = db.Column(db.String(30), nullable=True)
+    guardian_phone = db.Column(db.String(20), nullable=True)
+    guardian_updated_at = db.Column(db.DateTime, nullable=True)
+    minor_notice_ack_at = db.Column(db.DateTime, nullable=True)
     # Two-step approval for NEW athletes (None = account from before this
     # rule: the coach alone verified it). The profile goes live
     # (is_verified) once the coach approved it AND the organization of

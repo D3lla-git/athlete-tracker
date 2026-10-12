@@ -91,6 +91,15 @@
 <!-- ==================== MY SUBMITTED RECORDS ==================== -->
 <h4 class="mt-4 mb-3" id="my-records">My Submitted Records <i class="fa-solid fa-book"></i></h4>
 {% include '_record_warning.html' %}
+{% if is_minor_athlete(current_user) %}
+  {# Young athletes: a standing reminder to let an adult help (safeguarding). #}
+  <div class="alert alert-warning d-flex gap-2 align-items-start minor-note" role="note">
+    <i class="fa-solid fa-people-roof mt-1" aria-hidden="true"></i>
+    <div class="small"><strong>You are under {{ guardian_age }}.</strong> Let your parent, guardian ({{ current_user.guardian_name or 'not added yet' }}) or coach
+      help manage your page and check your records before you submit them. Scouts must contact you through them, your school or club.
+      <a href="{{ url_for('profile') }}#guardianContact">Parent / guardian contact</a></div>
+  </div>
+{% endif %}
 {% set my_pins = pinned_record_ids(current_user.id) %}
 {% set my_pin_limit = pin_limit(current_user) %}
 {% macro pin_button(r, my_pins, my_pin_limit) %}

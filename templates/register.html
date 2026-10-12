@@ -131,6 +131,54 @@
       required>
 </div>
 
+{# Under 17: parent / guardian contact (shown once the date of birth says so). #}
+<fieldset class="mb-3 reg-guardian" id="regGuardian" hidden>
+  <legend class="h6 fw-bold"><i class="fa-solid fa-people-roof"></i> Parent / guardian (under {{ guardian_age }})</legend>
+  <div class="alert alert-warning small py-2">
+    <strong>You are under {{ guardian_age }}.</strong> D.A.R.T. asks that your parent, guardian or coach help manage your page.
+    Their contact is seen only by your coaches and the D.A.R.T Admin.
+  </div>
+  <div class="mb-2">
+    <label class="form-label" for="reg_guardian_name">Parent / guardian's full name</label>
+    <input class="form-control" id="reg_guardian_name" name="guardian_name" maxlength="100" autocomplete="off" placeholder="Example: Mary Wleh Kollie">
+  </div>
+  <div class="row g-2 mb-2">
+    <div class="col-sm-5">
+      <label class="form-label" for="reg_guardian_relationship">Relationship</label>
+      <select class="form-select" id="reg_guardian_relationship" name="guardian_relationship">
+        <option value="">Choose…</option>
+        {% for r in guardian_relationships %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-sm-7">
+      <label class="form-label" for="reg_guardian_phone">Phone number</label>
+      <input class="form-control" type="tel" id="reg_guardian_phone" name="guardian_phone" maxlength="20" inputmode="tel" placeholder="0770 123 456">
+    </div>
+  </div>
+  <div class="form-check">
+    <input class="form-check-input" type="checkbox" id="reg_guardian_ack" name="guardian_ack" value="yes">
+    <label class="form-check-label small" for="reg_guardian_ack">My parent, guardian or coach knows about my D.A.R.T. page and will help me manage it.</label>
+  </div>
+</fieldset>
+<script>
+(function () {
+  var dob = document.getElementById('date_of_birth'), box = document.getElementById('regGuardian');
+  if (!dob || !box) return;
+  var fields = box.querySelectorAll('input, select');
+  function sync() {
+    var d = dob.value ? new Date(dob.value + 'T00:00:00') : null, minor = false;
+    if (d && !isNaN(d)) {
+      var t = new Date(), age = t.getFullYear() - d.getFullYear();
+      if (t.getMonth() < d.getMonth() || (t.getMonth() === d.getMonth() && t.getDate() < d.getDate())) age--;
+      minor = age >= 0 && age < {{ guardian_age }};
+    }
+    box.hidden = !minor;
+    fields.forEach(function (f) { f.required = minor; f.disabled = !minor; });
+  }
+  dob.addEventListener('change', sync); dob.addEventListener('input', sync); sync();
+})();
+</script>
+
 <div class="mb-3">
   <label for="nationality" class="form-label">
     Nationality <i class="fa-solid fa-globe" style="color: skyblue;"></i>

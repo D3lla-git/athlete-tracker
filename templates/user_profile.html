@@ -21,6 +21,16 @@
 {# ===== Profile card (same design as the shared card image + PDF) ===== #}
 {% if user.role in ('Athlete', 'Coach', 'Scout') %}
   {{ profile_hero(profile_card_info(user, current_user)) }}
+  {% if can_see_guardian(current_user, user) %}
+    {# Coaches of the athlete's team + the D.A.R.T Admin only (safeguarding). #}
+    <div class="alert alert-light border d-flex flex-wrap gap-2 align-items-center up-guardian" role="note">
+      <i class="fa-solid fa-people-roof text-success" aria-hidden="true"></i>
+      <strong>Parent / guardian:</strong> {{ user.guardian_name }} ({{ user.guardian_relationship }}) ·
+      <a href="tel:{{ user.guardian_phone }}" translate="no">{{ user.guardian_phone | phone }}</a>
+      {% if is_minor_athlete(user) %}<span class="badge text-bg-warning">Under {{ guardian_age }}</span>{% endif %}
+      <span class="text-muted small w-100">Visible to this athlete's coaches and the D.A.R.T Admin only.</span>
+    </div>
+  {% endif %}
 {% else %}
   <section class="up-plain">
     <h1>{{ user.display_name }}</h1>
