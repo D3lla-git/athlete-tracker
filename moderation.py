@@ -14,12 +14,12 @@ what it sees using a fixed form (a forced tool call, so the answer is always
 structured). The rules below, not the model, decide what happens:
 
   'reject' - clearly not allowed (the file is deleted at once)
-  'review' - looks fine, or could not be checked: a Super Admin decides
+  'review' - looks fine, or could not be checked: a D.A.R.T Admin decides
   'approve'- only used when automatic publishing is switched on (see
              HIGHLIGHT_AUTO_APPROVE in app.py)
 
 Without ANTHROPIC_API_KEY nothing is checked automatically and every upload
-waits for a Super Admin.
+waits for a D.A.R.T Admin.
 """
 import base64
 import io

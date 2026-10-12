@@ -1,0 +1,132 @@
+{# Analytics dashboard for coaches, scouts and organizations: the same design
+   as the D.A.R.T Admin's (primary gradient banner, KPIs with trends, charts
+   with table views). `rd` = role_analytics(user). Numbers with a `stat`
+   key refresh live on the coach dashboard. #}
+{% macro rx_spark(values) %}
+  {% set mx = (values | max) if values else 0 %}
+  {% set n = values | length %}
+  {% if n > 1 %}
+    {% set pts = [] %}
+    {% for v in values %}{% set _ = pts.append('%.1f,%.1f' % (loop.index0 * 100 / (n - 1), 30 - (v * 26 / (mx if mx else 1)) - 2)) %}{% endfor %}
+    <svg class="adx-spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      <polyline points="0,30 {{ pts | join(' ') }} 100,30" class="adx-spark-fill"/>
+      <polyline points="{{ pts | join(' ') }}" class="adx-spark-line"/>
+    </svg>
+  {% endif %}
+{% endmacro %}
+{% macro rx_delta(change) %}
+  {% if change.pct is none %}
+    <span class="adx-delta adx-delta-flat">{{ change.this }} this month</span>
+  {% elif change.pct >= 0 %}
+    <span class="adx-delta adx-delta-up"><i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i> +{{ change.pct }}% <span>vs last month</span></span>
+  {% else %}
+    <span class="adx-delta adx-delta-down"><i class="fa-solid fa-arrow-trend-down" aria-hidden="true"></i> {{ change.pct }}% <span>vs last month</span></span>
+  {% endif %}
+{% endmacro %}
+{% macro rx_month_table(labels, caption, columns) %}
+  <details class="adx-table">
+    <summary><i class="fa-solid fa-table" aria-hidden="true"></i> Table</summary>
+    <div class="adx-table-wrap"><table>
+      <caption class="visually-hidden">{{ caption }}</caption>
+      <thead><tr><th scope="col">Month</th>{% for c in columns %}<th scope="col">{{ c[0] }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for label in labels %}{% set i = loop.index0 %}<tr><th scope="row">{{ label }}</th>{% for c in columns %}<td>{{ c[1][i] }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table></div>
+  </details>
+{% endmacro %}
+
+
+{% macro role_analytics_block(rd, banner=true) %}
+<div class="adx adx-role" id="roleAnalytics" data-role="{{ rd.role }}">
+  <script type="application/json" id="rxData">{{ rd | tojson }}</script>
+
+  {# ---------- Banner (primary gradient; pages with their own hero skip it) ---------- #}
+  {% if banner %}
+  <section class="adx-banner" aria-label="{{ rd.role }} overview">
+    <span class="adx-banner-decor" aria-hidden="true"></span>
+    <div>
+      <h2>{{ rd.title }}</h2>
+      <p>{{ rd.subtitle }}</p>
+    </div>
+    <nav class="adx-actions" aria-label="Quick links">
+      {% for label, href, icon, badge in rd.actions %}
+        <a class="adx-action{{ ' adx-action-main' if loop.first }}" href="{{ href }}"><i class="{{ icon }}" aria-hidden="true"></i> {{ label }}{% if badge %} <span class="badge rounded-pill">{{ badge }}</span>{% endif %}</a>
+      {% endfor %}
+    </nav>
+  </section>
+  {% endif %}
+
+  {# ---------- KPI row ---------- #}
+  <section class="adx-kpis adx-kpis-{{ rd.kpis | length }}" aria-label="Key numbers">
+    {% for k in rd.kpis %}
+      {% if k.href %}<a class="adx-kpi adx-kpi-link" href="{{ k.href }}">{% else %}<div class="adx-kpi">{% endif %}
+        <div class="adx-kpi-head"><span class="adx-kpi-icon adx-{{ k.tone }}"><i class="{{ k.icon }}" aria-hidden="true"></i></span> {{ k.label }}</div>
+        <div class="adx-kpi-value"><span{% if k.stat %} data-stat="{{ k.stat }}"{% endif %}>{{ k.value }}</span>{% if k.suffix %}<small>{{ k.suffix }}</small>{% endif %}</div>
+        {% if k.change %}{{ rx_delta(k.change) }}{% elif k.note %}<span class="adx-delta adx-delta-flat">{{ k.note }}</span>{% endif %}
+        {% if k.spark %}{{ rx_spark(k.spark) }}
+        {% elif k.meter is defined and k.meter is not none %}
+          <div class="adx-meter" role="meter" aria-valuenow="{{ k.meter }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ k.label }}">
+            <span data-meter="{{ k.meter }}" aria-hidden="true"></span>
+          </div>
+          <script>
+            (function () {
+              const meterBars = document.querySelectorAll('.adx-meter [data-meter]');
+              meterBars.forEach(function (bar) {
+                bar.style.width = bar.getAttribute('data-meter') + '%';
+              });
+            })();
+          </script>
+        {% endif %}
+      {% if k.href %}</a>{% else %}</div>{% endif %}
+    {% endfor %}
+  </section>
+
+  {# ---------- Trend + status ---------- #}
+  <div class="adx-grid">
+    <article class="adx-card {{ 'adx-span-8' if rd.status else 'adx-span-12' }}">
+      <div class="adx-card-head">
+        <div><h4>{{ rd.trend.title }}</h4><span class="adx-muted">{{ rd.trend.sub }} · last 12 months</span></div>
+        {{ rx_delta(rd.trend.change) }}
+      </div>
+      <div class="adx-chart adx-chart-lg"><canvas id="rxTrend" role="img" aria-label="{{ rd.trend.title }}"></canvas></div>
+      {% set cols = [] %}{% for se in rd.trend.series %}{% set _ = cols.append((se.label, se.data)) %}{% endfor %}
+      {{ rx_month_table(rd.labels, rd.trend.title, cols) }}
+    </article>
+    {% if rd.status %}
+      {% set st = rd.status %}
+      <article class="adx-card adx-span-4">
+        <div class="adx-card-head"><div><h4>{{ st.title }}</h4><span class="adx-muted">{{ st.sub }}</span></div></div>
+        <div class="adx-chart adx-chart-donut">
+          <canvas id="rxStatus" role="img" aria-label="{{ st.title }}"></canvas>
+          <div class="adx-donut-center"><strong>{{ st.center }}</strong><span>{{ st.center_label }}</span></div>
+        </div>
+        <ul class="adx-status-list">
+          <li><span class="adx-key" style="background: var(--adx-good)"></span><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Approved <strong{% if st.stats %} data-stat="{{ st.stats[0] }}"{% endif %}>{{ st.approved }}</strong></li>
+          <li><span class="adx-key" style="background: var(--adx-warning)"></span><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i> Pending <strong{% if st.stats %} data-stat="{{ st.stats[1] }}"{% endif %}>{{ st.pending }}</strong></li>
+          <li><span class="adx-key" style="background: var(--adx-critical)"></span><i class="fa-solid fa-circle-xmark" aria-hidden="true"></i> Rejected <strong{% if st.stats %} data-stat="{{ st.stats[2] }}"{% endif %}>{{ st.rejected }}</strong></li>
+        </ul>
+      </article>
+    {% endif %}
+
+    {# ---------- Ranking + monthly bars ---------- #}
+    <article class="adx-card adx-span-6">
+      <div class="adx-card-head"><div><h4>{{ rd.rank.title }}</h4><span class="adx-muted">{{ rd.rank.sub }} · most first</span></div></div>
+      <div class="adx-chart adx-chart-rank"><canvas id="rxRank" role="img" aria-label="{{ rd.rank.title }}"></canvas></div>
+      <details class="adx-table"><summary><i class="fa-solid fa-table" aria-hidden="true"></i> Table</summary>
+        <div class="adx-table-wrap"><table><thead><tr><th scope="col">Sport</th><th scope="col">Records</th></tr></thead>
+          <tbody>{% for sp, n in rd.rank.rows %}<tr><th scope="row">{{ sp }}</th><td>{{ n }}</td></tr>{% endfor %}</tbody></table></div>
+      </details>
+    </article>
+    <article class="adx-card adx-span-6">
+      <div class="adx-card-head">
+        <div><h4>{{ rd.bars.title }}</h4><span class="adx-muted">{{ rd.bars.sub }}</span></div>
+        {{ rx_delta(rd.bars.change) }}
+      </div>
+      <div class="adx-chart adx-chart-sm"><canvas id="rxBars" role="img" aria-label="{{ rd.bars.title }}"></canvas></div>
+      {{ rx_month_table(rd.labels, rd.bars.title, [(rd.bars.label, rd.bars.data)]) }}
+    </article>
+  </div>
+</div>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-admin-analytics.css') }}">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+<script src="{{ url_for('static', filename='js/dart-role-charts.js') }}" defer></script>
+{% endmacro %}

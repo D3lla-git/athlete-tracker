@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}
-  Conversation with {{ recipient.full_name }} | D.A.R.T
+  Conversation with {{ recipient.display_name }} | D.A.R.T
 {% endblock %}
 
 {# Full-screen chat: no footer under the conversation. #}
@@ -463,7 +463,7 @@
       {% if recipient.profile_picture %}
         <img
           src="{{ url_for('profile_picture', filename=recipient.profile_picture) }}"
-          alt="{{ recipient.full_name }}"
+          alt="{{ recipient.display_name }}"
           class="conversation-header-avatar">
       {% else %}
         <div class="conversation-header-avatar-placeholder">
@@ -473,14 +473,14 @@
 
       <div class="conversation-header-info">
         <p class="conversation-header-name">
-          {{ recipient.full_name }} {{ handle_tag(recipient) }}
+          {{ recipient.display_name }} {{ handle_tag(recipient) }}
           {% if recipient.nationality and show_personal(recipient) %}
             <span class="ms-1">{{ country_flag(recipient.nationality) }}</span>
           {% endif %}
         </p>
 
         <div class="conversation-header-role">
-          {{ recipient.role }}{% if recipient.school %} · {{ recipient.school }}{% endif %}
+          {{ recipient.role_label }}{% if recipient.school %} · {{ recipient.school }}{% endif %}
         </div>
       </div>
 
@@ -526,7 +526,7 @@
           <div>
             <i class="fa-regular fa-comments"></i>
             <h5>No messages yet</h5>
-            <p class="mb-0">Start the conversation with {{ recipient.full_name }}.</p>
+            <p class="mb-0">Start the conversation with {{ recipient.display_name }}.</p>
           </div>
         </div>
 

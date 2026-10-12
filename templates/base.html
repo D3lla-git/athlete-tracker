@@ -88,7 +88,7 @@
       data-warning-seconds="{{ session_warning_seconds }}" data-keepalive-url="{{ url_for('session_keepalive') }}"
       data-csrf="{{ csrf_token() }}"{% endif %}>
   <!-- ========== NAVBAR ========== -->
-  {# Super Admin, Scout and Coach menus have the most links: they open out from
+  {# D.A.R.T Admin, Scout and Coach menus have the most links: they open out from
      1200px and use the hamburger menu below that, so nothing gets squeezed. #}
   <nav class="navbar {{ 'navbar-expand-xl dart-nav-wide' if current_user.is_authenticated and current_user.role in ('System', 'Scout', 'Coach') else 'navbar-expand-lg' }} navbar-dark bg-dark sticky-top">
     <div class="container">

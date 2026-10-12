@@ -1,4 +1,4 @@
-{# Reject a photo / video with a reason (Super Admin + coaches). #}
+{# Reject a photo / video with a reason (D.A.R.T Admin + coaches). #}
 {% macro media_reject_form(action_url, h, form_class='mr-reject', button_class='btn btn-outline-danger mr-btn') %}
 <form method="POST" action="{{ action_url }}" class="{{ form_class }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

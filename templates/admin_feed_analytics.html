@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Highlights Analysis · Super Admin{% endblock %}
+{% block title %}Highlights Analysis · D.A.R.T Admin{% endblock %}
 
 {% block content %}
 {% set metrics = (('like', 'Likes', 'fa-futbol'), ('comment', 'Comments', 'fa-comment'), ('save', 'Bookmarks', 'fa-bookmark'),
@@ -22,7 +22,8 @@
     </div>
     <label class="fa-sort">Rank by
       <select name="sort" class="form-select form-select-sm" onchange="this.form.submit()">
-        <option value="engagement" {{ 'selected' if sort == 'engagement' }}>Overall engagement</option>
+        <option value="reactions" {{ 'selected' if sort == 'reactions' }}>Most reactions (all kinds)</option>
+        <option value="engagement" {{ 'selected' if sort == 'engagement' }}>Engagement score</option>
         {% for key, label, _ in metrics %}<option value="{{ key }}" {{ 'selected' if sort == key }}>Most {{ label | lower }}</option>{% endfor %}
       </select>
     </label>
@@ -46,7 +47,7 @@
   </div>
   <p class="fa-note">{{ active_posts }} of {{ live_posts }} live post{{ 's' if live_posts != 1 }} had activity in this period.</p>
 
-  <h2 class="fa-sub">Top posts</h2>
+  <h2 class="fa-sub">Top posts <span class="fa-sub-note">#1 = {{ 'most reactions' if sort == 'reactions' else 'highest ' ~ ({'engagement': 'engagement score', 'like': 'likes', 'comment': 'comments', 'save': 'bookmarks', 'share': 'shares', 'repost': 'reposts'}[sort]) }}</span></h2>
   {% if rows %}
     <ol class="fa-list">
       {% for row in rows %}
@@ -71,7 +72,7 @@
                   <small><span class="fa-m">{{ m }}</span>·<span class="fa-v">{{ v }}</span></small>
                 </span>
               {% endfor %}
-              <span class="fa-score" title="Likes + saves + shares, comments and reposts count double">Score {{ row.score }}</span>
+              <span class="fa-score" title="Likes + comments + bookmarks + shares + reposts">{{ row.reactions }} reaction{{ 's' if row.reactions != 1 }}</span>
             </div>
           </div>
         </li>
@@ -119,7 +120,8 @@
   .fa-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
   .fa-stat small { margin-left: 3px; font-weight: 700; }
   .fa-stat.is-sorted { padding: 0 8px; border-radius: 999px; background: rgba(25, 135, 84, 0.12); }
-  .fa-score { font-weight: 800; }
+  .fa-score { font-weight: 800; padding: 0 10px; border-radius: 999px; background: rgba(25, 135, 84, 0.12); }
+  .fa-sub-note { font-size: 0.8rem; font-weight: 600; color: var(--muted-text, #6c757d); margin-left: 6px; }
   .fa-legend { font-size: 0.8rem; color: var(--muted-text, #6c757d); margin-top: 8px; }
   @media (max-width: 575.98px) {
     .fa-sort { margin-left: 0; }

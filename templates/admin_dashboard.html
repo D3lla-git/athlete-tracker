@@ -7,9 +7,9 @@
 {% include '_admin_dashboard_overview.html' %}
 <!-- ========== PENDING VERIFICATIONS ========== -->
 {% if pending_coaches %}
-<div class="card mb-4 border-warning">
+<div class="card mb-4 border-warning" id="pendingCoaches">
   <div class="card-header dash-caution-header">
-    <strong>Pending Coach Approvals (Super Admin Only)</strong>
+    <strong>Pending Coach Approvals (D.A.R.T Admin Only)</strong>
   </div>
   <div class="card-body">
     <div class="table-responsive">
@@ -55,11 +55,11 @@
 
 <!-- ========== PENDING SCOUT APPROVALS ========== -->
 {% if current_user.role == 'System' %}
-<div class="card mb-4 border-info">
+<div class="card mb-4 border-info" id="pendingScouts">
 
   <div class="card-header dash-caution-header">
     <strong>
-      Pending Scout Approvals (Super Admin Only)
+      Pending Scout Approvals (D.A.R.T Admin Only)
     </strong>
   </div>
 
@@ -265,7 +265,7 @@
           <form method="POST" action="{{ url_for('admin_athlete_override', user_id=u.id) }}" style="display:inline;"
                 onsubmit="return confirm('Make this profile live without the organization\'s approval?');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline-warning btn-sm dart-btn" title="Super Admin override">
+            <button type="submit" class="btn btn-outline-warning btn-sm dart-btn" title="D.A.R.T Admin override">
               <i class="fa-solid fa-gavel"></i> Verify without organization
             </button>
           </form>
@@ -315,7 +315,7 @@
 
 <!-- ==================== MOBILE VIEW - PENDING RECORDS SLIDER ==================== -->
 <div class="d-md-none">
-  <h4 class="mt-4 mb-3">Pending Sports Records</h4>
+  <h4 class="mt-4 mb-3" id="pendingRecords">Pending Sports Records</h4>
 
   {% if pending_records %}
     <div class="dart-slider" data-dart-slider aria-label="Pending sports records">

@@ -226,7 +226,7 @@ def is_premium(user):
 
 
 def is_staff(user):
-    """Coaches and the Super Admin manage records (no ads for them)."""
+    """Coaches and the D.A.R.T Admin manage records (no ads for them)."""
     return bool(user and getattr(user, 'is_authenticated', False) and user.role in ('Coach', 'System'))
 
 
@@ -456,7 +456,7 @@ def usage_summary(user, today=None):
 # Free athletes: only their latest approved record is shown to others on
 # scout dashboards and in search. Premium athletes: all approved records,
 # where their plan allows (High School Premium: dashboards; others: both).
-# The athlete themself, coaches and the Super Admin always see everything;
+# The athlete themself, coaches and the D.A.R.T Admin always see everything;
 # organizations see their own roster in full on their dashboard.
 
 def full_visibility_athlete_ids(context):
@@ -515,7 +515,7 @@ latest_approved_record_ids = showcase_record_ids
 
 
 def sees_everything(viewer):
-    # Only the Super Admin. Coaches see their own teams in full (below);
+    # Only the D.A.R.T Admin. Coaches see their own teams in full (below);
     # organizations their own roster on their dashboard.
     return is_super_admin(viewer)
 

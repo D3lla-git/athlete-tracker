@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Safety Review · Super Admin{% endblock %}
+{% block title %}Safety Review · D.A.R.T Admin{% endblock %}
 
 {% block content %}
 {% from '_media_reject_form.html' import media_reject_form %}
@@ -108,7 +108,7 @@
     <ul class="mr-list">
       {% for u in blocked %}
         <li>
-          <span><strong>{{ u.full_name }}</strong> · {{ u.role }} · {{ u.media_strikes }} strike{{ 's' if u.media_strikes != 1 }}</span>
+          <span><strong>{{ u.full_name }}</strong> · {{ u.role_label }} · {{ u.media_strikes }} strike{{ 's' if u.media_strikes != 1 }}</span>
           <form method="POST" action="{{ url_for('admin_media_restore', user_id=u.id) }}"
                 onsubmit="return confirm('Restore photo and video uploads for {{ u.full_name | e }}?');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -3,6 +3,7 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash  # type: ignore[import-not-found]
 from competitions import COMPETITION_TEAM_LABELS
 from datetime import datetime
+import re
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import declared_attr
 
@@ -16,6 +17,18 @@ class User(UserMixin, db.Model):
     # people with the same full name apart. See usernames.py.
     username = db.Column(db.String(20), nullable=True, unique=True, index=True)
     username_changed_at = db.Column(db.DateTime, nullable=True)
+
+    @property
+    def display_name(self):
+        """The name shown to people. The platform admin account always shows as
+        "D.A.R.T Admin" when its stored name is a role placeholder (e.g. "Super" + "Admin")."""
+        if self.role == 'System' and re.search(r'(super|admin|system|root)', self.full_name or '', re.IGNORECASE):
+            return 'D.A.R.T Admin'
+        return self.full_name
+
+    @property
+    def role_label(self):
+        return 'D.A.R.T Admin' if self.role == 'System' else self.role
     school = db.Column(db.String(150), nullable=False)
     # Athlete / Coach category permissions
     athlete_category = db.Column(db.String(50), nullable=True)
@@ -62,7 +75,7 @@ class User(UserMixin, db.Model):
     # or 'private'. None = not chosen yet = hidden.
     personal_visibility = db.Column(db.String(10), nullable=True)
     # Media safety: rejected uploads add strikes; nudity or too many strikes
-    # block photo/video uploads until a Super Admin restores them.
+    # block photo/video uploads until a D.A.R.T Admin restores them.
     media_strikes = db.Column(db.Integer, nullable=False, default=0, server_default='0')
     media_blocked = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
     # Records a coach rejected as FAKE (kept even if the athlete deletes the
@@ -183,7 +196,7 @@ class SportRecord(db.Model):
     # in app.py). Cleared when the record goes back to pending.
     rejection_reason = db.Column(db.String(20), nullable=True)
     rejection_note = db.Column(db.String(200), nullable=True)
-    rejected_by = db.Column(db.BigInteger, nullable=True)     # coach / Super Admin user id
+    rejected_by = db.Column(db.BigInteger, nullable=True)     # coach / D.A.R.T Admin user id
     rejected_at = db.Column(db.DateTime, nullable=True)
 
     user = db.relationship('User', backref='records')
@@ -287,7 +300,7 @@ class AthleteHighlight(db.Model):
 
     # Content safety. Only 'approved' highlights are ever shown to others.
     # 'pending' files sit in the private 'highlight-review' bucket until a
-    # Super Admin approves them (then they move to the public bucket);
+    # D.A.R.T Admin approves them (then they move to the public bucket);
     # 'rejected' rows keep only the reason (the file is deleted).
     sport = db.Column(db.String(20), nullable=True)          # Football / Basketball / Kickball
     status = db.Column(db.String(12), nullable=False, default='pending', server_default='pending', index=True)
@@ -300,7 +313,7 @@ class AthleteHighlight(db.Model):
     reviewed_at = db.Column(db.DateTime, nullable=True)
 
     # Two approvals before a new upload goes live (feed + profile):
-    # the Super Admin (or the AI check, if auto-approve is on) and the
+    # the D.A.R.T Admin (or the AI check, if auto-approve is on) and the
     # coach of the athlete's team - when that team has a coach on D.A.R.T.
     # coach_approval: pending / approved / not_required (None = older upload).
     team_name = db.Column(db.String(150), nullable=True)
@@ -423,7 +436,7 @@ class OrganizationProfile(db.Model):
     An Enterprise / Institution / Academy / Club account (User.role =
     'Organization'). Its roster lists every verified athlete whose team
     name matches the organization's name or one of its approved aliases.
-    Nothing is shown until the Super Admin verifies the organization.
+    Nothing is shown until the D.A.R.T Admin verifies the organization.
     """
     __tablename__ = 'organization_profile'
 
@@ -447,7 +460,7 @@ class OrganizationProfile(db.Model):
     # Registration certificate / letterhead (Supabase 'id-documents' bucket).
     document_path = db.Column(db.String(255), nullable=True)
     # Other names athletes use for this team, one per line. Only approved
-    # aliases are used for the roster; changes wait for the Super Admin.
+    # aliases are used for the roster; changes wait for the D.A.R.T Admin.
     approved_aliases = db.Column(db.Text, nullable=True)
     requested_aliases = db.Column(db.Text, nullable=True)
     verification_status = db.Column(db.String(20), nullable=False, default='pending')  # pending / verified / rejected
@@ -844,7 +857,7 @@ class Payment(db.Model):
     )
 
     # Plan bought (see plans.PLANS) and, for manual mobile-money payments,
-    # what the payer told us. Reviewed by the Super Admin.
+    # what the payer told us. Reviewed by the D.A.R.T Admin.
     plan_code = db.Column(db.String(80), nullable=True, index=True)
     payment_method = db.Column(db.String(30), nullable=True)    # orange_money / mtn_momo / card
     payer_phone = db.Column(db.String(30), nullable=True)
@@ -1173,7 +1186,7 @@ class CoachTeam(db.Model):
     A team a coach coaches (or coached). The coach's registered team
     (User.school) becomes the first, primary row. Coach Pro coaches can add
     more (e.g. a high-school team and a club at the same time); every new
-    team waits for the Super Admin before the coach may approve its
+    team waits for the D.A.R.T Admin before the coach may approve its
     athletes' records. Leaving a team keeps its history.
     """
     __tablename__ = 'coach_team'
@@ -1220,7 +1233,7 @@ class CoachGameRecord(db.Model):
     yellow_cards = db.Column(db.Integer, nullable=False, default=0)   # cards the coach received
     red_cards = db.Column(db.Integer, nullable=False, default=0)
     notes = db.Column(db.String(200), nullable=True)
-    # pending -> approved / rejected (Super Admin). Only approved show publicly.
+    # pending -> approved / rejected (D.A.R.T Admin). Only approved show publicly.
     status = db.Column(db.String(12), nullable=False, default='pending', index=True)
     review_note = db.Column(db.String(200), nullable=True)
     reviewed_by = db.Column(db.BigInteger, nullable=True)

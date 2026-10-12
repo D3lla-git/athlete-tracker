@@ -177,7 +177,6 @@ def feed_query(tab, sport, actor):
     if sport in FEED_SPORTS:
         query = query.filter(AthleteHighlight.sport == sport)
 
-    published = published_col()
     if tab == 'saved':
         if actor is None:
             return query.filter(literal(False))
@@ -186,18 +185,8 @@ def feed_query(tab, sport, actor):
             .filter(actor.owns(HighlightSave))
             .order_by(HighlightSave.created_at.desc(), HighlightSave.id.desc())
         )
-    if tab == 'latest':
-        return query.order_by(published.desc(), AthleteHighlight.id.desc())
-
-    # For you: newest days first; within a day, what people engage with most.
-    engagement = (
-        AthleteHighlight.like_count
-        + 2 * AthleteHighlight.repost_count
-        + 2 * AthleteHighlight.comment_count
-        + AthleteHighlight.save_count
-        + AthleteHighlight.share_count
-    )
-    return query.order_by(func.date(published).desc(), engagement.desc(), published.desc(), AthleteHighlight.id.desc())
+    # For you and Latest: the newest post first, by when it was posted.
+    return query.order_by(AthleteHighlight.created_at.desc(), AthleteHighlight.id.desc())
 
 
 def feed_page(query, page):
@@ -355,7 +344,7 @@ def delete_children(highlight_id):
         model.query.filter_by(highlight_id=highlight_id).delete(synchronize_session=False)
 
 
-# ---------- Super Admin: engagement analysis ----------
+# ---------- D.A.R.T Admin: engagement analysis ----------
 ENGAGEMENT_KINDS = (
     ('like', HighlightLike), ('comment', HighlightComment), ('save', HighlightSave),
     ('share', HighlightShare), ('repost', HighlightRepost),
@@ -396,6 +385,11 @@ def engagement_totals(breakdown):
             totals[kind][0] += members
             totals[kind][1] += visitors
     return totals
+
+
+def total_reactions(row):
+    """Every reaction counted once: likes + comments + saves + shares + reposts (members + visitors)."""
+    return sum(members + visitors for members, visitors in row.values())
 
 
 def engagement_score(row):

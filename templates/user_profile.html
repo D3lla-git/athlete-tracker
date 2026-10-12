@@ -23,9 +23,9 @@
   {{ profile_hero(profile_card_info(user, current_user)) }}
 {% else %}
   <section class="up-plain">
-    <h1>{{ user.full_name }}</h1>
+    <h1>{{ user.display_name }}</h1>
     {% if user.username %}<div class="dart-handle dart-handle-lg" translate="no">@{{ user.username }}</div>{% endif %}
-    <span class="up-plain-role">{{ user.role }}</span>
+    <span class="up-plain-role">{{ user.role_label }}</span>
   </section>
 {% endif %}
 

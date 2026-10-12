@@ -3,6 +3,51 @@
      owner      - the athlete the highlights belong to
      can_manage - true on the athlete's own pages (upload + delete) #}
 
+{# One tile for a post with several photos / videos (desktop). #}
+{% macro post_tile(items, can_manage, is_admin) %}
+{% set first = items[0] %}
+{% set slides = [] %}
+{% for it in items %}{% set _ = slides.append({'type': it.media_type, 'src': highlight_url(it), 'caption': it.caption or ''}) %}{% endfor %}
+{% set waiting = items | selectattr('status', 'equalto', 'pending') | list | length %}
+{% set photos = items | selectattr('media_type', 'equalto', 'photo') | list | length %}
+{% set videos = items | length - photos %}
+<figure class="hl-tile hl-post-tile{{ ' hl-tile-pending' if waiting }}">
+  {% if waiting %}
+    <span class="hl-status" title="Only you can see the files still under review">
+      <i class="fa-solid fa-hourglass-half"></i> {{ waiting }} of {{ items | length }} under review
+    </span>
+  {% endif %}
+  <button type="button" class="hl-media" data-hl-items='{{ slides | tojson }}'
+          aria-label="Open post: {{ items | length }} photos and videos{{ ': ' ~ first.caption if first.caption }}">
+    {% if first.is_video %}
+      <video src="{{ highlight_url(first) }}#t=0.1" preload="metadata" muted playsinline tabindex="-1"></video>
+    {% else %}
+      <img src="{{ highlight_url(first) }}" alt="{{ first.caption or 'Highlight photo' }}" loading="lazy">
+    {% endif %}
+    <span class="hl-stack" aria-hidden="true"><i class="fa-solid fa-layer-group"></i> {{ items | length }}</span>
+  </button>
+  {% if can_manage or is_admin %}
+    <form method="POST" action="{{ url_for('delete_highlight', highlight_id=first.id) }}" class="hl-delete"
+          onsubmit="return confirm('Delete this whole post ({{ items | length }} photos and videos)? This cannot be undone.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="whole_post" value="1">
+      <input type="hidden" name="next" value="{{ request.path }}#highlights">
+      <button type="submit" class="hl-delete-btn" aria-label="Delete this post" title="Delete post">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </form>
+  {% endif %}
+  <figcaption>
+    {% if first.caption %}<span class="hl-caption">{{ first.caption }}</span>{% endif %}
+    <span class="hl-date">
+      <i class="fa-solid fa-layer-group"></i>
+      {% if photos %}{{ photos }} photo{{ 's' if photos != 1 }}{% endif %}{% if photos and videos %} + {% endif %}{% if videos %}{{ videos }} video{{ 's' if videos != 1 }}{% endif %}
+      · {% if first.sport %}{{ first.sport }} · {% endif %}{{ first.created_at.strftime('%b %d, %Y') }}
+    </span>
+  </figcaption>
+</figure>
+{% endmacro %}
+
 {% macro highlights_section(highlights, owner, can_manage=false) %}
 {% set is_admin = current_user.is_authenticated and current_user.role == 'System' %}
 <section class="card shadow mt-4 hl-section" id="highlights" aria-labelledby="highlightsTitle">
@@ -34,8 +79,19 @@
 
     {# ---------- Gallery ---------- #}
     {% if highlights %}
+      {# Files posted together (one post): on desktop they show as ONE tile
+         that opens a viewer to go through them; phones keep a tile each. #}
+      {% set posts = {} %}
+      {% for h in highlights %}{% if h.post_key and h.status != 'rejected' %}{% set _ = posts.setdefault(h.post_key, []).append(h) %}{% endif %}{% endfor %}
+      {% set shown_posts = [] %}
       <div class="hl-grid">
         {% for h in highlights %}
+          {% set grp = posts.get(h.post_key) if (h.post_key and h.status != 'rejected') else none %}
+          {% set multi = grp is not none and grp | length > 1 %}
+          {% if multi and h.post_key not in shown_posts %}
+            {% set _ = shown_posts.append(h.post_key) %}
+            {{ post_tile(grp | sort(attribute='post_position'), can_manage, is_admin) }}
+          {% endif %}
           {% if h.status == 'rejected' %}
             {# Owner only: the file is already deleted; just the reason. #}
             <figure class="hl-tile hl-tile-rejected">
@@ -59,7 +115,7 @@
             </figure>
           {% else %}
           {% set url = highlight_url(h) %}
-          <figure class="hl-tile{{ ' hl-tile-pending' if h.status == 'pending' }}">
+          <figure class="hl-tile{{ ' hl-tile-pending' if h.status == 'pending' }}{{ ' hl-in-post' if multi }}">
             {% if h.status == 'pending' %}
               <span class="hl-status" title="Only you can see this until it is approved">
                 <i class="fa-solid fa-hourglass-half"></i> Under review
@@ -92,7 +148,7 @@
             <figcaption>
               {% if h.status == 'pending' and (can_manage or is_admin) %}
                 {% set waiting_for = [] %}
-                {% if not h.admin_approved_at %}{% set _ = waiting_for.append('D.A.R.T. Super Admin') %}{% endif %}
+                {% if not h.admin_approved_at %}{% set _ = waiting_for.append('D.A.R.T Admin') %}{% endif %}
                 {% if h.coach_approval == 'pending' %}{% set _ = waiting_for.append('your coach' ~ (' at ' ~ h.team_name if h.team_name else '')) %}{% endif %}
                 {% if waiting_for %}
                   <span class="hl-waiting"><i class="fa-solid fa-hourglass-half"></i> Waiting for: {{ waiting_for | join(' and ') }}</span>
@@ -128,6 +184,9 @@
     <div class="modal-content hl-viewer">
       <button type="button" class="btn-close btn-close-white hl-viewer-close" data-bs-dismiss="modal" aria-label="Close"></button>
       <div class="hl-viewer-media"></div>
+      <button type="button" class="hl-viewer-nav hl-viewer-prev" aria-label="Previous" hidden><i class="fa-solid fa-chevron-left"></i></button>
+      <button type="button" class="hl-viewer-nav hl-viewer-next" aria-label="Next" hidden><i class="fa-solid fa-chevron-right"></i></button>
+      <span class="hl-viewer-count" aria-live="polite" hidden></span>
       <div class="hl-viewer-caption"></div>
     </div>
   </div>
@@ -567,6 +626,31 @@
 
   .hl-tile { position: relative; margin: 0; min-width: 0; }
 
+  /* A post with several files: one tile on desktop, a tile per file on phones. */
+  .hl-post-tile { display: none; }
+  @media (min-width: 992px) {
+    .hl-post-tile { display: block; }
+    .hl-in-post { display: none; }
+  }
+  .hl-stack {
+    position: absolute; top: 8px; right: 8px; padding: 3px 9px; border-radius: 999px;
+    font-size: 0.78rem; font-weight: 800; color: #fff; background: rgba(0, 0, 0, 0.65);
+  }
+  .hl-post-tile .hl-delete { right: auto; left: 8px; }
+  .hl-post-tile .hl-status { top: auto; bottom: 8px; }
+  .hl-viewer-nav {
+    position: absolute; top: 50%; transform: translateY(-50%); z-index: 3; width: 42px; height: 42px;
+    border: 0; border-radius: 50%; display: grid; place-items: center; color: #111;
+    background: rgba(255, 255, 255, 0.9); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  }
+  .hl-viewer-nav[hidden] { display: none; }
+  .hl-viewer-prev { left: 12px; }
+  .hl-viewer-next { right: 12px; }
+  .hl-viewer-count {
+    position: absolute; top: 14px; left: 14px; z-index: 3; padding: 2px 10px; border-radius: 999px;
+    font-size: 0.8rem; font-weight: 800; color: #fff; background: rgba(0, 0, 0, 0.6);
+  }
+
   .hl-media {
     position: relative;
     display: block;
@@ -690,24 +774,53 @@
     var mediaBox = viewer.querySelector('.hl-viewer-media');
     var captionBox = viewer.querySelector('.hl-viewer-caption');
 
-    document.addEventListener('click', function (e) {
-      var tile = e.target.closest('.hl-media');
-      if (!tile) return;
+    // One file, or every file of a post (‹ › / arrow keys to go through them).
+    var slides = [], at = 0;
+    var prevBtn = viewer.querySelector('.hl-viewer-prev'), nextBtn = viewer.querySelector('.hl-viewer-next');
+    var counter = viewer.querySelector('.hl-viewer-count');
+
+    function showSlide(i) {
+      at = Math.max(0, Math.min(slides.length - 1, i));
+      var item = slides[at];
       mediaBox.innerHTML = '';
       var el;
-      if (tile.dataset.hlType === 'video') {
+      if (item.type === 'video') {
         el = document.createElement('video');
         el.controls = true;
         el.autoplay = true;
         el.playsInline = true;
       } else {
         el = document.createElement('img');
-        el.alt = tile.dataset.hlCaption || 'Highlight photo';
+        el.alt = item.caption || 'Highlight photo';
       }
-      el.src = tile.dataset.hlSrc;
+      el.src = item.src;
       mediaBox.appendChild(el);
-      captionBox.textContent = tile.dataset.hlCaption || '';
+      captionBox.textContent = item.caption || '';
+      var many = slides.length > 1;
+      prevBtn.hidden = !many || at === 0;
+      nextBtn.hidden = !many || at === slides.length - 1;
+      counter.hidden = !many;
+      counter.textContent = (at + 1) + ' / ' + slides.length;
+    }
+
+    document.addEventListener('click', function (e) {
+      var tile = e.target.closest('.hl-media');
+      if (!tile) return;
+      if (tile.dataset.hlItems) {
+        try { slides = JSON.parse(tile.dataset.hlItems); } catch (err) { slides = []; }
+      } else {
+        slides = [{ type: tile.dataset.hlType, src: tile.dataset.hlSrc, caption: tile.dataset.hlCaption }];
+      }
+      if (!slides.length) return;
+      showSlide(0);
       bootstrap.Modal.getOrCreateInstance(viewer).show();
+    });
+    prevBtn.addEventListener('click', function () { showSlide(at - 1); });
+    nextBtn.addEventListener('click', function () { showSlide(at + 1); });
+    viewer.addEventListener('keydown', function (e) {
+      if (slides.length < 2) return;
+      if (e.key === 'ArrowRight') showSlide(at + 1);
+      if (e.key === 'ArrowLeft') showSlide(at - 1);
     });
 
     // Stop the video when the viewer closes.

@@ -1,6 +1,6 @@
 {# Coach dashboard: photos / videos from the coach's teams waiting for them.
    Uploads go live (profile + Highlights feed) once the coach AND the
-   D.A.R.T. Super Admin approve them. #}
+   D.A.R.T Admin approve them. #}
 {% from '_media_reject_form.html' import media_reject_form %}
 <section class="chr" id="highlightReview" aria-labelledby="chrTitle">
   <h4 id="chrTitle"><i class="fa-solid fa-clapperboard"></i> Highlights to approve
@@ -8,7 +8,7 @@
   <p class="chr-lead">
     Photos and videos your athletes posted for the Highlights feed. Approve only real football, basketball or
     kickball action of your athlete: no selfies, posed pictures, other sports or anything rude. Each one also needs
-    the D.A.R.T. Super Admin's approval before it goes live.
+    the D.A.R.T Admin's approval before it goes live.
   </p>
 
   {% if highlight_queue %}
@@ -34,7 +34,7 @@
             {% if h.caption %}<div class="chr-caption">“{{ h.caption }}”</div>{% endif %}
             <div class="chr-step {{ 'is-done' if h.admin_approved_at }}">
               <i class="fa-solid {{ 'fa-circle-check' if h.admin_approved_at else 'fa-hourglass-half' }}"></i>
-              Super Admin: {{ 'approved' if h.admin_approved_at else 'not yet' }}
+              D.A.R.T Admin: {{ 'approved' if h.admin_approved_at else 'not yet' }}
             </div>
             <div class="chr-actions">
               <form method="POST" action="{{ url_for('coach_highlight_action', highlight_id=h.id, action='approve') }}">

@@ -47,7 +47,7 @@
           <li class="is-done"><i class="fa-solid fa-circle-check"></i>
             <span><strong>Uploaded</strong> · passed the first safety check</span></li>
           <li class="{{ 'is-done' if p.admin_done }}"><i class="fa-solid {{ 'fa-circle-check' if p.admin_done else 'fa-hourglass-half' }}"></i>
-            <span><strong>D.A.R.T. Super Admin</strong> {{ 'approved it' if p.admin_done else 'checks it is real sports action' }}</span></li>
+            <span><strong>D.A.R.T Admin</strong> {{ 'approved it' if p.admin_done else 'checks it is real sports action' }}</span></li>
           {% if p.coach == 'pending' %}
             <li><i class="fa-solid fa-hourglass-half"></i>
               <span><strong>Your coach{% if p.team %} at {{ p.team }}{% endif %}</strong> approves it</span></li>

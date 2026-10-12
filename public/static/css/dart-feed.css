@@ -242,7 +242,7 @@ html.fp-sheet-open, html.fp-sheet-open body { overflow: hidden; }
 [data-theme="dark"] .fp-c-visitor { color: #ffa94d; }
 span.fp-c-name { font-weight: 800; }
 
-/* Super Admin: post insights */
+/* D.A.R.T Admin: post insights */
 .fp-insights {
   margin-top: 14px; padding: 14px; border-radius: 18px;
   background: var(--surface-bg, #fff); border: 1px solid rgba(25, 135, 84, 0.4);
@@ -292,3 +292,21 @@ span.fp-c-name { font-weight: 800; }
 .fp-dots span { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.5); transition: transform 0.2s ease, background 0.2s ease; }
 .fp-dots span.on { background: #fff; transform: scale(1.3); }
 @media (prefers-reduced-motion: reduce) { .fp-dots span { transition: none; } }
+
+/* ---------- Desktop: posts fit the screen ----------
+   The media box takes the shape of the post's first photo / video (set by
+   dart-feed.js as --fp-ratio, from tall 4:5 to wide 16:9) and is never taller
+   than the window minus the post's name and buttons, so the whole post
+   (name, photos, Like row) is visible at once. Phones are unchanged. */
+@media (min-width: 992px) {
+  .feed-page { --fp-media-max: min(calc(100vh - 300px), 640px); }
+  .fp-carousel .fp-frame,
+  .fp-media > .fp-media-video {
+    aspect-ratio: var(--fp-ratio, 4 / 5);
+    max-height: var(--fp-media-max);
+  }
+  .fp-media > .fp-frame:not(.fp-media-video) img { max-height: var(--fp-media-max); }
+  .fp-carousel .fp-frame img, .fp-carousel .fp-frame video { max-height: var(--fp-media-max); }
+  .fp-nav { width: 40px; height: 40px; }
+  .fp-nav:hover { background: #fff; }
+}

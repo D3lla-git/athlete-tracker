@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Payments · Super Admin{% endblock %}
+{% block title %}Payments · D.A.R.T Admin{% endblock %}
 
 {% block content %}
 <div class="ap-page">
@@ -19,7 +19,7 @@
           <div class="ap-card-main">
             <div class="ap-user">
               <strong>{{ p.user.full_name }}</strong>
-              <span>{{ p.user.role }}{% if p.user.athlete_category %} · {{ p.user.athlete_category }}{% endif %}</span>
+              <span>{{ p.user.role_label }}{% if p.user.athlete_category %} · {{ p.user.athlete_category }}{% endif %}</span>
             </div>
             <dl class="ap-facts">
               <div><dt>Plan</dt><dd>{{ plan.name if plan else p.plan_code }}</dd></div>

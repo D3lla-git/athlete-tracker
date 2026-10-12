@@ -434,6 +434,12 @@
     });
     scope.querySelectorAll('.fp-more').forEach(function (m) { if (moreObserver) moreObserver.observe(m); });
     scope.querySelectorAll('[data-carousel]').forEach(setupCarousel);
+    // Single videos take their own shape too (desktop).
+    scope.querySelectorAll('.fp-media:not(.fp-carousel) > .fp-media-video').forEach(function (frame) {
+      if (frame.dataset.fitted) return;
+      frame.dataset.fitted = '1';
+      fitToFirst(frame);
+    });
   }
 
   // ---------- several photos / videos in one post: swipe left / right ----------
@@ -499,6 +505,26 @@
     });
     window.addEventListener('resize', function () { shown = -1; update(); });
     update();
+    fitToFirst(carousel);
+  }
+
+  // The media box takes the shape of the post's first photo / video (used on
+  // desktop): between tall 4:5 and wide 16:9, like X.
+  function setRatio(box, w, h) {
+    if (!w || !h) return;
+    var r = Math.max(0.8, Math.min(16 / 9, w / h));
+    box.style.setProperty('--fp-ratio', r.toFixed(3));
+  }
+  function fitToFirst(box) {
+    var first = box.querySelector('.fp-slide img, .fp-slide video, .fp-media-video video');
+    if (!first) return;
+    if (first.tagName === 'IMG') {
+      if (first.complete && first.naturalWidth) setRatio(box, first.naturalWidth, first.naturalHeight);
+      else first.addEventListener('load', function () { setRatio(box, first.naturalWidth, first.naturalHeight); }, { once: true });
+    } else {
+      if (first.videoWidth) setRatio(box, first.videoWidth, first.videoHeight);
+      else first.addEventListener('loadedmetadata', function () { setRatio(box, first.videoWidth, first.videoHeight); }, { once: true });
+    }
   }
 
   var hasIO = 'IntersectionObserver' in window;

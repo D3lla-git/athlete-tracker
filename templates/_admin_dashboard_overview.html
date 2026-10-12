@@ -1,6 +1,6 @@
 {# ==========================================================
    DASHBOARD OVERVIEW (top of /admin)
-   System accounts see the Super Admin dashboard; coaches see their
+   System accounts see the D.A.R.T Admin dashboard; coaches see their
    team's numbers and the athletes they manage. Numbers come from the
    database and refresh every 60 seconds (/admin/dashboard-stats).
 ========================================================== #}
@@ -175,7 +175,7 @@
   <div>
     <h2>
       {% if current_user.role == 'System' %}
-        <i class="fa-solid fa-gauge-high me-1"></i> Super Admin Dashboard
+        <i class="fa-solid fa-gauge-high me-1"></i> D.A.R.T Admin Dashboard
       {% else %}
         <i class="fa-solid fa-clipboard-user me-1"></i> Coach Dashboard
       {% endif %}
@@ -200,58 +200,13 @@
 
 {% if current_user.role == 'System' %}
 
-  <div class="dash-section">
-    <div class="dash-section-title"><i class="fa-solid fa-file-lines"></i> Sports Records</div>
-    <div class="dash-grid">
-      {{ stat_card('records_uploaded', 'Records Uploaded', 'fa-solid fa-cloud-arrow-up') }}
-      {{ stat_card('records_approved', 'Records Approved', 'fa-solid fa-circle-check', 'success') }}
-      {{ stat_card('records_pending', 'Records Pending', 'fa-solid fa-hourglass-half', 'pending') }}
-      {{ stat_card('records_rejected', 'Records Rejected', 'fa-solid fa-circle-xmark', 'danger') }}
-      {{ stat_card('records_deleted', 'Records Deleted', 'fa-solid fa-trash', 'danger', 'Counted since deletion tracking began') }}
-    </div>
-  </div>
-
-  <div class="dash-section">
-    <div class="dash-section-title"><i class="fa-solid fa-users"></i> Users</div>
-    <div class="dash-grid">
-      {{ stat_card('users_total', 'Total Users', 'fa-solid fa-users') }}
-      {{ stat_card('users_free', 'Basic / Free Users', 'fa-solid fa-user') }}
-      {{ stat_card('users_paid', 'Paid Subscribers', 'fa-solid fa-crown', 'gold') }}
-      {{ stat_card('athletes_total', 'Athletes', 'fa-solid fa-person-running', 'success') }}
-    </div>
-  </div>
-
-  <div class="dash-section">
-    <div class="dash-section-title"><i class="fa-solid fa-user-shield"></i> Coaches</div>
-    <div class="dash-grid">
-      {{ stat_card('coaches_approved', 'Approved Coaches', 'fa-solid fa-user-check', 'success') }}
-      {{ stat_card('coaches_pending', 'Pending Coaches', 'fa-solid fa-user-clock', 'pending') }}
-    </div>
-  </div>
-
-  <div class="dash-section">
-    <div class="dash-section-title"><i class="fa-solid fa-binoculars"></i> Scouts</div>
-    <div class="dash-grid">
-      {{ stat_card('scouts_approved', 'Approved Scouts', 'fa-solid fa-user-check', 'success') }}
-      {{ stat_card('scouts_pending', 'Pending Scouts', 'fa-solid fa-user-clock', 'pending') }}
-      {{ stat_card('scouts_free', 'Free Scout Accounts', 'fa-solid fa-user') }}
-      {{ stat_card('scouts_paid', 'Paid Scout Subscribers', 'fa-solid fa-crown', 'gold') }}
-    </div>
-  </div>
+  {% include '_admin_analytics.html' %}
 
 {% else %}
 
-  <div class="dash-section">
-    <div class="dash-grid">
-      {{ stat_card('records_uploaded', 'Athlete Records Uploaded', 'fa-solid fa-cloud-arrow-up') }}
-      {{ stat_card('records_approved', 'Records Approved', 'fa-solid fa-circle-check', 'success') }}
-      {{ stat_card('records_pending', 'Records Pending', 'fa-solid fa-hourglass-half', 'pending') }}
-      {{ stat_card('athletes_managed', 'Athletes Managing', 'fa-solid fa-people-group', 'purple') }}
-      <a href="#pendingAthletes" class="dash-stat-link" aria-label="Athletes pending: see the list">
-        {{ stat_card('athletes_pending', 'Athletes Pending', 'fa-solid fa-user-clock', 'pending', 'Waiting to be approved') }}
-      </a>
-    </div>
-  </div>
+  {# Coach: the same analytics dashboard as the D.A.R.T Admin's, for their teams. #}
+  {% from '_role_analytics.html' import role_analytics_block %}
+  {{ role_analytics_block(role_dash) }}
 
   <!-- ===== ATHLETES THIS COACH MANAGES ===== -->
   <div class="dash-section">

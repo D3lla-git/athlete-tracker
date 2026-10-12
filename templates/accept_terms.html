@@ -11,7 +11,7 @@
       <p class="tg-lead">
         Welcome, <strong>{{ current_user.full_name }}</strong>. Please read and accept our terms to
         continue as {{ 'an' if current_user.role in ('Athlete', 'Organization') else 'a' }}
-        <strong>{{ current_user.role }}</strong>.
+        <strong>{{ current_user.role_label }}</strong>.
       </p>
     </div>
 

@@ -314,7 +314,7 @@
 
             <img
               src="{{ url_for('profile_picture', filename=other_user.profile_picture) }}"
-              alt="{{ other_user.full_name }}"
+              alt="{{ other_user.display_name }}"
               class="conversation-avatar"
             >
 
@@ -334,12 +334,12 @@
 
               <div>
                 <span class="conversation-name">
-                  {{ other_user.full_name }}
+                  {{ other_user.display_name }}
                 </span>
                 {{ handle_tag(other_user) }}
 
                 <span class="conversation-role">
-                  {{ other_user.role }}
+                  {{ other_user.role_label }}
                 </span>
 
                 {% if other_user.nationality and show_personal(other_user) %}

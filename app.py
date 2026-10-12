@@ -1204,7 +1204,7 @@ app.jinja_env.globals.update(pinned_record_ids=pinned_record_ids, pin_limit=pin_
 #   1. The user picks a plan; checkout shows D.A.R.T.'s Orange Money /
 #      MTN MoMo number and a unique reference (DART-XXXXXXXX).
 #   2. They pay from their phone, then enter the transaction ID.
-#   3. The Super Admin checks it against the MoMo statement and confirms
+#   3. The D.A.R.T Admin checks it against the MoMo statement and confirms
 #      (or rejects) it on /admin/payments. Confirming starts 30 days.
 # Cards show "coming soon" until a card processor is connected; then
 # only step 3 needs automating (activate_plan() does the rest).
@@ -1425,7 +1425,7 @@ def premium_checkout_pending(payment_reference):
     return redirect(url_for('billing'))
 
 
-# ---------- Super Admin: confirm mobile-money payments ----------
+# ---------- D.A.R.T Admin: confirm mobile-money payments ----------
 def require_super_admin():
     if not current_user.is_authenticated or current_user.role != 'System':
         abort(403)
@@ -1549,7 +1549,7 @@ def inject_admin_payment_count():
     if current_user.is_authenticated and current_user.role == 'System':
         return {
             'payments_awaiting': Payment.query.filter_by(status='awaiting_review').count(),
-            'media_awaiting': AthleteHighlight.query.filter(AthleteHighlight.status == 'pending', AthleteHighlight.admin_approved_at.is_(None)).count(),   # waiting for the Super Admin
+            'media_awaiting': AthleteHighlight.query.filter(AthleteHighlight.status == 'pending', AthleteHighlight.admin_approved_at.is_(None)).count(),   # waiting for the D.A.R.T Admin
         }
     return {'payments_awaiting': 0, 'media_awaiting': 0}
 
@@ -1750,6 +1750,8 @@ def suggestion_order(column, text):
 
 
 app.jinja_env.globals['search_words'] = search_words
+# The platform role 'System' is shown as "D.A.R.T Admin" everywhere.
+app.jinja_env.filters['role_label'] = lambda role: 'D.A.R.T Admin' if role == 'System' else role
 
 
 def name_or_username(text):
@@ -3404,7 +3406,7 @@ def continue_login(user):
     # Coaches/admins must be verified before continuing
     if user.role == 'Coach' and not user.is_verified:
         flash(
-            'Your coach account is waiting for Super Admin approval.',
+            'Your coach account is waiting for D.A.R.T Admin approval.',
             'warning'
         )
         return redirect(url_for('login'))
@@ -3418,7 +3420,7 @@ def continue_login(user):
         )
         return redirect(url_for('login'))
 
-    # Organizations must be verified by the Super Admin first.
+    # Organizations must be verified by the D.A.R.T Admin first.
     if user.role == 'Organization' and not user.is_verified:
         flash(
             'Your organization is waiting for D.A.R.T. verification. We will '
@@ -4512,7 +4514,7 @@ def conversation(user_id):
 # CONTENT SAFETY: only football / basketball / kickball action is allowed.
 # New uploads go to the PRIVATE 'highlight-review' bucket. moderation.py
 # checks them (when ANTHROPIC_API_KEY is set) and clearly bad files are
-# deleted at once. Everything else waits for a Super Admin (/admin/highlights);
+# deleted at once. Everything else waits for a D.A.R.T Admin (/admin/highlights);
 # only approved files are moved to the public 'athlete-highlights' bucket
 # and shown to anyone. HIGHLIGHT_AUTO_APPROVE = 'photos' or 'all' lets
 # files the AI is confident about go live without waiting (default: off).
@@ -4567,7 +4569,7 @@ def highlights_for(user_id, include_unpublished=False):
     """
     Approved highlights (what everyone sees). include_unpublished: also the
     ones waiting for review and rejected ones (the athlete's own pages and
-    the Super Admin).
+    the D.A.R.T Admin).
     """
     query = AthleteHighlight.query.filter_by(user_id=user_id)
     if not include_unpublished:
@@ -4582,12 +4584,12 @@ def can_moderate_media(user):
     return user.is_authenticated and user.role == 'System'
 
 
-# ---------- Two approvals: Super Admin + the athlete's coach ----------
+# ---------- Two approvals: D.A.R.T Admin + the athlete's coach ----------
 # A new photo / video goes live (profile + Highlights feed) only when the
-# Super Admin approved it (or the AI check, when HIGHLIGHT_AUTO_APPROVE is
+# D.A.R.T Admin approved it (or the AI check, when HIGHLIGHT_AUTO_APPROVE is
 # on) AND the coach of the athlete's team approved it. Teams with no coach
-# on D.A.R.T. only need the Super Admin. Uploads from before this rule
-# (coach_approval None) only ever needed the Super Admin.
+# on D.A.R.T. only need the D.A.R.T Admin. Uploads from before this rule
+# (coach_approval None) only ever needed the D.A.R.T Admin.
 def team_has_coach(team_name):
     """True if a verified coach on D.A.R.T. coaches this team now."""
     key = coaching._key(team_name)
@@ -5163,7 +5165,7 @@ def highlight_complete():
     else:
         # Frames the browser took from the video (the server can't decode
         # video). Faked frames can't sneak anything through: every video
-        # still needs a Super Admin's approval.
+        # still needs a D.A.R.T Admin's approval.
         images = moderation.decode_frames(data.get('frames'))
 
     check = (
@@ -5236,11 +5238,24 @@ def highlight_complete():
 def delete_highlight(highlight_id):
     highlight = db.session.get(AthleteHighlight, highlight_id)
 
-    # The athlete, or the Super Admin (to remove inappropriate content).
+    # The athlete, or the D.A.R.T Admin (to remove inappropriate content).
     if not highlight or (
         highlight.user_id != current_user.id and current_user.role != 'System'
     ):
         abort(404)
+
+    # "Delete post": every file of a multi-file post (same owner) goes.
+    if request.form.get('whole_post') == '1' and highlight.post_key:
+        files = AthleteHighlight.query.filter(AthleteHighlight.post_key == highlight.post_key,
+                                              AthleteHighlight.user_id == highlight.user_id).all()
+        for item in files:
+            if item.status != 'rejected':
+                remove_highlight_file(item.storage_path, item.storage_bucket)
+            feed_mod.delete_children(item.id)
+            db.session.delete(item)
+        db.session.commit()
+        flash(f'Post deleted ({len(files)} photos and videos).', 'success')
+        return redirect(safe_next_url(request.form.get('next')) or url_for('student_dashboard'))
 
     if highlight.status != 'rejected':      # rejected files are already gone
         remove_highlight_file(highlight.storage_path, highlight.storage_bucket)
@@ -5259,7 +5274,7 @@ def delete_highlight(highlight_id):
     )
 
 
-# ---------- Super Admin: review photos and videos ----------
+# ---------- D.A.R.T Admin: review photos and videos ----------
 @app.route('/admin/highlights')
 @login_required
 def admin_highlights():
@@ -5270,7 +5285,7 @@ def admin_highlights():
         .order_by(AthleteHighlight.created_at.asc(), AthleteHighlight.id.asc())
         .limit(100).all()
     )
-    # Approved by the Super Admin, still waiting for the athlete's coach.
+    # Approved by the D.A.R.T Admin, still waiting for the athlete's coach.
     waiting_coach = (
         AthleteHighlight.query.filter(AthleteHighlight.status == 'pending', AthleteHighlight.admin_approved_at.isnot(None))
         .order_by(AthleteHighlight.admin_approved_at.asc(), AthleteHighlight.id.asc())
@@ -5318,7 +5333,7 @@ def admin_highlight_action(highlight_id, action):
             highlight.admin_approved_at = now
             highlight.reviewed_by = current_user.id
             highlight.reviewed_at = now
-        # Super Admin override: the coach has not answered (or cannot).
+        # D.A.R.T Admin override: the coach has not answered (or cannot).
         overridden = action == 'approve_all' and highlight.coach_approval == 'pending'
         if overridden:
             highlight.coach_approval = 'approved'
@@ -5386,7 +5401,7 @@ def coach_highlight_action(highlight_id, action):
         )
         db.session.commit()
         flash(f"Approved: {name}'s {highlight.media_type} is now live in Highlights." if result == 'live'
-              else f"Approved by you. {name}'s {highlight.media_type} goes live once the D.A.R.T. Super Admin also approves it.",
+              else f"Approved by you. {name}'s {highlight.media_type} goes live once the D.A.R.T Admin also approves it.",
               'success' if result == 'live' else 'info')
         return back
 
@@ -5416,10 +5431,10 @@ def coach_highlight_action(highlight_id, action):
 # ("For you" ranks each day by likes, reposts, comments, saves, shares).
 # EVERYONE can like, repost, save, share and comment, even without an
 # account: verified members react as themselves, everyone else as an
-# anonymous visitor (random id in the 'dart_vid' cookie). The Super Admin's
+# anonymous visitor (random id in the 'dart_vid' cookie). The D.A.R.T Admin's
 # analysis page tells members and visitors apart. Suspended accounts can't
 # react. Posting stays with verified athletes, and every upload is approved
-# by the Super Admin and the athlete's coach.
+# by the D.A.R.T Admin and the athlete's coach.
 VISITOR_COOKIE = 'dart_vid'
 VISITOR_COOKIE_DAYS = 365
 _VISITOR_KEY_RE = re.compile(r'^[a-f0-9]{32}$')
@@ -5507,7 +5522,7 @@ def can_delete_comment(comment, highlight, actor):
 def comment_payload(comment, highlight, actor):
     author = comment.user
     if author:
-        name, role = author.full_name, author.role
+        name, role = author.display_name, author.role_label
         url = athlete_public_path(author) if author.role == 'Athlete' else url_for('user_profile', user_id=author.id)
     else:
         name, role, url = comment.visitor_name or 'Visitor', 'Visitor', ''
@@ -5658,7 +5673,7 @@ def feed_comments(highlight_id):
 def feed_comment_delete(comment_id):
     comment = db.session.get(HighlightComment, comment_id)
     highlight = db.session.get(AthleteHighlight, comment.highlight_id) if comment else None
-    # The writer (member or visitor), the athlete who posted, or the Super Admin.
+    # The writer (member or visitor), the athlete who posted, or the D.A.R.T Admin.
     if not comment or not highlight or not can_delete_comment(comment, highlight, feed_actor()):
         abort(404)
     if current_user.is_authenticated and current_user.role == 'System' and comment.user_id != current_user.id:
@@ -5671,9 +5686,9 @@ def feed_comment_delete(comment_id):
     return feed_json({'count': highlight.comment_count, 'label': feed_mod.compact_count(highlight.comment_count)})
 
 
-# ---------- Super Admin: what people do with each post ----------
+# ---------- D.A.R.T Admin: what people do with each post ----------
 ANALYTICS_PERIODS = {'7': 7, '30': 30, '90': 90, 'all': None}
-ANALYTICS_SORTS = ('engagement', 'like', 'comment', 'save', 'share', 'repost')
+ANALYTICS_SORTS = ('reactions', 'engagement', 'like', 'comment', 'save', 'share', 'repost')
 ANALYTICS_LIMIT = 50
 
 
@@ -5683,8 +5698,8 @@ def admin_feed_analytics():
     require_super_admin()
     period = request.args.get('period', '30')
     period = period if period in ANALYTICS_PERIODS else '30'
-    sort = request.args.get('sort', 'engagement')
-    sort = sort if sort in ANALYTICS_SORTS else 'engagement'
+    sort = request.args.get('sort', 'reactions')
+    sort = sort if sort in ANALYTICS_SORTS else 'reactions'
     audience = request.args.get('audience', 'all')
     audience = audience if audience in ('all', 'members', 'visitors') else 'all'
 
@@ -5694,6 +5709,10 @@ def admin_feed_analytics():
     totals = feed_mod.engagement_totals(breakdown)
 
     def sort_value(row):
+        if sort == 'reactions':
+            # Total reactions of the chosen audience (everyone / members / visitors).
+            side = {'members': 0, 'visitors': 1}.get(audience)
+            return sum((pair[side] if side is not None else pair[0] + pair[1]) for pair in row.values())
         if sort == 'engagement':
             return feed_mod.engagement_score(row)
         members, visitors = row[sort]
@@ -5704,7 +5723,8 @@ def admin_feed_analytics():
         h.id: h for h in AthleteHighlight.query.filter(AthleteHighlight.id.in_([hid for hid, _ in ranked]))
         .options(joinedload(AthleteHighlight.user)).all()
     } if ranked else {}
-    rows = [{'post': posts[hid], 'stats': stats, 'score': feed_mod.engagement_score(stats)}
+    rows = [{'post': posts[hid], 'stats': stats, 'score': feed_mod.engagement_score(stats),
+             'reactions': feed_mod.total_reactions(stats)}
             for hid, stats in ranked if hid in posts]
 
     live_posts = AthleteHighlight.query.filter(AthleteHighlight.status == 'approved').count()
@@ -5755,10 +5775,10 @@ def admin_unsuspend(user_id):
 # ==========================================================
 # Teams: the coach's registered team is the first (primary) team. Coach
 # Pro coaches add more teams (e.g. a high school + a club at once); each
-# waits for the Super Admin before the coach can verify / approve that
+# waits for the D.A.R.T Admin before the coach can verify / approve that
 # team's athletes and records. Leaving a team keeps every record.
 # Career: game records (result, score, formation, subs, cards) and
-# trophies / awards. The Super Admin verifies them; approved ones show on
+# trophies / awards. The D.A.R.T Admin verifies them; approved ones show on
 # the coach's profile and in Coach search for everyone, for good.
 COACH_CATEGORY_CHOICES = (
     'All Coach', 'County Meet Coach', 'Club League Coach', 'University Coach',
@@ -5810,7 +5830,7 @@ def coach_career():
         CoachAchievement.season.desc(), CoachAchievement.id.desc()).all()
     summary = coaching.career_summary([g for g in games if g.status == 'approved'],
                                       [a for a in achievements if a.status == 'approved'])
-    # Teams a game can be recorded for: every team the Super Admin approved
+    # Teams a game can be recorded for: every team the D.A.R.T Admin approved
     # (also teams the coach has left - their history).
     record_teams = [t.team_name for t in teams if t.status in ('approved', 'left')]
 
@@ -5857,7 +5877,7 @@ def coach_team_add():
     create_audit_log(action='coach_team_requested', actor_user_id=current_user.id, target_type='CoachTeam',
                      target_id=str(team.id), details={'team': name, 'category': category, 'role': role})
     db.session.commit()
-    flash(f'{name} was sent to the Super Admin. Once approved you can verify its athletes and approve their records.', 'success')
+    flash(f'{name} was sent to the D.A.R.T Admin. Once approved you can verify its athletes and approve their records.', 'success')
     return redirect(url_for('coach_career') + '#teams')
 
 
@@ -5944,7 +5964,7 @@ def coach_game_add():
     create_audit_log(action='coach_game_submitted', actor_user_id=current_user.id,
                      target_type='CoachGameRecord', target_id=str(game.id))
     db.session.commit()
-    flash('Game saved. It shows on your profile once the Super Admin verifies it.', 'success')
+    flash('Game saved. It shows on your profile once the D.A.R.T Admin verifies it.', 'success')
     return redirect(url_for('coach_career') + '#games')
 
 
@@ -5966,7 +5986,7 @@ def coach_achievement_add():
     create_audit_log(action='coach_achievement_submitted', actor_user_id=current_user.id,
                      target_type='CoachAchievement', target_id=str(item.id))
     db.session.commit()
-    flash('Saved. It shows on your profile once the Super Admin verifies it.', 'success')
+    flash('Saved. It shows on your profile once the D.A.R.T Admin verifies it.', 'success')
     return redirect(url_for('coach_career') + '#achievements')
 
 
@@ -5989,7 +6009,7 @@ def coach_item_delete(kind, item_id):
     return redirect(url_for('coach_career') + f'#{kind}')
 
 
-# ---------- Super Admin: verify coach teams and career records ----------
+# ---------- D.A.R.T Admin: verify coach teams and career records ----------
 @app.route('/admin/coach-review')
 @login_required
 def admin_coach_review():
@@ -6050,11 +6070,11 @@ app.jinja_env.globals['coach_public_data'] = coach_public_data
 # ENTERPRISE / INSTITUTION / ACADEMY ACCOUNTS (role 'Organization')
 # ==========================================================
 # - Register with an official document and accept the Organization Data
-#   Use Terms. Nothing is visible until the Super Admin verifies them.
+#   Use Terms. Nothing is visible until the D.A.R.T Admin verifies them.
 # - Login needs 2FA (TWO_FACTOR_ROLES) like coaches and scouts.
 # - Roster: every verified athlete whose team name (profile team or an
 #   approved record's team) matches the organization's name or one of its
-#   Super-Admin-approved aliases, minus athletes the organization removed.
+#   D.A.R.T-Admin-approved aliases, minus athletes the organization removed.
 # - Data shown: sport profile only (name, photo, age, gender, nationality,
 #   physicals, shirt #, positions, approved records, highlights). Never
 #   email, ID document, date of birth or messages.
@@ -6471,8 +6491,10 @@ def organization_dashboard():
     )
     db.session.commit()
 
+    to_confirm = athletes_to_confirm(org)
     return render_template('organization_dashboard.html', org=org, data=data,
-                           athletes_to_confirm=athletes_to_confirm(org))
+                           athletes_to_confirm=to_confirm,
+                           role_dash=role_analytics(current_user, org=org, to_confirm=len(to_confirm)))
 
 
 def athletes_to_confirm(org):
@@ -6512,7 +6534,7 @@ def organization_confirm_athlete(athlete_id, action):
 @app.route('/admin/athletes/<int:user_id>/verify-now', methods=['POST'])
 @login_required
 def admin_athlete_override(user_id):
-    """Super Admin: make a new athlete live without the organization (e.g. it never answers)."""
+    """D.A.R.T Admin: make a new athlete live without the organization (e.g. it never answers)."""
     require_super_admin()
     athlete = db.session.get(User, user_id)
     if not athlete or athlete.role != 'Athlete':
@@ -6524,7 +6546,7 @@ def admin_athlete_override(user_id):
     create_audit_log(action='athlete_verified_override', actor_user_id=current_user.id, target_type='User',
                      target_id=str(athlete.id), details={'organization': athlete.org_approval_name})
     db.session.commit()
-    flash(f'{athlete.full_name} is verified and live (Super Admin override).', 'success')
+    flash(f'{athlete.full_name} is verified and live (D.A.R.T Admin override).', 'success')
     return redirect(url_for('admin_dashboard'))
 
 
@@ -6651,7 +6673,7 @@ def organization_settings():
         org.contact_name = contact_name
         org.contact_title = contact_title
 
-        # Alias changes wait for the Super Admin (they decide who appears on the roster).
+        # Alias changes wait for the D.A.R.T Admin (they decide who appears on the roster).
         approved = OrganizationProfile.split_names(org.approved_aliases)
         if [a.lower() for a in aliases] != [a.lower() for a in approved]:
             org.requested_aliases = '\n'.join(aliases) or ''
@@ -6678,7 +6700,7 @@ def organization_settings():
     return render_template('organization_settings.html', org=org, removed=removed)
 
 
-# ---------- Super Admin: verify organizations ----------
+# ---------- D.A.R.T Admin: verify organizations ----------
 @app.route('/admin/organizations')
 @login_required
 def admin_organizations():
@@ -7140,7 +7162,7 @@ def organization_terms():
 # acceptance is stored in TermsAcceptance as a permanent record.
 TERMS_VERSION = '2026-10-07'
 
-# The Super Admin runs the platform and is not asked.
+# The D.A.R.T Admin runs the platform and is not asked.
 TERMS_EXEMPT_ROLES = ('System',)
 
 # Pages that stay open before acceptance: the terms themselves, logging out,
@@ -7791,7 +7813,7 @@ def id_document(filename):
         flash('ID document not found.', 'danger')
         return redirect(url_for('admin_dashboard'))
 
-    # Super Admin can view documents from all schools
+    # D.A.R.T Admin can view documents from all schools
     is_super_admin = current_user.role == 'System'
 
     # Coaches can only view ID documents of athletes on a team they manage.
@@ -8075,9 +8097,11 @@ def scout_dashboard():
         )
         return redirect(url_for('login'))
 
+    dash = scout_dashboard_data(current_user)
     return render_template(
         'scout_dashboard.html',
-        dash=scout_dashboard_data(current_user)
+        dash=dash,
+        role_dash=role_analytics(current_user, kpis=dash.get('kpis')),
     )
 class RecordSubmissionError(Exception):
     """A submitted sports record failed validation."""
@@ -8589,7 +8613,7 @@ def delete_record(record_id):
         return redirect(url_for('student_dashboard'))
 
     # Deleted rows are gone, so record the deletion for the
-    # Super Admin dashboard's "records deleted" count.
+    # D.A.R.T Admin dashboard's "records deleted" count.
     create_audit_log(
         RECORD_DELETED_ACTION,
         actor_user_id=current_user.id,
@@ -9191,7 +9215,7 @@ def edit_record(record_id):
     )
 
 # ==========================================================
-# DASHBOARD STATISTICS (Super Admin + Coach)
+# DASHBOARD STATISTICS (D.A.R.T Admin + Coach)
 # ==========================================================
 # Computed live from the database on every page load, and refreshed
 # every 60 seconds on the page through /admin/dashboard-stats.
@@ -9240,7 +9264,7 @@ def super_admin_dashboard_stats():
         if paid_ids else 0
     )
 
-    return {
+    stats = {
         'records_uploaded': records_existing + records_deleted,
         'records_approved': records_by_status.get('approved', 0),
         'records_pending': records_by_status.get('pending', 0),
@@ -9256,6 +9280,280 @@ def super_admin_dashboard_stats():
         'scouts_pending': role_count('Scout', is_verified=False),
         'scouts_free': total_scouts - paid_scouts,
         'scouts_paid': paid_scouts,
+        'orgs_total': users_by_role.get('Organization', 0),
+        'orgs_verified': OrganizationProfile.query.filter_by(verification_status='verified').count(),
+        'orgs_pending': OrganizationProfile.query.filter_by(verification_status='pending').count(),
+        'orgs_paid': (User.query.filter(User.role == 'Organization', User.id.in_(paid_ids)).count() if paid_ids else 0),
+        'media_pending': AthleteHighlight.query.filter(AthleteHighlight.status == 'pending',
+                                                       AthleteHighlight.admin_approved_at.is_(None)).count(),
+        'athletes_pending': User.query.filter(User.role == 'Athlete', User.is_verified.is_(False)).count(),
+    }
+    stats['reviews_pending'] = (stats['records_pending'] + stats['coaches_pending'] + stats['scouts_pending']
+                                + stats['orgs_pending'] + stats['media_pending'] + stats['athletes_pending'])
+    stats['approval_rate'] = (round(stats['records_approved'] * 100 / (stats['records_approved'] + stats['records_rejected']))
+                              if stats['records_approved'] + stats['records_rejected'] else 0)
+    return stats
+
+
+ANALYTICS_MONTHS = 12
+
+
+def _month_keys(months=ANALYTICS_MONTHS, today=None):
+    """[(year, month), ...] for the last `months` months, oldest first."""
+    today = today or datetime.utcnow().date()
+    y, m = today.year, today.month
+    keys = []
+    for _ in range(months):
+        keys.append((y, m))
+        y, m = (y - 1, 12) if m == 1 else (y, m - 1)
+    return keys[::-1]
+
+
+def _monthly(column, keys, *filters, group=None):
+    """
+    Counts per month (one grouped query; works on Postgres and SQLite).
+    group: an extra column -> {value: [counts]}; else [counts].
+    """
+    start = datetime(keys[0][0], keys[0][1], 1)
+    year, month = func.extract('year', column), func.extract('month', column)
+    cols = [year, month] + ([group] if group is not None else []) + [func.count()]
+    rows = (db.session.query(*cols).filter(column >= start, *filters)
+            .group_by(year, month, *([group] if group is not None else [])).all())
+    index = {k: i for i, k in enumerate(keys)}
+    if group is None:
+        out = [0] * len(keys)
+        for y, m, n in rows:
+            i = index.get((int(y), int(m)))
+            if i is not None:
+                out[i] += n
+        return out
+    out = {}
+    for y, m, g, n in rows:
+        i = index.get((int(y), int(m)))
+        if i is not None:
+            out.setdefault(g, [0] * len(keys))[i] += n
+    return out
+
+
+def _change(series):
+    """This month vs last month: (this, last, percent change or None)."""
+    this, last = (series[-1], series[-2]) if len(series) > 1 else (series[-1] if series else 0, 0)
+    pct = None if not last else round((this - last) * 100 / last)
+    return {'this': this, 'last': last, 'pct': pct}
+
+
+def super_admin_analytics():
+    """
+    Trends and breakdowns for the D.A.R.T Admin analytics dashboard: 12 months
+    of records and sign-ups, records by sport and status, coaches, scouts
+    and organizations (enterprise).
+    """
+    keys = _month_keys()
+    labels = [datetime(y, m, 1).strftime('%b %y') for y, m in keys]
+
+    records_by_status = _monthly(SportRecord.created_at, keys, group=SportRecord.status)
+    records_total = [sum(v[i] for v in records_by_status.values()) for i in range(len(keys))]
+    signups = _monthly(User.created_at, keys, User.role.in_(('Athlete', 'Coach', 'Scout', 'Organization')), group=User.role)
+    for role in ('Athlete', 'Coach', 'Scout', 'Organization'):
+        signups.setdefault(role, [0] * len(keys))
+    signups_total = [sum(signups[r][i] for r in signups) for i in range(len(keys))]
+
+    by_sport = dict(db.session.query(SportRecord.sport, func.count(SportRecord.id)).group_by(SportRecord.sport).all())
+    status_counts = dict(db.session.query(SportRecord.status, func.count(SportRecord.id)).group_by(SportRecord.status).all())
+    decided = status_counts.get('approved', 0) + status_counts.get('rejected', 0)
+
+    org_status = dict(db.session.query(OrganizationProfile.verification_status, func.count(OrganizationProfile.id))
+                      .group_by(OrganizationProfile.verification_status).all())
+    org_types = (db.session.query(OrganizationProfile.org_type, func.count(OrganizationProfile.id))
+                 .filter(OrganizationProfile.verification_status == 'verified')
+                 .group_by(OrganizationProfile.org_type).order_by(func.count(OrganizationProfile.id).desc()).all())
+    paid_ids = paid_subscriber_ids()
+    org_pro = User.query.filter(User.role == 'Organization', User.id.in_(paid_ids)).count() if paid_ids else 0
+    athletes_live = User.query.filter(User.role == 'Athlete', User.is_verified.is_(True)).count()
+    athletes_waiting = User.query.filter(User.role == 'Athlete', User.is_verified.is_(False)).count()
+
+    return {
+        'labels': labels,
+        'records': {
+            'total': records_total,
+            'approved': records_by_status.get('approved', [0] * len(keys)),
+            'change': _change(records_total),
+            'by_sport': [[sport, by_sport.get(sport, 0)] for sport in ('Football', 'Basketball', 'Kickball')],
+            'approval_rate': round(status_counts.get('approved', 0) * 100 / decided) if decided else None,
+        },
+        'users': {
+            'signups': {role: signups[role] for role in ('Athlete', 'Coach', 'Scout', 'Organization')},
+            'total': signups_total,
+            'change': _change(signups_total),
+            'athletes_live': athletes_live,
+            'athletes_waiting': athletes_waiting,
+        },
+        'coaches': {'signups': signups['Coach'], 'change': _change(signups['Coach'])},
+        'scouts': {'signups': signups['Scout'], 'change': _change(signups['Scout'])},
+        'organizations': {
+            'verified': org_status.get('verified', 0),
+            'pending': org_status.get('pending', 0),
+            'rejected': org_status.get('rejected', 0),
+            'pro': org_pro,
+            'types': [[t or 'Other', n] for t, n in org_types],
+            'signups': signups['Organization'],
+            'change': _change(signups['Organization']),
+        },
+    }
+
+
+def _monthly_from(items, keys, when=lambda x: x.created_at, where=lambda x: True):
+    """Counts per month from objects already loaded (small, scoped lists)."""
+    index = {k: i for i, k in enumerate(keys)}
+    out = [0] * len(keys)
+    for item in items:
+        moment = when(item)
+        if moment and where(item):
+            i = index.get((moment.year, moment.month))
+            if i is not None:
+                out[i] += 1
+    return out
+
+
+def _status_split(records):
+    counts = {'approved': 0, 'pending': 0, 'rejected': 0}
+    for r in records:
+        if r.status in counts:
+            counts[r.status] += 1
+    decided = counts['approved'] + counts['rejected']
+    return counts, (round(counts['approved'] * 100 / decided) if decided else 0)
+
+
+def _by_sport(rows):
+    """[(sport, count)] for the three sports, most first. rows: records or (sport, count) pairs."""
+    counts = {'Football': 0, 'Basketball': 0, 'Kickball': 0}
+    for row in rows:
+        sport, n = (row if isinstance(row, tuple) else (row.sport, 1))
+        if sport in counts:
+            counts[sport] += n
+    return sorted(counts.items(), key=lambda kv: -kv[1])
+
+
+def role_analytics(user, **extra):
+    """
+    The analytics dashboard (same design as the D.A.R.T Admin's) for a coach,
+    scout or organization, scoped to what they look after:
+      coach        - records and athletes of the teams they coach
+      organization - its roster's records and athletes
+      scout        - the D.A.R.T. talent pool (approved records, new athletes)
+    One shape for every role, drawn by dart-role-charts.js.
+    """
+    keys = _month_keys()
+    labels = [datetime(y, m, 1).strftime('%b %y') for y, m in keys]
+    first_name = (user.full_name or '').split(' ')[0]
+
+    if user.role == 'Coach':
+        records = coach_scope_records(user)
+        counts, rate = _status_split(records)
+        uploaded = _monthly_from(records, keys)
+        approved = _monthly_from(records, keys, where=lambda r: r.status == 'approved')
+        team_keys = coaching.team_keys(user)
+        athletes = (User.query.filter(User.role == 'Athlete', func.lower(func.trim(User.school)).in_(team_keys)).all()
+                    if team_keys else [])
+        joined = _monthly_from(athletes, keys)
+        queue = extra.get('highlight_queue') or []
+        return {
+            'role': 'Coach', 'title': f'Welcome back, {first_name}',
+            'subtitle': f'{user.school} · {user.coach_category or "Coach"} · your teams at a glance',
+            'labels': labels,
+            'actions': [('Records to review', '#pendingRecords', 'fa-solid fa-file-circle-check', counts['pending']),
+                        ('Athletes to verify', '#pendingAthletes', 'fa-solid fa-user-clock', extra.get('athletes_pending', 0)),
+                        ('Highlights to approve', '#highlightReview', 'fa-solid fa-clapperboard', len(queue)),
+                        ('My coaching career', url_for('coach_career'), 'fa-solid fa-clipboard-user', 0)],
+            'kpis': [
+                {'label': 'Team records', 'value': len(records), 'stat': 'records_uploaded', 'icon': 'fa-solid fa-file-lines', 'tone': 'aqua',
+                 'change': _change(uploaded), 'spark': uploaded},
+                {'label': 'Approval rate', 'value': rate, 'suffix': '%', 'icon': 'fa-solid fa-circle-check', 'tone': 'green',
+                 'note': 'of reviewed records approved', 'meter': rate},
+                {'label': 'Athletes managing', 'value': extra.get('athletes_managed', 0), 'stat': 'athletes_managed',
+                 'icon': 'fa-solid fa-people-group', 'tone': 'blue', 'change': _change(joined), 'spark': joined},
+                {'label': 'Athletes pending', 'value': extra.get('athletes_pending', 0), 'stat': 'athletes_pending',
+                 'icon': 'fa-solid fa-user-clock', 'tone': 'gold', 'note': 'waiting to be approved', 'href': '#pendingAthletes'},
+            ],
+            'trend': {'title': 'Team records per month', 'sub': 'Uploaded vs approved', 'change': _change(uploaded),
+                      'series': [{'label': 'Uploaded', 'data': uploaded, 'slot': 1}, {'label': 'Approved', 'data': approved, 'slot': 3}]},
+            'status': {'title': 'Review status', 'sub': "Your teams' records", 'approved': counts['approved'],
+                       'pending': counts['pending'], 'rejected': counts['rejected'], 'center': len(records), 'center_label': 'records',
+                       'stats': ['records_approved', 'records_pending', 'records_rejected']},
+            'rank': {'title': 'Records by sport', 'sub': 'Your teams', 'rows': _by_sport(records)},
+            'bars': {'title': 'New athletes per month', 'sub': 'Registered on your teams', 'label': 'New athletes',
+                     'data': joined, 'slot': 1, 'change': _change(joined)},
+        }
+
+    if user.role == 'Organization':
+        org = extra['org']
+        athletes = roster_athletes(org)
+        ids = [a.id for a in athletes]
+        records = SportRecord.query.filter(SportRecord.user_id.in_(ids)).all() if ids else []
+        counts, rate = _status_split(records)
+        uploaded = _monthly_from(records, keys)
+        approved = _monthly_from(records, keys, where=lambda r: r.status == 'approved')
+        joined = _monthly_from(athletes, keys)
+        to_confirm = extra.get('to_confirm', 0)
+        highlights = (AthleteHighlight.query.filter(AthleteHighlight.user_id.in_(ids), AthleteHighlight.status == 'approved').count()
+                      if ids else 0)
+        place = (org.city + ', ' if org.city else '') + (org.country or '')
+        return {
+            'role': 'Organization', 'title': org.org_name, 'subtitle': f'{org.org_type} · {place} · your roster at a glance',
+            'labels': labels,
+            'actions': [('Confirm athletes', '#confirm-athletes', 'fa-solid fa-user-check', to_confirm),
+                        ('Roster', '#roster', 'fa-solid fa-users', 0),
+                        ('Settings', url_for('organization_settings'), 'fa-solid fa-gear', 0)],
+            'kpis': [
+                {'label': 'Roster', 'value': len(athletes), 'icon': 'fa-solid fa-users', 'tone': 'blue', 'change': _change(joined), 'spark': joined},
+                {'label': 'Roster records', 'value': len(records), 'icon': 'fa-solid fa-file-lines', 'tone': 'aqua',
+                 'change': _change(uploaded), 'spark': uploaded},
+                {'label': 'Approval rate', 'value': rate, 'suffix': '%', 'icon': 'fa-solid fa-circle-check', 'tone': 'green',
+                 'note': 'of reviewed records approved', 'meter': rate},
+                {'label': 'Highlights live', 'value': highlights, 'icon': 'fa-solid fa-clapperboard', 'tone': 'violet',
+                 'note': 'approved photos & videos'},
+                {'label': 'Athletes to confirm', 'value': to_confirm, 'icon': 'fa-solid fa-user-clock', 'tone': 'gold',
+                 'note': 'say they play for you', 'href': '#confirm-athletes'},
+            ],
+            'trend': {'title': 'Roster records per month', 'sub': 'Uploaded vs approved', 'change': _change(uploaded),
+                      'series': [{'label': 'Uploaded', 'data': uploaded, 'slot': 1}, {'label': 'Approved', 'data': approved, 'slot': 3}]},
+            'status': {'title': 'Review status', 'sub': 'Roster records', 'approved': counts['approved'], 'pending': counts['pending'],
+                       'rejected': counts['rejected'], 'center': len(records), 'center_label': 'records', 'stats': None},
+            'rank': {'title': 'Records by sport', 'sub': 'Your roster', 'rows': _by_sport(records)},
+            'bars': {'title': 'Athletes joining your roster', 'sub': 'By the month they registered', 'label': 'New athletes',
+                     'data': joined, 'slot': 4, 'change': _change(joined)},
+        }
+
+    # Scout: the D.A.R.T. talent pool.
+    approved_month = _monthly(SportRecord.created_at, keys, SportRecord.status == 'approved')
+    new_athletes = _monthly(User.created_at, keys, User.role == 'Athlete', User.is_verified.is_(True))
+    by_sport = db.session.query(SportRecord.sport, func.count(SportRecord.id)).filter(
+        SportRecord.status == 'approved').group_by(SportRecord.sport).all()
+    kp = extra.get('kpis') or {}
+    return {
+        'role': 'Scout', 'title': f'Welcome back, {first_name}',
+        'subtitle': 'The D.A.R.T. talent pool: verified, coach-approved performances',
+        'labels': labels,
+        'actions': [('Search athletes', url_for('search'), 'fa-solid fa-magnifying-glass', 0),
+                    ('Highlights', url_for('feed'), 'fa-solid fa-clapperboard', 0),
+                    ('Inbox', url_for('inbox'), 'fa-solid fa-envelope', 0)],
+        'kpis': [
+            {'label': 'Verified athletes', 'value': kp.get('athletes', 0), 'icon': 'fa-solid fa-person-running', 'tone': 'blue',
+             'change': _change(new_athletes), 'spark': new_athletes},
+            {'label': 'Approved records', 'value': kp.get('records', 0), 'icon': 'fa-solid fa-file-circle-check', 'tone': 'aqua',
+             'change': _change(approved_month), 'spark': approved_month},
+            {'label': 'New this week', 'value': kp.get('new_this_week', 0), 'icon': 'fa-solid fa-bolt', 'tone': 'gold',
+             'note': 'approved records'},
+            {'label': 'Saved searches', 'value': kp.get('saved_searches', 0), 'icon': 'fa-solid fa-bookmark', 'tone': 'violet',
+             'note': 'your alerts', 'href': url_for('search')},
+        ],
+        'trend': {'title': 'Approved records per month', 'sub': 'New verified performances to scout', 'change': _change(approved_month),
+                  'series': [{'label': 'Approved records', 'data': approved_month, 'slot': 1}]},
+        'status': None,
+        'rank': {'title': 'Approved records by sport', 'sub': 'Where the talent is',
+                 'rows': _by_sport([(sport, int(n)) for sport, n in by_sport])},
+        'bars': {'title': 'New verified athletes per month', 'sub': 'Fresh talent joining D.A.R.T.', 'label': 'New athletes',
+                 'data': new_athletes, 'slot': 3, 'change': _change(new_athletes)},
     }
 
 
@@ -9406,7 +9704,7 @@ def admin_dashboard_stats():
 @app.route('/admin')
 @login_required
 def admin_dashboard():
-    # Only Coaches and Super Admins can access this dashboard; everyone
+    # Only Coaches and D.A.R.T Admins can access this dashboard; everyone
     # else goes to their own (no redirect loops between dashboards).
     if current_user.role not in ('Coach', 'System'):
         return redirect(url_for(dashboard_endpoint_for(current_user)))
@@ -9435,7 +9733,7 @@ def admin_dashboard():
 
     # ==========================================================
     # PENDING SCOUT APPROVALS
-    # SUPER ADMIN ONLY
+    # D.A.R.T ADMIN ONLY
     # ==========================================================
     pending_scouts = []
 
@@ -9504,14 +9802,21 @@ def admin_dashboard():
         approved_records_total=approved_records_total,
         dashboard_list_limit=DASHBOARD_LIST_LIMIT,
         highlight_queue=coach_highlight_queue(current_user) if current_user.role == 'Coach' else [],
+        analytics=super_admin_analytics() if current_user.role == 'System' else None,
+        role_dash=(role_analytics(current_user, highlight_queue=coach_highlight_queue(current_user),
+                                  athletes_managed=dashboard_stats.get('athletes_managed', 0),
+                                  athletes_pending=dashboard_stats.get('athletes_pending', 0))
+                   if current_user.role == 'Coach' else None),
+        now_hour=(datetime.utcnow()).hour,                 # Liberia is on UTC
+        today_label=datetime.utcnow().strftime('%A, %B %d, %Y').replace(' 0', ' '),
     )
 
 @app.route('/approve_coach/<int:user_id>', methods=['POST'])
 @login_required
 def approve_coach(user_id):
-    # Only Super Admin can approve coaches
+    # Only D.A.R.T Admin can approve coaches
     if current_user.role != 'System':
-        flash('Only Super Admin can approve coaches.', 'danger')
+        flash('Only D.A.R.T Admin can approve coaches.', 'danger')
         return redirect(url_for('admin_dashboard'))
 
     coach = User.query.get_or_404(user_id)
@@ -9623,10 +9928,10 @@ def build_recruitment_highlights(pinned_records):
 @login_required
 def approve_scout(user_id):
 
-    # Only Super Admin can approve Scouts.
+    # Only D.A.R.T Admin can approve Scouts.
     if current_user.role != 'System':
         flash(
-            'Only Super Admin can approve Scout accounts.',
+            'Only D.A.R.T Admin can approve Scout accounts.',
             'danger'
         )
         return redirect(url_for('admin_dashboard'))
@@ -9940,12 +10245,12 @@ def update_profile():
     coach_pro = is_coach and is_coach_pro(current_user)
 
     # Update school/team. A coach's team decides whose records they approve,
-    # so coaches change teams in My Coaching Career (Super Admin approves).
+    # so coaches change teams in My Coaching Career (D.A.R.T Admin approves).
     new_school = request.form.get('school', '').strip()
     if new_school:
         if is_coach:
             if new_school.casefold() != (current_user.school or '').strip().casefold():
-                flash('Coaches change or add teams in My Coaching Career; the Super Admin approves each new team.', 'warning')
+                flash('Coaches change or add teams in My Coaching Career; the D.A.R.T Admin approves each new team.', 'warning')
                 return redirect(url_for('profile'))
         else:
             team_changed = normalize_team_name(new_school) != normalize_team_name(current_user.school)
@@ -10870,7 +11175,7 @@ def register_coach(registration_category=None):
             role='Coach',
             coach_category=selected_category,
             username=username,
-            is_verified=False          # Pending Super Admin approval
+            is_verified=False          # Pending D.A.R.T Admin approval
         )
         coach.set_password(password)
         attach_google_signup(coach)
@@ -10894,7 +11199,7 @@ def register_coach(registration_category=None):
 
         flash(
             f'Coach account created as {selected_category}! '
-            'Waiting for Super Admin approval.',
+            'Waiting for D.A.R.T Admin approval.',
             'success'
         )
         return redirect(url_for('login'))

@@ -105,22 +105,11 @@
     }
   </style>
 
-  {% if data.full %}
-  <!-- ===================== KPIs ===================== -->
-  <div class="oh-kpis">
-    {% for value, label, icon, tone in [
-      (data.kpis.athletes, 'Roster Athletes', 'fa-users', 'green'),
-      (data.kpis.records, 'Approved Records', 'fa-clipboard-check', 'blue'),
-      (data.kpis.season_records, data.season ~ ' Season Records', 'fa-calendar-check', 'gold'),
-      (data.kpis.highlights, 'Highlights', 'fa-photo-film', 'purple'),
-    ] %}
-      <div class="oh-kpi oh-tone-{{ tone }}">
-        <div class="oh-kpi-icon" aria-hidden="true"><i class="fa-solid {{ icon }}"></i></div>
-        <div><div class="oh-kpi-value">{{ value }}</div><div class="oh-kpi-label">{{ label }}</div></div>
-      </div>
-    {% endfor %}
-  </div>
+  {# Analytics (same design as the D.A.R.T Admin dashboard): the roster. #}
+  {% from '_role_analytics.html' import role_analytics_block %}
+  <div class="oh-analytics">{{ role_analytics_block(role_dash, banner=false) }}</div>
 
+  {% if data.full %}
   <div class="row g-3">
     <!-- ===================== ROSTER ===================== -->
     <div class="col-xl-8">
@@ -319,10 +308,7 @@
     margin-bottom: 18px;
     border-radius: 26px;
     color: #fff;
-    background:
-      radial-gradient(circle at 88% 12%, rgba(57, 185, 114, 0.38), transparent 38%),
-      radial-gradient(circle at 5% 100%, rgba(245, 197, 66, 0.16), transparent 40%),
-      linear-gradient(145deg, #071208, #0d2413 55%, #061008);
+    background: var(--dart-primary-gradient);   /* D.A.R.T. primary gradient */
   }
   .oh-eyebrow { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #4cd38a; }
   .oh-hero h1 { font-size: clamp(1.6rem, 3.5vw, 2.4rem); font-weight: 900; margin: 6px 0 10px; overflow-wrap: anywhere; }

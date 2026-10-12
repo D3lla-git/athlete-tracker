@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Agreements · Super Admin{% endblock %}
+{% block title %}Agreements · D.A.R.T Admin{% endblock %}
 
 {% block content %}
 <div class="at-page">
@@ -44,7 +44,7 @@
           {% for row in rows %}
             <tr>
               <td data-label="Name"><a href="{{ url_for('user_profile', user_id=row.user_id) }}"><strong>{{ row.full_name }}</strong></a></td>
-              <td data-label="Role"><span class="at-role at-role-{{ row.role | lower }}">{{ row.role }}</span></td>
+              <td data-label="Role"><span class="at-role at-role-{{ row.role | lower }}">{{ row.role | role_label }}</span></td>
               <td data-label="Version">{{ row.terms_version }}</td>
               <td data-label="Documents" class="small">{{ row.documents.replace(',', ', ') }}</td>
               <td data-label="Personal details" class="small">{{ personal_visibility_choices[row.personal_visibility][0] if row.personal_visibility in personal_visibility_choices else '-' }}</td>

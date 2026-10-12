@@ -182,7 +182,7 @@ nav.navbar .navbar-nav .nav-link > .badge { margin-left: 0 !important; }
 /* Personal details the user keeps private. */
 .rt-chip-private { font-style: italic; opacity: 0.85; }
 
-/* Super Admin "Review" menu: icon, label, waiting count in one row. */
+/* D.A.R.T Admin "Review" menu: icon, label, waiting count in one row. */
 .dart-review-menu .dropdown-item { display: flex; align-items: center; gap: 10px; }
 .dart-review-menu .dropdown-item i { width: 18px; text-align: center; color: #198754; }
 .dart-review-menu .dropdown-item .badge { margin-left: auto; }
@@ -1181,7 +1181,7 @@ html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item):not(.dart
   flex-shrink: 0;
 }
 
-/* Super Admin / Scout bar between 992px and 1199px (hamburger menu there): keep
+/* D.A.R.T Admin / Scout bar between 992px and 1199px (hamburger menu there): keep
    the Light / Install buttons beside the logo, menu button on the right. */
 @media (min-width: 992px) and (max-width: 1199.98px) {
   nav.dart-nav-wide > .container { justify-content: flex-start; }
@@ -1190,7 +1190,7 @@ html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item):not(.dart
   nav.dart-nav-wide .navbar-collapse .navbar-nav { padding-top: 6px; }
 }
 
-/* Super Admin / Scout bar on smaller laptops: icon-only Light / Install
+/* D.A.R.T Admin / Scout bar on smaller laptops: icon-only Light / Install
    buttons so all their links fit on one row (title + aria-label still name them). */
 @media (min-width: 1200px) and (max-width: 1365.98px) {
   nav.dart-nav-wide .theme-label,
@@ -1423,11 +1423,27 @@ html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item):not(.dart
 }
 
 .athlete-footer-social a:hover {
-  background: darkgreen;
-  border-color: darkgreen;
   color: #ffffff;
   transform: translateY(-3px);
+  filter: brightness(1.12);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
 }
+
+/* Each network in its official brand colour (white logo on the brand fill). */
+.athlete-footer-social a, .athlete-footer-social a i { color: #ffffff !important; }
+.athlete-footer-social a[aria-label="Facebook"] { background: #1877f2; border-color: #1877f2; }
+.athlete-footer-social a[aria-label="Instagram"] {
+  background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285aeb 90%);
+  border-color: transparent;
+}
+.athlete-footer-social a[aria-label="X"],
+.athlete-footer-social a[aria-label="X (Twitter)"],
+.athlete-footer-social a[aria-label="Twitter"] { background: #000000; border-color: #3a3a3a; }
+.athlete-footer-social a[aria-label="LinkedIn"] { background: #0a66c2; border-color: #0a66c2; }
+.athlete-footer-social a[aria-label="YouTube"] { background: #ff0000; border-color: #ff0000; }
+.athlete-footer-social a[aria-label="TikTok"] { background: #000000; border-color: #3a3a3a; }
+.athlete-footer-social a[aria-label="TikTok"] i { text-shadow: -1.5px -1px 0 #25f4ee, 1.5px 1px 0 #fe2c55; }
+.athlete-footer-social a[aria-label="WhatsApp"] { background: #25d366; border-color: #25d366; }
 
 .athlete-footer-divider {
   border: 0;

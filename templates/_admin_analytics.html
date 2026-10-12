@@ -1,0 +1,322 @@
+{# D.A.R.T Admin analytics dashboard: KPIs, trends and breakdowns for
+   Sports Records, Users, Coaches, Scouts and Enterprise (organizations).
+   Numbers marked data-stat refresh live (every 60 s); charts are drawn by
+   dart-admin-charts.js from the JSON below. Every chart has a table view. #}
+{% set s = dashboard_stats %}
+{% set a = analytics %}
+
+{# ---------- small helpers ---------- #}
+{% macro spark(values, cls='') %}
+  {# A tiny trend line (no axes): last 12 months. #}
+  {% set mx = (values | max) if values else 0 %}
+  {% set n = values | length %}
+  {% if n > 1 %}
+    {% set pts = [] %}
+    {% for v in values %}
+      {% set _ = pts.append('%.1f,%.1f' % (loop.index0 * 100 / (n - 1), 30 - (v * 26 / (mx if mx else 1)) - 2)) %}
+    {% endfor %}
+    <svg class="adx-spark {{ cls }}" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      <polyline points="0,30 {{ pts | join(' ') }} 100,30" class="adx-spark-fill"/>
+      <polyline points="{{ pts | join(' ') }}" class="adx-spark-line"/>
+    </svg>
+  {% endif %}
+{% endmacro %}
+
+{% macro delta(change, noun='last month') %}
+  {% if change.pct is none %}
+    <span class="adx-delta adx-delta-flat" title="This month {{ change.this }} · {{ noun }} {{ change.last }}">{{ change.this }} this month</span>
+  {% elif change.pct >= 0 %}
+    <span class="adx-delta adx-delta-up" title="This month {{ change.this }} · {{ noun }} {{ change.last }}"><i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i> +{{ change.pct }}% <span>vs {{ noun }}</span></span>
+  {% else %}
+    <span class="adx-delta adx-delta-down" title="This month {{ change.this }} · {{ noun }} {{ change.last }}"><i class="fa-solid fa-arrow-trend-down" aria-hidden="true"></i> {{ change.pct }}% <span>vs {{ noun }}</span></span>
+  {% endif %}
+{% endmacro %}
+
+{% macro mini(key, label, icon, tone='neutral', hint=None, href=None) %}
+  {% if href %}<a href="{{ href }}" class="adx-mini adx-{{ tone }}">{% else %}<div class="adx-mini adx-{{ tone }}">{% endif %}
+    <span class="adx-mini-icon" aria-hidden="true"><i class="{{ icon }}"></i></span>
+    <span class="adx-mini-body">
+      <span class="adx-mini-value" data-stat="{{ key }}">{{ s[key] }}</span>
+      <span class="adx-mini-label">{{ label }}</span>
+      {% if hint %}<span class="adx-mini-hint">{{ hint }}</span>{% endif %}
+    </span>
+  {% if href %}</a>{% else %}</div>{% endif %}
+{% endmacro %}
+
+{% macro split(parts, label) %}
+  {# A 100% bar: parts = [(label, value, css var, icon, live stat key or None)]. #}
+  {% set total = parts | sum(attribute=1) %}
+  <div class="adx-split" role="img" aria-label="{{ label }}: {% for p in parts %}{{ p[0] }} {{ p[1] }}{{ ', ' if not loop.last }}{% endfor %}">
+    <div class="adx-split-bar">
+      {% for p in parts %}{% if p[1] %}<span style="flex: {{ p[1] }}; background: var({{ p[2] }})"></span>{% endif %}{% endfor %}
+      {% if not total %}<span class="adx-split-empty"></span>{% endif %}
+    </div>
+    <ul class="adx-split-legend">
+      {% for p in parts %}
+        <li><span class="adx-key" style="background: var({{ p[2] }})"></span>{% if p[3] %}<i class="{{ p[3] }}" aria-hidden="true"></i>{% endif %}
+          {{ p[0] }} <strong{% if p | length > 4 and p[4] %} data-stat="{{ p[4] }}"{% endif %}>{{ p[1] }}</strong>{% if total %}{% set pct = p[1] * 100 / total %} <span class="adx-muted">· {{ '<1' if 0 < pct < 1 else '>99' if 99 < pct < 100 else (pct | round | int) }}%</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endmacro %}
+
+{% macro month_table(caption, columns) %}
+  {# columns = [(header, values)] by month #}
+  <details class="adx-table">
+    <summary><i class="fa-solid fa-table" aria-hidden="true"></i> Table</summary>
+    <div class="adx-table-wrap">
+      <table>
+        <caption class="visually-hidden">{{ caption }}</caption>
+        <thead><tr><th scope="col">Month</th>{% for c in columns %}<th scope="col">{{ c[0] }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for label in a.labels %}
+            {% set i = loop.index0 %}
+            <tr><th scope="row">{{ label }}</th>{% for c in columns %}<td>{{ c[1][i] }}</td>{% endfor %}</tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+{% endmacro %}
+
+<div class="adx" id="adminAnalytics">
+  <script type="application/json" id="adxData">{{ a | tojson }}</script>
+
+  {# ================= Command banner ================= #}
+  <section class="adx-banner" aria-label="Command centre">
+    <div>
+      <h2>Good {{ 'morning' if now_hour < 12 else 'afternoon' if now_hour < 17 else 'evening' }}, {{ current_user.display_name if current_user.display_name == 'D.A.R.T Admin' else (current_user.full_name or 'Admin').split(' ')[0] }}</h2>
+      <p>D.A.R.T. command centre · {{ today_label }} · everything on one screen</p>
+    </div>
+    <span class="adx-banner-decor" aria-hidden="true"></span>
+    <nav class="adx-actions" aria-label="Review queues">
+      {# Reviews: every queue in one menu. #}
+      <div class="dropdown">
+        <button type="button" class="adx-action adx-action-main dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" id="adxReviewMenu">
+          <i class="fa-solid fa-list-check"></i> Review
+          {% if s.reviews_pending %}<span class="badge rounded-pill" data-stat="reviews_pending">{{ s.reviews_pending }}</span>{% endif %}
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end adx-review-menu" aria-labelledby="adxReviewMenu">
+          <li><h6 class="dropdown-header">Content reviews</h6></li>
+          <li><a class="dropdown-item" href="#pendingRecords"><i class="fa-solid fa-file-lines"></i> Sports records <span class="adx-menu-count">{{ s.records_pending }}</span></a></li>
+          <li><a class="dropdown-item" href="{{ url_for('admin_highlights') }}"><i class="fa-solid fa-photo-film"></i> Photos &amp; videos <span class="adx-menu-count">{{ media_awaiting or 0 }}</span></a></li>
+          <li><a class="dropdown-item" href="#pendingAthletes"><i class="fa-solid fa-user-clock"></i> Athletes not live yet <span class="adx-menu-count">{{ s.athletes_pending }}</span></a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><h6 class="dropdown-header">Accounts</h6></li>
+          <li><a class="dropdown-item" href="#pendingCoaches"><i class="fa-solid fa-user-tie"></i> Coaches <span class="adx-menu-count">{{ s.coaches_pending }}</span></a></li>
+          <li><a class="dropdown-item" href="{{ url_for('admin_coach_review') }}"><i class="fa-solid fa-clipboard-user"></i> Coach teams &amp; careers <span class="adx-menu-count">{{ coach_review_awaiting or 0 }}</span></a></li>
+          <li><a class="dropdown-item" href="#pendingScouts"><i class="fa-solid fa-binoculars"></i> Scouts <span class="adx-menu-count">{{ s.scouts_pending }}</span></a></li>
+          <li><a class="dropdown-item" href="{{ url_for('admin_organizations') }}"><i class="fa-solid fa-building-shield"></i> Organizations <span class="adx-menu-count">{{ s.orgs_pending }}</span></a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="{{ url_for('admin_payments') }}"><i class="fa-solid fa-money-check-dollar"></i> Payments <span class="adx-menu-count">{{ payments_awaiting or 0 }}</span></a></li>
+          <li><a class="dropdown-item" href="{{ url_for('admin_terms_acceptances') }}"><i class="fa-solid fa-file-signature"></i> Agreements</a></li>
+        </ul>
+      </div>
+      <a class="adx-action" href="{{ url_for('admin_highlights') }}"><i class="fa-solid fa-photo-film"></i> Media{% if media_awaiting %} <span class="badge rounded-pill">{{ media_awaiting }}</span>{% endif %}</a>
+      <a class="adx-action" href="{{ url_for('admin_coach_review') }}"><i class="fa-solid fa-clipboard-user"></i> Coach review{% if coach_review_awaiting %} <span class="badge rounded-pill">{{ coach_review_awaiting }}</span>{% endif %}</a>
+      <a class="adx-action" href="{{ url_for('admin_organizations') }}"><i class="fa-solid fa-building-shield"></i> Organizations</a>
+      <a class="adx-action" href="{{ url_for('admin_payments') }}"><i class="fa-solid fa-money-check-dollar"></i> Payments{% if payments_awaiting %} <span class="badge rounded-pill">{{ payments_awaiting }}</span>{% endif %}</a>
+      <a class="adx-action" href="{{ url_for('admin_feed_analytics') }}"><i class="fa-solid fa-chart-simple"></i> Highlights analysis</a>
+    </nav>
+  </section>
+
+  {# ================= KPI row ================= #}
+  <section class="adx-kpis" aria-label="Key numbers">
+    <div class="adx-kpi">
+      <div class="adx-kpi-head"><span class="adx-kpi-icon adx-blue"><i class="fa-solid fa-users"></i></span> Total users</div>
+      <div class="adx-kpi-value" data-stat="users_total">{{ s.users_total }}</div>
+      {{ delta(a.users.change) }}
+      {{ spark(a.users.total) }}
+    </div>
+    <div class="adx-kpi">
+      <div class="adx-kpi-head"><span class="adx-kpi-icon adx-aqua"><i class="fa-solid fa-file-lines"></i></span> Records uploaded</div>
+      <div class="adx-kpi-value" data-stat="records_uploaded">{{ s.records_uploaded }}</div>
+      {{ delta(a.records.change) }}
+      {{ spark(a.records.total) }}
+    </div>
+    <div class="adx-kpi">
+      <div class="adx-kpi-head"><span class="adx-kpi-icon adx-green"><i class="fa-solid fa-circle-check"></i></span> Approval rate</div>
+      <div class="adx-kpi-value"><span data-stat="approval_rate">{{ s.approval_rate }}</span><small>%</small></div>
+      <span class="adx-delta adx-delta-flat">of reviewed records approved</span>
+      <div class="adx-meter" role="meter" aria-valuenow="{{ s.approval_rate }}" aria-valuemin="0" aria-valuemax="100" aria-label="Approval rate">
+        <span style="width: {{ s.approval_rate }}%"></span>
+      </div>
+    </div>
+    <div class="adx-kpi">
+      <div class="adx-kpi-head"><span class="adx-kpi-icon adx-gold"><i class="fa-solid fa-crown"></i></span> Paid subscribers</div>
+      <div class="adx-kpi-value" data-stat="users_paid">{{ s.users_paid }}</div>
+      <span class="adx-delta adx-delta-flat">{{ ((s.users_paid * 100 / s.users_total) | round(1)) if s.users_total else 0 }}% of all users</span>
+      <div class="adx-meter adx-meter-gold" aria-hidden="true"><span style="width: {{ (s.users_paid * 100 / s.users_total) if s.users_total else 0 }}%"></span></div>
+    </div>
+    <div class="adx-kpi">
+      <div class="adx-kpi-head"><span class="adx-kpi-icon adx-violet"><i class="fa-solid fa-building-shield"></i></span> Organizations</div>
+      <div class="adx-kpi-value" data-stat="orgs_verified">{{ s.orgs_verified }}</div>
+      {{ delta(a.organizations.change) }}
+      {{ spark(a.organizations.signups) }}
+    </div>
+  </section>
+
+  {# ================= Needs attention ================= #}
+  <section class="adx-attention" aria-labelledby="adxAttentionTitle">
+    <div class="adx-attention-head">
+      <h3 id="adxAttentionTitle"><i class="fa-solid fa-bell"></i> Needs your attention</h3>
+      <span class="adx-attention-total"><span data-stat="reviews_pending">{{ s.reviews_pending }}</span> waiting</span>
+    </div>
+    <div class="adx-attention-grid">
+      {{ mini('records_pending', 'Records to review', 'fa-solid fa-hourglass-half', 'warn', None, '#pendingRecords') }}
+      {{ mini('athletes_pending', 'Athletes not live yet', 'fa-solid fa-user-clock', 'warn', None, '#pendingAthletes') }}
+      {{ mini('coaches_pending', 'Coaches to approve', 'fa-solid fa-user-tie', 'warn', None, '#pendingCoaches') }}
+      {{ mini('scouts_pending', 'Scouts to approve', 'fa-solid fa-binoculars', 'warn', None, '#pendingScouts') }}
+      {{ mini('orgs_pending', 'Organizations to verify', 'fa-solid fa-building-circle-exclamation', 'warn', None, url_for('admin_organizations')) }}
+      {{ mini('media_pending', 'Photos & videos', 'fa-solid fa-photo-film', 'warn', None, url_for('admin_highlights')) }}
+    </div>
+  </section>
+
+  {# ================= Sports records ================= #}
+  <section class="adx-section" aria-labelledby="adxRecordsTitle">
+    <header class="adx-section-head">
+      <h3 id="adxRecordsTitle"><span class="adx-section-icon adx-aqua"><i class="fa-solid fa-file-lines"></i></span> Sports Records</h3>
+      <span class="adx-muted">Last 12 months</span>
+    </header>
+    <div class="adx-grid">
+      <div class="adx-span-12 adx-mini-row">
+        {{ mini('records_uploaded', 'Records uploaded', 'fa-solid fa-cloud-arrow-up', 'blue') }}
+        {{ mini('records_approved', 'Approved', 'fa-solid fa-circle-check', 'good') }}
+        {{ mini('records_pending', 'Pending', 'fa-solid fa-hourglass-half', 'warn') }}
+        {{ mini('records_rejected', 'Rejected', 'fa-solid fa-circle-xmark', 'bad') }}
+        {{ mini('records_deleted', 'Deleted', 'fa-solid fa-trash', 'neutral', 'Since deletion tracking began') }}
+      </div>
+      <article class="adx-card adx-span-8">
+        <div class="adx-card-head">
+          <div><h4>Records uploaded per month</h4><span class="adx-muted">Uploaded vs approved</span></div>
+          {{ delta(a.records.change) }}
+        </div>
+        <div class="adx-chart adx-chart-lg"><canvas id="adxRecordsTrend" role="img" aria-label="Records uploaded and approved per month, last 12 months"></canvas></div>
+        {{ month_table('Records per month', [('Uploaded', a.records.total), ('Approved', a.records.approved)]) }}
+      </article>
+      <article class="adx-card adx-span-4">
+        <div class="adx-card-head"><div><h4>Review status</h4><span class="adx-muted">All records</span></div></div>
+        <div class="adx-chart adx-chart-donut">
+          <canvas id="adxRecordsStatus" role="img" aria-label="Records by status"></canvas>
+          <div class="adx-donut-center"><strong data-stat="records_uploaded">{{ s.records_uploaded }}</strong><span>uploaded</span></div>
+        </div>
+        <ul class="adx-status-list">
+          <li><span class="adx-key" style="background: var(--adx-good)"></span><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Approved <strong data-stat="records_approved">{{ s.records_approved }}</strong></li>
+          <li><span class="adx-key" style="background: var(--adx-warning)"></span><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i> Pending <strong data-stat="records_pending">{{ s.records_pending }}</strong></li>
+          <li><span class="adx-key" style="background: var(--adx-critical)"></span><i class="fa-solid fa-circle-xmark" aria-hidden="true"></i> Rejected <strong data-stat="records_rejected">{{ s.records_rejected }}</strong></li>
+          <li class="adx-muted"><span class="adx-key adx-key-hollow"></span><i class="fa-solid fa-trash" aria-hidden="true"></i> Deleted <strong data-stat="records_deleted">{{ s.records_deleted }}</strong></li>
+        </ul>
+      </article>
+      <article class="adx-card adx-span-12">
+        <div class="adx-card-head"><div><h4>Records by sport</h4><span class="adx-muted">All records, most first</span></div></div>
+        <div class="adx-chart adx-chart-rank"><canvas id="adxRecordsSport" role="img" aria-label="Records by sport"></canvas></div>
+        <details class="adx-table"><summary><i class="fa-solid fa-table" aria-hidden="true"></i> Table</summary>
+          <div class="adx-table-wrap"><table><thead><tr><th scope="col">Sport</th><th scope="col">Records</th></tr></thead>
+            <tbody>{% for sp, n in a.records.by_sport %}<tr><th scope="row">{{ sp }}</th><td>{{ n }}</td></tr>{% endfor %}</tbody></table></div>
+        </details>
+      </article>
+    </div>
+  </section>
+
+  {# ================= Users ================= #}
+  <section class="adx-section" aria-labelledby="adxUsersTitle">
+    <header class="adx-section-head">
+      <h3 id="adxUsersTitle"><span class="adx-section-icon adx-blue"><i class="fa-solid fa-users"></i></span> Users</h3>
+      <span class="adx-muted">Sign-ups by role, last 12 months</span>
+    </header>
+    <div class="adx-grid">
+      <article class="adx-card adx-span-8">
+        <div class="adx-card-head">
+          <div><h4>New accounts per month</h4><span class="adx-muted">Athletes, coaches, scouts and organizations</span></div>
+          {{ delta(a.users.change) }}
+        </div>
+        <div class="adx-chart adx-chart-lg"><canvas id="adxSignups" role="img" aria-label="New accounts per month by role"></canvas></div>
+        {{ month_table('New accounts per month', [('Athletes', a.users.signups.Athlete), ('Coaches', a.users.signups.Coach), ('Scouts', a.users.signups.Scout), ('Organizations', a.users.signups.Organization)]) }}
+      </article>
+      <article class="adx-card adx-span-4">
+        <div class="adx-card-head"><div><h4>Accounts</h4><span class="adx-muted">Free vs paid</span></div></div>
+        <div class="adx-big"><span data-stat="users_total">{{ s.users_total }}</span><small>total users</small></div>
+        {{ split([('Free', s.users_free, '--adx-s1', 'fa-solid fa-user'), ('Paid', s.users_paid, '--adx-gold', 'fa-solid fa-crown')], 'Free and paid users') }}
+        <div class="adx-mini-stack">
+          {{ mini('athletes_total', 'Athletes', 'fa-solid fa-person-running', 'good', a.users.athletes_live ~ ' live · ' ~ a.users.athletes_waiting ~ ' waiting') }}
+          {{ mini('users_free', 'Basic / free', 'fa-solid fa-user', 'neutral') }}
+          {{ mini('users_paid', 'Paid subscribers', 'fa-solid fa-crown', 'gold') }}
+        </div>
+      </article>
+    </div>
+  </section>
+
+  {# ================= Coaches · Scouts ================= #}
+  <div class="adx-grid adx-pair">
+    <section class="adx-section adx-card adx-span-6" aria-labelledby="adxCoachesTitle">
+      <header class="adx-section-head adx-section-head-in">
+        <h3 id="adxCoachesTitle"><span class="adx-section-icon adx-orange"><i class="fa-solid fa-user-shield"></i></span> Coaches</h3>
+        {{ delta(a.coaches.change) }}
+      </header>
+      <div class="adx-mini-row adx-mini-row-2">
+        {{ mini('coaches_approved', 'Approved coaches', 'fa-solid fa-user-check', 'good') }}
+        {{ mini('coaches_pending', 'Pending coaches', 'fa-solid fa-user-clock', 'warn', None, '#pendingCoaches') }}
+      </div>
+      {{ split([('Approved', s.coaches_approved, '--adx-good', 'fa-solid fa-circle-check'), ('Pending', s.coaches_pending, '--adx-warning', 'fa-solid fa-hourglass-half')], 'Coaches by status') }}
+      <h4 class="adx-sub">New coaches per month</h4>
+      <div class="adx-chart adx-chart-sm"><canvas id="adxCoachesTrend" role="img" aria-label="New coaches per month"></canvas></div>
+      {{ month_table('New coaches per month', [('Coaches', a.coaches.signups)]) }}
+    </section>
+
+    <section class="adx-section adx-card adx-span-6" aria-labelledby="adxScoutsTitle">
+      <header class="adx-section-head adx-section-head-in">
+        <h3 id="adxScoutsTitle"><span class="adx-section-icon adx-violet"><i class="fa-solid fa-binoculars"></i></span> Scouts</h3>
+        {{ delta(a.scouts.change) }}
+      </header>
+      <div class="adx-mini-row adx-mini-row-2">
+        {{ mini('scouts_approved', 'Approved scouts', 'fa-solid fa-user-check', 'good') }}
+        {{ mini('scouts_pending', 'Pending scouts', 'fa-solid fa-user-clock', 'warn', None, '#pendingScouts') }}
+      </div>
+      {{ split([('Free', s.scouts_free, '--adx-s1', 'fa-solid fa-user', 'scouts_free'), ('Paid', s.scouts_paid, '--adx-gold', 'fa-solid fa-crown', 'scouts_paid')], 'Free and paid scouts') }}
+      <h4 class="adx-sub">New scouts per month</h4>
+      <div class="adx-chart adx-chart-sm"><canvas id="adxScoutsTrend" role="img" aria-label="New scouts per month"></canvas></div>
+      {{ month_table('New scouts per month', [('Scouts', a.scouts.signups)]) }}
+    </section>
+  </div>
+
+  {# ================= Enterprise ================= #}
+  <section class="adx-section" aria-labelledby="adxOrgTitle">
+    <header class="adx-section-head">
+      <h3 id="adxOrgTitle"><span class="adx-section-icon adx-violet"><i class="fa-solid fa-building-shield"></i></span> Enterprise</h3>
+      <span class="adx-muted">Schools, clubs, academies and federations</span>
+    </header>
+    <div class="adx-grid">
+      <div class="adx-span-12 adx-mini-row">
+        {{ mini('orgs_total', 'Organization accounts', 'fa-solid fa-building', 'neutral') }}
+        {{ mini('orgs_verified', 'Verified', 'fa-solid fa-circle-check', 'good') }}
+        {{ mini('orgs_pending', 'Waiting for verification', 'fa-solid fa-hourglass-half', 'warn') }}
+        {{ mini('orgs_paid', 'Organization Pro', 'fa-solid fa-crown', 'gold') }}
+      </div>
+      <article class="adx-card adx-span-6">
+        <div class="adx-card-head"><div><h4>Verified organizations by type</h4><span class="adx-muted">{{ a.organizations.verified }} verified</span></div></div>
+        {% if a.organizations.types %}
+          <div class="adx-chart adx-chart-sm"><canvas id="adxOrgTypes" role="img" aria-label="Verified organizations by type"></canvas></div>
+          <details class="adx-table"><summary><i class="fa-solid fa-table" aria-hidden="true"></i> Table</summary>
+            <div class="adx-table-wrap"><table><thead><tr><th scope="col">Type</th><th scope="col">Organizations</th></tr></thead>
+              <tbody>{% for t, n in a.organizations.types %}<tr><th scope="row">{{ t }}</th><td>{{ n }}</td></tr>{% endfor %}</tbody></table></div>
+          </details>
+        {% else %}
+          <p class="adx-empty"><i class="fa-solid fa-building"></i> No verified organizations yet.</p>
+        {% endif %}
+      </article>
+      <article class="adx-card adx-span-6">
+        <div class="adx-card-head">
+          <div><h4>New organizations per month</h4><span class="adx-muted">Registrations, last 12 months</span></div>
+          {{ delta(a.organizations.change) }}
+        </div>
+        <div class="adx-chart adx-chart-sm"><canvas id="adxOrgTrend" role="img" aria-label="New organizations per month"></canvas></div>
+        {{ split([('Verified', a.organizations.verified, '--adx-good', 'fa-solid fa-circle-check'), ('Pending', a.organizations.pending, '--adx-warning', 'fa-solid fa-hourglass-half'), ('Rejected', a.organizations.rejected, '--adx-critical', 'fa-solid fa-circle-xmark')], 'Organizations by verification status') }}
+        {{ month_table('New organizations per month', [('Organizations', a.organizations.signups)]) }}
+      </article>
+    </div>
+  </section>
+</div>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-admin-analytics.css') }}">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+<script src="{{ url_for('static', filename='js/dart-admin-charts.js') }}" defer></script>

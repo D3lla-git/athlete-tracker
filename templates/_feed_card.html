@@ -35,7 +35,7 @@
 {% set liked = h.id in state.like %}
 {% set reposted = h.id in state.repost %}
 {% set saved = h.id in state.save %}
-{% set when = h.published_at or h.reviewed_at or h.created_at %}
+{% set when = h.created_at or h.published_at %}   {# when it was posted (the feed is ordered by it) #}
 <article class="fp" data-post="{{ h.id }}" data-post-url="{{ post_url }}" aria-labelledby="fpName{{ h.id }}">
   <header class="fp-head">
     <a href="{{ athlete_public_path(athlete) }}" class="fp-avatar" tabindex="-1" aria-hidden="true">
