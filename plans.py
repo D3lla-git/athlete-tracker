@@ -41,6 +41,9 @@ UNIVERSITY = 'University Athlete'
 COUNTY_MEET = 'County Meet Athlete'
 CLUB_LEAGUE = 'Club League Athlete'
 ALL_ATHLETE = 'All Athlete'
+INDIVIDUAL = 'Individual Athlete'     # no team: approved by the D.A.R.T Admin
+
+CLUB_DIVISION_ORDER = ('1st Division', '2nd Division', '3rd Division')
 
 
 @dataclass(frozen=True)
@@ -66,10 +69,16 @@ class Plan:
     visible_on_dashboards: bool = False
     visible_in_search: bool = False
     highlight: bool = False        # "most popular" style emphasis
+    division: str | None = None    # Club League plans: the club's division
 
     @property
     def price_label(self):
         return f'${self.price:.2f}'
+
+    @property
+    def price_note(self):
+        """Prices are in US dollars; mobile money is paid in the Liberian-dollar equivalent."""
+        return 'or LRD equivalent'
 
 
 FREE_ATHLETE_LIMITS = Limits(records=3, photos=2, videos=1)
@@ -84,12 +93,12 @@ _UNLIMITED_ATHLETE_FEATURES = (
 )
 
 
-def _athlete_unlimited(code, category, name, price, highlight=False):
+def _athlete_unlimited(code, category, name, price, highlight=False, division=None):
     return Plan(
         code=code, audience='athlete', name=name, price=Decimal(price),
         methods=MOMO_METHODS, features=_UNLIMITED_ATHLETE_FEATURES,
         category=category, advanced_search=True,
-        visible_on_dashboards=True, visible_in_search=True, highlight=highlight,
+        visible_on_dashboards=True, visible_in_search=True, highlight=highlight, division=division,
     )
 
 
@@ -97,7 +106,7 @@ PLANS = {
     plan.code: plan for plan in (
         Plan(
             code='athlete_high_school', audience='athlete', name='High School Premium',
-            price=Decimal('2.50'), methods=MOMO_METHODS, category=HIGH_SCHOOL,
+            price=Decimal('2.00'), methods=MOMO_METHODS, category=HIGH_SCHOOL,
             limits=Limits(records=10, photos=5, videos=5),
             visible_on_dashboards=True, visible_in_search=True,
             features=(
@@ -108,13 +117,16 @@ PLANS = {
                 'No ads',
             ),
         ),
-        _athlete_unlimited('athlete_community', COMMUNITY, 'Community Premium', '10.00'),
-        _athlete_unlimited('athlete_university', UNIVERSITY, 'University Premium', '15.00'),
+        _athlete_unlimited('athlete_community', COMMUNITY, 'Community/Area Premium', '5.00'),
+        _athlete_unlimited('athlete_university', UNIVERSITY, 'University Premium', '10.00'),
         _athlete_unlimited('athlete_county_meet', COUNTY_MEET, 'County Meet Premium', '20.00'),
-        _athlete_unlimited('athlete_club_league', CLUB_LEAGUE, 'Club League Premium', '20.00'),
-        _athlete_unlimited('athlete_all', ALL_ATHLETE, 'All-Athletes Premium', '50.00', highlight=True),
+        # Club League: price by division (the code of the 1st Division plan is unchanged).
+        _athlete_unlimited('athlete_club_league', CLUB_LEAGUE, 'Club League Premium · 1st Division', '20.00', division='1st Division'),
+        _athlete_unlimited('athlete_club_league_2nd', CLUB_LEAGUE, 'Club League Premium · 2nd Division', '10.00', division='2nd Division'),
+        _athlete_unlimited('athlete_club_league_3rd', CLUB_LEAGUE, 'Club League Premium · 3rd Division', '5.00', division='3rd Division'),
+        _athlete_unlimited('athlete_all', ALL_ATHLETE, 'All-Athletes Premium', '25.00', highlight=True),
         Plan(
-            code='scout_pro', audience='scout', name='Scout Pro', price=Decimal('99.90'),
+            code='scout_pro', audience='scout', name='Scout Pro (B2B)', price=Decimal('99.99'),
             methods=('card',) + MOMO_METHODS, advanced_search=True, highlight=True,
             features=(
                 'Filter verified talent',
@@ -127,7 +139,7 @@ PLANS = {
         ),
         Plan(
             # Price: set by D.A.R.T. (change here; the pricing page follows).
-            code='coach_pro', audience='coach', name='Coach Pro', price=Decimal('9.90'),
+            code='coach_pro', audience='coach', name='Coach Pro', price=Decimal('9.99'),
             methods=MOMO_METHODS, advanced_search=True, highlight=True,
             features=(
                 'Coaching career: wins, draws, losses, scores, formations, subs, cards',
@@ -141,7 +153,7 @@ PLANS = {
         ),
         Plan(
             code='organization_pro', audience='organization', name='Organization Pro',
-            price=Decimal('99.90'), methods=('card',) + MOMO_METHODS, advanced_search=True,
+            price=Decimal('99.99'), methods=('card',) + MOMO_METHODS, advanced_search=True,
             highlight=True,
             features=(
                 'Full roster of every athlete registered under your name',
@@ -156,8 +168,25 @@ PLANS = {
 }
 
 ATHLETE_PLAN_BY_CATEGORY = {
-    plan.category: plan for plan in PLANS.values() if plan.audience == 'athlete'
+    plan.category: plan for plan in PLANS.values() if plan.audience == 'athlete' and plan.division in (None, '1st Division')
 }
+CLUB_PLAN_BY_DIVISION = {plan.division: plan for plan in PLANS.values() if plan.division}
+
+
+def club_division_of(user):
+    """
+    The Club League division the athlete plays in, from their own club records
+    (newest approved first, then newest pending). The price follows it, so an
+    athlete can't pick a cheaper division than they play in. None if unknown.
+    """
+    for statuses in (('approved',), ('pending', 'verifying')):
+        row = (db.session.query(SportRecord.club_division)
+               .filter(SportRecord.user_id == user.id, SportRecord.competition_category == 'Club League',
+                       SportRecord.club_division.in_(CLUB_DIVISION_ORDER), SportRecord.status.in_(statuses))
+               .order_by(SportRecord.game_date.desc().nullslast(), SportRecord.id.desc()).first())
+        if row:
+            return row[0]
+    return None
 
 AUDIENCE_FOR_ROLE = {'Athlete': 'athlete', 'Scout': 'scout', 'Organization': 'organization', 'Coach': 'coach'}
 
@@ -262,6 +291,9 @@ def plan_for_user(user):
     audience = AUDIENCE_FOR_ROLE.get(getattr(user, 'role', None))
 
     if audience == 'athlete':
+        if user.athlete_category == CLUB_LEAGUE:
+            # No club record yet: the 1st Division price until a division is on file.
+            return CLUB_PLAN_BY_DIVISION.get(club_division_of(user) or '1st Division')
         return ATHLETE_PLAN_BY_CATEGORY.get(user.athlete_category)
     if audience == 'scout':
         return PLANS['scout_pro']
@@ -288,6 +320,11 @@ def eligibility_error(user, plan):
             f'{plan.name} is for verified {plan.category}s. Your category is '
             f'{user.athlete_category or "not set"}.'
         )
+
+    if plan.division and plan_for_user(user) is not plan:
+        mine = plan_for_user(user)
+        return (f'{plan.name} is for {plan.division} players. Your club records show '
+                f'{mine.division if mine else "another division"}, so your plan is {mine.name if mine else "different"}.')
 
     return None
 

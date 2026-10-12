@@ -12,9 +12,10 @@
 
     {% if p.kind == 'record' %}
       <h2 id="approvalPromptTitle">
-        {% if p.action == 'edited' %}Edited record sent for coach approval
-        {% elif p.action == 'resubmitted' %}Record resubmitted for coach approval
-        {% else %}Record sent for coach approval{% endif %}
+        {% set who = 'D.A.R.T Admin' if p.individual else 'coach' %}
+        {% if p.action == 'edited' %}Edited record sent for {{ who }} approval
+        {% elif p.action == 'resubmitted' %}Record resubmitted for {{ who }} approval
+        {% else %}Record sent for {{ who }} approval{% endif %}
       </h2>
       <div id="approvalPromptBody">
         <p class="approval-prompt-what">
@@ -24,12 +25,12 @@
           <li class="is-done"><i class="fa-solid fa-circle-check"></i>
             <span><strong>{{ 'Changes saved' if p.action == 'edited' else 'Submitted' }}</strong> · the record is now <em>Pending</em></span></li>
           <li><i class="fa-solid fa-hourglass-half"></i>
-            <span><strong>Your coach{% if p.team %} at {{ p.team }}{% endif %}</strong> checks and approves it</span></li>
+            <span><strong>{% if p.individual %}The D.A.R.T Admin{% else %}Your coach{% if p.team %} at {{ p.team }}{% endif %}{% endif %}</strong> checks and approves it</span></li>
           <li class="is-skip"><i class="fa-solid fa-eye"></i>
             <span>Once approved it appears on your profile and in search</span></li>
         </ul>
         {% if p.action == 'edited' %}
-          <p class="approval-prompt-note">Every edit goes back to Pending until your coach approves the changes.</p>
+          <p class="approval-prompt-note">Every edit goes back to Pending until {{ 'the D.A.R.T Admin approves' if p.individual else 'your coach approves' }} the changes.</p>
         {% endif %}
       </div>
       <div class="approval-prompt-actions">
@@ -70,10 +71,13 @@
         <ul class="approval-prompt-steps">
           <li class="{{ 'is-done' if p.coach_done }}">
             <i class="fa-solid {{ 'fa-circle-check' if p.coach_done else 'fa-hourglass-half' }}"></i>
-            <span><strong>Your coach{% if p.team %} at {{ p.team }}{% endif %}</strong>
+            <span><strong>{% if p.individual %}The D.A.R.T Admin{% else %}Your coach{% if p.team %} at {{ p.team }}{% endif %}{% endif %}</strong>
               {{ 'approved your profile' if p.coach_done else 'checks your ID and approves your profile' }}</span>
           </li>
-          {% if p.org == 'not_required' %}
+          {% if p.individual %}
+            <li class="is-skip"><i class="fa-solid fa-person-running"></i>
+              <span><strong>Individual Athlete</strong>: no team or organization approval needed.</span></li>
+          {% elif p.org == 'not_required' %}
             <li class="is-skip"><i class="fa-solid fa-minus"></i>
               <span><strong>{{ p.team or 'Your team' }}</strong> has no organization account on D.A.R.T. yet, so your coach's approval is enough.</span></li>
           {% elif p.org == 'rejected' %}

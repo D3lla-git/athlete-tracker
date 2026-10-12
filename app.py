@@ -5,7 +5,7 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import MultiDict
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare, RecordVerificationEvent, MatchReport, MatchReportLine)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare, RecordVerificationEvent, MatchReport, MatchReportLine, AwardContest, AwardEntry)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
@@ -51,6 +51,7 @@ import coaching
 import integrity
 import notifications as notif
 import guardian as guardian_mod
+import awards as awards_mod
 from competitions import (
     ALL_COMPETITIONS,
     ATHLETE_CATEGORIES,
@@ -544,6 +545,14 @@ VALID_PREFERRED_FEET = {
     'Left',
     'Both'
 }
+INDIVIDUAL_ATHLETE = 'Individual Athlete'
+
+
+def is_individual_athlete(user):
+    """Athlete with no team: profile, records and highlights approved by the D.A.R.T Admin."""
+    return getattr(user, 'role', None) == 'Athlete' and user.athlete_category == INDIVIDUAL_ATHLETE
+
+
 def athlete_can_submit_competition(category, competition):
     """Check whether an athlete category allows a competition."""
     if competition not in VALID_COMPETITIONS:
@@ -557,7 +566,9 @@ def athlete_can_submit_competition(category, competition):
         'Club League Athlete': 'Club League',
         'University Athlete': 'University League',
         'Community/Area League Athlete': 'Community/Area League',
-        'High School Athlete': 'High School'
+        'High School Athlete': 'High School',
+        # No team: unofficial games, approved by the D.A.R.T Admin.
+        INDIVIDUAL_ATHLETE: 'Unofficial Game',
     }
 
     return category_map.get(category) == competition
@@ -2616,7 +2627,8 @@ def register(registration_category=None):
         'club-league': 'Club League Athlete',
         'university': 'University Athlete',
         'community-league': 'Community/Area League Athlete',
-        'high-school': 'High School Athlete'
+        'high-school': 'High School Athlete',
+        'individual': INDIVIDUAL_ATHLETE,
     }
 
     # Determine selected registration category
@@ -2636,7 +2648,11 @@ def register(registration_category=None):
         if name_error:
             flash(name_error, 'danger')
             return redirect(url_for('register', registration_category=registration_category))
-        school = request.form['school'].strip()
+        # Individual athletes have no team (the D.A.R.T Admin approves them).
+        school = '' if selected_category == INDIVIDUAL_ATHLETE else ' '.join((request.form.get('school') or '').split())
+        if not school and selected_category != INDIVIDUAL_ATHLETE:
+            flash('Enter your team name, or register as an Individual Athlete if you have no team.', 'danger')
+            return redirect(url_for('register', registration_category=registration_category))
         gender = request.form.get('gender', '').strip()
         nationality = request.form.get('nationality', '').strip()
         email = request.form['email'].strip().lower()
@@ -3777,6 +3793,7 @@ def queue_profile_prompt(athlete, kind):
         'profile', reason=kind, team=athlete.school or '',
         coach_done=bool(athlete.coach_verified),
         org=athlete.org_approval or 'not_required', org_name=athlete.org_approval_name or '',
+        individual=is_individual_athlete(athlete),
     )
 
 
@@ -3784,6 +3801,7 @@ def queue_record_prompt(record, action):
     """action: 'submitted', 'edited' or 'resubmitted'."""
     queue_approval_prompt(
         'record', action=action, sport=record.sport or '', team=record.team or '',
+        individual=not (record.team or '').strip(),
         opponent=record.team_played_against or '',
         date=record.game_date.strftime('%d %b %Y') if record.game_date else str(record.year or ''),
     )
@@ -7824,6 +7842,8 @@ def profile_card_info(user, viewer=None):
     teams = info.get('teams') or []
     if len(teams) == 1:
         info['extra'] = [('Team', teams[0][0])] + info['extra']
+    elif not teams and is_individual_athlete(user):
+        info['extra'] = [('Team', 'Individual · no team')] + info['extra']
     return info
 
 
@@ -8333,7 +8353,8 @@ def game_date_future_error(game_date):
 
 
 app.jinja_env.globals['today_iso'] = lambda: utc_today().isoformat()
-app.jinja_env.globals.update(athlete_categories=ATHLETE_CATEGORIES, coach_categories=COACH_CATEGORIES)
+app.jinja_env.globals.update(athlete_categories=ATHLETE_CATEGORIES, coach_categories=COACH_CATEGORIES,
+                             is_individual_athlete=is_individual_athlete)
 app.jinja_env.globals['athlete_allowed_competitions'] = lambda user: athlete_allowed_competitions(user)
 
 
@@ -8440,6 +8461,8 @@ def build_sport_record_from_form(form):
         raise RecordSubmissionError(trophy_error)
 
     team = form.get('team', '').strip()
+    if is_individual_athlete(current_user):
+        team = ''              # no team: the D.A.R.T Admin approves the record
     team_played_against = form.get('team_played_against', '').strip()
     match_minutes_played = form.get('match_minutes_played') or 0
     clean_sheets = form.get('clean_sheets') or 0
@@ -10676,7 +10699,8 @@ def update_profile():
             'Club League Athlete',
             'University Athlete',
             'Community/Area League Athlete',
-            'High School Athlete'
+            'High School Athlete',
+            INDIVIDUAL_ATHLETE,
         }
 
         if new_athlete_category:
@@ -10741,6 +10765,14 @@ def update_profile():
                     ))
 
             current_user.athlete_category = new_athlete_category
+
+        # Individual athletes have no team; joining a team means choosing a
+        # team category AND the team's name (its coach approves from then on).
+        if current_user.athlete_category == INDIVIDUAL_ATHLETE:
+            current_user.school = ''
+        elif not (current_user.school or '').strip():
+            flash('Enter the name of the team you play for.', 'danger')
+            return redirect(url_for('profile'))
 
     # ==========================================================
     # UPDATE COACH CATEGORY
@@ -12521,6 +12553,157 @@ def _bell_count():
 
 app.jinja_env.globals.update(bell_count=_bell_count, terms_update_pending=lambda: terms_update_pending(current_user),
                              terms_version_label=TERMS_VERSION)
+
+
+# ==========================================================
+# AWARDS: Highlight / Goal / Assist ... of the Week / Month
+# ==========================================================
+def _contests_by_phase():
+    contests = AwardContest.query.order_by(AwardContest.voting_ends_at.desc()).limit(60).all()
+    now = datetime.utcnow()
+    changed = False
+    groups = {'entries': [], 'voting': [], 'upcoming': [], 'closed': []}
+    for c in contests:
+        p = awards_mod.phase(c, now)
+        if p == 'closed' and not c.decided_at:
+            awards_mod.decide(c, now)
+            changed = True
+        groups[p].append(c)
+    if changed:
+        db.session.commit()
+    return groups
+
+
+@app.route('/awards')
+def awards_page():
+    groups = _contests_by_phase()
+    mine = {}
+    if current_user.is_authenticated and current_user.role == 'Athlete' and current_user.is_verified:
+        mine = {c.id: awards_mod.eligible_highlights(current_user, c) for c in groups['entries']}
+    return render_template('awards.html', groups=groups, awards=awards_mod.AWARDS, phase=awards_mod.phase,
+                           ranked=awards_mod.ranked, my_vote=lambda c: awards_mod.my_vote(c, current_user),
+                           my_highlights=mine, highlight_url=highlight_media_url)
+
+
+@app.route('/awards/<int:contest_id>/enter', methods=['POST'])
+@login_required
+def award_enter(contest_id):
+    contest = AwardContest.query.get_or_404(contest_id)
+    highlight = db.session.get(AthleteHighlight, request.form.get('highlight_id', type=int) or 0)
+    error = awards_mod.entry_error(contest, current_user, highlight)
+    if error:
+        flash(error, 'warning')
+        return redirect(url_for('awards_page') + f'#contest{contest.id}')
+    note = ' '.join((request.form.get('note') or '').split())[:awards_mod.MAX_NOTE] or None
+    entry = AwardEntry(contest_id=contest.id, athlete_id=current_user.id, highlight_id=highlight.id, note=note)
+    db.session.add(entry)
+    try:
+        db.session.flush()
+    except IntegrityError:
+        db.session.rollback()
+        flash('You have already entered this award.', 'info')
+        return redirect(url_for('awards_page') + f'#contest{contest.id}')
+    create_audit_log(action='award_entry_submitted', actor_user_id=current_user.id, target_type='award_entry',
+                     target_id=str(entry.id), details={'contest': contest.title, 'highlight_id': highlight.id})
+    db.session.commit()
+    flash(f'Entered in {contest.title}! The D.A.R.T Admin reviews entries before voting starts.', 'success')
+    return redirect(url_for('awards_page') + f'#contest{contest.id}')
+
+
+@app.route('/awards/entries/<int:entry_id>/vote', methods=['POST'])
+@login_required
+def award_vote(entry_id):
+    entry = AwardEntry.query.get_or_404(entry_id)
+    contest = entry.contest
+    error = awards_mod.vote_error(contest, entry, current_user)
+    if error:
+        flash(error, 'warning')
+    else:
+        awards_mod.cast_vote(contest, entry, current_user)
+        try:
+            db.session.commit()
+            flash(f'Vote counted for {entry.athlete.full_name}. You can move your vote until voting closes.', 'success')
+        except IntegrityError:
+            db.session.rollback()
+            flash('Your vote was already counted.', 'info')
+    return redirect(url_for('awards_page') + f'#contest{contest.id}')
+
+
+@app.route('/admin/awards', methods=['GET', 'POST'])
+@login_required
+def admin_awards():
+    require_super_admin()
+    if request.method == 'POST':
+        award, period = request.form.get('award'), request.form.get('period')
+        sport = request.form.get('sport') or None
+        try:
+            opens = datetime.strptime(request.form.get('opens_at', ''), '%Y-%m-%dT%H:%M')
+            deadline = datetime.strptime(request.form.get('entry_deadline', ''), '%Y-%m-%dT%H:%M')
+            ends = datetime.strptime(request.form.get('voting_ends_at', ''), '%Y-%m-%dT%H:%M')
+        except ValueError:
+            opens = deadline = ends = None
+        if award not in awards_mod.AWARDS or period not in awards_mod.PERIODS or (sport and sport not in awards_mod.SPORTS):
+            flash('Choose the award, period and sport.', 'danger')
+        elif not (opens and deadline and ends) or not (opens < deadline < ends):
+            flash('Dates must be in order: entries open, entries close, voting closes.', 'danger')
+        elif (ends - opens).days > 62:
+            flash('A contest can run for at most two months.', 'danger')
+        else:
+            contest = AwardContest(award=award, period=period, sport=sport, title=awards_mod.title_for(award, period, sport),
+                                   opens_at=opens, entry_deadline=deadline, voting_ends_at=ends, created_by=current_user.id)
+            db.session.add(contest)
+            db.session.flush()
+            create_audit_log(action='award_contest_created', actor_user_id=current_user.id, target_type='award_contest',
+                             target_id=str(contest.id), details={'title': contest.title})
+            db.session.commit()
+            flash(f'{contest.title} created.', 'success')
+        return redirect(url_for('admin_awards'))
+    groups = _contests_by_phase()
+    contests = groups['entries'] + groups['voting'] + groups['upcoming'] + groups['closed']
+    return render_template('admin_awards.html', contests=contests, awards=awards_mod.AWARDS, periods=awards_mod.PERIODS,
+                           sports=awards_mod.SPORTS, phase=awards_mod.phase, ranked=awards_mod.ranked,
+                           highlight_url=highlight_media_url, now=datetime.utcnow())
+
+
+@app.route('/admin/awards/entries/<int:entry_id>/<action>', methods=['POST'])
+@login_required
+def admin_award_entry(entry_id, action):
+    require_super_admin()
+    entry = AwardEntry.query.get_or_404(entry_id)
+    if action not in ('approve', 'reject') or entry.contest.decided_at:
+        abort(400)
+    entry.status = 'approved' if action == 'approve' else 'rejected'
+    entry.reviewed_at = datetime.utcnow()
+    create_audit_log(action=f'award_entry_{entry.status}', actor_user_id=current_user.id, target_type='award_entry',
+                     target_id=str(entry.id))
+    db.session.commit()
+    flash('Entry ' + entry.status + '.', 'success')
+    return redirect(url_for('admin_awards') + f'#contest{entry.contest_id}')
+
+
+@app.route('/admin/awards/<int:contest_id>/close', methods=['POST'])
+@login_required
+def admin_award_close(contest_id):
+    """End voting now and announce the winner."""
+    require_super_admin()
+    contest = AwardContest.query.get_or_404(contest_id)
+    if awards_mod.phase(contest) != 'voting':
+        flash('Only an award in its voting stage can be closed.', 'warning')
+        return redirect(url_for('admin_awards'))
+    contest.voting_ends_at = datetime.utcnow()
+    winner = awards_mod.decide(contest, contest.voting_ends_at + timedelta(seconds=1))
+    create_audit_log(action='award_contest_closed', actor_user_id=current_user.id, target_type='award_contest',
+                     target_id=str(contest.id), details={'winner_entry_id': winner.id if winner else None})
+    db.session.commit()
+    flash(f'{contest.title}: ' + (f'{winner.athlete.full_name} wins!' if winner else 'closed with no votes.'), 'success')
+    return redirect(url_for('admin_awards') + f'#contest{contest.id}')
+
+
+def awards_pending_count():
+    return AwardEntry.query.filter_by(status='pending').count()
+
+
+app.jinja_env.globals['awards_pending_count'] = awards_pending_count
 
 
 if __name__ == '__main__':

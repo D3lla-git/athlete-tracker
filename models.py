@@ -1051,6 +1051,62 @@ class Entitlement(db.Model):
     )
 
 
+class AwardContest(db.Model):
+    """
+    "Goal of the Week", "Highlight of the Month"... run by the D.A.R.T Admin.
+    Entries are open until entry_deadline, voting until voting_ends_at; the
+    entry with the most votes wins (decided once voting has closed).
+    """
+    __tablename__ = 'award_contest'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    award = db.Column(db.String(30), nullable=False)          # highlight / goal / assist / save / skill ...
+    period = db.Column(db.String(10), nullable=False)         # week / month
+    sport = db.Column(db.String(20), nullable=True)           # None = any sport
+    title = db.Column(db.String(120), nullable=False)
+    opens_at = db.Column(db.DateTime, nullable=False)
+    entry_deadline = db.Column(db.DateTime, nullable=False)
+    voting_ends_at = db.Column(db.DateTime, nullable=False)
+    winner_entry_id = db.Column(db.BigInteger, nullable=True)
+    decided_at = db.Column(db.DateTime, nullable=True)
+    created_by = db.Column(db.BigInteger, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    entries = db.relationship('AwardEntry', backref='contest', cascade='all, delete-orphan', lazy='selectin')
+
+
+class AwardEntry(db.Model):
+    """An athlete's approved highlight entered in a contest (the D.A.R.T Admin approves the entry)."""
+    __tablename__ = 'award_entry'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    contest_id = db.Column(db.BigInteger, db.ForeignKey('award_contest.id', ondelete='CASCADE'), nullable=False, index=True)
+    athlete_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    highlight_id = db.Column(db.BigInteger, db.ForeignKey('athlete_highlight.id', ondelete='CASCADE'), nullable=False)
+    note = db.Column(db.String(150), nullable=True)
+    status = db.Column(db.String(12), nullable=False, default='pending')   # pending / approved / rejected
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+
+    athlete = db.relationship('User', foreign_keys=[athlete_id])
+    highlight = db.relationship('AthleteHighlight', foreign_keys=[highlight_id])
+
+    __table_args__ = (db.UniqueConstraint('contest_id', 'athlete_id', name='uq_award_entry_contest_athlete'),)
+
+
+class AwardVote(db.Model):
+    """One vote per signed-in member per contest (changeable while voting is open)."""
+    __tablename__ = 'award_vote'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    contest_id = db.Column(db.BigInteger, db.ForeignKey('award_contest.id', ondelete='CASCADE'), nullable=False, index=True)
+    entry_id = db.Column(db.BigInteger, db.ForeignKey('award_entry.id', ondelete='CASCADE'), nullable=False, index=True)
+    voter_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (db.UniqueConstraint('contest_id', 'voter_id', name='uq_award_vote_contest_voter'),)
+
+
 class Notification(db.Model):
     """
     In-app notification (the bell). Only good news about the user's own

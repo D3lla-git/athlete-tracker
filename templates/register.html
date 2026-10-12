@@ -37,6 +37,13 @@
           <div class="mb-3">
             {{ username_field('regUsername', name_source_id='regFullName') }}
           </div>
+          {% if selected_category == 'Individual Athlete' %}
+          <div class="alert alert-success small d-flex gap-2" role="note">
+            <i class="fa-solid fa-person-running mt-1" aria-hidden="true"></i>
+            <span><strong>Individual Athlete:</strong> no team needed. You can upload records of unofficial games and highlights;
+              the D.A.R.T Admin approves your profile and records. When you join a team, change your category in My Profile.</span>
+          </div>
+          {% else %}
           <div class="mb-3">
             <label for="regTeam">Team Name <i class="fa-solid fa-users"></i></label>
             <input type="text" name="school" id="regTeam" placeholder="Example: St. John's High School/Bea Mountain FC" class="form-control"
@@ -88,6 +95,7 @@
               });
             })();
           </script>
+          {% endif %}
           <div class="mb-3">
   <label class="form-label">
     Gender <i class="fa-solid fa-venus-mars"></i>

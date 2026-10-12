@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Awards Admin | D.A.R.T{% endblock %}
+
+{% block content %}
+{% include '_award_styles.html' %}
+<div class="container-xl px-0">
+  <section class="aw-hero" aria-label="Awards admin">
+    <i class="fa-solid fa-trophy aw-trophy" aria-hidden="true"></i>
+    <h1><i class="fa-solid fa-trophy" aria-hidden="true"></i> Awards: Week &amp; Month</h1>
+    <p>Create a contest, approve the highlights athletes enter, and the most-voted entry wins when voting closes.</p>
+    <div class="d-flex flex-wrap gap-2 mt-3">
+      <a class="btn btn-light btn-sm" href="{{ url_for('awards_page') }}"><i class="fa-solid fa-eye" aria-hidden="true"></i> Public awards page</a>
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('admin_dashboard') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Dashboard</a>
+    </div>
+  </section>
+
+  {# ---------- New contest ---------- #}
+  <article class="aw-contest">
+    <h2 class="h5 fw-bold mb-3"><i class="fa-solid fa-plus" aria-hidden="true"></i> New award</h2>
+    <form method="POST" action="{{ url_for('admin_awards') }}" class="row g-2 align-items-end" id="awardForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-6 col-md-3">
+        <label class="form-label small" for="awAward">Award</label>
+        <select class="form-select" id="awAward" name="award" required>
+          {% for key, (label, sport, icon) in awards.items() %}<option value="{{ key }}" data-sport="{{ sport or '' }}">{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small" for="awPeriod">Of the</label>
+        <select class="form-select" id="awPeriod" name="period" required>
+          {% for key, label in periods.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-2">
+        <label class="form-label small" for="awSport">Sport</label>
+        <select class="form-select" id="awSport" name="sport">
+          <option value="">Any sport</option>
+          {% for s in sports %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-auto">
+        <label class="form-label small" for="awOpens">Entries open (UTC)</label>
+        <input class="form-control" type="datetime-local" id="awOpens" name="opens_at" required value="{{ now.strftime('%Y-%m-%dT%H:%M') }}">
+      </div>
+      <div class="col-6 col-md-auto">
+        <label class="form-label small" for="awDeadline">Entries close</label>
+        <input class="form-control" type="datetime-local" id="awDeadline" name="entry_deadline" required>
+      </div>
+      <div class="col-6 col-md-auto">
+        <label class="form-label small" for="awEnds">Voting closes</label>
+        <input class="form-control" type="datetime-local" id="awEnds" name="voting_ends_at" required>
+      </div>
+      <div class="col-6 col-md-auto">
+        <button type="submit" class="btn dart-btn w-100"><i class="fa-solid fa-trophy" aria-hidden="true"></i> Create</button>
+      </div>
+    </form>
+  </article>
+
+  {# ---------- Contests ---------- #}
+  {% for c in contests %}
+    {% set p = phase(c, now) %}
+    {% set pending = c.entries | selectattr('status', 'equalto', 'pending') | list %}
+    <article class="aw-contest" id="contest{{ c.id }}">
+      <div class="aw-contest-head">
+        <span class="aw-icon" aria-hidden="true"><i class="fa-solid {{ awards[c.award][2] }}"></i></span>
+        <div>
+          <h2>{{ c.title }}</h2>
+          <div class="aw-when">Entries {{ c.opens_at.strftime('%d %b %H:%M') }} → {{ c.entry_deadline.strftime('%d %b %H:%M') }} ·
+            voting until {{ c.voting_ends_at.strftime('%d %b %H:%M') }} UTC · {{ c.entries | length }} entries</div>
+        </div>
+        <span class="aw-phase aw-phase-{{ p }}">{{ {'entries': 'Entries open', 'voting': 'Voting', 'upcoming': 'Upcoming', 'closed': 'Closed'}[p] }}</span>
+        {% if p == 'voting' %}
+          <form method="POST" action="{{ url_for('admin_award_close', contest_id=c.id) }}"
+                onsubmit="return confirm('Close voting now and announce the winner?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-warning" type="submit"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> Close &amp; announce</button>
+          </form>
+        {% endif %}
+      </div>
+
+      {% if pending %}
+        <h3 class="h6 fw-bold">Entries to review <span class="badge text-bg-warning">{{ pending | length }}</span></h3>
+        <div class="aw-grid mb-3">
+          {% for e in pending %}
+            <div class="aw-entry">
+              <div class="aw-media">
+                {% if e.highlight.is_video %}<video src="{{ highlight_url(e.highlight) }}" controls playsinline preload="metadata"></video>
+                {% else %}<img src="{{ highlight_url(e.highlight) }}" alt="{{ e.highlight.caption or 'Highlight' }}" loading="lazy">{% endif %}
+              </div>
+              <div class="aw-entry-body">
+                <span class="aw-name">{{ e.athlete.full_name }}{% if is_individual_athlete(e.athlete) %} <span class="badge text-bg-success">Individual</span>{% endif %}</span>
+                {% if e.note %}<span class="aw-note">{{ e.note }}</span>{% endif %}
+                <div class="d-flex gap-2 mt-auto">
+                  {% for action, cls, label in (('approve', 'dart-btn', 'Approve'), ('reject', 'btn-outline-danger', 'Reject')) %}
+                    <form method="POST" action="{{ url_for('admin_award_entry', entry_id=e.id, action=action) }}" class="flex-fill">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button class="btn btn-sm {{ cls }} w-100" type="submit">{{ label }}</button>
+                    </form>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% set rows = ranked(c) %}
+      {% if rows %}
+        <h3 class="h6 fw-bold">{{ 'Result' if p == 'closed' else 'Votes so far' }}</h3>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead><tr><th scope="col">#</th><th scope="col">Athlete</th><th scope="col">Note</th><th scope="col" class="text-end">Votes</th></tr></thead>
+            <tbody>
+              {% for e, votes in rows %}
+                <tr>
+                  <td>{{ loop.index }}</td>
+                  <td>{{ e.athlete.full_name }}{% if c.winner_entry_id == e.id %} <span class="aw-winner-badge"><i class="fa-solid fa-trophy"></i> Winner</span>{% endif %}</td>
+                  <td class="small text-muted">{{ e.note or '' }}</td>
+                  <td class="text-end fw-bold">{{ votes }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% elif not pending %}
+        <p class="aw-empty mb-0">No approved entries yet.</p>
+      {% endif %}
+    </article>
+  {% else %}
+    <p class="aw-empty">No awards yet. Create the first one above.</p>
+  {% endfor %}
+</div>
+<script>
+  // Picking "Goal" suggests Football, "Dunk" Basketball, "Home Run" Kickball.
+  (function () {
+    var award = document.getElementById('awAward'), sport = document.getElementById('awSport');
+    if (!award || !sport) return;
+    award.addEventListener('change', function () {
+      var s = award.options[award.selectedIndex].getAttribute('data-sport');
+      sport.value = s || '';
+    });
+  })();
+</script>
+{% endblock %}

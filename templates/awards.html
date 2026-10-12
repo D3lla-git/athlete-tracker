@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Awards | D.A.R.T{% endblock %}
+
+{% macro entry_media(h) %}
+  <div class="aw-media">
+    {% if h.is_video %}
+      <video src="{{ highlight_url(h) }}" controls playsinline preload="metadata" aria-label="{{ h.caption or 'Highlight video' }}"></video>
+    {% else %}
+      <img src="{{ highlight_url(h) }}" alt="{{ h.caption or 'Highlight photo' }}" loading="lazy" decoding="async">
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% macro contest_head(c, p) %}
+  <div class="aw-contest-head">
+    <span class="aw-icon" aria-hidden="true"><i class="fa-solid {{ awards[c.award][2] }}"></i></span>
+    <div>
+      <h2>{{ c.title }}</h2>
+      <div class="aw-when">
+        {% if p == 'entries' %}Entries close {{ c.entry_deadline.strftime('%d %b, %H:%M') }} UTC · voting until {{ c.voting_ends_at.strftime('%d %b') }}
+        {% elif p == 'voting' %}Voting closes {{ c.voting_ends_at.strftime('%d %b, %H:%M') }} UTC
+        {% elif p == 'upcoming' %}Entries open {{ c.opens_at.strftime('%d %b, %H:%M') }} UTC
+        {% else %}Closed {{ c.voting_ends_at.strftime('%d %b %Y') }}{% endif %}
+      </div>
+    </div>
+    <span class="aw-phase aw-phase-{{ p }}">{{ {'entries': 'Entries open', 'voting': 'Vote now', 'upcoming': 'Coming soon', 'closed': 'Winner'}[p] }}</span>
+  </div>
+{% endmacro %}
+
+{% block content %}
+{% include '_award_styles.html' %}
+<div class="container-xl px-0">
+  <section class="aw-hero" aria-label="Awards">
+    <i class="fa-solid fa-trophy aw-trophy" aria-hidden="true"></i>
+    <h1><i class="fa-solid fa-trophy" aria-hidden="true"></i> D.A.R.T. Awards</h1>
+    <p>Highlight, Goal, Assist… of the Week and of the Month. Athletes (with a team or individual) enter their best approved highlight;
+       D.A.R.T. members vote. One vote per member per award, and you can move it until voting closes.</p>
+  </section>
+
+  {# ---------- Vote now ---------- #}
+  <h2 class="aw-section"><i class="fa-solid fa-check-to-slot" aria-hidden="true"></i> Vote now</h2>
+  {% for c in groups.voting %}
+    {% set voted = my_vote(c) %}
+    <article class="aw-contest" id="contest{{ c.id }}">
+      {{ contest_head(c, 'voting') }}
+      {% set rows = ranked(c) %}
+      {% if rows %}
+        <div class="aw-grid">
+          {% for e, votes in rows %}
+            <div class="aw-entry{{ ' is-mine-vote' if voted == e.id }}">
+              {{ entry_media(e.highlight) }}
+              <div class="aw-entry-body">
+                <a class="aw-name text-decoration-none" href="{{ url_for('user_profile', user_id=e.athlete_id) }}">{{ e.athlete.full_name }}</a>
+                {% if e.note %}<div class="aw-note">{{ e.note }}</div>{% endif %}
+                <div class="aw-votes">{{ votes }} vote{{ '' if votes == 1 else 's' }}</div>
+                {% if current_user.is_authenticated %}
+                  {% if current_user.id == e.athlete_id %}
+                    <span class="small text-muted">Your entry</span>
+                  {% elif voted == e.id %}
+                    <span class="badge text-bg-primary">Your vote</span>
+                  {% else %}
+                    <form method="POST" action="{{ url_for('award_vote', entry_id=e.id) }}" class="mt-auto">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="btn btn-sm dart-btn w-100"><i class="fa-solid fa-check-to-slot" aria-hidden="true"></i> {{ 'Move my vote here' if voted else 'Vote' }}</button>
+                    </form>
+                  {% endif %}
+                {% else %}
+                  <a class="btn btn-sm btn-outline-success mt-auto" href="{{ url_for('login', next=url_for('awards_page')) }}">Log in to vote</a>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}<p class="aw-empty mb-0">No entries in the vote.</p>{% endif %}
+    </article>
+  {% else %}
+    <p class="aw-empty">No award is in its voting stage right now.</p>
+  {% endfor %}
+
+  {# ---------- Enter ---------- #}
+  <h2 class="aw-section"><i class="fa-solid fa-upload" aria-hidden="true"></i> Enter your highlight</h2>
+  {% for c in groups.entries %}
+    <article class="aw-contest" id="contest{{ c.id }}">
+      {{ contest_head(c, 'entries') }}
+      {% set mine = c.entries | selectattr('athlete_id', 'equalto', current_user.id if current_user.is_authenticated else 0) | first %}
+      {% if mine %}
+        <p class="mb-0"><i class="fa-solid fa-circle-check text-success" aria-hidden="true"></i> You entered this award
+          ({{ {'pending': 'waiting for D.A.R.T Admin review', 'approved': 'approved, in the vote', 'rejected': 'not accepted'}[mine.status] }}).</p>
+      {% elif current_user.is_authenticated and current_user.role == 'Athlete' and current_user.is_verified %}
+        {% set clips = my_highlights.get(c.id) or [] %}
+        {% if clips %}
+          <form method="POST" action="{{ url_for('award_enter', contest_id=c.id) }}" class="aw-enter">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="visually-hidden" for="awClip{{ c.id }}">Your highlight</label>
+            <select class="form-select" id="awClip{{ c.id }}" name="highlight_id" required>
+              <option value="">Choose one of your approved highlights…</option>
+              {% for h in clips %}<option value="{{ h.id }}">{{ (h.caption or ('Video' if h.is_video else 'Photo')) | truncate(50) }} · {{ h.created_at.strftime('%d %b') }}</option>{% endfor %}
+            </select>
+            <label class="visually-hidden" for="awNote{{ c.id }}">Note</label>
+            <input class="form-control" id="awNote{{ c.id }}" name="note" maxlength="150" placeholder="e.g. Free kick vs LPRC, 88th minute (optional)">
+            <button type="submit" class="btn dart-btn"><i class="fa-solid fa-trophy" aria-hidden="true"></i> Enter</button>
+          </form>
+        {% else %}
+          <p class="mb-0 aw-empty">Post a {{ c.sport or '' }} highlight first (it must be approved), then enter it here.
+            <a href="{{ url_for('feed') }}">Highlights</a></p>
+        {% endif %}
+      {% elif current_user.is_authenticated %}
+        <p class="mb-0 aw-empty">Only verified athletes can enter. Vote once entries close.</p>
+      {% else %}
+        <p class="mb-0 aw-empty"><a href="{{ url_for('login', next=url_for('awards_page')) }}">Log in</a> as an athlete to enter.</p>
+      {% endif %}
+    </article>
+  {% else %}
+    <p class="aw-empty">No award is taking entries right now.</p>
+  {% endfor %}
+
+  {% if groups.upcoming %}
+    <h2 class="aw-section"><i class="fa-regular fa-calendar" aria-hidden="true"></i> Coming soon</h2>
+    {% for c in groups.upcoming %}<article class="aw-contest" id="contest{{ c.id }}">{{ contest_head(c, 'upcoming') }}</article>{% endfor %}
+  {% endif %}
+
+  {# ---------- Winners ---------- #}
+  <h2 class="aw-section"><i class="fa-solid fa-medal" aria-hidden="true"></i> Winners</h2>
+  {% set ns = namespace(any=false) %}
+  <div class="aw-grid">
+    {% for c in groups.closed %}
+      {% set w = (c.entries | selectattr('id', 'equalto', c.winner_entry_id) | first) if c.winner_entry_id else none %}
+      {% if w %}
+        {% set ns.any = true %}
+        <div class="aw-entry is-winner" id="contest{{ c.id }}">
+          {{ entry_media(w.highlight) }}
+          <div class="aw-entry-body">
+            <span class="aw-winner-badge"><i class="fa-solid fa-trophy" aria-hidden="true"></i> {{ c.title }}</span>
+            <a class="aw-name text-decoration-none" href="{{ url_for('user_profile', user_id=w.athlete_id) }}">{{ w.athlete.full_name }}</a>
+            <span class="aw-note">{{ c.voting_ends_at.strftime('%d %b %Y') }}</span>
+          </div>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% if not ns.any %}<p class="aw-empty">Winners appear here when voting closes.</p>{% endif %}
+</div>
+{% endblock %}

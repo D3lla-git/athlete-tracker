@@ -29,6 +29,10 @@
   background: var(--dart-primary-gradient, #198754); cursor: pointer;
 }
 .feed-chip-add:hover { filter: brightness(1.1); }
+.feed-chip-awards { display: inline-flex; align-items: center; gap: 6px; border-color: rgba(212, 165, 20, 0.6); color: #8a6400 !important; }
+.feed-chip-awards i { color: #d4a514; }
+[data-theme="dark"] .feed-chip-awards { color: #f5c542 !important; }
+@media (max-width: 575.98px) { .feed-awards-text { display: none; } .feed-chip-awards { padding-left: 11px; padding-right: 11px; } }
 .feed-add-short { display: none; }
 @media (max-width: 575.98px) { .feed-add-short { display: inline; } }
 .feed-compose {

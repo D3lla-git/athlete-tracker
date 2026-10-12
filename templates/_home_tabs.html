@@ -4,7 +4,7 @@
 <nav class="home-tabs" aria-label="Home sections"
      {% if home_tab == 'home' %}data-swipe-next="{{ url_for('feed') }}"{% else %}data-swipe-prev="{{ url_for('index') }}"{% endif %}>
   <a href="{{ url_for('index') }}" class="home-tab {{ 'active' if home_tab == 'home' }}" {% if home_tab == 'home' %}aria-current="page"{% endif %}>
-    <span>Home</span>
+    <span><i class="fa-solid fa-house" aria-hidden="true"></i> Home</span>
   </a>
   <a href="{{ url_for('feed') }}" class="home-tab {{ 'active' if home_tab == 'highlights' }}" {% if home_tab == 'highlights' %}aria-current="page"{% endif %}>
     <span><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> Highlights</span>

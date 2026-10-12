@@ -47,6 +47,7 @@ SPORT_COMPETITIONS = {
         'AFCON',
         'WAFU',
         'World Cup',
+        'Unofficial Game',
     ],
     # AFCON and WAFU are football competitions.
     'Basketball': [
@@ -56,6 +57,7 @@ SPORT_COMPETITIONS = {
         'University League',
         'Community/Area League',
         'World Cup',
+        'Unofficial Game',
     ],
     # There is no international kickball competition.
     'Kickball': [
@@ -64,6 +66,7 @@ SPORT_COMPETITIONS = {
         'Club League',
         'University League',
         'Community/Area League',
+        'Unofficial Game',
     ],
 }
 
@@ -123,6 +126,7 @@ TROPHIES = {
         'AFCON': ['AFCON Finals', 'AFCON Qualifiers'],
         'WAFU': ['WAFU Zone A Tournament'],
         'World Cup': ['FIFA World Cup', 'FIFA World Cup Qualifiers'],
+        'Unofficial Game': [],
     },
     'Basketball': {
         'High School': ['Classes League'],
@@ -140,6 +144,7 @@ TROPHIES = {
             'FIBA AfroBasket',
             'FIBA AfroBasket Qualifiers',
         ],
+        'Unofficial Game': [],
     },
     'Kickball': {
         'High School': ['Classes League', 'National High School Championship'],
@@ -152,6 +157,7 @@ TROPHIES = {
         },
         'University League': ['University Championship'],
         'Community/Area League': ['Community Trophy'],
+        'Unofficial Game': [],
     },
 }
 
@@ -487,6 +493,15 @@ ATHLETE_CATEGORIES = [
         'This category means you are only playing high school ball, therefore only '
         'High School records will be stored.',
         ['High School'],
+    ),
+    _category(
+        'individual', 'Individual Athlete', 'fa-person-running',
+        'You have no team (yet) but play unofficial games.',
+        'This category is for athletes without a team who play unofficial games and want '
+        'their talent seen in Liberia and the world. No coach or team approval is needed: '
+        'the D.A.R.T Admin approves your profile and your records until you update your '
+        'profile to the team you play for.',
+        ['Unofficial Game'],
     ),
 ]
 

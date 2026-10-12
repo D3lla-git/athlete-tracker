@@ -10,7 +10,7 @@
     <aside class="co-summary" aria-labelledby="coPlanTitle">
       <div class="co-eyebrow"><i class="fa-solid fa-crown"></i> You're upgrading to</div>
       <h1 id="coPlanTitle">{{ plan.name }}</h1>
-      <div class="co-price">{{ plan.price_label }} <span>USD / 30 days</span></div>
+      <div class="co-price">{{ plan.price_label }} <span>USD / 30 days · {{ plan.price_note }}</span></div>
       <ul class="co-features">
         {% for f in plan.features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
       </ul>
@@ -58,7 +58,7 @@
           </li>
 
           <li>
-            <strong>Send exactly {{ plan.price_label }} USD</strong>
+            <strong>Send exactly {{ plan.price_label }} USD (or the LRD equivalent)</strong>
             <div class="co-transfer">
               <div class="co-transfer-row">
                 <span>To</span>

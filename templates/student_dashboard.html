@@ -89,6 +89,14 @@
 
 <!-- ==================== MY RECORDS TABLE ==================== -->
 <!-- ==================== MY SUBMITTED RECORDS ==================== -->
+{% if is_individual_athlete(current_user) %}
+  <div class="alert alert-success d-flex gap-2 align-items-start" role="note">
+    <i class="fa-solid fa-person-running mt-1" aria-hidden="true"></i>
+    <div class="small"><strong>Individual Athlete:</strong> you have no team, so the D.A.R.T Admin approves your records (choose
+      <em>Unofficial Game</em>) and highlights. Joined a team? <a href="{{ url_for('profile') }}">Change your category and team in My Profile</a>.</div>
+  </div>
+{% endif %}
+<a class="btn btn-sm btn-outline-warning mb-2" href="{{ url_for('awards_page') }}"><i class="fa-solid fa-trophy" aria-hidden="true"></i> Awards: enter your best highlight, vote</a>
 <h4 class="mt-4 mb-3" id="my-records">My Submitted Records <i class="fa-solid fa-book"></i></h4>
 {% include '_record_warning.html' %}
 {% if is_minor_athlete(current_user) %}

@@ -73,6 +73,7 @@
       <article class="pr-card">
         <div class="pr-card-name">Basic Profile</div>
         <div class="pr-price">Free</div>
+        <div class="pr-lrd">or LRD equivalent</div>
         <div class="pr-price-note">Forever</div>
         <ul class="pr-features">
           <li><i class="fa-solid fa-check"></i> Basic D.A.R.T. profile & dashboard</li>
@@ -93,6 +94,7 @@
       <article class="pr-card">
         <div class="pr-card-name">{{ high_school_plan.name }}</div>
         <div class="pr-price">{{ high_school_plan.price_label }}<span>/month</span></div>
+        <div class="pr-lrd">or LRD equivalent</div>
         <div class="pr-price-note">For verified High School Athletes</div>
         <ul class="pr-features">
           {% for f in high_school_plan.features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
@@ -106,16 +108,17 @@
         <div class="pr-ribbon">Unlimited</div>
         <div class="pr-card-name">Athlete Premium</div>
         <div class="pr-price">from {{ pro_from_price }}<span>/month</span></div>
-        <div class="pr-price-note">Price by your category</div>
+        <div class="pr-lrd">or LRD equivalent</div>
+        <div class="pr-price-note">Price by your category (Club League: by your division)</div>
         <ul class="pr-features">
           {% for f in pro_athlete_plans[0].features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
         </ul>
 
         <div class="pr-category-table" role="table" aria-label="Athlete Premium price by category">
           {% for p in pro_athlete_plans %}
-            {% set mine = current_user.is_authenticated and current_user.role == 'Athlete' and current_user.athlete_category == p.category %}
+            {% set mine = my_eligible and my_eligible.code == p.code %}
             <div class="pr-category-row {% if mine %}is-mine{% endif %}" role="row">
-              <span role="cell">{{ p.category }}{% if mine %} <em>(you)</em>{% endif %}</span>
+              <span role="cell">{{ p.category }}{% if p.division %} · {{ p.division }}{% endif %}{% if mine %} <em>(you)</em>{% endif %}</span>
               <strong role="cell">{{ p.price_label }}</strong>
             </div>
           {% endfor %}
@@ -143,6 +146,7 @@
       <article class="pr-card">
         <div class="pr-card-name">Coach</div>
         <div class="pr-price">Free</div>
+        <div class="pr-lrd">or LRD equivalent</div>
         <div class="pr-price-note">After verification</div>
         <ul class="pr-features">
           <li><i class="fa-solid fa-check"></i> Verify your team's athletes</li>
@@ -163,6 +167,7 @@
         <div class="pr-ribbon">Career</div>
         <div class="pr-card-name">{{ coach_plan.name }}</div>
         <div class="pr-price">{{ coach_plan.price_label }}<span>/month</span></div>
+        <div class="pr-lrd">or LRD equivalent</div>
         <div class="pr-price-note">Billed monthly · no auto-renewal</div>
         <ul class="pr-features">
           {% for f in coach_plan.features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
@@ -184,6 +189,7 @@
       <article class="pr-card">
         <div class="pr-card-name">Basic Scout</div>
         <div class="pr-price">Free</div>
+        <div class="pr-lrd">or LRD equivalent</div>
         <div class="pr-price-note">Forever</div>
         <ul class="pr-features">
           <li><i class="fa-solid fa-check"></i> Scout dashboard basics & quick search</li>
@@ -203,6 +209,7 @@
         <div class="pr-ribbon">SaaS</div>
         <div class="pr-card-name">{{ scout_plan.name }}</div>
         <div class="pr-price">{{ scout_plan.price_label }}<span>/month</span></div>
+        <div class="pr-lrd">or LRD equivalent</div>
         <div class="pr-price-note">Billed monthly · no auto-renewal</div>
         <ul class="pr-features">
           {% for f in scout_plan.features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
@@ -224,6 +231,7 @@
       <article class="pr-card">
         <div class="pr-card-name">Organization Free</div>
         <div class="pr-price">Free</div>
+        <div class="pr-lrd">or LRD equivalent</div>
         <div class="pr-price-note">After verification</div>
         <ul class="pr-features">
           <li><i class="fa-solid fa-check"></i> Verified organization page & dashboard</li>
@@ -241,6 +249,7 @@
         <div class="pr-ribbon">Teams</div>
         <div class="pr-card-name">{{ organization_plan.name }}</div>
         <div class="pr-price">{{ organization_plan.price_label }}<span>/month</span></div>
+        <div class="pr-lrd">or LRD equivalent</div>
         <div class="pr-price-note">Billed monthly · no auto-renewal</div>
         <ul class="pr-features">
           {% for f in organization_plan.features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
@@ -279,6 +288,7 @@
 </div>
 
 <style>
+  .pr-lrd { margin-top: -4px; margin-bottom: 8px; font-size: 0.8rem; font-weight: 700; color: var(--muted-text, #6c757d); }
   .pr-page { max-width: 1140px; margin: 0 auto; }
 
   .pr-hero {

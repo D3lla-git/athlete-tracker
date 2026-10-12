@@ -1,0 +1,42 @@
+{# Shared styles for the Awards pages (public + D.A.R.T Admin). Primary gradient hero. #}
+<style>
+  .aw-hero {
+    position: relative; overflow: hidden; padding: 24px 22px; border-radius: 22px; color: #fff; margin-bottom: 18px;
+    background: var(--dart-primary-gradient); background-color: #0d2413; border: 1px solid rgba(57, 185, 114, 0.35);
+    box-shadow: 0 14px 34px rgba(4, 20, 8, 0.28);
+  }
+  .aw-hero h1 { font-size: clamp(1.35rem, 4vw, 1.9rem); font-weight: 800; margin: 0 0 6px; }
+  .aw-hero p { margin: 0; color: rgba(255, 255, 255, 0.85); max-width: 760px; }
+  .aw-hero .aw-trophy { position: absolute; right: 18px; top: 10px; font-size: 5rem; opacity: 0.12; }
+  .aw-section { display: flex; align-items: center; gap: 8px; margin: 26px 0 12px; font-weight: 800; font-size: 1.2rem; }
+  .aw-contest {
+    margin-bottom: 18px; padding: 16px; border-radius: 18px; background: var(--surface-bg, #fff); color: var(--surface-text, #111);
+    border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1)); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.05); scroll-margin-top: 96px;
+  }
+  .aw-contest-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .aw-icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; color: #fff;
+    background: var(--dart-primary-gradient); background-color: #0d2413; font-size: 1.2rem; }
+  .aw-contest h2 { font-size: 1.1rem; font-weight: 800; margin: 0; }
+  .aw-when { font-size: 0.82rem; color: var(--muted-text, #6c757d); }
+  .aw-phase { margin-left: auto; font-size: 0.75rem; font-weight: 800; padding: 3px 10px; border-radius: 999px; color: #fff; }
+  .aw-phase-entries { background: #198754; } .aw-phase-voting { background: #0b5ed7; }
+  .aw-phase-upcoming { background: #6c757d; } .aw-phase-closed { background: #b8860b; }
+  .aw-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+  .aw-entry { display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.12));
+    background: var(--surface-bg, #fff); }
+  .aw-entry.is-mine-vote { border: 2px solid #0b5ed7; }
+  .aw-entry.is-winner { border: 2px solid #d4a514; box-shadow: 0 0 0 4px rgba(212, 165, 20, 0.2); }
+  .aw-media { aspect-ratio: 4 / 5; background: #000; display: grid; place-items: center; }
+  .aw-media img, .aw-media video { width: 100%; height: 100%; object-fit: contain; }
+  .aw-entry-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .aw-name { font-weight: 800; }
+  .aw-note { font-size: 0.85rem; color: var(--muted-text, #6c757d); }
+  .aw-votes { font-size: 0.85rem; font-weight: 800; color: #0b5ed7; }
+  html[data-theme="dark"] .aw-votes { color: #74b0ff; }
+  .aw-winner-badge { display: inline-flex; gap: 6px; align-items: center; font-weight: 800; color: #8a6400; background: rgba(245, 197, 66, 0.25);
+    padding: 3px 10px; border-radius: 999px; font-size: 0.8rem; }
+  html[data-theme="dark"] .aw-winner-badge { color: #f5c542; }
+  .aw-enter { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; padding: 12px; border-radius: 14px; background: rgba(25, 135, 84, 0.07); }
+  .aw-enter select, .aw-enter input { min-width: 0; flex: 1 1 220px; }
+  .aw-empty { color: var(--muted-text, #6c757d); }
+</style>
