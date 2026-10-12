@@ -4,6 +4,8 @@
    proof_note(r)                - coach / admin: why the record is held, and the proof link
    countersign_actions(r, next) - confirm / dispute buttons (opposing coach, match official, D.A.R.T Admin) #}
 
+{% from '_record_table_macros.html' import record_card_grid with context %}
+
 {% macro record_status_badge(r, cls='') %}
   {% if r.status == 'approved' %}
     <span class="badge dart-pill {{ cls }}">Approved{% if r.countersign_role %} <i class="fa-solid fa-check-double" title="Counter-signed" aria-label="counter-signed"></i>{% endif %}</span>
@@ -104,7 +106,9 @@
       · {{ r.team }} <span class="text-muted">vs</span> {{ r.team_played_against }}
       · {{ r.competition_display or r.competition_category }}
     </div>
+    {# Every field of the record, not just the headline numbers: any of them could be false. #}
     <div class="integrity-cs-stats">{{ record_line(r) }}{% if r.games_played and r.games_played > 1 %} ({{ r.games_played }} games){% endif %}</div>
+    <div class="integrity-cs-all" aria-label="All numbers in this record">{{ record_card_grid(r) }}</div>
     {% if people and r.coach_approved_by in people %}<div class="small text-muted">Approved by coach {{ people[r.coach_approved_by].full_name }} · {{ r.coach_approved_at.strftime('%d %b %Y') if r.coach_approved_at }}</div>{% endif %}
     {{ proof_note(r) }}
     {{ countersign_actions(r, next) }}

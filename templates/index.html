@@ -94,6 +94,23 @@
 
         </a>
 
+
+        <a href="{{ url_for('register_official') }}"
+           class="dart-action-btn dart-action-official">
+
+            <span class="dart-action-icon">
+                <i class="fa-solid fa-clipboard-check"></i>
+            </span>
+
+            <span class="dart-action-text">
+                <strong>Register as Match Official</strong>
+                <small title="Journalist · League secretary · Referee">Verify match records</small>
+            </span>
+
+            <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
+
+        </a>
+
     </div>
 </section>
    <!--D.A.R.T. Hero Section-->   <!--D.A.R.T. Hero Section--> 
@@ -534,8 +551,7 @@
     max-width: 1400px;
     margin: 0 auto;
 
-    /* 5 tiles as 3 + 2: a 6-column grid where the first row's tiles
-       span 2 columns and the second row's span 3. */
+    /* Tablet: 6 tiles in 3 rows of 2 (each spans 3 of 6 columns). */
     display: grid;
     grid-template-columns:
         repeat(6, minmax(0, 1fr));
@@ -544,15 +560,10 @@
 }
 
 .dart-action-container > .dart-action-btn {
-    grid-column: span 2;
-}
-
-.dart-action-container > .dart-action-scout,
-.dart-action-container > .dart-action-org {
     grid-column: span 3;
 }
 
-/* Desktop: one compact row of 5 — icon on top, text centred below.
+/* Desktop: one compact row of 6 — icon on top, text centred below.
    Scoped to the container so it wins over the base tile styles below. */
 @media (min-width: 992px) {
 
@@ -561,7 +572,7 @@
     }
 
     .dart-action-container {
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        grid-template-columns: repeat(6, minmax(0, 1fr));
         gap: 12px;
         max-width: 1320px;
     }
@@ -700,6 +711,10 @@
 
 .dart-action-org .dart-action-icon {
     background: rgba(13,202,240,0.30);
+}
+
+.dart-action-official .dart-action-icon {
+    background: rgba(220,53,69,0.32);
 }
 
 .dart-action-text {

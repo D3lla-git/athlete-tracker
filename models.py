@@ -22,7 +22,7 @@ class User(UserMixin, db.Model):
     def display_name(self):
         """The name shown to people. The platform admin account always shows as
         "D.A.R.T Admin" when its stored name is a role placeholder (e.g. "Super" + "Admin")."""
-        if self.role == 'System' and re.search(r'(super|admin|system|root)', self.full_name or '', re.IGNORECASE):
+        if self.role == 'System' and re.fullmatch(r'(?:\s|super|admin|system|root|d\.?a\.?r\.?t\.?)*', self.full_name or '', re.IGNORECASE):
             return 'D.A.R.T Admin'
         return self.full_name
 
@@ -1042,6 +1042,23 @@ class Entitlement(db.Model):
             name='unique_user_entitlement'
         ),
     )
+
+
+class Notification(db.Model):
+    """
+    In-app notification (the bell). Only good news about the user's own
+    account: profile / record approved (athletes), account approved
+    (coaches, scouts, organizations). Created automatically (notifications.py).
+    """
+    __tablename__ = 'notification'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    user_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    kind = db.Column(db.String(30), nullable=False)
+    message = db.Column(db.String(300), nullable=False)
+    link = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    read_at = db.Column(db.DateTime, nullable=True)
 
 
 class RecordVerificationEvent(db.Model):

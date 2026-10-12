@@ -1325,6 +1325,11 @@ html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item):not(.dart
   }
 }
 
+/* In-page links (dashboard buttons, Review menu) stop below the sticky
+   navbar instead of hiding the section title under it. */
+html { scroll-padding-top: 96px; }
+.dash-anchor { display: block; height: 0; }
+
 .pwa-ios-steps {
   list-style: none;
   padding: 0;

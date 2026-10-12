@@ -167,6 +167,18 @@
 
             <!-- Form Fields -->
             <div class="col-md-8">
+            {% if current_user.role == 'System' %}
+            <div class="mb-3">
+              <label class="form-label" for="adminFullName">Name <i class="fa-solid fa-user-shield"></i></label>
+              <input type="text" class="form-control" id="adminFullName" name="admin_full_name" value="{{ current_user.full_name }}"
+                     maxlength="100" minlength="2" autocomplete="name" aria-describedby="adminNameHelp">
+              <small class="text-muted d-block" id="adminNameHelp">
+                Shown as <strong>{{ current_user.display_name }}</strong>. You sign in with this name, so remember the new one.
+              </small>
+              <label class="form-label mt-2 small" for="adminNamePassword">Current password (only needed to change your name)</label>
+              <input type="password" class="form-control" id="adminNamePassword" name="current_password_for_name" autocomplete="current-password">
+            </div>
+            {% else %}
             <div class="mb-3">
   <label class="form-label">Full Name <i class="fa-solid fa-user"></i></label>
 
@@ -180,6 +192,7 @@
     {% endif %}
   </div>
 </div>
+            {% endif %}
 
               {% set coach_pro_user = current_user.role == 'Coach' and is_coach_pro(current_user) %}
               <div class="mb-3">
@@ -858,10 +871,15 @@
 
                                 {% if already_pinned %}
 
-                                    <span class="badge bg-success">
-                                        <i class="fa-solid fa-thumbtack"></i>
-                                        Pinned
-                                    </span>
+                                    {# Pinned is a toggle: clicking it unpins (clicking "Pin Record" pins again). #}
+                                    <form method="POST" action="{{ url_for('unpin_premium_record', record_id=record.id) }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-success pin-toggle" aria-pressed="true"
+                                                title="Pinned. Click to unpin">
+                                            <i class="fa-solid fa-thumbtack"></i>
+                                            Pinned
+                                        </button>
+                                    </form>
 
                                 {% elif pinned_records|length < 3 %}
 

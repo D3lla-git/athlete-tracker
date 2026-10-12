@@ -50,6 +50,7 @@
 .integrity-sport { margin-left: auto; font-size: 0.75rem; font-weight: 800; color: #198754; text-transform: uppercase; }
 .integrity-cs-match { font-size: 0.85rem; color: var(--muted-text, #6c757d); }
 .integrity-cs-stats { font-size: 1.05rem; font-weight: 800; }
+.integrity-cs-all .card-grid { margin: 4px 0 2px; font-size: 0.85rem; }
 .integrity-cs-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; margin-top: 4px; }
 .integrity-dispute summary { list-style: none; }
 .integrity-dispute summary::-webkit-details-marker { display: none; }

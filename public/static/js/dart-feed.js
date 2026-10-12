@@ -434,6 +434,12 @@
     });
     scope.querySelectorAll('.fp-more').forEach(function (m) { if (moreObserver) moreObserver.observe(m); });
     scope.querySelectorAll('[data-carousel]').forEach(setupCarousel);
+    // Desktop: a blurred copy of each photo fills its frame (see dart-feed.css).
+    scope.querySelectorAll('.fp-photo img').forEach(function (img) {
+      var frame = img.closest('.fp-photo');
+      function lit() { frame.classList.add('fp-has-bg'); }
+      if (img.complete && img.naturalWidth) lit(); else img.addEventListener('load', lit, { once: true });
+    });
     // Single videos take their own shape too (desktop).
     scope.querySelectorAll('.fp-media:not(.fp-carousel) > .fp-media-video').forEach(function (frame) {
       if (frame.dataset.fitted) return;

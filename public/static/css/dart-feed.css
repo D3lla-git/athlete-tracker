@@ -299,14 +299,34 @@ span.fp-c-name { font-weight: 800; }
    than the window minus the post's name and buttons, so the whole post
    (name, photos, Like row) is visible at once. Phones are unchanged. */
 @media (min-width: 992px) {
-  .feed-page { --fp-media-max: min(calc(100vh - 300px), 640px); }
+  /* Room left for the navbar, the post's name / caption and its Like row. */
+  .feed-page { --fp-media-max: clamp(300px, calc(100vh - 270px), 680px); }
+  /* The frame always spans the whole post (no narrow box pushed to one side);
+     its height follows the first photo's shape, capped to fit the screen.
+     100cqw = the post's width. Every photo / video is centred in it whole. */
+  .fp-media { container-type: inline-size; }
   .fp-carousel .fp-frame,
   .fp-media > .fp-media-video {
-    aspect-ratio: var(--fp-ratio, 4 / 5);
-    max-height: var(--fp-media-max);
+    width: 100%;
+    aspect-ratio: auto;
+    height: min(var(--fp-media-max), calc(100cqw / var(--fp-ratio, 0.8)));
+    max-height: none;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);   /* the photo's 100% = the frame */
   }
+  .fp-carousel .fp-frame img, .fp-carousel .fp-frame video,
+  .fp-media > .fp-media-video video { width: 100%; height: 100%; max-height: none; object-fit: contain; }
   .fp-media > .fp-frame:not(.fp-media-video) img { max-height: var(--fp-media-max); }
-  .fp-carousel .fp-frame img, .fp-carousel .fp-frame video { max-height: var(--fp-media-max); }
+  /* Around a photo of another shape: the same photo, softly blurred, instead of black bars. */
+  .fp-photo { position: relative; overflow: hidden; isolation: isolate; }
+  .fp-photo.fp-has-bg::before {
+    content: ''; position: absolute; inset: -40px; z-index: -1;
+    background: var(--fp-bg) center / cover no-repeat;
+    filter: blur(30px) brightness(0.55) saturate(1.15);
+  }
+  .fp-photo.fp-has-bg img { background: transparent; position: relative; }
   .fp-nav { width: 40px; height: 40px; }
   .fp-nav:hover { background: #fff; }
+}
+@media (min-width: 992px) and (prefers-reduced-transparency: reduce) {
+  .fp-photo.fp-has-bg::before { display: none; }
 }

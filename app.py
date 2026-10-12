@@ -49,6 +49,7 @@ from plans import (
 )
 import coaching
 import integrity
+import notifications as notif
 from competitions import (
     ALL_COMPETITIONS,
     ATHLETE_CATEGORIES,
@@ -7242,11 +7243,30 @@ app.jinja_env.globals.update(handle=user_handle, handle_tag=handle_tag, username
 
 
 def needs_terms_acceptance(user):
+    """
+    Accepting the Terms is a ONE-TIME step per account (stored on the
+    account, so it follows the user to every device and survives logouts).
+    Only accounts that never accepted any version are stopped. When the
+    Terms change later, people who already accepted see a small "Terms
+    updated" notice instead (terms_update_pending), never a blocking page.
+    """
     return (
         user.is_authenticated
         and user.role not in TERMS_EXEMPT_ROLES
-        and user.terms_version != TERMS_VERSION
+        and not user.terms_version
+        and not user.terms_accepted_at
     )
+
+
+def terms_update_pending(user):
+    """Accepted an earlier version: show the non-blocking "Terms updated" notice."""
+    return (
+        getattr(user, 'is_authenticated', False)
+        and user.role not in TERMS_EXEMPT_ROLES
+        and bool(user.terms_version or user.terms_accepted_at)
+        and user.terms_version != TERMS_VERSION
+        and user.role != 'Organization' or False
+    ) if getattr(user, 'is_authenticated', False) else False
 
 
 def terms_documents_for(user):
@@ -7703,7 +7723,39 @@ def profile_card_info(user, viewer=None):
         })
 
     info['share_path'] = profile_share_path(user)
+    info['contacts'] = profile_contacts(user)
     return info
+
+
+def format_phone(phone):
+    """'+231770123456' -> '+231 77 012 3456'."""
+    if phone and len(phone) == 13 and phone.startswith('+231'):
+        return f'+231 {phone[4:6]} {phone[6:9]} {phone[9:]}'
+    return phone or ''
+
+
+def profile_contacts(user):
+    """
+    Phone contacts shown on a profile card, to signed-in members only (never
+    on the public share image / PDF). A coach shows their own number; an
+    athlete shows the number of each coach of their team. The numbers come
+    from the coaches' accounts, so athletes can't edit them (coaches can't
+    either: only the D.A.R.T Admin changes a coach's number).
+    """
+    if not (has_request_context() and current_user.is_authenticated):
+        return []
+    if user.role == 'Coach':
+        if user.phone and not user.license_revoked:
+            return [{'label': 'Contact', 'name': '', 'phone': format_phone(user.phone), 'tel': user.phone}]
+        return []
+    if user.role == 'Athlete' and user.school:
+        return [{'label': 'Coach contact', 'name': c.full_name, 'phone': format_phone(c.phone), 'tel': c.phone, 'coach_id': c.id}
+                for c in sorted(integrity._active_coaches_of(user.school), key=lambda c: c.full_name or '')
+                if c.phone][:3]
+    return []
+
+
+app.jinja_env.filters['phone'] = format_phone
 
 
 def _fetch_profile_photo(user):
@@ -9487,8 +9539,10 @@ def role_analytics(user, **extra):
             'role': 'Coach', 'title': f'Welcome back, {first_name}',
             'subtitle': f'{user.school} · {user.coach_category or "Coach"} · your teams at a glance',
             'labels': labels,
-            'actions': [('Records to review', '#pendingRecords', 'fa-solid fa-file-circle-check', counts['pending']),
-                        ('Athletes to verify', '#pendingAthletes', 'fa-solid fa-user-clock', extra.get('athletes_pending', 0)),
+            'actions': [('Records to review', '#pendingRecords', 'fa-solid fa-file-circle-check', counts['pending'])]
+                       + ([('Opponent records to confirm', '#countersignQueue', 'fa-solid fa-user-check', extra.get('countersign_pending', 0))]
+                          if integrity_enabled() else [])
+                       + [('Athletes to verify', '#pendingAthletes', 'fa-solid fa-user-clock', extra.get('athletes_pending', 0)),
                         ('Highlights to approve', '#highlightReview', 'fa-solid fa-clapperboard', len(queue)),
                         ('My coaching career', url_for('coach_career'), 'fa-solid fa-clipboard-user', 0)],
             'kpis': [
@@ -9814,6 +9868,7 @@ def admin_dashboard():
     # say how many there are in total.
     pending_records_total = len(pending_records)
     approved_records_total = len(approved_records)
+    countersign_queue = countersign_queue_for(current_user) if current_user.role == 'Coach' else []
 
     return render_template(
         'admin_dashboard.html',
@@ -9828,13 +9883,14 @@ def admin_dashboard():
         approved_records_total=approved_records_total,
         dashboard_list_limit=DASHBOARD_LIST_LIMIT,
         highlight_queue=coach_highlight_queue(current_user) if current_user.role == 'Coach' else [],
-        countersign_queue=countersign_queue_for(current_user) if current_user.role == 'Coach' else [],
+        countersign_queue=countersign_queue,
         integrity_on=integrity_enabled(),
         verification_counts=verification_counts() if current_user.role == 'System' else None,
         analytics=super_admin_analytics() if current_user.role == 'System' else None,
         role_dash=(role_analytics(current_user, highlight_queue=coach_highlight_queue(current_user),
                                   athletes_managed=dashboard_stats.get('athletes_managed', 0),
-                                  athletes_pending=dashboard_stats.get('athletes_pending', 0))
+                                  athletes_pending=dashboard_stats.get('athletes_pending', 0),
+                                  countersign_pending=len(countersign_queue))
                    if current_user.role == 'Coach' else None),
         now_hour=(datetime.utcnow()).hour,                 # Liberia is on UTC
         today_label=datetime.utcnow().strftime('%A, %B %d, %Y').replace(' 0', ' '),
@@ -10272,6 +10328,28 @@ def update_profile():
     is_coach = current_user.role == 'Coach'
     profile_resent = False
     coach_pro = is_coach and is_coach_pro(current_user)
+
+    # The D.A.R.T Admin may rename their account (others keep their
+    # government name). The admin signs in with this name, so the current
+    # password must confirm the change.
+    if current_user.role == 'System' and 'admin_full_name' in request.form:
+        new_name = ' '.join((request.form.get('admin_full_name') or '').split())
+        if new_name != current_user.full_name:
+            if not re.fullmatch(r"[^\W\d_](?:[^\W\d_]|[ .'\-])*", new_name) or not 2 <= len(new_name) <= 100:
+                flash('Name: 2 to 100 letters (spaces, dots, apostrophes and hyphens allowed).', 'danger')
+                return redirect(url_for('profile'))
+            if not current_user.check_password(request.form.get('current_password_for_name', '')):
+                flash('Enter your current password to change your name.', 'danger')
+                return redirect(url_for('profile'))
+            if User.query.filter(func.lower(User.full_name) == new_name.lower(), User.id != current_user.id).first():
+                flash('Another account already uses this name. Choose a different one.', 'danger')
+                return redirect(url_for('profile'))
+            create_audit_log(action='admin_name_changed', actor_user_id=current_user.id, target_type='User',
+                             target_id=str(current_user.id), details={'old': current_user.full_name, 'new': new_name})
+            current_user.full_name = new_name
+            db.session.commit()
+            flash(f'Name changed to {new_name}. Use this name to sign in from now on.', 'success')
+            return redirect(url_for('profile'))
 
     # Update school/team. A coach's team decides whose records they approve,
     # so coaches change teams in My Coaching Career (D.A.R.T Admin approves).

@@ -17,7 +17,9 @@
     <span class="fp-paused" aria-hidden="true"><i class="fa-solid fa-play"></i></span>
   </div>
 {% else %}
-  <div class="fp-frame">
+  {# --fp-bg: the same photo, blurred, fills the frame around it on desktop
+     (only once the photo has loaded, so nothing extra is downloaded). #}
+  <div class="fp-frame fp-photo" style="--fp-bg: url('{{ url }}')">
     {% set alt = label or item.caption or 'Highlight photo of ' ~ athlete.full_name %}
     {% if full %}
       <img src="{{ url }}" alt="{{ alt }}" decoding="async" {% if not eager %}loading="lazy"{% endif %}>

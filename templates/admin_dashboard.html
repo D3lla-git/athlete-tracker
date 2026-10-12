@@ -330,15 +330,17 @@
     </form>
   </section>
   {% endif %}
-  {% if countersign_queue %}
   <section class="integrity-panel" id="countersignQueue" aria-label="Counter-sign requests">
-    <h4><i class="fa-solid fa-user-check" aria-hidden="true"></i> Counter-sign requests <span class="badge rounded-pill">{{ countersign_queue | length }}</span></h4>
+    <h4><i class="fa-solid fa-user-check" aria-hidden="true"></i> Opponent records to confirm <span class="badge rounded-pill">{{ countersign_queue | length }}</span></h4>
+    {% if countersign_queue %}
     <p>Your team played these games. The other coach approved their athlete's numbers: confirm them only if they are true, or dispute them. Your decision is recorded permanently.</p>
     <div class="integrity-cs-grid">
       {% for r in countersign_queue %}{{ countersign_card(r) }}{% endfor %}
     </div>
+    {% else %}
+    <p class="mb-0">Nothing to confirm. When another coach approves an athlete's record from a game against your team, it appears here for you to confirm or dispute.</p>
+    {% endif %}
   </section>
-  {% endif %}
 {% elif current_user.role == 'System' and verification_counts %}
   {% set vc = verification_counts %}
   <section class="integrity-panel" aria-label="Record verification">
@@ -354,9 +356,11 @@
   </section>
 {% endif %}
 
+{# Banner / Review-menu links land here on phones and desktop alike. #}
+<div id="pendingRecords" class="dash-anchor" aria-hidden="true"></div>
 <!-- ==================== MOBILE VIEW - PENDING RECORDS SLIDER ==================== -->
 <div class="d-md-none">
-  <h4 class="mt-4 mb-3" id="pendingRecords">Pending Sports Records</h4>
+  <h4 class="mt-4 mb-3">Pending Sports Records</h4>
 
   {% if pending_records %}
     <div class="dart-slider" data-dart-slider aria-label="Pending sports records">
