@@ -1,13 +1,19 @@
-{# Top tabs, like X's "For you | Following": Home (the home page) | Highlights (the feed).
-   Set `home_tab` to 'home' or 'highlights' before including. #}
-{# Swipe left on Home -> Highlights; swipe right on Highlights -> Home (dart-home-swipe.js). #}
+{# Top tabs, like X's "For you | Following": Home | Highlights (the feed) | Market$ (sports gear).
+   Set `home_tab` to 'home', 'highlights' or 'market' before including. #}
+{# Swipe left / right moves to the next / previous tab (dart-home-swipe.js). #}
+{% set _tabs = [('home', url_for('index')), ('highlights', url_for('feed')), ('market', url_for('market_home'))] %}
+{% set _names = ['home', 'highlights', 'market'] %}{% set _i = _names.index(home_tab) if home_tab in _names else 0 %}
 <nav class="home-tabs" aria-label="Home sections"
-     {% if home_tab == 'home' %}data-swipe-next="{{ url_for('feed') }}"{% else %}data-swipe-prev="{{ url_for('index') }}"{% endif %}>
+     {% if _i > 0 %}data-swipe-prev="{{ _tabs[_i - 1][1] }}"{% endif %}
+     {% if _i < 2 %}data-swipe-next="{{ _tabs[_i + 1][1] }}"{% endif %}>
   <a href="{{ url_for('index') }}" class="home-tab {{ 'active' if home_tab == 'home' }}" {% if home_tab == 'home' %}aria-current="page"{% endif %}>
     <span><i class="fa-solid fa-house" aria-hidden="true"></i> Home</span>
   </a>
   <a href="{{ url_for('feed') }}" class="home-tab {{ 'active' if home_tab == 'highlights' }}" {% if home_tab == 'highlights' %}aria-current="page"{% endif %}>
     <span><i class="fa-solid fa-clapperboard" aria-hidden="true"></i> Highlights</span>
+  </a>
+  <a href="{{ url_for('market_home') }}" class="home-tab {{ 'active' if home_tab == 'market' }}" {% if home_tab == 'market' %}aria-current="page"{% endif %}>
+    <span><i class="fa-solid fa-store" aria-hidden="true"></i> Market<b class="home-tab-dollar">$</b></span>
   </a>
 </nav>
 <script src="{{ url_for('static', filename='js/dart-home-swipe.js') }}" defer></script>
@@ -27,4 +33,6 @@
   }
   .home-tab.active { color: inherit !important; }
   .home-tab.active span { border-bottom-color: #198754; }
+  .home-tab-dollar { color: #f5c542; font-weight: 900; }
+  @media (max-width: 380px) { .home-tab span i { display: none; } }
 </style>

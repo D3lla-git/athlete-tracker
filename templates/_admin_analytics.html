@@ -102,6 +102,8 @@
           <li><a class="dropdown-item" href="{{ url_for('admin_highlights') }}"><i class="fa-solid fa-photo-film"></i> Photos &amp; videos <span class="adx-menu-count">{{ media_awaiting or 0 }}</span></a></li>
           <li><a class="dropdown-item" href="{{ url_for('verification_center') }}"><i class="fa-solid fa-scale-balanced"></i> Record verification &amp; disputes <span class="adx-menu-count">{{ (verification_counts.verifying + verification_counts.disputed + verification_counts.proof) if verification_counts else 0 }}</span></a></li>
           <li><a class="dropdown-item" href="{{ url_for('admin_awards') }}"><i class="fa-solid fa-trophy"></i> Award entries (week / month) <span class="adx-menu-count">{{ awards_pending_count() }}</span></a></li>
+          <li><a class="dropdown-item" href="{{ url_for('admin_market') }}"><i class="fa-solid fa-store"></i> Market$ listings &amp; reports <span class="adx-menu-count">{% set _mp = market_pending() %}{{ _mp.listings + _mp.reports }}</span></a></li>
+          <li><a class="dropdown-item" href="{{ url_for('admin_predictions') }}"><i class="fa-solid fa-bullseye"></i> Predictions (free game)</a></li>
           <li><a class="dropdown-item" href="#pendingAthletes"><i class="fa-solid fa-user-clock"></i> Athletes not live yet <span class="adx-menu-count">{{ s.athletes_pending }}</span></a></li>
           <li><hr class="dropdown-divider"></li>
           <li><h6 class="dropdown-header">Accounts</h6></li>
@@ -115,6 +117,7 @@
           <li><a class="dropdown-item" href="{{ url_for('admin_terms_acceptances') }}"><i class="fa-solid fa-file-signature"></i> Agreements</a></li>
         </ul>
       </div>
+      <a class="adx-action" href="{{ url_for('admin_market') }}"><i class="fa-solid fa-store"></i> Market${% set _mp2 = market_pending() %}{% if _mp2.listings + _mp2.reports %} <span class="badge rounded-pill">{{ _mp2.listings + _mp2.reports }}</span>{% endif %}</a>
       <a class="adx-action" href="{{ url_for('admin_awards') }}"><i class="fa-solid fa-trophy"></i> Awards{% set _awp = awards_pending_count() %}{% if _awp %} <span class="badge rounded-pill">{{ _awp }}</span>{% endif %}</a>
       <a class="adx-action" href="{{ url_for('verification_center') }}"><i class="fa-solid fa-scale-balanced"></i> Verification{% if verification_counts and verification_counts.disputed %} <span class="badge rounded-pill">{{ verification_counts.disputed }}</span>{% endif %}</a>
       <a class="adx-action" href="{{ url_for('admin_highlights') }}"><i class="fa-solid fa-photo-film"></i> Media{% if media_awaiting %} <span class="badge rounded-pill">{{ media_awaiting }}</span>{% endif %}</a>

@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}D.A.R.T Market$ | Sports gear{% endblock %}
+
+{% block content %}
+{% from '_market_macros.html' import product_card, money, color_css, safety_tips with context %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-market.css') }}">
+<div class="mk container-xl px-0">
+  {% include '_home_tabs.html' %}
+
+  {% if gate %}
+    {# Visitors: D.A.R.T Market$ is for registered members. #}
+    <section class="mk-gate" aria-label="D.A.R.T Market$">
+      <i class="fa-solid fa-store fa-2x mb-2" aria-hidden="true"></i>
+      <h1>D.A.R.T Market<span style="color:#f5c542">$</span></h1>
+      <p>Buy and sell sports gear only: football boots, basketball sneakers, kickball skips, jerseys, socks, balls and more.
+         Every product is checked by the D.A.R.T Admin before it goes live. Create a free D.A.R.T. account to shop or sell.</p>
+      <div class="mk-gate-cats">{% for key, (label, sport, icon) in market_categories.items() %}<span><i class="fa-solid {{ icon }}" aria-hidden="true"></i> {{ label }}</span>{% endfor %}</div>
+      <div class="d-flex flex-wrap justify-content-center gap-2 mt-3">
+        <a class="btn btn-light fw-bold" href="{{ url_for('login', next=url_for('market_home')) }}"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> Log in</a>
+        <a class="btn btn-outline-light fw-bold" href="{{ url_for('register') }}">Register as an athlete</a>
+        <a class="btn btn-outline-light fw-bold" href="{{ url_for('register_vendor') }}"><i class="fa-solid fa-store" aria-hidden="true"></i> Register as a vendor</a>
+      </div>
+    </section>
+  {% else %}
+
+  <div class="mk-top">
+    <h1 class="mk-title"><i class="fa-solid fa-store" aria-hidden="true"></i> D.A.R.T Market<span class="mk-dollar">$</span></h1>
+    <div class="mk-actions">
+      <a class="mk-btn-pill" href="{{ url_for('market_messages') }}"><i class="fa-solid fa-comments" aria-hidden="true"></i> Messages
+        {% set _u = market_unread() %}{% if _u %}<span class="mk-badge">{{ '9+' if _u > 9 else _u }}</span>{% endif %}</a>
+      <a class="mk-btn-pill" href="{{ url_for('market_mine') }}"><i class="fa-solid fa-box-open" aria-hidden="true"></i> My shop</a>
+      {% if not block_reason %}<a class="mk-btn-pill mk-btn-sell" href="{{ url_for('market_sell') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i> Sell</a>{% endif %}
+    </div>
+  </div>
+  {% if block_reason %}<div class="alert alert-warning small"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> {{ block_reason }}</div>{% endif %}
+
+  <form class="mk-search" method="get" action="{{ url_for('market_home') }}" role="search">
+    <label class="visually-hidden" for="mkQ">Search sports gear</label>
+    <input class="form-control" id="mkQ" name="q" value="{{ filters.get('q', '') }}" maxlength="60" placeholder="Search boots, jerseys, balls, brands…">
+    {% for k, v in filters.items() if k != 'q' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+    <button class="btn dart-btn" type="submit" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
+    <button class="btn btn-outline-secondary mk-filter-toggle" type="button" data-mk-filters aria-controls="mkFilters"><i class="fa-solid fa-sliders" aria-hidden="true"></i> Filter</button>
+  </form>
+
+  {% if featured and not filters %}
+    <section class="mk-promo" aria-label="New on D.A.R.T Market$">
+      <div class="mk-promo-track" data-mk-carousel>
+        {% for l in featured %}
+          <a class="mk-promo-card" href="{{ url_for('market_item', listing_id=l.id) }}">
+            <div>
+              <span class="mk-promo-tag">{{ 'New on D.A.R.T Market$' if loop.first else market_categories[l.category][0] }}</span>
+              <div class="mk-promo-name">{{ l.title }}</div>
+              <div class="mk-promo-price">{{ money(l) }}</div>
+              <span class="mk-promo-cta">View</span>
+            </div>
+            <div class="mk-promo-img">{% if l.cover %}<img src="{{ market_image_url(l.cover) }}" alt="" loading="lazy">{% endif %}</div>
+          </a>
+        {% endfor %}
+      </div>
+      <div class="mk-dots" aria-hidden="true">{% for l in featured %}<span class="{{ 'on' if loop.first }}"></span>{% endfor %}</div>
+    </section>
+  {% endif %}
+
+  <nav class="mk-cats" aria-label="Categories">
+    <a class="mk-cat {{ 'active' if not filters.get('category') }}" href="{{ url_for('market_home', **(filters | dict_without('category', 'page'))) }}">All</a>
+    {% for key, (label, sport, icon) in market_categories.items() %}
+      <a class="mk-cat {{ 'active' if filters.get('category') == key }}" href="{{ url_for('market_home', **(dict(filters | dict_without('category', 'page'), category=key))) }}">
+        <i class="fa-solid {{ icon }}" aria-hidden="true"></i> {{ label }}</a>
+    {% endfor %}
+  </nav>
+
+  <div class="mk-layout">
+    <div class="mk-sheet-backdrop" data-mk-close></div>
+    <form class="mk-filters" id="mkFilters" method="get" action="{{ url_for('market_home') }}" aria-label="Filters">
+      <div class="mk-sheet-head"><strong>Filter</strong><button type="button" class="btn-close" data-mk-close aria-label="Close filters"></button></div>
+      {% if filters.get('q') %}<input type="hidden" name="q" value="{{ filters.q }}">{% endif %}
+      {% if filters.get('category') %}<input type="hidden" name="category" value="{{ filters.category }}">{% endif %}
+      <h3>Price range</h3>
+      <div class="mk-range">
+        <input class="form-control form-control-sm" type="number" min="0" step="1" name="min" value="{{ filters.get('min', '') }}" placeholder="Min" aria-label="Minimum price">
+        <input class="form-control form-control-sm" type="number" min="0" step="1" name="max" value="{{ filters.get('max', '') }}" placeholder="Max" aria-label="Maximum price">
+      </div>
+      <select class="form-select form-select-sm mt-2" name="currency" aria-label="Currency">
+        <option value="">USD &amp; LRD</option>
+        {% for c in market_currencies %}<option value="{{ c }}" {% if filters.get('currency') == c %}selected{% endif %}>{{ c }} only</option>{% endfor %}
+      </select>
+      <h3>Sport</h3>
+      <select class="form-select form-select-sm" name="sport" aria-label="Sport">
+        <option value="">All sports</option>
+        {% for s in market_sports %}<option value="{{ s }}" {% if filters.get('sport') == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+      </select>
+      <h3>Brand</h3>
+      <select class="form-select form-select-sm" name="brand" aria-label="Brand">
+        <option value="">All brands</option>
+        {% for b in brands %}<option value="{{ b }}" {% if filters.get('brand') == b %}selected{% endif %}>{{ b }}</option>{% endfor %}
+      </select>
+      <h3>Color</h3>
+      <div class="mk-swatches">
+        {% for c in ['black', 'white', 'red', 'blue', 'green', 'yellow', 'orange', 'pink', 'grey'] %}
+          <label class="mk-swatch" title="{{ c | title }}"><input type="radio" name="color" value="{{ c }}" {% if filters.get('color') == c %}checked{% endif %}>
+            <span style="background: {{ color_css(c) }}"><span class="visually-hidden">{{ c }}</span></span></label>
+        {% endfor %}
+      </div>
+      <h3>Size</h3>
+      <div class="mk-chips">
+        {% for sz in ['S', 'M', 'L', 'XL', '38', '40', '41', '42', '43', '44', '45'] %}
+          <label class="mk-chip-opt"><input type="radio" name="size" value="{{ sz }}" {% if filters.get('size') == sz %}checked{% endif %}><span>{{ sz }}</span></label>
+        {% endfor %}
+      </div>
+      <h3>Condition</h3>
+      <select class="form-select form-select-sm" name="condition" aria-label="Condition">
+        <option value="">New &amp; used</option>
+        {% for k, v in market_conditions.items() %}<option value="{{ k }}" {% if filters.get('condition') == k %}selected{% endif %}>{{ v }}</option>{% endfor %}
+      </select>
+      <h3>Sort</h3>
+      <select class="form-select form-select-sm" name="sort" aria-label="Sort">
+        {% for k, v in (('', 'Newest'), ('price_asc', 'Price: low to high'), ('price_desc', 'Price: high to low'), ('popular', 'Most viewed')) %}
+          <option value="{{ k }}" {% if filters.get('sort', '') == k %}selected{% endif %}>{{ v }}</option>{% endfor %}
+      </select>
+      <div class="d-flex gap-2 mt-3">
+        <button class="btn dart-btn flex-fill" type="submit">Apply</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('market_home') }}">Reset</a>
+      </div>
+    </form>
+
+    <section aria-label="Products">
+      <p class="small text-muted mb-2">{{ total }} product{{ '' if total == 1 else 's' }}</p>
+      {% if listings %}
+        <div class="mk-grid">{% for l in listings %}{{ product_card(l) }}{% endfor %}</div>
+        {% if pages > 1 %}
+          <nav class="mk-pager" aria-label="Pages">
+            {% if page > 1 %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('market_home', **dict(filters, page=page - 1)) }}">Previous</a>{% endif %}
+            <span class="align-self-center small">Page {{ page }} of {{ pages }}</span>
+            {% if page < pages %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('market_home', **dict(filters, page=page + 1)) }}">Next</a>{% endif %}
+          </nav>
+        {% endif %}
+      {% else %}
+        <div class="mk-empty"><i class="fa-solid fa-basket-shopping" aria-hidden="true"></i>
+          {% if filters %}No product matches these filters.{% else %}No products yet. Be the first to sell sports gear!{% endif %}</div>
+      {% endif %}
+      {{ safety_tips() }}
+    </section>
+  </div>
+  {% endif %}
+</div>
+<script>
+(function () {
+  // Filter sheet (phones)
+  var f = document.getElementById('mkFilters'), bd = document.querySelector('.mk-sheet-backdrop');
+  function open(on) { if (!f) return; f.classList.toggle('is-open', on); if (bd) bd.classList.toggle('is-open', on); }
+  document.querySelectorAll('[data-mk-filters]').forEach(function (b) { b.addEventListener('click', function () { open(true); }); });
+  document.querySelectorAll('[data-mk-close]').forEach(function (b) { b.addEventListener('click', function () { open(false); }); });
+  // Promo carousel dots
+  var track = document.querySelector('[data-mk-carousel]');
+  if (track) {
+    var dots = track.parentElement.querySelectorAll('.mk-dots span');
+    track.addEventListener('scroll', function () {
+      var i = Math.round(track.scrollLeft / Math.max(1, track.firstElementChild.getBoundingClientRect().width + 14));
+      dots.forEach(function (d, j) { d.classList.toggle('on', j === i); });
+    }, { passive: true });
+  }
+})();
+</script>
+{% endblock %}

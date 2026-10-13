@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit listing' if listing else 'Sell sports gear' }} | D.A.R.T Market${% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-market.css') }}">
+<div class="mk container px-0" style="max-width: 860px">
+  <a class="mk-btn-pill mb-3" href="{{ url_for('market_mine') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> My shop</a>
+  <section class="mk-gate text-start mb-3" aria-label="Sell">
+    <h1 class="h3"><i class="fa-solid fa-tags" aria-hidden="true"></i> {{ 'Edit listing' if listing else 'Sell your sports gear' }}</h1>
+    <p class="mx-0 mb-0">Only sports gear for football, basketball and kickball: boots, basketball sneakers, kickball skips, sports socks, jerseys, balls,
+      protection and equipment. Every listing (and every change) is checked by the D.A.R.T Admin before it goes live. D.A.R.T. never handles the payment.</p>
+  </section>
+
+  <form method="POST" enctype="multipart/form-data" class="mk-panel" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-3">
+      <div class="col-12">
+        <label class="form-label fw-bold" for="mkTitle">Product name</label>
+        <input class="form-control" id="mkTitle" name="title" maxlength="80" required value="{{ form.get('title', '') }}" placeholder="e.g. Nike Mercurial Vapor football boots">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label fw-bold" for="mkCat">Category</label>
+        <select class="form-select" id="mkCat" name="category" required>
+          <option value="">Choose…</option>
+          {% for key, (label, sport, icon) in market_categories.items() %}<option value="{{ key }}" data-sport="{{ sport or '' }}" {% if form.get('category') == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label fw-bold" for="mkSport">Sport</label>
+        <select class="form-select" id="mkSport" name="sport" required>
+          {% for s in market_sports %}<option value="{{ s }}" {% if form.get('sport') == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label fw-bold" for="mkPrice">Price</label>
+        <input class="form-control" id="mkPrice" name="price" inputmode="decimal" required value="{{ form.get('price', '') }}" placeholder="45.00">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label fw-bold" for="mkCur">Currency</label>
+        <select class="form-select" id="mkCur" name="currency">{% for c in market_currencies %}<option value="{{ c }}" {% if form.get('currency') == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label fw-bold" for="mkCond">Condition</label>
+        <select class="form-select" id="mkCond" name="condition">{% for k, v in market_conditions.items() %}<option value="{{ k }}" {% if form.get('condition') == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label fw-bold" for="mkQty">Quantity</label>
+        <input class="form-control" id="mkQty" name="quantity" type="number" min="1" max="500" value="{{ form.get('quantity', 1) }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label fw-bold" for="mkBrand">Brand</label>
+        <input class="form-control" id="mkBrand" name="brand" maxlength="40" value="{{ form.get('brand', '') }}" placeholder="Nike, Adidas, Puma…">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label fw-bold" for="mkSizes">Sizes</label>
+        <input class="form-control" id="mkSizes" name="sizes" maxlength="120" value="{{ form.get('sizes', '') }}" placeholder="40, 41, 42 or S, M, L">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label fw-bold" for="mkColors">Colors</label>
+        <input class="form-control" id="mkColors" name="colors" maxlength="120" value="{{ form.get('colors', '') }}" placeholder="black, red">
+      </div>
+      <div class="col-12">
+        <label class="form-label fw-bold" for="mkDesc">Description</label>
+        <textarea class="form-control" id="mkDesc" name="description" rows="4" maxlength="1500" required placeholder="Condition, what is included, any defects…">{{ form.get('description', '') }}</textarea>
+      </div>
+      <div class="col-md-8">
+        <label class="form-label fw-bold" for="mkSpecs">Specifications (optional)</label>
+        <textarea class="form-control" id="mkSpecs" name="specs" rows="2" maxlength="1000" placeholder="Material, studs (FG / AG / TF), weight…">{{ form.get('specs', '') }}</textarea>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label fw-bold" for="mkLoc">Location</label>
+        <input class="form-control" id="mkLoc" name="location" maxlength="80" value="{{ form.get('location', '') }}" placeholder="Monrovia, Sinkor">
+      </div>
+      <div class="col-12">
+        <label class="form-label fw-bold" for="mkImages">Photos {% if listing %}(add more, up to {{ market_max_images }} in total){% else %}(1 to {{ market_max_images }}){% endif %}</label>
+        <input class="form-control" id="mkImages" name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple {% if not listing %}required{% endif %}>
+        <small class="text-muted">Clear photos of the real product. Location data is removed from your photos automatically.</small>
+        <div class="mk-grid mt-2" id="mkPreview"></div>
+        {% if listing and listing.images %}
+          <div class="d-flex gap-2 mt-2 flex-wrap">{% for img in listing.images %}<img class="mk-thumb" src="{{ market_image_url(img) }}" alt="">{% endfor %}</div>
+        {% endif %}
+      </div>
+      {% if not current_user.phone %}
+        <div class="col-md-6">
+          <label class="form-label fw-bold" for="mkPhone">Your phone number</label>
+          <input class="form-control" id="mkPhone" name="phone" type="tel" maxlength="20" required value="{{ form.get('phone', '') }}" placeholder="0770 123 456">
+          <small class="text-muted">Buyers call or WhatsApp you on it (you see theirs too).</small>
+        </div>
+      {% endif %}
+    </div>
+    <button class="btn dart-btn w-100 py-2 mt-3" type="submit"><i class="fa-solid fa-paper-plane"></i> {{ 'Save and send for review' if listing else 'Send for D.A.R.T Admin approval' }}</button>
+  </form>
+</div>
+<script>
+(function () {
+  var cat = document.getElementById('mkCat'), sport = document.getElementById('mkSport');
+  cat && cat.addEventListener('change', function () {
+    var s = cat.options[cat.selectedIndex].getAttribute('data-sport');
+    if (s) sport.value = s;
+  });
+  var inp = document.getElementById('mkImages'), prev = document.getElementById('mkPreview');
+  inp && inp.addEventListener('change', function () {
+    prev.innerHTML = '';
+    Array.prototype.slice.call(inp.files, 0, {{ market_max_images }}).forEach(function (f) {
+      if (!/^image\//.test(f.type)) return;
+      var img = document.createElement('img');
+      img.className = 'mk-thumb'; img.alt = ''; img.src = URL.createObjectURL(f);
+      prev.appendChild(img);
+    });
+  });
+})();
+</script>
+{% endblock %}

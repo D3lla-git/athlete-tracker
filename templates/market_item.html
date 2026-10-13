@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}{{ listing.title }} | D.A.R.T Market${% endblock %}
+
+{% block content %}
+{% from '_market_macros.html' import product_card, money, color_css, status_badge, safety_tips with context %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-market.css') }}">
+<div class="mk container-xl px-0">
+  <a class="mk-btn-pill mb-3" href="{{ url_for('market_home') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> D.A.R.T Market$</a>
+
+  {% if listing.status != 'approved' %}
+    <div class="alert alert-info small">{{ status_badge(listing) }}
+      {% if listing.status == 'pending' %} Only you and the D.A.R.T Admin can see this listing until it is approved.
+      {% elif listing.review_note %} Reason: {{ listing.review_note }}{% endif %}</div>
+  {% endif %}
+
+  <div class="mk-item">
+    <div class="mk-gallery" aria-label="Product photos">
+      <div class="mk-gallery-track" data-mk-gallery>
+        {% for img in listing.images %}<img src="{{ market_image_url(img) }}" alt="{{ listing.title }} photo {{ loop.index }}" {% if not loop.first %}loading="lazy"{% endif %}>{% endfor %}
+      </div>
+      {% if listing.images | length > 1 %}<div class="mk-dots" aria-hidden="true">{% for img in listing.images %}<span class="{{ 'on' if loop.first }}"></span>{% endfor %}</div>{% endif %}
+    </div>
+
+    <div class="mk-panel">
+      <h1>{{ listing.title }}</h1>
+      <div class="d-flex flex-wrap align-items-baseline justify-content-between gap-2">
+        <div class="mk-item-price">{{ money(listing) }}</div>
+        <div class="small">Seller: <strong>{{ listing.seller.shop_name or listing.seller.display_name }}</strong>
+          {% if listing.seller.username %}<span class="text-muted">@{{ listing.seller.username }}</span>{% endif %}</div>
+      </div>
+      <div class="mk-meta">
+        <span>{{ listing.sport }}</span><span>{{ market_categories[listing.category][0] }}</span><span>{{ market_conditions[listing.condition] }}</span>
+        {% if listing.brand %}<span>{{ listing.brand }}</span>{% endif %}{% if listing.location %}<span><i class="fa-solid fa-location-dot"></i> {{ listing.location }}</span>{% endif %}
+        <span>{{ listing.quantity }} available</span>
+      </div>
+      {% if listing.color_list %}
+        <div class="mk-label">Color</div>
+        <div class="mk-color-dots">{% for c in listing.color_list %}<span class="mk-color-dot" style="background: {{ color_css(c) }}" title="{{ c }}" role="img" aria-label="{{ c }}"></span>{% endfor %}</div>
+      {% endif %}
+      {% if listing.size_list %}
+        <div class="mk-label">Size</div>
+        <div class="mk-sizes">{% for sz in listing.size_list %}<span>{{ sz }}</span>{% endfor %}</div>
+      {% endif %}
+
+      <div class="mk-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="true" data-mk-tab="desc">Description</button>
+        <button type="button" role="tab" aria-selected="false" data-mk-tab="specs">Specifications</button>
+        <button type="button" role="tab" aria-selected="false" data-mk-tab="seller">Seller</button>
+      </div>
+      <div class="mk-tab-body" data-mk-pane="desc">{{ listing.description }}</div>
+      <div class="mk-tab-body" data-mk-pane="specs" hidden>{{ listing.specs or 'No specifications given.' }}</div>
+      <div class="mk-tab-body" data-mk-pane="seller" hidden>{{ listing.seller.shop_name or listing.seller.display_name }} · {{ listing.seller.role_label }}{% if listing.seller.school %} · {{ listing.seller.school }}{% endif %}
+On D.A.R.T. since {{ listing.seller.created_at.strftime('%b %Y') if listing.seller.created_at else '—' }}</div>
+
+      {% if is_seller %}
+        <div class="mk-contact">
+          {{ status_badge(listing) }} · {{ listing.views }} views
+          <div class="d-flex flex-wrap gap-2 mt-2">
+            <a class="btn btn-sm dart-btn" href="{{ url_for('market_edit', listing_id=listing.id) }}"><i class="fa-solid fa-pen"></i> Edit</a>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('market_mine') }}">My shop</a>
+          </div>
+        </div>
+      {% elif listing.status == 'approved' %}
+        <div class="mk-contact" id="contact">
+          {% if block_reason %}
+            <p class="mb-0 small">{{ block_reason }}</p>
+          {% else %}
+            {% if listing.seller.phone %}
+              <div class="mb-2">
+                <a class="mk-phone" href="tel:{{ listing.seller.phone }}"><i class="fa-solid fa-phone" aria-hidden="true"></i> {{ listing.seller.phone | phone }}</a>
+                <a class="btn btn-sm btn-success ms-2" href="https://wa.me/{{ listing.seller.phone | replace('+', '') }}" target="_blank" rel="noopener noreferrer">
+                  <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> WhatsApp</a>
+              </div>
+            {% endif %}
+            {% if thread %}
+              <a class="btn dart-btn w-100" href="{{ url_for('market_thread', thread_id=thread.id) }}"><i class="fa-solid fa-comments"></i> Open your chat with the seller</a>
+            {% else %}
+              <form method="POST" action="{{ url_for('market_contact', listing_id=listing.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {% if not current_user.phone %}
+                  <label class="form-label small fw-bold" for="mkPhone">Your phone number (the seller sees it, as you see theirs)</label>
+                  <input class="form-control mb-2" id="mkPhone" name="phone" type="tel" maxlength="20" required placeholder="0770 123 456">
+                {% endif %}
+                <label class="form-label small fw-bold" for="mkMsg">Message the seller</label>
+                <textarea class="form-control mb-2" id="mkMsg" name="body" rows="2" maxlength="1000" required>Hi! Is the "{{ listing.title }}" still available?</textarea>
+                <button class="btn dart-btn w-100" type="submit"><i class="fa-solid fa-paper-plane"></i> Send message</button>
+              </form>
+            {% endif %}
+          {% endif %}
+        </div>
+        {{ safety_tips() }}
+        {% if not already_reported %}
+          <details class="mt-2">
+            <summary class="small text-muted"><i class="fa-solid fa-flag"></i> Report this listing</summary>
+            <form method="POST" action="{{ url_for('market_report', listing_id=listing.id) }}" class="mt-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <select class="form-select form-select-sm mb-2" name="reason" required aria-label="Reason">
+                {% for k, v in market_report_reasons.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+              </select>
+              <input class="form-control form-control-sm mb-2" name="detail" maxlength="300" placeholder="Details (optional)">
+              <button class="btn btn-sm btn-outline-danger" type="submit">Send report</button>
+            </form>
+          </details>
+        {% else %}<p class="small text-muted mt-2"><i class="fa-solid fa-flag"></i> You reported this listing.</p>{% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  {% if more %}
+    <h2 class="h5 fw-bold mt-4">More from this seller</h2>
+    <div class="mk-grid">{% for l in more %}{{ product_card(l) }}{% endfor %}</div>
+  {% endif %}
+</div>
+<script>
+(function () {
+  document.querySelectorAll('[data-mk-tab]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('[data-mk-tab]').forEach(function (x) { x.setAttribute('aria-selected', x === b ? 'true' : 'false'); });
+      document.querySelectorAll('[data-mk-pane]').forEach(function (p) { p.hidden = p.getAttribute('data-mk-pane') !== b.getAttribute('data-mk-tab'); });
+    });
+  });
+  var g = document.querySelector('[data-mk-gallery]');
+  if (g) {
+    var dots = g.parentElement.querySelectorAll('.mk-dots span');
+    g.addEventListener('scroll', function () {
+      var i = Math.round(g.scrollLeft / Math.max(1, g.clientWidth));
+      dots.forEach(function (d, j) { d.classList.toggle('on', j === i); });
+    }, { passive: true });
+  }
+})();
+</script>
+{% endblock %}

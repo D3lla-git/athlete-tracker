@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Predictions admin | D.A.R.T{% endblock %}
+
+{% block content %}
+{% include '_award_styles.html' %}
+<div class="container-xl px-0">
+  <section class="aw-hero" aria-label="Predictions admin">
+    <h1><i class="fa-solid fa-bullseye" aria-hidden="true"></i> Predictions (free game)</h1>
+    <p>Post a question about an <strong>adult (18+) premium</strong> athlete's next game. No money is involved. Settle it from the athlete's approved record (verified numbers) or the official result.</p>
+    <a class="btn btn-light btn-sm mt-2" href="{{ url_for('predictions_page') }}">Public page</a>
+  </section>
+
+  <article class="aw-contest">
+    <h2 class="h5 fw-bold">New prediction</h2>
+    <form method="POST" class="row g-2 align-items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-3"><label class="form-label small" for="pAth">Athlete (@username)</label>
+        <input class="form-control" id="pAth" name="athlete" required placeholder="@musu_kollie"></div>
+      <div class="col-6 col-md-2"><label class="form-label small" for="pSport">Sport</label>
+        <select class="form-select" id="pSport" name="sport">{% for s in stats %}<option>{{ s }}</option>{% endfor %}</select></div>
+      <div class="col-6 col-md-2"><label class="form-label small" for="pStat">Stat</label>
+        <select class="form-select" id="pStat" name="stat">{% for s, st in stats.items() %}{% for k, v in st.items() %}<option value="{{ k }}" data-sport="{{ s }}">{{ v }} ({{ s }})</option>{% endfor %}{% endfor %}</select></div>
+      <div class="col-4 col-md-1"><label class="form-label small" for="pLine">At least</label>
+        <input class="form-control" id="pLine" name="line" type="number" min="0" max="100" value="1" required></div>
+      <div class="col-8 col-md-2"><label class="form-label small" for="pDate">Match date</label>
+        <input class="form-control" id="pDate" name="match_date" type="date" required></div>
+      <div class="col-md-2"><label class="form-label small" for="pClose">Closes (UTC)</label>
+        <input class="form-control" id="pClose" name="closes_at" type="datetime-local" required></div>
+      <div class="col-md-8"><label class="form-label small" for="pLabel">Match (optional)</label>
+        <input class="form-control" id="pLabel" name="match_label" maxlength="120" placeholder="LPRC Oilers vs Watanga FC"></div>
+      <div class="col-md-4"><button class="btn dart-btn w-100" type="submit"><i class="fa-solid fa-plus"></i> Post</button></div>
+    </form>
+  </article>
+
+  {% for q in questions %}
+    {% set yes, no = split(q) %}
+    <article class="aw-contest">
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <strong>{{ q.athlete.full_name }}</strong> · {{ q.line }}+ {{ stat_label(q.stat) }} ({{ q.sport }}) on {{ q.match_date.strftime('%d %b %Y') }}
+        <span class="badge {{ 'text-bg-success' if q.status == 'open' else 'text-bg-secondary' }}">{{ q.status }}</span>
+        <span class="small text-muted">Yes {{ yes }} · No {{ no }}{% if q.result_value is not none %} · result {{ q.result_value }}{% endif %}</span>
+      </div>
+      {% if q.status == 'open' %}
+        {% set rv = record_value(q) %}
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          {% if rv is not none %}
+            <form method="POST" action="{{ url_for('admin_prediction_action', question_id=q.id, action='settle') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="from_record" value="1">
+              <button class="btn btn-sm dart-btn" type="submit">Settle from approved record ({{ rv }})</button>
+            </form>
+          {% endif %}
+          <form method="POST" action="{{ url_for('admin_prediction_action', question_id=q.id, action='settle') }}" class="d-flex gap-1">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input class="form-control form-control-sm" style="width: 90px" name="value" type="number" min="0" max="300" placeholder="Result" aria-label="Result">
+            <button class="btn btn-sm btn-outline-success" type="submit">Settle</button>
+          </form>
+          <form method="POST" action="{{ url_for('admin_prediction_action', question_id=q.id, action='void') }}" onsubmit="return confirm('Cancel this prediction?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger" type="submit">Cancel</button>
+          </form>
+        </div>
+      {% endif %}
+    </article>
+  {% else %}<p class="aw-empty">No predictions yet.</p>{% endfor %}
+</div>
+{% endblock %}

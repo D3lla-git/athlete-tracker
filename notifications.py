@@ -58,6 +58,11 @@ def _create_notifications(session, flush_context, instances):
                                      link='/student#my-records'))
 
 
+def notify(user_id, kind, message, link=None):
+    """One bell notification (e.g. a seller's D.A.R.T Market$ listing approved). Caller commits."""
+    db.session.add(Notification(user_id=user_id, kind=kind, message=(message or '')[:300], link=link))
+
+
 def notify_new_award(contest):
     """
     A new award (e.g. Goal of the Week) reaches every athlete on D.A.R.T.

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Chat | D.A.R.T Market${% endblock %}
+
+{% block content %}
+{% from '_market_macros.html' import money, safety_tips with context %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-market.css') }}">
+{% set me_buyer = current_user.id == thread.buyer_id %}
+<div class="mk container px-0" style="max-width: 820px">
+  <a class="mk-btn-pill mb-3" href="{{ url_for('market_messages') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Messages</a>
+
+  <div class="mk-thread-row">
+    {% if thread.listing.cover %}<img src="{{ market_image_url(thread.listing.cover) }}" alt="">{% endif %}
+    <div class="flex-grow-1" style="min-width: 0">
+      <a class="fw-bold text-decoration-none" href="{{ url_for('market_item', listing_id=thread.listing_id) }}">{{ thread.listing.title }}</a>
+      <div class="mk-price">{{ money(thread.listing) }}</div>
+    </div>
+  </div>
+
+  {# Both sides see each other's phone number: the deal happens directly, off D.A.R.T. #}
+  <div class="mk-contact mt-0 mb-3">
+    <div class="row g-2">
+      <div class="col-sm-6">
+        <div class="small text-muted">{{ 'Seller' if me_buyer else 'Buyer' }}: {{ other.shop_name or other.display_name }}</div>
+        {% if other.phone %}
+          <a class="mk-phone" href="tel:{{ other.phone }}"><i class="fa-solid fa-phone"></i> {{ other.phone | phone }}</a>
+          <a class="btn btn-sm btn-success ms-1" href="https://wa.me/{{ other.phone | replace('+', '') }}" target="_blank" rel="noopener noreferrer"><i class="fa-brands fa-whatsapp"></i></a>
+        {% else %}<span class="small">No phone number yet</span>{% endif %}
+      </div>
+      <div class="col-sm-6">
+        <div class="small text-muted">You</div>
+        {% if current_user.phone %}<span class="fw-bold">{{ current_user.phone | phone }}</span>{% else %}
+          <form method="POST" action="{{ url_for('market_phone') }}" class="d-flex gap-1">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ url_for('market_thread', thread_id=thread.id) }}">
+            <input class="form-control form-control-sm" name="phone" type="tel" maxlength="20" required placeholder="0770 123 456" aria-label="Your phone number">
+            <button class="btn btn-sm dart-btn" type="submit">Save</button>
+          </form>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="mk-chat" aria-live="polite">
+    {% for m in thread.messages %}
+      <div class="mk-msg {{ 'mk-msg-me' if m.sender_id == current_user.id else 'mk-msg-them' }}" {% if loop.last %}id="last"{% endif %}>{{ m.body }}<small>{{ m.created_at.strftime('%d %b, %H:%M') }} UTC</small></div>
+    {% endfor %}
+  </div>
+  {% if block_reason %}
+    <p class="small text-muted mt-2">{{ block_reason }}</p>
+  {% else %}
+    <form method="POST" class="mk-chat-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="visually-hidden" for="mkReply">Message</label>
+      <textarea class="form-control" id="mkReply" name="body" rows="2" maxlength="1000" required placeholder="Write a message…"></textarea>
+      <button class="btn dart-btn" type="submit" aria-label="Send"><i class="fa-solid fa-paper-plane"></i></button>
+    </form>
+  {% endif %}
+  {{ safety_tips() }}
+</div>
+<script>
+  (function () { var c = document.querySelector('.mk-chat'); if (c) c.scrollTop = c.scrollHeight; })();
+</script>
+{% endblock %}

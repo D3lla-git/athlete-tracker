@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash, check_password_hash  # typ
 from competitions import COMPETITION_TEAM_LABELS
 from datetime import datetime
 import re
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, INET
 from sqlalchemy.orm import declared_attr
 
 
@@ -93,6 +93,9 @@ class User(UserMixin, db.Model):
     official_type = db.Column(db.String(40), nullable=True)
     # Athletes under 17: a parent / guardian contact is required, and the
     # athlete confirms a parent, guardian or coach helps manage the page.
+    # D.A.R.T Market$: the D.A.R.T Admin can stop an account from selling / messaging.
+    market_banned = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    shop_name = db.Column(db.String(80), nullable=True)          # Vendor accounts
     # Club League division the athlete plays in (Club League / All Athlete), from registration.
     club_division = db.Column(db.String(20), nullable=True)
     guardian_name = db.Column(db.String(100), nullable=True)
@@ -1118,6 +1121,155 @@ class AwardVote(db.Model):
     )
 
 
+# ==========================================================
+# D.A.R.T MARKET$ (sports gear marketplace). D.A.R.T never handles the
+# money: buyers and sellers chat and call each other and pay off D.A.R.T.
+# Every listing is checked by the D.A.R.T Admin before it goes live.
+# ==========================================================
+class MarketListing(db.Model):
+    __tablename__ = 'market_listing'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    seller_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    title = db.Column(db.String(80), nullable=False)
+    category = db.Column(db.String(30), nullable=False, index=True)
+    sport = db.Column(db.String(20), nullable=False, index=True)        # Football / Basketball / Kickball / Multi-sport
+    brand = db.Column(db.String(40), nullable=True)
+    condition = db.Column(db.String(10), nullable=False, default='new')  # new / used
+    price = db.Column(db.Numeric(10, 2), nullable=False)
+    currency = db.Column(db.String(3), nullable=False, default='USD')    # USD / LRD
+    sizes = db.Column(db.String(120), nullable=True)                     # "40, 41, 42" / "S, M, L"
+    colors = db.Column(db.String(120), nullable=True)                    # "black, red"
+    description = db.Column(db.String(1500), nullable=False)
+    specs = db.Column(db.String(1000), nullable=True)
+    location = db.Column(db.String(80), nullable=True)
+    quantity = db.Column(db.Integer, nullable=False, default=1)
+    # pending -> approved / rejected; approved -> sold / removed (by the seller or the D.A.R.T Admin)
+    status = db.Column(db.String(12), nullable=False, default='pending', index=True)
+    review_note = db.Column(db.String(200), nullable=True)
+    reviewed_by = db.Column(db.BigInteger, nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    views = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    seller = db.relationship('User', foreign_keys=[seller_id])
+    images = db.relationship('MarketImage', backref='listing', cascade='all, delete-orphan', lazy='selectin',
+                             order_by='MarketImage.position')
+
+    @property
+    def cover(self):
+        return self.images[0] if self.images else None
+
+    @property
+    def size_list(self):
+        return [x.strip() for x in (self.sizes or '').split(',') if x.strip()]
+
+    @property
+    def color_list(self):
+        return [x.strip() for x in (self.colors or '').split(',') if x.strip()]
+
+
+class MarketImage(db.Model):
+    """A product photo (cleaned: re-encoded, no EXIF / GPS). Private until the listing is approved."""
+    __tablename__ = 'market_image'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    listing_id = db.Column(db.BigInteger, db.ForeignKey('market_listing.id', ondelete='CASCADE'), nullable=False, index=True)
+    storage_path = db.Column(db.String(255), nullable=False)
+    bucket = db.Column(db.String(40), nullable=False)
+    position = db.Column(db.Integer, nullable=False, default=0)
+
+
+class MarketThread(db.Model):
+    """A buyer's conversation with a seller about one listing."""
+    __tablename__ = 'market_thread'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    listing_id = db.Column(db.BigInteger, db.ForeignKey('market_listing.id', ondelete='CASCADE'), nullable=False, index=True)
+    buyer_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    seller_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    last_message_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    listing = db.relationship('MarketListing')
+    buyer = db.relationship('User', foreign_keys=[buyer_id])
+    seller = db.relationship('User', foreign_keys=[seller_id])
+    messages = db.relationship('MarketMessage', backref='thread', cascade='all, delete-orphan', lazy='selectin',
+                               order_by='MarketMessage.id')
+
+    __table_args__ = (db.UniqueConstraint('listing_id', 'buyer_id', name='uq_market_thread_listing_buyer'),)
+
+
+class MarketMessage(db.Model):
+    __tablename__ = 'market_message'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    thread_id = db.Column(db.BigInteger, db.ForeignKey('market_thread.id', ondelete='CASCADE'), nullable=False, index=True)
+    sender_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    body = db.Column(db.String(1000), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    read_at = db.Column(db.DateTime, nullable=True)
+
+
+class MarketReport(db.Model):
+    """A user reports a listing (scam, not sports gear, fake...)."""
+    __tablename__ = 'market_report'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    listing_id = db.Column(db.BigInteger, db.ForeignKey('market_listing.id', ondelete='CASCADE'), nullable=False, index=True)
+    reporter_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    reason = db.Column(db.String(30), nullable=False)
+    detail = db.Column(db.String(300), nullable=True)
+    status = db.Column(db.String(12), nullable=False, default='open')     # open / resolved
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    listing = db.relationship('MarketListing')
+    reporter = db.relationship('User', foreign_keys=[reporter_id])
+
+    __table_args__ = (db.UniqueConstraint('listing_id', 'reporter_id', name='uq_market_report_listing_reporter'),)
+
+
+# ==========================================================
+# D.A.R.T PREDICTIONS: a FREE game (points, no money) on adult (18+)
+# premium athletes' next-game stats. Athletes can't take part.
+# ==========================================================
+class PredictionQuestion(db.Model):
+    __tablename__ = 'prediction_question'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    athlete_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    sport = db.Column(db.String(20), nullable=False)
+    stat = db.Column(db.String(20), nullable=False)        # goals / assists / saves / points / rebounds / home_runs
+    line = db.Column(db.Integer, nullable=False)           # "at least <line>"
+    match_date = db.Column(db.Date, nullable=False)
+    match_label = db.Column(db.String(120), nullable=True)
+    closes_at = db.Column(db.DateTime, nullable=False)
+    status = db.Column(db.String(10), nullable=False, default='open')   # open / settled / void
+    result_value = db.Column(db.Integer, nullable=True)
+    settled_at = db.Column(db.DateTime, nullable=True)
+    created_by = db.Column(db.BigInteger, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    athlete = db.relationship('User', foreign_keys=[athlete_id])
+    picks = db.relationship('PredictionPick', backref='question', cascade='all, delete-orphan', lazy='selectin')
+
+
+class PredictionPick(db.Model):
+    __tablename__ = 'prediction_pick'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    question_id = db.Column(db.BigInteger, db.ForeignKey('prediction_question.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    pick = db.Column(db.String(5), nullable=False)          # yes / no  ("will reach the line?")
+    points = db.Column(db.Integer, nullable=True)           # set when settled
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship('User', foreign_keys=[user_id])
+
+    __table_args__ = (db.UniqueConstraint('question_id', 'user_id', name='uq_prediction_pick_question_user'),)
+
+
 class Notification(db.Model):
     """
     In-app notification (the bell). Only good news about the user's own
@@ -1222,13 +1374,15 @@ class AuditLog(db.Model):
         nullable=True
     )
 
+    # bigint in the database (Supabase): always an id number.
     target_id = db.Column(
-        db.String(100),
+        db.BigInteger,
         nullable=True
     )
 
+    # inet in the database (Supabase); plain text on other databases (tests).
     ip_address = db.Column(
-        db.String(64),
+        db.String(64).with_variant(INET(), 'postgresql'),
         nullable=True
     )
 

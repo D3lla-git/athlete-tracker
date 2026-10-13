@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Messages | D.A.R.T Market${% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-market.css') }}">
+<div class="mk container px-0" style="max-width: 820px">
+  <div class="mk-top">
+    <h1 class="mk-title"><i class="fa-solid fa-comments" aria-hidden="true"></i> Market$ messages</h1>
+    <div class="mk-actions"><a class="mk-btn-pill" href="{{ url_for('market_home') }}"><i class="fa-solid fa-store"></i> Market$</a></div>
+  </div>
+  {% for t in threads %}
+    {% set other = t.seller if current_user.id == t.buyer_id else t.buyer %}
+    {% set unread = t.messages | selectattr('read_at', 'none') | rejectattr('sender_id', 'equalto', current_user.id) | list %}
+    {% set last = t.messages[-1] if t.messages else none %}
+    <a class="mk-thread-row{{ ' is-unread' if unread }}" href="{{ url_for('market_thread', thread_id=t.id) }}">
+      {% if t.listing.cover %}<img src="{{ market_image_url(t.listing.cover) }}" alt="">{% else %}<span class="mk-thumb"></span>{% endif %}
+      <div class="flex-grow-1" style="min-width: 0">
+        <div class="fw-bold text-truncate">{{ other.shop_name or other.display_name }} <span class="small text-muted">· {{ 'selling' if current_user.id == t.buyer_id else 'buying' }}</span></div>
+        <div class="small text-truncate">{{ t.listing.title }}</div>
+        {% if last %}<div class="small text-muted text-truncate">{{ 'You: ' if last.sender_id == current_user.id }}{{ last.body }}</div>{% endif %}
+      </div>
+      {% if unread %}<span class="badge text-bg-success">{{ unread | length }}</span>{% endif %}
+    </a>
+  {% else %}
+    <div class="mk-empty"><i class="fa-regular fa-comments" aria-hidden="true"></i> No conversations yet. Open a product and message the seller.</div>
+  {% endfor %}
+</div>
+{% endblock %}

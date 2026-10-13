@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Predictions | D.A.R.T{% endblock %}
+
+{% block content %}
+{% include '_award_styles.html' %}
+<div class="container-xl px-0">
+  <section class="aw-hero" aria-label="Predictions">
+    <i class="fa-solid fa-bullseye aw-trophy" aria-hidden="true"></i>
+    <h1><i class="fa-solid fa-bullseye" aria-hidden="true"></i> D.A.R.T. Predictions</h1>
+    <p>A <strong>free</strong> game: no money, just points and bragging rights. Predict whether adult premium athletes reach their numbers in their next game.
+       Each correct pick earns {{ points }} points. Coaches, scouts, organizations and vendors can play; athletes and match officials can't.</p>
+    <div class="d-flex flex-wrap gap-2 mt-3">
+      <a class="btn btn-light btn-sm" href="{{ url_for('awards_page') }}"><i class="fa-solid fa-trophy"></i> Awards</a>
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('market_home') }}"><i class="fa-solid fa-store"></i> Market$</a>
+    </div>
+  </section>
+  {% if predictor_error %}<div class="alert alert-info small"><i class="fa-solid fa-circle-info"></i> {{ predictor_error }}</div>{% endif %}
+
+  <h2 class="aw-section"><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i> Open</h2>
+  <div class="aw-grid">
+    {% for q in open_q %}
+      {% set yes, no = split(q) %}
+      <article class="aw-contest mb-0" id="q{{ q.id }}">
+        <div class="aw-name">{{ q.athlete.full_name }}</div>
+        <p class="mb-1">Will reach <strong>{{ q.line }}+ {{ stat_label(q.stat) }}</strong> ({{ q.sport }}){% if q.match_label %} · {{ q.match_label }}{% endif %} on {{ q.match_date.strftime('%d %b %Y') }}?</p>
+        <div class="aw-when">Closes {{ q.closes_at.strftime('%d %b, %H:%M') }} UTC · {{ yes + no }} prediction{{ '' if yes + no == 1 else 's' }}</div>
+        {% if mine.get(q.id) %}
+          <span class="badge text-bg-primary mt-2">Your pick: {{ 'Yes' if mine[q.id].pick == 'yes' else 'No' }}</span>
+        {% elif not predictor_error %}
+          <form method="POST" action="{{ url_for('prediction_pick', question_id=q.id) }}" class="d-flex gap-2 mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm dart-btn flex-fill" name="pick" value="yes" type="submit">Yes</button>
+            <button class="btn btn-sm btn-outline-secondary flex-fill" name="pick" value="no" type="submit">No</button>
+          </form>
+        {% endif %}
+      </article>
+    {% else %}<p class="aw-empty">No open predictions right now.</p>{% endfor %}
+  </div>
+
+  {% if waiting %}
+    <h2 class="aw-section"><i class="fa-solid fa-clipboard-check" aria-hidden="true"></i> Waiting for the verified result</h2>
+    <ul class="small">{% for q in waiting %}<li>{{ q.athlete.full_name }}: {{ q.line }}+ {{ stat_label(q.stat) }} on {{ q.match_date.strftime('%d %b') }}{% if mine.get(q.id) %} · your pick {{ mine[q.id].pick | title }}{% endif %}</li>{% endfor %}</ul>
+  {% endif %}
+
+  <div class="row g-3 mt-1">
+    <div class="col-lg-7">
+      <h2 class="aw-section"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> Results</h2>
+      {% for q in settled %}
+        <div class="aw-contest mb-2 py-2">
+          <strong>{{ q.athlete.full_name }}</strong>: {{ q.line }}+ {{ stat_label(q.stat) }} on {{ q.match_date.strftime('%d %b') }}
+          {% if q.status == 'void' %}<span class="badge text-bg-secondary">Cancelled</span>
+          {% else %}→ <strong>{{ q.result_value }}</strong> <span class="badge {{ 'text-bg-success' if q.result_value >= q.line else 'text-bg-danger' }}">{{ 'Yes' if q.result_value >= q.line else 'No' }}</span>{% endif %}
+          {% if mine.get(q.id) %}<span class="small ms-1">· you: {{ mine[q.id].pick | title }}, +{{ mine[q.id].points or 0 }} pts</span>{% endif %}
+        </div>
+      {% else %}<p class="aw-empty">No results yet.</p>{% endfor %}
+    </div>
+    <div class="col-lg-5">
+      <h2 class="aw-section"><i class="fa-solid fa-ranking-star" aria-hidden="true"></i> Leaderboard</h2>
+      <ol class="aw-contest ps-4">
+        {% for u, pts, n in leaderboard %}<li class="mb-1"><strong>{{ u.display_name }}</strong> <span class="text-muted small">({{ u.role_label }})</span> · {{ pts }} pts · {{ n }} picks</li>
+        {% else %}<li class="list-unstyled aw-empty">No points yet.</li>{% endfor %}
+      </ol>
+    </div>
+  </div>
+</div>
+{% endblock %}

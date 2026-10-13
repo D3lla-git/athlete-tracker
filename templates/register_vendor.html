@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Vendor Registration | D.A.R.T Market${% endblock %}
+
+{% block content %}
+{% from '_gov_name.html' import gov_name_note, gov_name_assets %}
+{% from '_username_field.html' import username_field, username_assets %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-market.css') }}">
+<div class="mk container py-3" style="max-width: 760px">
+  <section class="mk-gate mb-3" aria-label="Vendor registration">
+    <i class="fa-solid fa-store fa-2x mb-2" aria-hidden="true"></i>
+    <h1 class="h2">Sell on D.A.R.T Market<span style="color:#f5c542">$</span></h1>
+    <p>For shops and sellers of sports gear: football boots, basketball sneakers, kickball skips, jerseys, socks, balls and equipment.
+       Every product is checked by the D.A.R.T Admin before it goes live. Buyers contact you directly; D.A.R.T. never handles payments.</p>
+  </section>
+  <form method="POST" action="{{ url_for('register_vendor') }}" class="mk-panel" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3">
+      <label class="form-label" for="full_name">Your full/Business name (as on your ID)</label>
+      <input class="form-control" id="full_name" name="full_name" maxlength="100" required autocomplete="name" data-gov-name
+             value="{{ form.get('full_name', '') }}" placeholder="Example: John Felix Brown" aria-describedby="full_nameNote full_nameError">
+      {{ gov_name_note('full_name') }}
+    </div>
+    <div class="mb-3">{{ username_field('vendorUsername', value=form.get('username', ''), name_source_id='full_name') }}</div>
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label class="form-label" for="shop_name">Shop name (optional)</label>
+        <input class="form-control" id="shop_name" name="shop_name" maxlength="80" value="{{ form.get('shop_name', '') }}" placeholder="e.g. Sinkor Sports Shop">
+      </div>
+      <div class="col-md-6 mb-3">
+        <label class="form-label" for="phone">Phone number (buyers call / WhatsApp you)</label>
+        <input class="form-control" id="phone" name="phone" type="tel" maxlength="20" required value="{{ form.get('phone', '') }}" placeholder="0770 123 456">
+      </div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="email">Email</label>
+      <input class="form-control" id="email" name="email" type="email" maxlength="150" required autocomplete="email" value="{{ form.get('email', '') }}">
+    </div>
+    <div class="row">
+      <div class="col-md-6 mb-3"><label class="form-label" for="password">Password</label>
+        <input class="form-control" id="password" name="password" type="password" required minlength="8" autocomplete="new-password"></div>
+      <div class="col-md-6 mb-3"><label class="form-label" for="confirm_password">Confirm password</label>
+        <input class="form-control" id="confirm_password" name="confirm_password" type="password" required minlength="8" autocomplete="new-password"></div>
+    </div>
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" id="agree" name="agree" value="yes" required>
+      <label class="form-check-label small" for="agree">I will only sell genuine sports gear, describe it honestly, and never ask buyers to pay before they see the item.</label>
+    </div>
+    <button class="btn dart-btn w-100 py-2" type="submit"><i class="fa-solid fa-store"></i> Create vendor account</button>
+  </form>
+</div>
+{{ gov_name_assets() }}
+{{ username_assets() }}
+{% endblock %}

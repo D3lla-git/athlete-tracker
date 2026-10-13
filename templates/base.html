@@ -155,6 +155,10 @@
   <a class="nav-link" href="{{ url_for('feed') }}" style="color: white;">Highlights <i class="fa-solid fa-clapperboard"></i></a>
 </li>
 
+<li class="nav-item">
+  <a class="nav-link nav-market" href="{{ url_for('market_home') }}" style="color: white;" title="D.A.R.T Market$" aria-label="D.A.R.T Market$"><span class="nav-market-label">Market</span><b style="color:#f5c542">$</b> <i class="fa-solid fa-store"></i></a>
+</li>
+
 {% if not current_user.is_authenticated or current_user.role in ('Athlete', 'Scout', 'Organization', 'Coach') %}
 <li class="nav-item">
   <a class="nav-link" href="{{ url_for('pricing') }}" style="color: white;">
@@ -275,6 +279,11 @@
     <li>
       <a class="dropdown-item" href="{{ url_for('register_official') }}">
         Register as Match Official
+      </a>
+    </li>
+    <li>
+      <a class="dropdown-item" href="{{ url_for('register_vendor') }}">
+        Register as Vendor (D.A.R.T Market$)
       </a>
     </li>
     <li>

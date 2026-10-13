@@ -40,6 +40,10 @@
       <li><i class="fa-solid fa-hand-pointer" aria-hidden="true"></i> Press <strong>Vote</strong> under your favourite photo / video</li>
       <li><i class="fa-solid fa-lock" aria-hidden="true"></i> One vote per person per award. It is final</li>
     </ol>
+    <div class="d-flex flex-wrap gap-2 mt-3">
+      <a class="btn btn-light btn-sm" href="{{ url_for('predictions_page') }}"><i class="fa-solid fa-bullseye"></i> Predictions (free game)</a>
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('market_home') }}"><i class="fa-solid fa-store"></i> Market$</a>
+    </div>
   </section>
 
   {# ---------- Vote now ---------- #}

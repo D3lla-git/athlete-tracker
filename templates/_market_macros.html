@@ -1,0 +1,42 @@
+{# D.A.R.T Market$ building blocks. Import "with context". #}
+{% set _mk_colors = {'black': '#111111', 'white': '#f5f5f5', 'red': '#d32f2f', 'blue': '#1565c0', 'green': '#2e7d32', 'yellow': '#fbc02d',
+  'orange': '#ef6c00', 'pink': '#ec407a', 'purple': '#7b1fa2', 'grey': '#9e9e9e', 'gray': '#9e9e9e', 'brown': '#6d4c41', 'navy': '#1a237e',
+  'gold': '#c9a227', 'silver': '#c0c0c0', 'maroon': '#800000', 'beige': '#d7c4a3', 'cream': '#f3e9d2', 'teal': '#00897b'} %}
+
+{% macro color_css(name) -%}
+  {{ _mk_colors.get((name or '').lower().strip(), '#bdbdbd') }}
+{%- endmacro %}
+
+{% macro money(l) -%}
+  {% if l.currency == 'LRD' %}L${{ '{:,.0f}'.format(l.price) }}{% else %}${{ '{:,.2f}'.format(l.price) }}{% endif %}
+{%- endmacro %}
+
+{% macro status_badge(l) %}
+  <span class="mk-status mk-status-{{ l.status }}">{{ {'pending': 'Waiting for D.A.R.T Admin', 'approved': 'Live', 'rejected': 'Not approved', 'sold': 'Sold', 'removed': 'Removed'}[l.status] }}</span>
+{% endmacro %}
+
+{% macro product_card(l) %}
+  <a class="mk-card" href="{{ url_for('market_item', listing_id=l.id) }}">
+    <div class="mk-card-img">
+      {% if l.cover %}<img src="{{ market_image_url(l.cover) }}" alt="{{ l.title }}" loading="lazy" decoding="async">{% endif %}
+      <span class="mk-card-sport">{{ l.sport }}</span>
+      {% if l.condition == 'used' %}<span class="mk-card-cond">Used</span>{% endif %}
+    </div>
+    <div class="mk-card-body">
+      <span class="mk-card-name">{{ l.title }}</span>
+      <span class="mk-price">{{ money(l) }}</span>
+      <span class="mk-seller"><i class="fa-solid fa-store" aria-hidden="true"></i> {{ l.seller.shop_name or l.seller.display_name }}{% if l.location %} · {{ l.location }}{% endif %}</span>
+    </div>
+  </a>
+{% endmacro %}
+
+{% macro safety_tips() %}
+  <div class="mk-safety" role="note">
+    <strong><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Stay safe: D.A.R.T. never handles payments</strong>
+    <ul>
+      <li>Meet in a busy public place, check the item, then pay (Orange Money, MTN MoMo or cash).</li>
+      <li>Never pay in advance to someone you have not met, and never share your PIN or OTP codes.</li>
+      <li>Report fake, unsafe or non-sports listings with the <em>Report</em> button.</li>
+    </ul>
+  </div>
+{% endmacro %}

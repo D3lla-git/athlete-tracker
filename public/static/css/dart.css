@@ -1216,6 +1216,11 @@ html[data-theme="dark"] a:not(.btn):not(.nav-link):not(.dropdown-item):not(.dart
 
 /* D.A.R.T Admin / Scout bar on smaller laptops: icon-only Light / Install
    buttons so all their links fit on one row (title + aria-label still name them). */
+/* Market$ link: icon + "$" only on the busy wide bar until there is room. */
+@media (min-width: 1200px) and (max-width: 1599.98px) {
+  nav.dart-nav-wide .nav-market-label { display: none; }
+}
+
 @media (min-width: 1200px) and (max-width: 1365.98px) {
   nav.dart-nav-wide .theme-label,
   nav.dart-nav-wide .pwa-install-label { display: none !important; }

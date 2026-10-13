@@ -5,7 +5,7 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import MultiDict
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare, RecordVerificationEvent, MatchReport, MatchReportLine, AwardContest, AwardEntry)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare, RecordVerificationEvent, MatchReport, MatchReportLine, AwardContest, AwardEntry, MarketListing, MarketImage, MarketThread, MarketMessage, MarketReport, PredictionQuestion, PredictionPick)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
@@ -52,6 +52,8 @@ import integrity
 import notifications as notif
 import guardian as guardian_mod
 import awards as awards_mod
+import market as market_mod
+import predictions as predictions_mod
 from competitions import (
     CLUB_DIVISIONS,
     ALL_COMPETITIONS,
@@ -263,6 +265,14 @@ def create_audit_log(
     """
     Create a security/business audit event.
     """
+    # audit_log.target_id is a bigint column: store the id as a number
+    # (callers pass '37' or 37); anything else goes into the details.
+    if target_id is not None:
+        try:
+            target_id = int(str(target_id).strip())
+        except ValueError:
+            details = dict(details or {}, target=str(target_id)[:100])
+            target_id = None
 
     audit = AuditLog(
         actor_user_id=actor_user_id,
@@ -348,6 +358,12 @@ def _version_static_urls(endpoint, values):
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,
     'pool_recycle': 1800,
+    # Insert rows one statement each (no batched "insertmanyvalues"). The
+    # batched form casts every value to the model's type (e.g. ::VARCHAR),
+    # which Postgres refuses for columns whose real type differs (audit_log
+    # ip_address is inet, target_id bigint). Single inserts let Postgres
+    # convert the values itself, as it always did.
+    'use_insertmanyvalues': False,
 }
 
 mail = Mail(app)
@@ -3511,6 +3527,11 @@ def continue_login(user):
         login_user(user)
         return redirect_after_login('student_dashboard')
 
+    # D.A.R.T Market$ vendors (sell sports gear only; every listing is checked).
+    if user.role == 'Vendor':
+        login_user(user)
+        return redirect_after_login('market_home')
+
     # Safety fallback — do not allow unknown roles to authenticate
     # into another role's dashboard.
     flash(
@@ -3736,7 +3757,7 @@ def queue_celebrations(user):
             actor_user_id=user.id,
             action=action,
             target_type=target_type,
-            target_id=str(target_id)
+            target_id=int(target_id)
         ).first() is not None
 
     if (
@@ -4103,6 +4124,7 @@ ROLE_DASHBOARDS = {
     'System': ('admin_dashboard', 'Admin', 'Admin', 'fa-solid fa-user-shield'),
     'Organization': ('organization_dashboard', 'Team HQ', 'Team', 'fa-solid fa-building-shield'),
     'Statistician': ('official_dashboard', 'Match Official', 'Official', 'fa-solid fa-clipboard-check'),
+    'Vendor': ('market_mine', 'My Shop', 'Shop', 'fa-solid fa-store'),
 }
 
 
@@ -7193,7 +7215,7 @@ def sitemap_xml():
 
 
 # ---------- Legal pages ----------
-LEGAL_UPDATED = 'October 12, 2026'
+LEGAL_UPDATED = 'October 13, 2026'
 
 
 @app.route('/privacy')
@@ -7227,7 +7249,7 @@ def organization_terms():
 # registering, or on their next login for existing accounts). Raise
 # TERMS_VERSION when the terms change: everyone is asked again, and each
 # acceptance is stored in TermsAcceptance as a permanent record.
-TERMS_VERSION = '2026-10-12'
+TERMS_VERSION = '2026-10-13'
 
 # The D.A.R.T Admin runs the platform and is not asked.
 TERMS_EXEMPT_ROLES = ('System',)
@@ -12829,6 +12851,595 @@ def awards_pending_count():
 app.jinja_env.globals['awards_pending_count'] = awards_pending_count
 app.jinja_env.globals['award_results'] = awards_mod.recent_results
 app.jinja_env.globals['highlight_media_url'] = highlight_media_url
+
+
+# ==========================================================
+# D.A.R.T MARKET$ - sports gear marketplace (see market.py)
+# ==========================================================
+MARKET_IMAGE_PREFIX = 'market'
+
+
+def market_store_image(data, path):
+    """Save a cleaned product photo in the PRIVATE review bucket (public only after approval)."""
+    supabase.storage.from_(HIGHLIGHT_REVIEW_BUCKET).upload(path, data, file_options={'content-type': 'image/jpeg'})
+    return path
+
+
+def market_image_url(img):
+    try:
+        if img.bucket == HIGHLIGHTS_BUCKET:
+            return highlight_public_url(img.storage_path)
+        return review_file_url(img.storage_path)          # private: short-lived signed link
+    except Exception as e:
+        app.logger.warning('Market image link failed: %s', e)
+        return ''
+
+
+def market_block_reason(user=None):
+    return market_mod.market_block_reason(user or current_user, athlete_age)
+
+
+def market_viewer_ok():
+    """Browsing D.A.R.T Market$ needs a D.A.R.T. account (any role)."""
+    return current_user.is_authenticated and not current_user.is_suspended
+
+
+def market_listing_visible(listing):
+    if listing.status == 'approved':
+        return market_viewer_ok()
+    return current_user.is_authenticated and (current_user.id == listing.seller_id or current_user.role == 'System')
+
+
+def save_market_phone(raw):
+    """Phone for buyers / sellers (Liberian or international). Returns an error or None. Caller commits."""
+    phone = guardian_mod.clean_phone(raw)
+    if not phone:
+        return 'Enter your phone number: Orange / Lonestar (e.g. 0770 123 456) or international (+...).'
+    if User.query.filter(User.phone == phone, User.id != current_user.id).first():
+        return 'This phone number is already used by another D.A.R.T. account.'
+    current_user.phone = phone
+    return None
+
+
+app.jinja_env.globals.update(
+    market_categories=market_mod.CATEGORIES, market_sports=market_mod.SPORTS, market_conditions=market_mod.CONDITIONS,
+    market_currencies=market_mod.CURRENCIES, market_report_reasons=market_mod.REPORT_REASONS,
+    market_image_url=market_image_url, market_max_images=market_mod.MAX_IMAGES,
+    market_unread=lambda: market_mod.unread_count(current_user),
+)
+
+
+def _market_gate():
+    return render_template('market.html', gate=True, home_tab='market')
+
+
+@app.route('/market')
+def market_home():
+    if not market_viewer_ok():
+        return _market_gate()
+    page = max(1, request.args.get('page', 1, type=int))
+    query = market_mod.search(request.args)
+    total = query.count()
+    listings = query.offset((page - 1) * market_mod.PAGE_SIZE).limit(market_mod.PAGE_SIZE).all()
+    featured = (MarketListing.query.filter_by(status='approved').order_by(MarketListing.reviewed_at.desc().nullslast())
+                .limit(5).all())
+    filters = {k: v for k, v in request.args.items() if k in ('q', 'sport', 'category', 'condition', 'currency', 'min', 'max',
+                                                            'size', 'color', 'brand', 'sort') and v}
+    return render_template('market.html', gate=False, home_tab='market', listings=listings, total=total, page=page,
+                           pages=max(1, -(-total // market_mod.PAGE_SIZE)), featured=featured, filters=filters,
+                           brands=market_mod.brands(), block_reason=market_block_reason())
+
+
+@app.route('/market/item/<int:listing_id>')
+def market_item(listing_id):
+    listing = MarketListing.query.get_or_404(listing_id)
+    if not market_viewer_ok():
+        return _market_gate()
+    if not market_listing_visible(listing):
+        abort(404)
+    if listing.status == 'approved' and current_user.id != listing.seller_id:
+        seen = session.get('_mkt_seen', [])
+        if listing.id not in seen:
+            listing.views = (listing.views or 0) + 1
+            session['_mkt_seen'] = (seen + [listing.id])[-200:]
+            db.session.commit()
+    thread = None
+    if current_user.id != listing.seller_id:
+        thread = MarketThread.query.filter_by(listing_id=listing.id, buyer_id=current_user.id).first()
+    more = (MarketListing.query.filter(MarketListing.seller_id == listing.seller_id, MarketListing.status == 'approved',
+                                       MarketListing.id != listing.id).order_by(MarketListing.id.desc()).limit(4).all())
+    return render_template('market_item.html', listing=listing, thread=thread, more=more, block_reason=market_block_reason(),
+                           is_seller=current_user.id == listing.seller_id,
+                           already_reported=MarketReport.query.filter_by(listing_id=listing.id, reporter_id=current_user.id).first())
+
+
+def _store_listing_images(listing, files):
+    """Clean + store up to MAX_IMAGES photos. Returns how many were saved."""
+    saved = 0
+    start = len(listing.images)
+    for f in files:
+        if start + saved >= market_mod.MAX_IMAGES:
+            break
+        if not f or not f.filename:
+            continue
+        data = market_mod.clean_image(f)
+        if not data:
+            continue
+        path = f'{MARKET_IMAGE_PREFIX}/{listing.id}/{uuid.uuid4().hex}.jpg'
+        market_store_image(data, path)
+        db.session.add(MarketImage(listing_id=listing.id, storage_path=path, bucket=HIGHLIGHT_REVIEW_BUCKET, position=start + saved))
+        saved += 1
+    return saved
+
+
+@app.route('/market/sell', methods=['GET', 'POST'])
+@login_required
+def market_sell():
+    reason = market_block_reason()
+    if reason:
+        flash(reason, 'warning')
+        return redirect(url_for('market_home'))
+    form = request.form if request.method == 'POST' else {}
+    if request.method == 'POST':
+        values, error = market_mod.validate_listing(request.form)
+        if not error:
+            error = market_mod.seller_limits_error(current_user)
+        files = [f for f in request.files.getlist('images') if f and f.filename]
+        if not error and not files:
+            error = 'Add at least one clear photo of the product.'
+        if not error and len(files) > market_mod.MAX_IMAGES:
+            error = f'Add at most {market_mod.MAX_IMAGES} photos.'
+        if not error and not current_user.phone:
+            error = save_market_phone(request.form.get('phone'))
+        if not error:
+            listing = MarketListing(seller_id=current_user.id, status='pending', **values)
+            db.session.add(listing)
+            db.session.flush()
+            try:
+                saved = _store_listing_images(listing, files)
+            except Exception as e:
+                app.logger.exception('Market photo upload failed: %s', e)
+                saved = -1
+            if saved <= 0:
+                db.session.rollback()
+                error = ('We could not read your photos. Use clear JPG, PNG or WEBP photos up to 6 MB.' if saved == 0
+                         else 'We could not upload your photos. Please try again.')
+            else:
+                create_audit_log(action='market_listing_submitted', actor_user_id=current_user.id, target_type='market_listing',
+                                 target_id=str(listing.id), details={'title': listing.title, 'photos': saved})
+                db.session.commit()
+                flash('Listing sent to the D.A.R.T Admin. It goes live on D.A.R.T Market$ once it is checked and approved.', 'success')
+                return redirect(url_for('market_mine'))
+        flash(error, 'danger')
+    return render_template('market_sell.html', form=form, listing=None), (400 if request.method == 'POST' else 200)
+
+
+@app.route('/market/item/<int:listing_id>/edit', methods=['GET', 'POST'])
+@login_required
+def market_edit(listing_id):
+    listing = MarketListing.query.get_or_404(listing_id)
+    if listing.seller_id != current_user.id or listing.status == 'removed':
+        abort(404)
+    reason = market_block_reason()
+    if reason:
+        flash(reason, 'warning')
+        return redirect(url_for('market_mine'))
+    form = request.form if request.method == 'POST' else {
+        'title': listing.title, 'category': listing.category, 'sport': listing.sport, 'condition': listing.condition,
+        'currency': listing.currency, 'price': f'{listing.price:.2f}', 'quantity': listing.quantity, 'description': listing.description,
+        'brand': listing.brand or '', 'sizes': listing.sizes or '', 'colors': listing.colors or '', 'specs': listing.specs or '',
+        'location': listing.location or ''}
+    if request.method == 'POST':
+        values, error = market_mod.validate_listing(request.form)
+        files = [f for f in request.files.getlist('images') if f and f.filename]
+        if not error:
+            for k, v in values.items():
+                setattr(listing, k, v)
+            if files:
+                _store_listing_images(listing, files)
+            # Every change is checked again before it is shown.
+            listing.status = 'pending'
+            listing.updated_at = datetime.utcnow()
+            create_audit_log(action='market_listing_edited', actor_user_id=current_user.id, target_type='market_listing',
+                             target_id=str(listing.id))
+            db.session.commit()
+            flash('Changes saved. The listing is checked again by the D.A.R.T Admin before it is shown.', 'success')
+            return redirect(url_for('market_mine'))
+        flash(error, 'danger')
+    return render_template('market_sell.html', form=form, listing=listing)
+
+
+@app.route('/market/item/<int:listing_id>/status', methods=['POST'])
+@login_required
+def market_item_status(listing_id):
+    listing = MarketListing.query.get_or_404(listing_id)
+    if listing.seller_id != current_user.id:
+        abort(404)
+    action = request.form.get('action')
+    if action == 'sold' and listing.status == 'approved':
+        listing.status = 'sold'
+        flash('Marked as sold. Congratulations!', 'success')
+    elif action == 'relist' and listing.status == 'sold':
+        listing.status = 'approved'
+        flash('Back on sale.', 'success')
+    elif action == 'remove' and listing.status in ('pending', 'approved', 'sold', 'rejected'):
+        listing.status = 'removed'
+        flash('Listing removed.', 'info')
+    else:
+        abort(400)
+    listing.updated_at = datetime.utcnow()
+    db.session.commit()
+    return redirect(url_for('market_mine'))
+
+
+@app.route('/market/mine')
+@login_required
+def market_mine():
+    listings = (MarketListing.query.filter(MarketListing.seller_id == current_user.id, MarketListing.status != 'removed')
+                .order_by(MarketListing.updated_at.desc()).all())
+    return render_template('market_mine.html', listings=listings, block_reason=market_block_reason())
+
+
+@app.route('/market/phone', methods=['POST'])
+@login_required
+def market_phone():
+    if market_block_reason():
+        abort(403)
+    error = save_market_phone(request.form.get('phone'))
+    if error:
+        flash(error, 'danger')
+    else:
+        create_audit_log(action='market_phone_saved', actor_user_id=current_user.id, target_type='User', target_id=str(current_user.id))
+        db.session.commit()
+        flash('Phone number saved.', 'success')
+    back = safe_next_url(request.form.get('next'))
+    return redirect(back or url_for('market_home'))
+
+
+@app.route('/market/item/<int:listing_id>/contact', methods=['POST'])
+@login_required
+def market_contact(listing_id):
+    listing = MarketListing.query.get_or_404(listing_id)
+    if listing.status != 'approved' or listing.seller_id == current_user.id:
+        abort(404)
+    reason = market_block_reason() or market_block_reason(listing.seller)
+    if reason:
+        flash(reason if reason else 'This seller cannot be contacted.', 'warning')
+        return redirect(url_for('market_item', listing_id=listing.id))
+    if not current_user.phone:
+        error = save_market_phone(request.form.get('phone'))
+        if error:
+            flash('Add your phone number first (the seller sees it, as you see theirs). ' + error, 'warning')
+            return redirect(url_for('market_item', listing_id=listing.id))
+    body = market_mod.clean_multiline(request.form.get('body'), 1000)
+    if len(body) < 2:
+        flash('Write a message to the seller.', 'warning')
+        return redirect(url_for('market_item', listing_id=listing.id))
+    thread = MarketThread.query.filter_by(listing_id=listing.id, buyer_id=current_user.id).first()
+    error = market_mod.message_rate_error(current_user) or (None if thread else market_mod.new_thread_error(current_user))
+    if error:
+        flash(error, 'warning')
+        return redirect(url_for('market_item', listing_id=listing.id))
+    if not thread:
+        thread = MarketThread(listing_id=listing.id, buyer_id=current_user.id, seller_id=listing.seller_id)
+        db.session.add(thread)
+        db.session.flush()
+    db.session.add(MarketMessage(thread_id=thread.id, sender_id=current_user.id, body=body))
+    thread.last_message_at = datetime.utcnow()
+    db.session.commit()
+    return redirect(url_for('market_thread', thread_id=thread.id))
+
+
+@app.route('/market/messages')
+@login_required
+def market_messages():
+    return render_template('market_messages.html', threads=market_mod.threads_for(current_user))
+
+
+@app.route('/market/messages/<int:thread_id>', methods=['GET', 'POST'])
+@login_required
+def market_thread(thread_id):
+    thread = MarketThread.query.get_or_404(thread_id)
+    if current_user.id not in (thread.buyer_id, thread.seller_id):
+        abort(404)
+    other = thread.seller if current_user.id == thread.buyer_id else thread.buyer
+    if request.method == 'POST':
+        reason = market_block_reason() or market_block_reason(other)
+        body = market_mod.clean_multiline(request.form.get('body'), 1000)
+        if reason:
+            flash(reason, 'warning')
+        elif len(body) < 1:
+            flash('Write a message.', 'warning')
+        elif market_mod.message_rate_error(current_user):
+            flash(market_mod.message_rate_error(current_user), 'warning')
+        else:
+            db.session.add(MarketMessage(thread_id=thread.id, sender_id=current_user.id, body=body))
+            thread.last_message_at = datetime.utcnow()
+            db.session.commit()
+        return redirect(url_for('market_thread', thread_id=thread.id) + '#last')
+    MarketMessage.query.filter(MarketMessage.thread_id == thread.id, MarketMessage.sender_id != current_user.id,
+                               MarketMessage.read_at.is_(None)).update({'read_at': datetime.utcnow()}, synchronize_session=False)
+    db.session.commit()
+    db.session.refresh(thread)
+    response = make_response(render_template('market_thread.html', thread=thread, other=other,
+                                             block_reason=market_block_reason() or market_block_reason(other)))
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@app.route('/market/item/<int:listing_id>/report', methods=['POST'])
+@login_required
+def market_report(listing_id):
+    listing = MarketListing.query.get_or_404(listing_id)
+    reason = request.form.get('reason')
+    if listing.status != 'approved' or reason not in market_mod.REPORT_REASONS or listing.seller_id == current_user.id:
+        abort(400)
+    if not MarketReport.query.filter_by(listing_id=listing.id, reporter_id=current_user.id).first():
+        db.session.add(MarketReport(listing_id=listing.id, reporter_id=current_user.id, reason=reason,
+                                    detail=market_mod.clean(request.form.get('detail'), 300) or None))
+        db.session.commit()
+    flash('Thank you. The D.A.R.T Admin will look at this listing.', 'success')
+    return redirect(url_for('market_item', listing_id=listing.id))
+
+
+# ---------- D.A.R.T Admin: Market review ----------
+@app.route('/admin/market')
+@login_required
+def admin_market():
+    require_super_admin()
+    pending = MarketListing.query.filter_by(status='pending').order_by(MarketListing.updated_at.asc()).limit(100).all()
+    reports = MarketReport.query.filter_by(status='open').order_by(MarketReport.created_at.asc()).limit(100).all()
+    recent = (MarketListing.query.filter(MarketListing.status.in_(('approved', 'rejected', 'removed', 'sold')))
+              .order_by(MarketListing.reviewed_at.desc().nullslast()).limit(30).all())
+    stats = {
+        'live': MarketListing.query.filter_by(status='approved').count(),
+        'sold': MarketListing.query.filter_by(status='sold').count(),
+        'sellers': db.session.query(func.count(func.distinct(MarketListing.seller_id))).scalar() or 0,
+        'threads': MarketThread.query.count(),
+    }
+    return render_template('admin_market.html', pending=pending, reports=reports, recent=recent, stats=stats)
+
+
+@app.route('/admin/market/item/<int:listing_id>/<action>', methods=['POST'])
+@login_required
+def admin_market_item(listing_id, action):
+    require_super_admin()
+    listing = MarketListing.query.get_or_404(listing_id)
+    note = market_mod.clean(request.form.get('note'), 200) or None
+    now = datetime.utcnow()
+    if action == 'approve' and listing.status == 'pending':
+        for img in listing.images:
+            if img.bucket != HIGHLIGHTS_BUCKET and publish_highlight_file(img.storage_path):
+                img.bucket = HIGHLIGHTS_BUCKET
+        listing.status = 'approved'
+        notif.notify(listing.seller_id, 'market_approved', f'Your listing "{listing.title}" is approved and live on D.A.R.T Market$.',
+                     f'/market/item/{listing.id}')
+    elif action == 'reject' and listing.status == 'pending':
+        if not note:
+            flash('Say why the listing is rejected (the seller sees it).', 'warning')
+            return redirect(url_for('admin_market'))
+        listing.status = 'rejected'
+        notif.notify(listing.seller_id, 'market_rejected', f'Your listing "{listing.title}" was not approved: {note}', '/market/mine')
+    elif action == 'remove' and listing.status in ('approved', 'sold'):
+        listing.status = 'removed'
+    else:
+        abort(400)
+    listing.review_note = note
+    listing.reviewed_by = current_user.id
+    listing.reviewed_at = now
+    if action == 'remove':
+        MarketReport.query.filter_by(listing_id=listing.id, status='open').update({'status': 'resolved'}, synchronize_session=False)
+    create_audit_log(action=f'market_listing_{action}', actor_user_id=current_user.id, target_type='market_listing',
+                     target_id=str(listing.id), details={'note': note})
+    db.session.commit()
+    flash(f'Listing {action}d.' if action != 'approve' else 'Listing approved and live.', 'success')
+    return redirect(url_for('admin_market'))
+
+
+@app.route('/admin/market/report/<int:report_id>/resolve', methods=['POST'])
+@login_required
+def admin_market_report(report_id):
+    require_super_admin()
+    report = MarketReport.query.get_or_404(report_id)
+    report.status = 'resolved'
+    db.session.commit()
+    flash('Report closed.', 'info')
+    return redirect(url_for('admin_market'))
+
+
+@app.route('/admin/market/user/<int:user_id>/ban', methods=['POST'])
+@login_required
+def admin_market_ban(user_id):
+    require_super_admin()
+    user = User.query.get_or_404(user_id)
+    if user.role == 'System':
+        abort(400)
+    user.market_banned = not user.market_banned
+    if user.market_banned:
+        MarketListing.query.filter(MarketListing.seller_id == user.id, MarketListing.status.in_(('pending', 'approved'))).update(
+            {'status': 'removed'}, synchronize_session=False)
+    create_audit_log(action='market_ban' if user.market_banned else 'market_unban', actor_user_id=current_user.id,
+                     target_type='User', target_id=str(user.id))
+    db.session.commit()
+    flash(f'{user.display_name} {"banned from" if user.market_banned else "allowed back on"} D.A.R.T Market$.', 'success')
+    return redirect(url_for('admin_market'))
+
+
+app.jinja_env.globals['market_pending'] = market_mod.pending_counts
+app.jinja_env.filters['dict_without'] = lambda d, *keys: {k: v for k, v in d.items() if k not in keys}
+
+
+# ---------- Vendors (sellers who are not athletes, coaches, scouts...) ----------
+@app.route('/register-vendor', methods=['GET', 'POST'])
+def register_vendor():
+    if current_user.is_authenticated:
+        return redirect(url_for('market_home'))
+    form = request.form if request.method == 'POST' else {}
+
+    def back(message):
+        flash(message, 'danger')
+        return render_template('register_vendor.html', form=form), 400
+
+    if request.method == 'POST':
+        full_name, name_error = validate_full_name(form.get('full_name', ''))
+        if name_error:
+            return back(name_error)
+        username, username_error = check_new_username(form.get('username'))
+        if username_error:
+            return back(username_error)
+        email = (form.get('email') or '').strip().lower()
+        if not email or len(email) > 150 or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            return back('Enter a valid email address.')
+        if User.query.filter_by(email=email).first():
+            return back('An account with this email address already exists.')
+        password = form.get('password', '')
+        if password != form.get('confirm_password', ''):
+            return back('Passwords do not match.')
+        if not is_strong_password(password):
+            return back('Password must meet the required security requirements.')
+        phone = guardian_mod.clean_phone(form.get('phone'))
+        if not phone:
+            return back('Enter your phone number (buyers call or WhatsApp you on it).')
+        if User.query.filter_by(phone=phone).first():
+            return back('This phone number is already used by another D.A.R.T. account.')
+        shop = market_mod.clean(form.get('shop_name'), 80)
+        if form.get('agree') != 'yes':
+            return back('Please confirm you will only sell genuine sports gear.')
+        vendor = User(full_name=full_name, username=username, email=email, role='Vendor', school=shop or '', shop_name=shop or None,
+                      phone=phone, is_verified=True)
+        vendor.set_password(password)
+        try:
+            db.session.add(vendor)
+            db.session.flush()
+            record_account_created(vendor)
+            create_audit_log(action='vendor_registration_created', actor_user_id=vendor.id, target_type='User',
+                             target_id=str(vendor.id), details={'shop': shop})
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return back('This email, username or phone number is already in use.')
+        flash('Vendor account created. Log in to post your sports gear on D.A.R.T Market$.', 'success')
+        return redirect(url_for('login'))
+    return render_template('register_vendor.html', form=form)
+
+
+# ==========================================================
+# D.A.R.T PREDICTIONS - free game, no money (see predictions.py)
+# ==========================================================
+def _premium(user):
+    try:
+        return bool(current_plan(user))
+    except Exception:
+        return False
+
+
+@app.route('/predictions')
+def predictions_page():
+    now = datetime.utcnow()
+    open_q = (PredictionQuestion.query.filter(PredictionQuestion.status == 'open', PredictionQuestion.closes_at > now)
+              .order_by(PredictionQuestion.closes_at.asc()).all())
+    waiting = (PredictionQuestion.query.filter(PredictionQuestion.status == 'open', PredictionQuestion.closes_at <= now)
+               .order_by(PredictionQuestion.match_date.desc()).limit(20).all())
+    settled = (PredictionQuestion.query.filter(PredictionQuestion.status.in_(('settled', 'void')))
+               .order_by(PredictionQuestion.settled_at.desc()).limit(20).all())
+    mine = {}
+    if current_user.is_authenticated:
+        mine = {p.question_id: p for p in PredictionPick.query.filter_by(user_id=current_user.id).all()}
+    return render_template('predictions.html', open_q=open_q, waiting=waiting, settled=settled, mine=mine,
+                           leaderboard=predictions_mod.leaderboard(), predictor_error=predictions_mod.predictor_error(current_user),
+                           split=predictions_mod.split, stat_label=predictions_mod.stat_label, points=predictions_mod.POINTS_CORRECT)
+
+
+@app.route('/predictions/<int:question_id>/pick', methods=['POST'])
+def prediction_pick(question_id):
+    q = PredictionQuestion.query.get_or_404(question_id)
+    error = predictions_mod.predictor_error(current_user)
+    pick = request.form.get('pick')
+    if error:
+        flash(error, 'warning')
+    elif not predictions_mod.is_open(q):
+        flash('This prediction is closed.', 'warning')
+    elif pick not in ('yes', 'no'):
+        abort(400)
+    elif PredictionPick.query.filter_by(question_id=q.id, user_id=current_user.id).first():
+        flash('You already answered this one.', 'info')
+    else:
+        db.session.add(PredictionPick(question_id=q.id, user_id=current_user.id, pick=pick))
+        try:
+            db.session.commit()
+            flash('Prediction saved. Points are added when the result is verified.', 'success')
+        except IntegrityError:
+            db.session.rollback()
+            flash('You already answered this one.', 'info')
+    return redirect(url_for('predictions_page') + f'#q{q.id}')
+
+
+@app.route('/admin/predictions', methods=['GET', 'POST'])
+@login_required
+def admin_predictions():
+    require_super_admin()
+    if request.method == 'POST':
+        handle = uname.normalize_username(request.form.get('athlete') or '')
+        athlete = User.query.filter(func.lower(User.username) == handle).first() if handle else None
+        sport = request.form.get('sport')
+        stat = request.form.get('stat')
+        try:
+            line = int(request.form.get('line') or -1)
+            match_date = datetime.strptime(request.form.get('match_date', ''), '%Y-%m-%d').date()
+            closes_at = datetime.strptime(request.form.get('closes_at', ''), '%Y-%m-%dT%H:%M')
+        except ValueError:
+            line, match_date, closes_at = -1, None, None
+        error = predictions_mod.athlete_error(athlete, athlete_age(athlete) if athlete else None, _premium(athlete) if athlete else False)
+        if not error and (sport not in predictions_mod.STATS or stat not in predictions_mod.STATS[sport]):
+            error = 'Choose the sport and a stat for it.'
+        if not error and not 0 <= line <= 100:
+            error = 'The line must be between 0 and 100.'
+        if not error and (not match_date or not closes_at or closes_at <= datetime.utcnow()
+                          or closes_at.date() > match_date):
+            error = 'Predictions must close in the future, on or before the match date.'
+        if error:
+            flash(error, 'danger')
+        else:
+            q = PredictionQuestion(athlete_id=athlete.id, sport=sport, stat=stat, line=line, match_date=match_date,
+                                   match_label=market_mod.clean(request.form.get('match_label'), 120) or None,
+                                   closes_at=closes_at, created_by=current_user.id)
+            db.session.add(q)
+            db.session.flush()
+            create_audit_log(action='prediction_created', actor_user_id=current_user.id, target_type='prediction_question',
+                             target_id=str(q.id))
+            db.session.commit()
+            flash('Prediction posted.', 'success')
+        return redirect(url_for('admin_predictions'))
+    questions = PredictionQuestion.query.order_by(PredictionQuestion.created_at.desc()).limit(60).all()
+    return render_template('admin_predictions.html', questions=questions, stats=predictions_mod.STATS, split=predictions_mod.split,
+                           record_value=predictions_mod.record_value, stat_label=predictions_mod.stat_label,
+                           now=datetime.utcnow())
+
+
+@app.route('/admin/predictions/<int:question_id>/<action>', methods=['POST'])
+@login_required
+def admin_prediction_action(question_id, action):
+    require_super_admin()
+    q = PredictionQuestion.query.get_or_404(question_id)
+    if q.status != 'open':
+        abort(400)
+    if action == 'settle':
+        value = request.form.get('value', type=int)
+        if request.form.get('from_record'):
+            value = predictions_mod.record_value(q)
+        if value is None or not 0 <= value <= 300:
+            flash('Enter the verified number (or use the approved record).', 'warning')
+            return redirect(url_for('admin_predictions'))
+        predictions_mod.settle(q, value)
+    elif action == 'void':
+        predictions_mod.void(q)
+    else:
+        abort(400)
+    create_audit_log(action=f'prediction_{action}', actor_user_id=current_user.id, target_type='prediction_question',
+                     target_id=str(q.id), details={'value': q.result_value})
+    db.session.commit()
+    flash('Prediction settled: points added.' if action == 'settle' else 'Prediction cancelled.', 'success')
+    return redirect(url_for('admin_predictions'))
 
 
 if __name__ == '__main__':

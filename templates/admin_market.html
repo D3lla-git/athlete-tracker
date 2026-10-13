@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Market$ review | D.A.R.T{% endblock %}
+
+{% block content %}
+{% from '_market_macros.html' import money, status_badge with context %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-market.css') }}">
+<div class="mk container-xl px-0">
+  <section class="mk-gate text-start mb-3" aria-label="Market review">
+    <h1 class="h3 mb-1"><i class="fa-solid fa-store" aria-hidden="true"></i> D.A.R.T Market$ review</h1>
+    <p class="mx-0 mb-2">Approve only genuine sports gear for football, basketball and kickball. Check the photos match the title, the price is realistic, and nothing is counterfeit or unsafe.</p>
+    <div class="d-flex flex-wrap gap-2">
+      <span class="badge rounded-pill text-bg-light">{{ pending | length }} to review</span>
+      <span class="badge rounded-pill text-bg-light">{{ reports | length }} reports</span>
+      <span class="badge rounded-pill text-bg-light">{{ stats.live }} live · {{ stats.sold }} sold</span>
+      <span class="badge rounded-pill text-bg-light">{{ stats.sellers }} sellers · {{ stats.threads }} chats</span>
+      <a class="btn btn-sm btn-light" href="{{ url_for('market_home') }}">Open Market$</a>
+    </div>
+  </section>
+
+  <h2 class="h5 fw-bold" id="pending">Listings to review</h2>
+  {% for l in pending %}
+    <article class="mk-panel mb-3">
+      <div class="row g-3">
+        <div class="col-md-5">
+          <div class="d-flex gap-2 flex-wrap">{% for img in l.images %}<a href="{{ market_image_url(img) }}" target="_blank" rel="noopener"><img class="mk-thumb" style="width:96px;height:96px" src="{{ market_image_url(img) }}" alt="Photo {{ loop.index }}"></a>{% endfor %}</div>
+        </div>
+        <div class="col-md-7">
+          <h3 class="h6 fw-bold mb-1">{{ l.title }} <span class="mk-price ms-1">{{ money(l) }}</span></h3>
+          <div class="mk-meta"><span>{{ market_categories[l.category][0] }}</span><span>{{ l.sport }}</span><span>{{ market_conditions[l.condition] }}</span>
+            {% if l.brand %}<span>{{ l.brand }}</span>{% endif %}{% if l.sizes %}<span>Sizes {{ l.sizes }}</span>{% endif %}</div>
+          <p class="small mb-1" style="white-space: pre-line">{{ l.description }}</p>
+          {% if l.specs %}<p class="small text-muted mb-1" style="white-space: pre-line">{{ l.specs }}</p>{% endif %}
+          <p class="small mb-2">Seller: <strong>{{ l.seller.shop_name or l.seller.display_name }}</strong> ({{ l.seller.role_label }}{% if l.seller.username %}, @{{ l.seller.username }}{% endif %})
+            · {{ l.seller.phone | phone if l.seller.phone else 'no phone' }} · submitted {{ l.updated_at.strftime('%d %b %H:%M') }}</p>
+          <div class="d-flex flex-wrap gap-2 align-items-start">
+            <form method="POST" action="{{ url_for('admin_market_item', listing_id=l.id, action='approve') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm dart-btn" type="submit"><i class="fa-solid fa-check"></i> Approve</button>
+            </form>
+            <form method="POST" action="{{ url_for('admin_market_item', listing_id=l.id, action='reject') }}" class="d-flex gap-1 flex-grow-1">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input class="form-control form-control-sm" name="note" maxlength="200" required placeholder="Why not (the seller sees it), e.g. Not sports gear" aria-label="Reason">
+              <button class="btn btn-sm btn-outline-danger" type="submit">Reject</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </article>
+  {% else %}<p class="mk-empty">Nothing waiting for review.</p>{% endfor %}
+
+  <h2 class="h5 fw-bold mt-4" id="reports">Reports</h2>
+  {% for r in reports %}
+    <div class="mk-thread-row">
+      {% if r.listing.cover %}<img src="{{ market_image_url(r.listing.cover) }}" alt="">{% endif %}
+      <div class="flex-grow-1" style="min-width: 0">
+        <a class="fw-bold" href="{{ url_for('market_item', listing_id=r.listing_id) }}">{{ r.listing.title }}</a> {{ status_badge(r.listing) }}
+        <div class="small"><strong>{{ market_report_reasons[r.reason] }}</strong>{% if r.detail %}: {{ r.detail }}{% endif %} · by {{ r.reporter.display_name }}</div>
+      </div>
+      <div class="d-flex flex-wrap gap-1">
+        {% if r.listing.status in ('approved', 'sold') %}
+          <form method="POST" action="{{ url_for('admin_market_item', listing_id=r.listing_id, action='remove') }}" onsubmit="return confirm('Remove this listing from D.A.R.T Market$?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="note" value="{{ market_report_reasons[r.reason] }}">
+            <button class="btn btn-sm btn-outline-danger" type="submit">Remove listing</button>
+          </form>
+        {% endif %}
+        <form method="POST" action="{{ url_for('admin_market_ban', user_id=r.listing.seller_id) }}" onsubmit="return confirm('{{ 'Allow this seller back?' if r.listing.seller.market_banned else 'Ban this seller from D.A.R.T Market$ (their listings are removed)?' }}');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-dark" type="submit">{{ 'Unban seller' if r.listing.seller.market_banned else 'Ban seller' }}</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin_market_report', report_id=r.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-secondary" type="submit">Close report</button>
+        </form>
+      </div>
+    </div>
+  {% else %}<p class="mk-empty">No open reports.</p>{% endfor %}
+
+  <h2 class="h5 fw-bold mt-4">Recent decisions</h2>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead><tr><th scope="col">Listing</th><th scope="col">Seller</th><th scope="col">Price</th><th scope="col">Status</th><th scope="col">Note</th></tr></thead>
+      <tbody>
+        {% for l in recent %}
+          <tr><td><a href="{{ url_for('market_item', listing_id=l.id) }}">{{ l.title }}</a></td><td>{{ l.seller.shop_name or l.seller.display_name }}</td>
+            <td>{{ money(l) }}</td><td>{{ status_badge(l) }}</td><td class="small">{{ l.review_note or '' }}</td></tr>
+        {% else %}<tr><td colspan="5" class="text-muted">Nothing yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
