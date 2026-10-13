@@ -34,5 +34,10 @@
   .home-tab.active { color: inherit !important; }
   .home-tab.active span { border-bottom-color: #198754; }
   .home-tab-dollar { color: #f5c542; font-weight: 900; }
-  @media (max-width: 380px) { .home-tab span i { display: none; } }
+  /* Phones: keep the icons (as on desktop), just a bit smaller. */
+  @media (max-width: 420px) {
+    .home-tab { padding-left: 4px; padding-right: 4px; font-size: 0.92rem; }
+    .home-tab span { gap: 5px; white-space: nowrap; }
+  }
+  @media (max-width: 350px) { .home-tab { font-size: 0.82rem; } .home-tab span { gap: 4px; } }
 </style>

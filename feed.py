@@ -316,6 +316,13 @@ def add_comment(highlight, actor, body, visitor_name=None):
     return comment
 
 
+def edit_comment(comment, body):
+    comment.body = body
+    comment.edited_at = datetime.utcnow()
+    db.session.commit()
+    return comment
+
+
 def delete_comment(comment):
     highlight_id = comment.highlight_id
     db.session.delete(comment)

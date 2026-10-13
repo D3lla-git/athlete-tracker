@@ -187,6 +187,13 @@
 .fp-c-tag { color: #fff; background: #198754; }
 .fp-c-role { background: rgba(108, 117, 125, 0.15); }
 .fp-c-ago { color: var(--muted-text, #6c757d); }
+.fp-c-edit { margin-left: auto; border: 0; background: transparent; color: var(--muted-text, #6c757d); padding: 4px 8px; border-radius: 999px; }
+.fp-c-edit:hover { color: #198754; background: rgba(25, 135, 84, 0.1); }
+.fp-c-edit + .fp-c-del { margin-left: 0; }
+.fp-c-edited { color: var(--muted-text, #6c757d); font-size: 0.78rem; }
+.fp-c-editor { margin-top: 6px; }
+.fp-c-editor textarea { resize: vertical; }
+.fp-c-editor-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
 .fp-c-del { margin-left: auto; border: 0; background: transparent; color: var(--muted-text, #6c757d); padding: 4px 8px; border-radius: 999px; }
 .fp-c-del:hover { color: #dc3545; background: rgba(220, 53, 69, 0.1); }
 .fp-c-body { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }

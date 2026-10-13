@@ -287,6 +287,40 @@
     </section>
   </div>
 
+  {# ================= Vendors · Match officials · Sports journalists ================= #}
+  <section class="adx-section" aria-labelledby="adxMoreRolesTitle" id="adxMoreRoles">
+    <header class="adx-section-head">
+      <h3 id="adxMoreRolesTitle"><span class="adx-section-icon adx-green"><i class="fa-solid fa-id-card"></i></span> Vendors · Match officials · Sports journalists</h3>
+    </header>
+    <div class="adx-grid">
+      <article class="adx-card adx-span-4" aria-label="Vendors">
+        <div class="adx-card-head"><div><h4><i class="fa-solid fa-store"></i> Vendors</h4><span class="adx-muted">D.A.R.T Market$ sellers</span></div>
+          <a class="adx-muted small" href="{{ url_for('admin_market') }}#vendors">Manage</a></div>
+        <div class="adx-mini-row">
+          {{ mini('vendors_total', 'Registered', 'fa-solid fa-user-plus', 'neutral') }}
+          {{ mini('vendors_verified', 'Verified', 'fa-solid fa-circle-check', 'good') }}
+          {{ mini('vendors_premium', 'Vendor Premium', 'fa-solid fa-crown', 'gold') }}
+        </div>
+      </article>
+      <article class="adx-card adx-span-4" aria-label="Match officials">
+        <div class="adx-card-head"><div><h4><i class="fa-solid fa-clipboard-check"></i> Match officials</h4><span class="adx-muted">Referees, linesmen, secretaries, spectators</span></div>
+          <a class="adx-muted small" href="{{ url_for('verification_center') }}#officials">Verify</a></div>
+        <div class="adx-mini-row adx-mini-row-2">
+          {{ mini('officials_total', 'Registered', 'fa-solid fa-user-plus', 'neutral') }}
+          {{ mini('officials_verified', 'Verified', 'fa-solid fa-circle-check', 'good') }}
+        </div>
+      </article>
+      <article class="adx-card adx-span-4" aria-label="Sports journalists">
+        <div class="adx-card-head"><div><h4><i class="fa-solid fa-newspaper"></i> Sports journalists</h4><span class="adx-muted">Can post sports content</span></div>
+          <a class="adx-muted small" href="{{ url_for('verification_center') }}#officials">Verify</a></div>
+        <div class="adx-mini-row adx-mini-row-2">
+          {{ mini('journalists_total', 'Registered', 'fa-solid fa-user-plus', 'neutral') }}
+          {{ mini('journalists_verified', 'Verified', 'fa-solid fa-circle-check', 'good') }}
+        </div>
+      </article>
+    </div>
+  </section>
+
   {# ================= Enterprise ================= #}
   <section class="adx-section" aria-labelledby="adxOrgTitle">
     <header class="adx-section-head">

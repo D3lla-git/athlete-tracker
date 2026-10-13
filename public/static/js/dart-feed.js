@@ -181,6 +181,22 @@
     ago.className = 'fp-c-ago';
     ago.textContent = '· ' + c.ago;
     head.appendChild(ago);
+    if (c.edited) {
+      var ed = document.createElement('span');
+      ed.className = 'fp-c-edited';
+      ed.textContent = '· edited';
+      head.appendChild(ed);
+    }
+    if (c.can_edit) {
+      var edb = document.createElement('button');
+      edb.type = 'button';
+      edb.className = 'fp-c-edit';
+      edb.dataset.editComment = c.id;
+      edb.setAttribute('aria-label', 'Edit comment');
+      edb.title = 'Edit';
+      edb.innerHTML = '<i class="fa-solid fa-pen"></i>';
+      head.appendChild(edb);
+    }
     if (c.can_delete) {
       var del = document.createElement('button');
       del.type = 'button';
@@ -334,6 +350,55 @@
   document.addEventListener('click', function (e) {
     if (e.target.closest('[data-open-composer]')) { openComposer(); return; }
     if (e.target.closest('[data-close-composer]')) { closeComposer(); return; }
+
+    // Edit own comment: the text becomes a small box with Save / Cancel.
+    var edit = e.target.closest('[data-edit-comment]');
+    if (edit) {
+      var item = edit.closest('.fp-c');
+      if (!item || item.querySelector('.fp-c-editor')) return;
+      var bodyEl = item.querySelector('.fp-c-body');
+      var form = document.createElement('form');
+      form.className = 'fp-c-editor';
+      var box = document.createElement('textarea');
+      box.className = 'form-control form-control-sm';
+      box.rows = 2;
+      box.maxLength = 300;
+      box.value = bodyEl.textContent;
+      box.setAttribute('aria-label', 'Edit your comment');
+      var row = document.createElement('div');
+      row.className = 'fp-c-editor-actions';
+      row.innerHTML = '<button type="button" class="btn btn-sm btn-link" data-edit-cancel>Cancel</button>' +
+        '<button type="submit" class="btn btn-sm dart-btn">Save</button>';
+      form.appendChild(box);
+      form.appendChild(row);
+      bodyEl.hidden = true;
+      bodyEl.after(form);
+      box.focus();
+      box.setSelectionRange(box.value.length, box.value.length);
+      var closeEditor = function () { form.remove(); bodyEl.hidden = false; edit.focus(); };
+      row.querySelector('[data-edit-cancel]').addEventListener('click', closeEditor);
+      form.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { ev.stopPropagation(); closeEditor(); } });
+      form.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        var text = box.value.trim();
+        if (!text) { toast('Write a comment first, or delete it.'); return; }
+        var save = form.querySelector('[type=submit]');
+        save.disabled = true;
+        send('/feed/comments/' + encodeURIComponent(edit.dataset.editComment) + '/edit', { body: text }).then(function (data) {
+          save.disabled = false;
+          if (!data.ok) { toast(data.error || 'Could not save your comment.'); return; }
+          bodyEl.textContent = data.comment.body;
+          if (data.comment.edited && !item.querySelector('.fp-c-edited')) {
+            var mark = document.createElement('span');
+            mark.className = 'fp-c-edited';
+            mark.textContent = '· edited';
+            item.querySelector('.fp-c-ago').after(mark);
+          }
+          closeEditor();
+        }).catch(function () { save.disabled = false; toast('You seem to be offline. Please try again.'); });
+      });
+      return;
+    }
 
     var del = e.target.closest('[data-delete-comment]');
     if (del) {

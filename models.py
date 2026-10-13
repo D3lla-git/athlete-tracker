@@ -478,6 +478,7 @@ class HighlightComment(db.Model):
     ip_hash = db.Column(db.String(32), nullable=True)
     body = db.Column(db.String(300), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    edited_at = db.Column(db.DateTime, nullable=True)   # set when the writer edits it ("edited")
 
     user = db.relationship('User', foreign_keys=[user_id])
 

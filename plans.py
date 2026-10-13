@@ -154,9 +154,10 @@ PLANS = {
         Plan(
             # Price: set by D.A.R.T. (change here; the pricing page follows).
             code='vendor_pro', audience='vendor', name='Vendor Premium', price=Decimal('14.99'),
-            methods=MOMO_METHODS, highlight=True,
+            methods=MOMO_METHODS, highlight=True, advanced_search=True,
             features=(
                 'Unlimited live products on D.A.R.T Market$',
+                'Advanced search (all filters for athletes, coaches and records)',
                 'Your products advertised across D.A.R.T.: the Market$ showcase and the Highlights feed',
                 'Premium badge on your business card',
                 'No ads',

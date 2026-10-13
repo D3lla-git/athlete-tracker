@@ -30,7 +30,7 @@
         {# One Register button: every kind of D.A.R.T. account. #}
         <div class="dropdown dart-action-drop">
             <button type="button" class="dart-action-btn dart-action-register dropdown-toggle" id="homeRegister"
-                    data-bs-toggle="dropdown" aria-expanded="false" data-bs-popper-config='{"strategy":"fixed"}'>
+                    data-bs-toggle="dropdown" aria-expanded="false">
 
                 <span class="dart-action-icon">
                     <i class="fa-solid fa-user-plus"></i>
@@ -62,6 +62,61 @@
 
     </div>
 </section>
+<script>
+  // iPhone / iPad (Safari, WebKit) draw the sliding hero cards above anything
+  // inside the page, whatever the z-index. Move the Register menu to the end of
+  // <body> so it opens on top of everything, on every phone.
+  document.addEventListener('DOMContentLoaded', function () {
+    var toggle = document.getElementById('homeRegister');
+    var menu = document.querySelector('.dart-register-menu');
+    if (!toggle || !menu || typeof bootstrap === 'undefined') return;
+    // Keeps its link to the menu. Fixed position + always open downwards (the list scrolls),
+    // added to Bootstrap's own placement rules (spacing, stay on screen).
+    bootstrap.Dropdown.getOrCreateInstance(toggle, {
+      popperConfig: function (config) {
+        config.strategy = 'fixed';
+        config.modifiers = (config.modifiers || []).concat([{ name: 'flip', enabled: false }]);
+        return config;
+      }
+    });
+    menu.classList.add('dart-register-menu-floating');
+    document.body.appendChild(menu);
+    // Short phones: keep every choice above the bottom tab bar (the list scrolls).
+    function fit() {
+      var bar = document.querySelector('.dart-tabbar');
+      var bottom = bar && bar.getBoundingClientRect().height && getComputedStyle(bar).display !== 'none'
+        ? bar.getBoundingClientRect().top : window.innerHeight;
+      var top = toggle.getBoundingClientRect().bottom + 6;
+      menu.style.maxHeight = Math.max(180, bottom - top - 10) + 'px';
+    }
+    toggle.addEventListener('show.bs.dropdown', function () {
+      // Room for the list: bring the button up under the top bar first.
+      var nav = document.querySelector('nav.navbar');
+      var navBottom = nav ? Math.max(0, nav.getBoundingClientRect().bottom) : 0;
+      var gap = toggle.getBoundingClientRect().top - navBottom - 12;
+      if (gap > 0 && window.innerHeight < 900) {
+        // Jump (no smooth scroll), so the menu is placed against the button's final position.
+        var root = document.documentElement, was = root.style.scrollBehavior;
+        root.style.scrollBehavior = 'auto';
+        window.scrollTo(0, window.scrollY + gap);
+        root.style.scrollBehavior = was;
+      }
+      fit();
+    });
+    toggle.addEventListener('shown.bs.dropdown', function () {
+      var dd = bootstrap.Dropdown.getInstance(toggle);
+      if (!dd) return;
+      dd.update();
+      setTimeout(function () { dd.update(); }, 300);   // after the button's tap animation
+    });
+    window.addEventListener('resize', fit);
+    // iPhone / iPad don't send a click when the empty page is tapped: close on any touch outside.
+    document.addEventListener('pointerdown', function (e) {
+      if (!menu.classList.contains('show') || menu.contains(e.target) || toggle.contains(e.target)) return;
+      bootstrap.Dropdown.getOrCreateInstance(toggle).hide();
+    });
+  });
+</script>
    <!--D.A.R.T. Hero Section-->   <!--D.A.R.T. Hero Section--> 
 <section class="dart-card-carousel-section">
 
@@ -469,6 +524,12 @@
 .dart-action-drop > .dart-action-btn { width: 100%; text-align: left; font: inherit; cursor: pointer; }
 .dart-action-drop > .dart-action-btn::after { display: none; }
 .dart-action-register .dart-action-icon { background: var(--dart-primary-gradient, linear-gradient(135deg, #198754, #0d6efd)); }
+/* Moved to <body>: above the hero slider on iPhone too (own layer, above page content, below the navbar menu / modals). */
+/* Touch screens: no "lift on hover" (iPhone keeps :hover after a tap, which nudged the button). */
+@media (hover: none) { .dart-action-btn:hover { transform: none; } }
+/* The Register button anchors its menu: it never moves (no lift), so the menu sits exactly under it. */
+.dart-action-drop > .dart-action-btn, .dart-action-drop > .dart-action-btn:hover { transform: none; transition: box-shadow 0.25s ease, border-color 0.25s ease; }
+.dart-register-menu-floating { z-index: 1031; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .dart-register-menu { min-width: min(340px, calc(100vw - 32px)); padding: 6px; border-radius: 16px; border: 1px solid rgba(25, 135, 84, 0.3);
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35); }
 .dart-register-menu .dropdown-item { display: flex; gap: 12px; align-items: center; padding: 9px 12px; border-radius: 11px; white-space: normal; }

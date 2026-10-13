@@ -5618,6 +5618,15 @@ def can_delete_comment(comment, highlight, actor):
     return comment.user_id is None and comment.visitor_key == actor.visitor_key
 
 
+def can_edit_comment(comment, actor):
+    """Only the writer (member or visitor on the same device) edits their comment."""
+    if actor is None:
+        return False
+    if actor.is_member:
+        return comment.user_id == actor.user_id
+    return comment.user_id is None and comment.visitor_key == actor.visitor_key
+
+
 def comment_payload(comment, highlight, actor):
     author = comment.user
     if author:
@@ -5635,6 +5644,8 @@ def comment_payload(comment, highlight, actor):
         'author_url': url,
         'ago': feed_mod.time_ago(comment.created_at),
         'can_delete': bool(can_delete_comment(comment, highlight, actor)),
+        'can_edit': bool(can_edit_comment(comment, actor)),
+        'edited': comment.edited_at is not None,
         'is_athlete': bool(author and author.id == highlight.user_id),
     }
 
@@ -5766,6 +5777,32 @@ def feed_comments(highlight_id):
     db.session.refresh(highlight)
     return feed_json({'comment': comment_payload(comment, highlight, actor), 'count': highlight.comment_count,
                       'label': feed_mod.compact_count(highlight.comment_count)})
+
+
+COMMENT_EDITS_PER_MINUTE = 6
+
+
+@app.route('/feed/comments/<int:comment_id>/edit', methods=['POST'])
+def feed_comment_edit(comment_id):
+    """The writer changes their comment (same rules as a new comment: no links, length limit)."""
+    comment = db.session.get(HighlightComment, comment_id)
+    highlight = feed_mod.get_live(comment.highlight_id) if comment else None
+    actor = feed_actor()
+    if not comment or not highlight or not can_edit_comment(comment, actor):
+        abort(404)
+    data = request.get_json(silent=True) or request.form
+    body, error = feed_mod.clean_comment(data.get('body'))
+    if error:
+        return feed_json_error(error, 422)
+    if body != comment.body:
+        # At most COMMENT_EDITS_PER_MINUTE edits a minute from this browser.
+        now = time.time()
+        recent = [t for t in (session.get('comment_edits') or []) if now - t < 60]
+        if len(recent) >= COMMENT_EDITS_PER_MINUTE:
+            return feed_json_error('You are editing too fast. Please wait a minute.', 429)
+        session['comment_edits'] = recent + [now]
+        feed_mod.edit_comment(comment, body)
+    return feed_json({'comment': comment_payload(comment, highlight, actor)})
 
 
 @app.route('/feed/comments/<int:comment_id>/delete', methods=['POST'])
@@ -9771,6 +9808,17 @@ def super_admin_dashboard_stats():
         'media_pending': AthleteHighlight.query.filter(AthleteHighlight.status == 'pending',
                                                        AthleteHighlight.admin_approved_at.is_(None)).count(),
         'athletes_pending': User.query.filter(User.role == 'Athlete', User.is_verified.is_(False)).count(),
+        # Vendors (D.A.R.T Market$), match officials and sports journalists.
+        'vendors_total': users_by_role.get('Vendor', 0),
+        'vendors_verified': User.query.filter(User.role == 'Vendor', User.vendor_verified_at.isnot(None)).count(),
+        'vendors_premium': len(premium_vendor_ids()),
+        'officials_total': User.query.filter(User.role == 'Statistician',
+                                             db.or_(User.official_type.is_(None), User.official_type != 'Sports journalist')).count(),
+        'officials_verified': User.query.filter(User.role == 'Statistician', User.is_verified.is_(True),
+                                                db.or_(User.official_type.is_(None), User.official_type != 'Sports journalist')).count(),
+        'journalists_total': User.query.filter(User.role == 'Statistician', User.official_type == 'Sports journalist').count(),
+        'journalists_verified': User.query.filter(User.role == 'Statistician', User.official_type == 'Sports journalist',
+                                                  User.is_verified.is_(True)).count(),
     }
     stats['reviews_pending'] = (stats['records_pending'] + stats['coaches_pending'] + stats['scouts_pending']
                                 + stats['orgs_pending'] + stats['media_pending'] + stats['athletes_pending'])
