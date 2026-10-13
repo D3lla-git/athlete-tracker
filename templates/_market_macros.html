@@ -30,6 +30,24 @@
   </a>
 {% endmacro %}
 
+{# Order tracker "map": In cart -> Sent to vendor -> Left vendor shop -> Buyer's possession. #}
+{% macro order_tracker(it) %}
+{% set cur = market_order_step(it) %}
+<div class="mk-track{% if it.status == 'cancelled' %} is-cancelled{% endif %}" role="list" aria-label="Order progress">
+  {% for key, label, icon in market_order_steps %}
+    {% set done = loop.index0 <= cur and it.status != 'cancelled' %}
+    <div class="mk-track-step{% if done %} is-done{% endif %}{% if loop.index0 == cur and it.status != 'cancelled' %} is-current{% endif %}" role="listitem"
+         aria-label="{{ label }}{% if done %} (done){% endif %}">
+      <span class="mk-track-dot">{% if done and loop.index0 < cur or (done and key == 'received') %}<i class="fa-solid fa-check" aria-hidden="true"></i>{% else %}<i class="fa-solid {{ icon }}" aria-hidden="true"></i>{% endif %}</span>
+      <span class="mk-track-label">{{ label }}</span>
+    </div>
+    {% if not loop.last %}<span class="mk-track-line{% if loop.index0 < cur and it.status != 'cancelled' %} is-done{% endif %}" aria-hidden="true">
+      {% if loop.index0 == cur - 1 and key == 'requested' and it.status == 'sold' %}<i class="fa-solid fa-truck-fast mk-track-truck"></i>{% endif %}</span>{% endif %}
+  {% endfor %}
+</div>
+{% if it.status == 'cancelled' %}<div class="small text-danger mt-1"><i class="fa-solid fa-ban"></i> The vendor did not sell this order.</div>{% endif %}
+{% endmacro %}
+
 {% macro safety_tips() %}
   <div class="mk-safety" role="note">
     <strong><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Stay safe: D.A.R.T. never handles payments</strong>

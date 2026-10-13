@@ -40,7 +40,7 @@
 {% set when = h.created_at or h.published_at %}   {# when it was posted (the feed is ordered by it) #}
 <article class="fp" data-post="{{ h.id }}" data-post-url="{{ post_url }}" aria-labelledby="fpName{{ h.id }}">
   <header class="fp-head">
-    <a href="{{ athlete_public_path(athlete) }}" class="fp-avatar" tabindex="-1" aria-hidden="true">
+    <a href="{{ profile_share_path(athlete) }}" class="fp-avatar" tabindex="-1" aria-hidden="true">
       {% if athlete.profile_picture %}
         <img src="{{ url_for('profile_picture', filename=athlete.profile_picture) }}" alt="" loading="lazy" decoding="async" width="44" height="44">
       {% else %}
@@ -49,14 +49,14 @@
     </a>
     <div class="fp-who">
       <div class="fp-line">
-        <a href="{{ athlete_public_path(athlete) }}" class="fp-name" id="fpName{{ h.id }}">{{ athlete.full_name }}</a>
-        <i class="fa-solid fa-circle-check fp-verified" title="Verified athlete" aria-label="Verified athlete"></i>
+        <a href="{{ profile_share_path(athlete) }}" class="fp-name" id="fpName{{ h.id }}">{{ athlete.full_name }}</a>
+        {% set _vlabel = "Verified sports journalist" if athlete.role == "Statistician" else "Verified athlete" %}<i class="fa-solid fa-circle-check fp-verified" title="{{ _vlabel }}" aria-label="{{ _vlabel }}"></i>{% if athlete.role == "Statistician" %}<span class="badge text-bg-info ms-1">Journalist</span>{% endif %}
         <span class="fp-dot" aria-hidden="true">·</span>
         <a href="{{ post_url }}" class="fp-time"><time datetime="{{ when.isoformat() }}Z" title="{{ when.strftime('%b %d, %Y %H:%M') }} UTC">{{ time_ago(when) }}</time></a>
       </div>
       <div class="fp-sub">
         {% if athlete.username %}<span class="fp-handle" translate="no">@{{ athlete.username }}</span>{% endif %}
-        {% if athlete.school %}<span>{{ athlete.school }}</span>{% endif %}
+        {% if athlete.school %}<span>{{ team_badge(athlete.school) }}{{ athlete.school }}</span>{% endif %}
         {% if h.sport %}<span class="fp-sport fp-sport-{{ h.sport | lower }}">{{ h.sport }}</span>{% endif %}
       </div>
     </div>

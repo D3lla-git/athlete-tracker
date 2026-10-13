@@ -8,7 +8,7 @@
 
 <section class="dart-action-section">
 
-    <div class="dart-action-container">
+    <div class="dart-action-container dart-action-container-2">
 
         <a href="{{ url_for('search') }}"
            class="dart-action-btn dart-action-search">
@@ -27,89 +27,38 @@
         </a>
 
 
-        <a href="{{ url_for('register') }}"
-           class="dart-action-btn dart-action-athlete">
+        {# One Register button: every kind of D.A.R.T. account. #}
+        <div class="dropdown dart-action-drop">
+            <button type="button" class="dart-action-btn dart-action-register dropdown-toggle" id="homeRegister"
+                    data-bs-toggle="dropdown" aria-expanded="false" data-bs-popper-config='{"strategy":"fixed"}'>
 
-            <span class="dart-action-icon">
-                <i class="fa-solid fa-person-running"></i>
-            </span>
+                <span class="dart-action-icon">
+                    <i class="fa-solid fa-user-plus"></i>
+                </span>
 
-            <span class="dart-action-text">
-                <strong>Register as Athlete</strong>
-                <small title="Create your sports CV/profile">Create your sports CV/profile</small>
-            </span>
+                <span class="dart-action-text">
+                    <strong>Register</strong>
+                    <small title="Athlete · Coach · Scout · Organization · Official · Vendor · Journalist">Athlete · Coach · Scout · Organization · Official · Vendor · Journalist</small>
+                </span>
 
-            <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
-
-        </a>
-
-
-        <a href="{{ url_for('register_coach') }}"
-           class="dart-action-btn dart-action-coach">
-
-            <span class="dart-action-icon">
-                <i class="fa-solid fa-user-shield"></i>
-            </span>
-
-            <span class="dart-action-text">
-                <strong>Register as Coach/Admin</strong>
-                <small title="Manage athletes &amp; records">Manage athletes &amp; records</small>
-            </span>
-
-            <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
-
-        </a>
-
-
-        <a href="{{ url_for('register_scout') }}"
-           class="dart-action-btn dart-action-scout">
-
-            <span class="dart-action-icon">
-                <i class="fa-solid fa-binoculars"></i>
-            </span>
-
-            <span class="dart-action-text">
-                <strong>Register as Scout</strong>
-                <small title="Discover and evaluate talent">Discover and evaluate talent</small>
-            </span>
-
-            <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
-
-        </a>
-
-
-        <a href="{{ url_for('register_organization') }}"
-           class="dart-action-btn dart-action-org">
-
-            <span class="dart-action-icon">
-                <i class="fa-solid fa-building-shield"></i>
-            </span>
-
-            <span class="dart-action-text">
-                <strong>Register as Organization</strong>
-                <small title="Club · Academy · School · Enterprise">Club · Academy · School · Enterprise</small>
-            </span>
-
-            <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
-
-        </a>
-
-
-        <a href="{{ url_for('register_official') }}"
-           class="dart-action-btn dart-action-official">
-
-            <span class="dart-action-icon">
-                <i class="fa-solid fa-clipboard-check"></i>
-            </span>
-
-            <span class="dart-action-text">
-                <strong>Register as Match Official</strong>
-                <small title="Journalist · League secretary · Referee">Verify match records</small>
-            </span>
-
-            <i class="fa-solid fa-arrow-right dart-action-arrow"></i>
-
-        </a>
+                <i class="fa-solid fa-chevron-down dart-action-arrow"></i>
+            </button>
+            <ul class="dropdown-menu dart-register-menu" aria-labelledby="homeRegister">
+                {% for endpoint, args, icon, label, hint in (
+                    ('register', {}, 'fa-person-running', 'Athlete', 'Create your sports CV / profile'),
+                    ('register_coach', {}, 'fa-user-shield', 'Coach / Admin', 'Manage athletes & records'),
+                    ('register_scout', {}, 'fa-binoculars', 'Scout', 'Discover and evaluate talent'),
+                    ('register_organization', {}, 'fa-building-shield', 'Organization', 'Club · Academy · School · Enterprise'),
+                    ('register_official', {}, 'fa-clipboard-check', 'Match Official', 'Referee · Linesman · Spectator: verify records'),
+                    ('register_vendor', {}, 'fa-store', 'Vendor (Seller)', 'Sell sports gear on D.A.R.T Market$'),
+                    ('register_official', {'as': 'journalist'}, 'fa-newspaper', 'Sports Journalist', 'Post sports content'),
+                ) %}
+                <li><a class="dropdown-item" href="{{ url_for(endpoint, **args) }}">
+                    <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
+                    <span><strong>{{ label }}</strong><small>{{ hint }}</small></span></a></li>
+                {% endfor %}
+            </ul>
+        </div>
 
     </div>
 </section>
@@ -510,6 +459,30 @@
 
 <!--D.A.R.T. ACTION BAR-css-->   <!--D.A.R.T. ACTION BAR-css-->
 <style>
+/* Two tiles: Search + one Register dropdown (side by side from tablets up). */
+.dart-action-container.dart-action-container-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 980px; }
+.dart-action-container-2 > .dart-action-btn, .dart-action-container-2 > .dart-action-drop { grid-column: auto !important; }
+/* Above the hero carousel below it, so the open menu is never covered. */
+.dart-action-section { z-index: 20; }
+.dart-action-drop { position: relative; min-width: 0; }
+.dart-action-drop .dart-action-text small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dart-action-drop > .dart-action-btn { width: 100%; text-align: left; font: inherit; cursor: pointer; }
+.dart-action-drop > .dart-action-btn::after { display: none; }
+.dart-action-register .dart-action-icon { background: var(--dart-primary-gradient, linear-gradient(135deg, #198754, #0d6efd)); }
+.dart-register-menu { min-width: min(340px, calc(100vw - 32px)); padding: 6px; border-radius: 16px; border: 1px solid rgba(25, 135, 84, 0.3);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35); }
+.dart-register-menu .dropdown-item { display: flex; gap: 12px; align-items: center; padding: 9px 12px; border-radius: 11px; white-space: normal; }
+.dart-register-menu .dropdown-item > i { width: 30px; height: 30px; flex: 0 0 30px; display: grid; place-items: center; border-radius: 9px;
+  color: #fff; background: var(--dart-primary-gradient, linear-gradient(135deg, #198754, #0d6efd)); }
+.dart-register-menu .dropdown-item strong { display: block; font-size: 0.92rem; }
+.dart-register-menu .dropdown-item small { display: block; opacity: 0.7; font-size: 0.74rem; }
+@media (min-width: 992px) {
+    .dart-action-container.dart-action-container-2 .dart-action-btn { flex-direction: row; justify-content: flex-start; text-align: left;
+        padding: 14px 18px; gap: 14px; }
+    .dart-action-container.dart-action-container-2 .dart-action-arrow { display: inline-block; }
+    .dart-action-container.dart-action-container-2 .dart-action-text small { white-space: normal; }
+}
+@media (max-width: 767px) { .dart-action-container.dart-action-container-2 { grid-template-columns: 1fr; } }
 .dart-action-section {
     position: relative;
     width: 100%;

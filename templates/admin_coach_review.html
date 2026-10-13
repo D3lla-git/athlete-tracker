@@ -24,7 +24,7 @@
   {% for t in teams %}
     <article class="cv-card">
       <div class="cv-main">
-        <strong>{{ t.team_name }}</strong> · {{ t.role }} · {{ t.coach_category }}
+        <strong>{{ team_badge(t.team_name) }}{{ t.team_name }}</strong> · {{ t.role }} · {{ t.coach_category }}
         <div class="cv-muted">Coach: <a href="{{ url_for('user_profile', user_id=t.coach_id) }}">{{ t.coach.full_name }}</a> {{ handle_tag(t.coach) }} (main team: {{ t.coach.school }}) · requested {{ t.created_at.strftime('%b %d, %Y') }}</div>
       </div>
       {{ decide('teams', t) }}
@@ -36,7 +36,7 @@
     <article class="cv-card">
       <div class="cv-main">
         <strong>{{ coach_results[g.result] }}{% if g.score_for is not none %} {{ g.score_for }}-{{ g.score_against }}{% endif %}</strong>
-        · {{ g.team_name }} vs {{ g.opponent }} · {{ g.sport }}
+        · {{ team_badge(g.team_name) }}{{ g.team_name }} vs {{ g.opponent }} · {{ g.sport }}
         <div class="cv-muted">{{ g.coach.full_name }} · {{ g.game_date.strftime('%b %d, %Y') }}{% if g.competition %} · {{ g.competition }}{% endif %}{% if g.formation %} · {{ g.formation }}{% endif %} · {{ g.substitutions }} subs{% if g.yellow_cards %} · {{ g.yellow_cards }} yellow{% endif %}{% if g.red_cards %} · red card{% endif %}{% if g.notes %} · “{{ g.notes }}”{% endif %}</div>
       </div>
       {{ decide('games', g) }}

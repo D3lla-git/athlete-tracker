@@ -21,7 +21,9 @@
       </div>
 
       <div class="pc-top">
-        {% if info.picture %}
+        {% if info.picture_url %}
+          <img src="{{ info.picture_url }}" alt="{{ info.name }} badge" class="pc-photo pc-photo-logo">
+        {% elif info.picture %}
           <img src="{{ url_for('profile_picture', filename=info.picture) }}" alt="{{ info.name }}" class="pc-photo">
         {% else %}
           <span class="pc-photo pc-photo-initials" aria-hidden="true">{{ info.name.split()[:2] | map('first') | join('') | upper }}</span>

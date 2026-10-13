@@ -480,7 +480,7 @@
         </p>
 
         <div class="conversation-header-role">
-          {{ recipient.role_label }}{% if recipient.school %} · {{ recipient.school }}{% endif %}
+          {{ recipient.role_label }}{% if recipient.school %} · {{ team_badge(recipient.school) }}{{ recipient.school }}{% endif %}
         </div>
       </div>
 

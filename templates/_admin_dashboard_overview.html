@@ -182,7 +182,7 @@
     </h2>
     {% if current_user.role != 'System' %}
       <div class="dash-updated mt-1">
-        <i class="fa-solid fa-users me-1"></i>{{ current_user.school }}
+        <i class="fa-solid fa-users me-1"></i>{{ team_badge(current_user.school) }}{{ current_user.school }}
         · {{ current_user.coach_category or 'Coach' }}
       </div>
       <a class="dash-career-link" href="{{ url_for('coach_career') }}">

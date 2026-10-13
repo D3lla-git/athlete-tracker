@@ -111,22 +111,6 @@
 <!-- ================= ATHLETE PERSONAL INFORMATION ================= -->
 
 <div class="mb-3">
-  <label for="age" class="form-label">
-    Age <i class="fa-solid fa-cake-candles"></i>
-  </label>
-
-  <input
-      type="number"
-      name="age"
-      id="age"
-      class="form-control"
-      min="0"
-      step="1"
-      placeholder="Example: 18"
-      required>
-</div>
-
-<div class="mb-3">
   <label for="date_of_birth" class="form-label">
     Date of Birth <i class="fa-solid fa-calendar-days"></i>
   </label>
@@ -138,6 +122,28 @@
       class="form-control"
       required>
 </div>
+
+<div class="mb-3">
+  <label for="age" class="form-label">
+    Age <i class="fa-solid fa-cake-candles"></i> <small class="text-muted">(worked out from your date of birth)</small>
+  </label>
+  <input type="number" name="age" id="age" class="form-control" readonly tabindex="-1" aria-readonly="true" placeholder="Automatic">
+</div>
+<script>
+(function () {
+  // Age follows the date of birth (the server works it out again).
+  var dob = document.getElementById('date_of_birth'), age = document.getElementById('age');
+  function sync() {
+    var d = dob.value ? new Date(dob.value + 'T00:00:00') : null;
+    if (!d || isNaN(d)) { age.value = ''; return; }
+    var t = new Date(), a = t.getFullYear() - d.getFullYear();
+    if (t.getMonth() < d.getMonth() || (t.getMonth() === d.getMonth() && t.getDate() < d.getDate())) a--;
+    age.value = a >= 0 ? a : '';
+  }
+  dob.addEventListener('change', sync); dob.addEventListener('input', sync); sync();
+})();
+</script>
+
 
 {% if selected_category in ('Club League Athlete', 'All Athlete') %}
 {# Club League division: required for Club League Athletes; optional for All Athletes who also play club league. #}

@@ -1766,3 +1766,13 @@ html[data-theme="dark"] .dart-slider-dot.is-active { background: #4cd38a; }
 .dart-handle-lg { display: block; font-size: 1rem; margin-top: -4px; margin-bottom: 6px; color: #198754; }
 [data-theme="dark"] .dart-handle-lg { color: #5dd39e; }
 .dart-handle-on-dark { color: rgba(255, 255, 255, 0.75); }
+
+/* ===== Team badge / logo (approved by the D.A.R.T Admin) next to a team's name ===== */
+.team-badge { display: inline-block; width: 1.3em; height: 1.3em; border-radius: 50%; object-fit: cover; vertical-align: -0.3em;
+  margin-right: 0.3em; background: #fff; border: 1px solid rgba(0, 0, 0, 0.12); flex-shrink: 0; }
+.team-badge-lg { width: 2em; height: 2em; vertical-align: middle; }
+.org-logo-preview { width: 84px; height: 84px; border-radius: 18px; object-fit: cover; background: #fff; border: 1px solid rgba(0, 0, 0, 0.12); }
+.org-logo-empty { display: inline-grid; place-items: center; font-size: 2rem; color: #198754; background: rgba(25, 135, 84, 0.08); }
+
+/* Organization card: the approved team badge instead of a photo */
+.pc-photo.pc-photo-logo { object-fit: contain; background: #fff; }

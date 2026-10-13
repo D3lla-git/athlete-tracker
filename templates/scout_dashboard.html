@@ -700,7 +700,7 @@
                   <a href="{{ url_for('user_profile', user_id=row.athlete.id) }}">{{ row.athlete.full_name }}</a> {{ handle_tag(row.athlete) }}
                   {% if row.athlete.nationality and show_personal(row.athlete) %}<span class="ms-1">{{ country_flag(row.athlete.nationality) }}</span>{% endif %}
                   <div class="sd-sub">
-                    <i class="fa-solid fa-school"></i> {{ row.athlete.school }}
+                    <i class="fa-solid fa-school"></i> {{ team_badge(row.athlete.school) }}{{ row.athlete.school }}
                     {% if row.athlete.age and show_personal(row.athlete) %} · {{ row.athlete.age }} yrs{% endif %}
                     · {{ row.games }} game{{ 's' if row.games != 1 }}
                   </div>
@@ -747,7 +747,7 @@
             </span>
             <div class="sd-stat-line">{{ key_stat(r) }}</div>
             <div class="sd-sub">
-              {{ r.team or r.user.school }} vs {{ r.team_played_against or '-' }}
+              {{ team_badge(r.team or r.user.school) }}{{ r.team or r.user.school }} vs {{ r.team_played_against or '-' }}
               · {{ r.competition_display }}
               · <i class="fa-regular fa-calendar-days"></i> {{ r.game_date.strftime('%b %d, %Y') if r.game_date else 'No date' }}
             </div>

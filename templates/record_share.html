@@ -27,7 +27,7 @@
             {% if record.shirt_number %}<span class="rs-shirt">#{{ record.shirt_number }}</span>{% endif %}
           </h1>
           <div class="rs-sub">
-            {{ record.team or athlete.school }}
+            {{ team_badge(record.team or athlete.school) }}{{ record.team or athlete.school }}
             {% if athlete.nationality and show_personal(athlete) %} · {{ country_flag(athlete.nationality) }} {{ athlete.nationality }}{% endif %}
             {% if record.position %} · {{ record.position }}{% endif %}
           </div>

@@ -788,7 +788,7 @@
                 </a>
                 {{ handle_tag(a) }}
                 <div class="rt-muted">
-                  <i class="fa-solid fa-school" aria-hidden="true"></i> {{ a.school }}
+                  <i class="fa-solid fa-school" aria-hidden="true"></i> {{ team_badge(a.school) }}{{ a.school }}
                 </div>
 
                 {% if a.role == 'Athlete' %}
@@ -904,7 +904,7 @@
   {% for item in results %}
     <div class="mb-5">
       <h5 class="mb-1"><a href="{% if current_user.is_authenticated and current_user.id == item.student.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=item.student.id) }}{% endif %}" class="text-decoration-none">{{ item.student.full_name }} <i class="fa-solid fa-user"></i></a> {{ handle_tag(item.student) }}</h5>
-      <p class="text-muted small mb-2">{{ item.student.school }} <i class="fa-solid fa-school"></i></p>
+      <p class="text-muted small mb-2">{{ team_badge(item.student.school) }}{{ item.student.school }} <i class="fa-solid fa-school"></i></p>
 
       {% if item.student.role == 'Athlete' %}
         {% set a = item.student %}
@@ -954,7 +954,7 @@
 
                    <div class="text-center mb-3">
               <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}" class="text-decoration-none"><strong>{{ r.user.full_name }}</strong></a> {{ handle_tag(r.user) }}<br>
-              <small class="text-muted">{{ r.team or r.user.school }} <i class="fa-solid fa-school"></i></small><br>
+              <small class="text-muted">{{ team_badge(r.team or r.user.school) }}{{ r.team or r.user.school }} <i class="fa-solid fa-school"></i></small><br>
               <small class="text-muted">vs. {{ r.team_played_against or '-' }} <i class="fa-solid fa-shield-halved"></i></small><br>
               
             </div>

@@ -96,6 +96,12 @@ class User(UserMixin, db.Model):
     # D.A.R.T Market$: the D.A.R.T Admin can stop an account from selling / messaging.
     market_banned = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
     shop_name = db.Column(db.String(80), nullable=True)          # Vendor accounts
+    # Vendors: a person (government name) or a business (business name), with the
+    # address / location on their business card; the D.A.R.T Admin verifies them.
+    vendor_type = db.Column(db.String(10), nullable=True)        # person / business
+    business_address = db.Column(db.String(200), nullable=True)
+    business_location = db.Column(db.String(80), nullable=True)
+    vendor_verified_at = db.Column(db.DateTime, nullable=True)
     # Club League division the athlete plays in (Club League / All Athlete), from registration.
     club_division = db.Column(db.String(20), nullable=True)
     guardian_name = db.Column(db.String(100), nullable=True)
@@ -513,6 +519,13 @@ class OrganizationProfile(db.Model):
     approved_aliases = db.Column(db.Text, nullable=True)
     requested_aliases = db.Column(db.Text, nullable=True)
     verification_status = db.Column(db.String(20), nullable=False, default='pending')  # pending / verified / rejected
+    # Team badge / logo (the organization's only picture). Uploads wait for
+    # the D.A.R.T Admin; the approved logo shows next to the team's name everywhere.
+    logo_path = db.Column(db.String(255), nullable=True)            # approved (public)
+    logo_pending_path = db.Column(db.String(255), nullable=True)    # waiting for review (private)
+    logo_status = db.Column(db.String(12), nullable=True)           # pending / approved / rejected
+    logo_note = db.Column(db.String(200), nullable=True)
+    logo_reviewed_at = db.Column(db.DateTime, nullable=True)
     verified_at = db.Column(db.DateTime, nullable=True)
     terms_version = db.Column(db.String(20), nullable=True)
     terms_accepted_at = db.Column(db.DateTime, nullable=True)
@@ -1210,6 +1223,35 @@ class MarketMessage(db.Model):
     body = db.Column(db.String(1000), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     read_at = db.Column(db.DateTime, nullable=True)
+
+
+class MarketCartItem(db.Model):
+    """
+    A product a buyer saved in their D.A.R.T Market$ cart: a list to discuss
+    with the seller in the app; the purchase itself happens off D.A.R.T.
+    """
+    __tablename__ = 'market_cart_item'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    user_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    listing_id = db.Column(db.BigInteger, db.ForeignKey('market_listing.id', ondelete='CASCADE'), nullable=False, index=True)
+    quantity = db.Column(db.Integer, nullable=False, default=1)
+    size = db.Column(db.String(15), nullable=True)
+    color = db.Column(db.String(15), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    # Order tracker: cart -> requested (list sent to the vendor) -> sold (left
+    # the vendor's shop, marked by the vendor) -> received (confirmed by the
+    # buyer only). cancelled = the vendor did not sell it.
+    status = db.Column(db.String(12), nullable=False, default='cart', server_default='cart')
+    requested_at = db.Column(db.DateTime, nullable=True)
+    sold_at = db.Column(db.DateTime, nullable=True)
+    received_at = db.Column(db.DateTime, nullable=True)
+    cancelled_at = db.Column(db.DateTime, nullable=True)
+
+    listing = db.relationship('MarketListing')
+    buyer = db.relationship('User', foreign_keys=[user_id])
+
+    __table_args__ = (db.UniqueConstraint('user_id', 'listing_id', name='uq_market_cart_user_listing'),)
 
 
 class MarketReport(db.Model):

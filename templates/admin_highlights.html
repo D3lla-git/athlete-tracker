@@ -126,7 +126,7 @@
     <ul class="mr-list">
       {% for u in suspended %}
         <li>
-          <span><strong>{{ u.full_name }}</strong> · {{ u.school }} · {{ u.fake_record_strikes }} fake record{{ 's' if u.fake_record_strikes != 1 }}
+          <span><strong>{{ u.full_name }}</strong> · {{ team_badge(u.school) }}{{ u.school }} · {{ u.fake_record_strikes }} fake record{{ 's' if u.fake_record_strikes != 1 }}
             <span class="text-muted small">· since {{ u.suspended_at.strftime('%b %d, %Y') if u.suspended_at else '-' }}</span></span>
           <form method="POST" action="{{ url_for('admin_unsuspend', user_id=u.id) }}"
                 onsubmit="return confirm('Lift the suspension for {{ u.full_name | e }}? Their fake-record count starts again from 0.');">
@@ -144,7 +144,7 @@
     <h2 class="mr-sub">Fake-record warnings</h2>
     <ul class="mr-list">
       {% for u in warned %}
-        <li><span><strong>{{ u.full_name }}</strong> · {{ u.school }}</span>
+        <li><span><strong>{{ u.full_name }}</strong> · {{ team_badge(u.school) }}{{ u.school }}</span>
           <span class="mr-strikes">{{ u.fake_record_strikes }} of {{ fake_record_suspend_at }}</span></li>
       {% endfor %}
     </ul>

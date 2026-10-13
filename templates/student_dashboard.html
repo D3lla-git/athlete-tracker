@@ -17,7 +17,7 @@
   <!-- Name and Info -->
   <div>
     <h2 class="mb-1">{{ current_user.full_name }} {{ handle_tag(current_user, 'dart-handle-on-dark') }}</h2>
-    <p class="text-muted mb-1">{{ current_user.school }} <i class="fa-solid fa-school"></i></p>
+    <p class="text-muted mb-1">{{ team_badge(current_user.school) }}{{ current_user.school }} <i class="fa-solid fa-school"></i></p>
     
     {% if current_user.is_verified %}
       <span class="badge dart-pill">Verified Athlete <i class="fa-solid fa-user-check"></i></span>

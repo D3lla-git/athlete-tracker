@@ -103,7 +103,7 @@
     </header>
     <div class="integrity-cs-match">
       <i class="fa-regular fa-calendar-days" aria-hidden="true"></i> {{ r.game_date.strftime('%d %b %Y') if r.game_date else r.year }}
-      · {{ r.team }} <span class="text-muted">vs</span> {{ r.team_played_against }}
+      · {{ team_badge(r.team) }}{{ r.team }} <span class="text-muted">vs</span> {{ r.team_played_against }}
       · {{ r.competition_display or r.competition_category }}
     </div>
     {# Every field of the record, not just the headline numbers: any of them could be false. #}

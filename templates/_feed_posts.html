@@ -2,6 +2,26 @@
 {% from '_feed_card.html' import feed_card %}
 {% for h in posts %}
   {{ feed_card(h, state, can_interact, slides=slides) }}
+  {% if loop.index == 3 %}
+    {# Vendor Premium: their products advertised in the Highlights feed. #}
+    {% set _ads = market_showcase(6) %}
+    {% if _ads %}
+      {% from '_market_macros.html' import money with context %}
+      <aside class="fp mk-sponsored" aria-label="Sponsored: D.A.R.T Market$">
+        <div class="mk-sponsored-head"><span><i class="fa-solid fa-store"></i> D.A.R.T Market<b>$</b> · Sponsored</span>
+          <a href="{{ url_for('market_home') }}">See all</a></div>
+        <div class="mk-sponsored-track">
+          {% for l in _ads %}
+            <a class="mk-sponsored-item" href="{{ url_for('market_item', listing_id=l.id) }}">
+              {% if l.cover %}<img src="{{ market_image_url(l.cover) }}" alt="" loading="lazy">{% endif %}
+              <span class="mk-sponsored-name">{{ l.title }}</span>
+              <span class="mk-sponsored-price">{{ money(l) }}</span>
+            </a>
+          {% endfor %}
+        </div>
+      </aside>
+    {% endif %}
+  {% endif %}
 {% endfor %}
 {% if next_url %}
   <div class="fp-more" data-next="{{ next_url }}">

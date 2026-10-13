@@ -7,7 +7,7 @@
   <div class="col-lg-10 col-xl-9">
 
     {# ===== My card: what others see when you share your profile ===== #}
-    {% if current_user.role in ('Athlete', 'Coach', 'Scout') %}
+    {% if current_user.role in profile_card_roles %}
       <div class="mp-hero-head">
         <div>
           <div class="mp-eyebrow">My Profile</div>
@@ -250,29 +250,36 @@
 
 <div class="mb-3">
   <label class="form-label">
-    Age
-    <i class="fa-solid fa-calendar-days" style="color: darkgreen;"></i>
-  </label>
-  <input
-      type="number"
-      name="age"
-      class="form-control"
-      min="1"
-      max="120"
-      value="{{ current_user.age or '' }}">
-</div>
-
-<div class="mb-3">
-  <label class="form-label">
     Date of Birth
     <i class="fa-solid fa-cake-candles"></i>
   </label>
   <input
       type="date"
-      name="date_of_birth"
+      name="date_of_birth" id="profileDob" max="{{ today_iso() }}"
       class="form-control"
       value="{% if current_user.date_of_birth %}{{ current_user.date_of_birth.strftime('%Y-%m-%d') }}{% endif %}">
 </div>
+
+<div class="mb-3">
+  <label class="form-label" for="profileAge">
+    Age <i class="fa-solid fa-calendar-days" style="color: darkgreen;"></i> <small class="text-muted">(from your date of birth)</small>
+  </label>
+  <input type="number" id="profileAge" class="form-control" readonly tabindex="-1" aria-readonly="true" value="{{ current_user.age or '' }}">
+</div>
+<script>
+(function () {
+  var dob = document.getElementById('profileDob'), age = document.getElementById('profileAge');
+  if (!dob || !age) return;
+  function sync() {
+    var d = dob.value ? new Date(dob.value + 'T00:00:00') : null;
+    if (!d || isNaN(d)) return;
+    var t = new Date(), a = t.getFullYear() - d.getFullYear();
+    if (t.getMonth() < d.getMonth() || (t.getMonth() === d.getMonth() && t.getDate() < d.getDate())) a--;
+    age.value = a >= 0 ? a : '';
+  }
+  dob.addEventListener('change', sync); dob.addEventListener('input', sync);
+})();
+</script>
 
 <div class="mb-3">
   <label class="form-label">
@@ -907,7 +914,7 @@
                                         {% endif %}
 
                                         {% if record.team %}
-                                            • {{ record.team }}
+                                            • {{ team_badge(record.team) }}{{ record.team }}
                                         {% endif %}
 
                                     </small>
@@ -1032,7 +1039,7 @@ function toggleChangePassword() {
     <div class="card-body">
       {% for org in listed_by %}
         <div class="listed-by-row">
-          <span><strong>{{ org.org_name }}</strong> <small class="text-muted">· {{ org.org_type }}{% if org.city %} · {{ org.city }}{% endif %}</small></span>
+          <span><strong>{{ team_badge(org.org_name) }}{{ org.org_name }}</strong> <small class="text-muted">· {{ org.org_type }}{% if org.city %} · {{ org.city }}{% endif %}</small></span>
           <span class="listed-by-badge"><i class="fa-solid fa-circle-check"></i> Verified</span>
         </div>
       {% else %}

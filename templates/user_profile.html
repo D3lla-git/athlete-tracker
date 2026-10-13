@@ -6,8 +6,8 @@
 {% block meta_description %}{% if seo %}{{ seo.description }}{% else %}{{ super() }}{% endif %}{% endblock %}
 {% block canonical %}{% if seo %}{{ seo.url }}{% else %}{{ super() }}{% endif %}{% endblock %}
 {% block og_type %}{% if seo %}profile{% else %}website{% endif %}{% endblock %}
-{% block og_image %}{% if user.role in ("Athlete", "Coach", "Scout") %}{{ site_url(url_for("profile_card_image", user_id=user.id)) }}{% else %}{{ super() }}{% endif %}{% endblock %}
-{% block twitter_card %}{% if user.role in ('Athlete', 'Coach', 'Scout') %}summary_large_image{% else %}summary{% endif %}{% endblock %}
+{% block og_image %}{% if user.role in profile_card_roles %}{{ site_url(url_for("profile_card_image", user_id=user.id)) }}{% else %}{{ super() }}{% endif %}{% endblock %}
+{% block twitter_card %}{% if user.role in profile_card_roles %}summary_large_image{% else %}summary{% endif %}{% endblock %}
 {% block robots %}<meta name="robots" content="{{ 'index, follow, max-image-preview:large' if indexable else 'noindex, nofollow' }}">{% endblock %}
 {% block structured_data %}{% if seo and indexable %}<script type="application/ld+json">{{ seo.structured | tojson }}</script>{% endif %}{% endblock %}
 
@@ -19,7 +19,7 @@
 {% from '_profile_card.html' import profile_hero %}
 
 {# ===== Profile card (same design as the shared card image + PDF) ===== #}
-{% if user.role in ('Athlete', 'Coach', 'Scout') %}
+{% if user.role in profile_card_roles %}
   {{ profile_hero(profile_card_info(user, current_user)) }}
   {% if can_see_guardian(current_user, user) %}
     {# Coaches of the athlete's team + the D.A.R.T Admin only (safeguarding). #}
@@ -136,7 +136,7 @@
         <div class="up-teams">
           {% for t in cd.teams %}
             <span class="up-team {{ 'up-team-past' if t.end_date }}">
-              <i class="fa-solid fa-people-group" aria-hidden="true"></i> {{ t.team_name }}
+              <i class="fa-solid fa-people-group" aria-hidden="true"></i> {{ team_badge(t.team_name) }}{{ t.team_name }}
               <small>{{ t.role }}{% if t.end_date %} · until {{ t.end_date.strftime('%Y') }}{% elif t.is_primary %} · main team{% endif %}</small>
             </span>
           {% endfor %}
@@ -278,7 +278,7 @@
               <div class="up-record-main">
                 <strong>{{ r.sport }}</strong> · {{ record_headline(r) }}
                 <div class="up-record-sub">
-                  {{ r.competition_display }}{% if r.game_date %} · {{ r.game_date.strftime('%b %d, %Y') }}{% endif %}{% if r.team %} · {{ r.team }}{% endif %}
+                  {{ r.competition_display }}{% if r.game_date %} · {{ r.game_date.strftime('%b %d, %Y') }}{% endif %}{% if r.team %} · {{ team_badge(r.team) }}{{ r.team }}{% endif %}
                 </div>
               </div>
               {% from '_share.html' import share_button %}
@@ -371,7 +371,7 @@
           {% if user.school %}
             <div class="small text-muted">
               <i class="fa-solid fa-people-group"></i>
-              {{ user.school }}
+              {{ team_badge(user.school) }}{{ user.school }}
             </div>
           {% endif %}
         </div>
@@ -708,7 +708,7 @@
                     {% if record.team %}
                       <div class="small text-muted">
                         <i class="fa-solid fa-people-group"></i>
-                        {{ record.team }}
+                        {{ team_badge(record.team) }}{{ record.team }}
                       </div>
                     {% endif %}
 

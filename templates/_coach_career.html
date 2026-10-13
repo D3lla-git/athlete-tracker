@@ -40,7 +40,7 @@
         <li class="cc-game cc-{{ g.result }}">
           <span class="cc-result" title="{{ coach_results[g.result] }}">{{ coach_results[g.result][0] }}</span>
           <div class="cc-game-main">
-            <strong>{{ g.team_name }} <span class="cc-vs">vs</span> {{ g.opponent }}</strong>
+            <strong>{{ team_badge(g.team_name) }}{{ g.team_name }} <span class="cc-vs">vs</span> {{ g.opponent }}</strong>
             <div class="cc-game-meta">
               {% if g.score_for is not none %}<span class="cc-score">{{ g.score_for }}-{{ g.score_against }}</span>{% endif %}
               <span><i class="fa-solid {{ {'Football': 'fa-futbol', 'Basketball': 'fa-basketball', 'Kickball': 'fa-baseball'}[g.sport] }}" aria-hidden="true"></i> {{ g.sport }}</span>

@@ -7,6 +7,33 @@
   <a href="{{ url_for('organization_dashboard') }}" class="os-back"><i class="fa-solid fa-arrow-left"></i> Team HQ</a>
   <h1 class="os-title"><i class="fa-solid fa-gear"></i> Organization settings</h1>
 
+  {# Shareable organization card (logo, type, location, verified). #}
+  {% from '_profile_card.html' import profile_hero %}
+  {{ profile_hero(profile_card_info(current_user, current_user), can_edit=false) }}
+
+  {# Team badge / logo: the organization's ONLY picture, checked by the D.A.R.T Admin. #}
+  <div class="card shadow mb-3" id="teamLogo">
+    <div class="card-header"><h2 class="h5 mb-0"><i class="fa-solid fa-shield-halved"></i> Team badge / logo</h2></div>
+    <div class="card-body d-flex flex-wrap gap-3 align-items-center">
+      <div class="text-center">
+        {% if org.logo_path %}<img src="{{ org_logo_url(org) }}" alt="{{ org.org_name }} badge" class="org-logo-preview">
+        {% else %}<span class="org-logo-preview org-logo-empty"><i class="fa-solid fa-shield-halved"></i></span>{% endif %}
+        <div class="small mt-1">{% if org.logo_path %}Live{% else %}No logo yet{% endif %}</div>
+      </div>
+      <div class="flex-grow-1" style="min-width: 240px">
+        {% if org.logo_status == 'pending' %}<div class="alert alert-info small py-2 mb-2"><i class="fa-solid fa-hourglass-half"></i> A new logo is waiting for D.A.R.T Admin approval.</div>
+        {% elif org.logo_status == 'rejected' %}<div class="alert alert-danger small py-2 mb-2">Your last logo was not approved{% if org.logo_note %}: {{ org.logo_note }}{% endif %}.</div>{% endif %}
+        <p class="small text-muted mb-2">Upload only your official team badge / logo. No photos of people, places or anything else: the D.A.R.T Admin approves it before it shows next to your team name in search, records, cards and tables.</p>
+        <form method="POST" action="{{ url_for('organization_logo') }}" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input class="form-control form-control-sm" style="max-width: 260px" type="file" name="logo" accept="image/jpeg,image/png,image/webp" required aria-label="Team badge / logo">
+          <label class="form-check small"><input class="form-check-input" type="checkbox" name="is_logo" value="yes" required> This is our official team badge / logo</label>
+          <button class="btn btn-sm dart-btn" type="submit"><i class="fa-solid fa-upload"></i> Send for approval</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <div class="row g-3">
     <div class="col-lg-7">
       <div class="card shadow">
@@ -66,7 +93,7 @@
         <div class="card-body">
           {% for a in removed %}
             <div class="os-removed">
-              <span>{{ a.full_name }} <small class="text-muted">· {{ a.school }}</small></span>
+              <span>{{ a.full_name }} <small class="text-muted">· {{ team_badge(a.school) }}{{ a.school }}</small></span>
               <form method="POST" action="{{ url_for('organization_restore_athlete', athlete_id=a.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-sm btn-outline-success rounded-pill"><i class="fa-solid fa-rotate-left me-1"></i> Restore</button>

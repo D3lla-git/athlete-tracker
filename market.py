@@ -20,7 +20,7 @@ from decimal import Decimal, InvalidOperation
 from PIL import Image, ImageOps
 from sqlalchemy import or_, func
 
-from models import db, User, MarketListing, MarketThread, MarketMessage, MarketReport
+from models import db, User, MarketListing, MarketThread, MarketMessage, MarketReport, MarketCartItem
 
 ADULT_AGE = 18
 SPORTS = ('Football', 'Basketball', 'Kickball', 'Multi-sport')
@@ -51,7 +51,9 @@ MAX_IMAGES = 5
 IMAGE_MAX_BYTES = 6 * 1024 * 1024
 IMAGE_MAX_SIDE = 1600
 MAX_PENDING_PER_SELLER = 10
-MAX_LIVE_PER_SELLER = 60
+MAX_LIVE_FREE = 10                 # free sellers: live products at a time
+MAX_LIVE_PREMIUM = 1000            # Vendor Premium: unlimited (sanity cap)
+MAX_CART_ITEMS = 50
 MAX_PRICE = {'USD': Decimal('20000'), 'LRD': Decimal('4000000')}
 NEW_THREADS_PER_DAY = 20
 MESSAGES_PER_10_MIN = 30
@@ -189,14 +191,108 @@ def clean_image(file_storage):
         return None
 
 
-def seller_limits_error(user):
+def live_limit(premium_vendor):
+    return MAX_LIVE_PREMIUM if premium_vendor else MAX_LIVE_FREE
+
+
+def seller_limits_error(user, premium_vendor=False):
     pending = MarketListing.query.filter_by(seller_id=user.id, status='pending').count()
     if pending >= MAX_PENDING_PER_SELLER:
         return f'You have {pending} listings waiting for review. Please wait for the D.A.R.T Admin to check them.'
     live = MarketListing.query.filter_by(seller_id=user.id, status='approved').count()
-    if live >= MAX_LIVE_PER_SELLER:
-        return f'You can have at most {MAX_LIVE_PER_SELLER} live listings. Mark sold items as sold first.'
+    limit = live_limit(premium_vendor)
+    if live + pending >= limit:
+        extra = '' if premium_vendor else ' Vendor Premium gives unlimited products.' if user.role == 'Vendor' else ''
+        return f'You can have {limit} products on D.A.R.T Market$ at a time. Mark sold items as sold first.{extra}'
     return None
+
+
+# ---------- vendors ----------
+_BUSINESS_RE = re.compile(r"^[\w][\w .,&'()/-]{1,99}$", re.UNICODE)
+
+
+def validate_business_name(raw):
+    """(name, error): a registered business / trading name, e.g. 'Sinkor Sports & Co.'."""
+    name = clean(raw, 100)
+    if len(name) < 2 or not _BUSINESS_RE.match(name) or not re.search(r'[^\W\d_]', name):
+        return None, 'Enter your business name (letters, numbers, spaces and . , & \' ( ) / - only).'
+    return name, None
+
+
+# ---------- cart ----------
+def cart_for(user):
+    """[(seller, [items])] grouped by seller, newest first. Items whose product is no longer on sale stay, marked."""
+    items = (MarketCartItem.query.filter_by(user_id=user.id).order_by(MarketCartItem.created_at.desc()).all())
+    groups, order = {}, []
+    for it in items:
+        sid = it.listing.seller_id
+        if sid not in groups:
+            groups[sid] = []
+            order.append(it.listing.seller)
+        groups[sid].append(it)
+    return [(seller, groups[seller.id]) for seller in order]
+
+
+def cart_totals(items):
+    """{'USD': Decimal, 'LRD': Decimal} for the items still in the cart and on sale."""
+    totals = {}
+    for it in items:
+        if it.listing.status == 'approved' and (it.status or 'cart') == 'cart':
+            totals[it.listing.currency] = totals.get(it.listing.currency, Decimal('0')) + it.listing.price * it.quantity
+    return totals
+
+
+def cart_count(user):
+    if not getattr(user, 'is_authenticated', False):
+        return 0
+    return MarketCartItem.query.filter_by(user_id=user.id, status='cart').count()
+
+
+# ---------- order tracker ----------
+# In cart -> Sent to vendor -> Left vendor shop -> Buyer's possession.
+ORDER_STEPS = (('cart', 'In cart', 'fa-cart-shopping'), ('requested', 'Sent to vendor', 'fa-paper-plane'),
+               ('sold', 'Left vendor shop', 'fa-truck-fast'), ('received', "Buyer's possession", 'fa-house-circle-check'))
+ORDER_STEP_INDEX = {key: i for i, (key, _, _) in enumerate(ORDER_STEPS)}
+# A vendor must mark a sent order as sold (or not sold) within this time:
+# overdue orders are shown to the D.A.R.T Admin (account suspension risk).
+ORDER_OVERDUE_DAYS = 7
+
+
+def order_step(item):
+    return ORDER_STEP_INDEX.get(item.status or 'cart', 0)
+
+
+def vendor_orders(user, limit=60):
+    """Orders buyers sent to this seller (newest first)."""
+    return (MarketCartItem.query.join(MarketListing, MarketCartItem.listing_id == MarketListing.id)
+            .filter(MarketListing.seller_id == user.id, MarketCartItem.status.in_(('requested', 'sold', 'received', 'cancelled')))
+            .order_by(MarketCartItem.requested_at.desc().nullslast(), MarketCartItem.id.desc()).limit(limit).all())
+
+
+def overdue_orders(seller_id=None):
+    """Sent orders a vendor has not marked sold / not sold in ORDER_OVERDUE_DAYS."""
+    cutoff = datetime.utcnow() - timedelta(days=ORDER_OVERDUE_DAYS)
+    q = (MarketCartItem.query.join(MarketListing, MarketCartItem.listing_id == MarketListing.id)
+         .filter(MarketCartItem.status == 'requested', MarketCartItem.requested_at < cutoff))
+    if seller_id is not None:
+        q = q.filter(MarketListing.seller_id == seller_id)
+    return q.order_by(MarketCartItem.requested_at.asc()).limit(200).all()
+
+
+def is_overdue(item):
+    return (item.status == 'requested' and item.requested_at is not None
+            and item.requested_at < datetime.utcnow() - timedelta(days=ORDER_OVERDUE_DAYS))
+
+
+def cart_message(items):
+    lines = ['Hi! I would like to buy:']
+    for it in items:
+        if it.listing.status != 'approved':
+            continue
+        extra = ', '.join(x for x in (f'size {it.size}' if it.size else '', it.color or '') if x)
+        lines.append(f'- {it.quantity} x {it.listing.title}' + (f' ({extra})' if extra else ''))
+    lines.append('Are they available? Where can we meet?')
+    return '\n'.join(lines)[:1000]
 
 
 # ---------- browsing ----------

@@ -28,9 +28,11 @@
         {% if org.requested_aliases %}
           <div class="ao-aliases"><strong>Other team names requested:</strong> {{ org.requested_aliases.splitlines() | join(' · ') }}</div>
         {% endif %}
+        {% if org.document_path %}
         <a class="btn btn-sm btn-outline-primary rounded-pill mt-2" href="{{ url_for('id_document', filename=org.document_path) }}" target="_blank" rel="noopener">
           <i class="fa-solid fa-file-shield me-1"></i> Open official document
         </a>
+        {% else %}<div class="small text-danger mt-2">No official document uploaded.</div>{% endif %}
       </div>
       <div class="ao-actions">
         <form method="POST" action="{{ url_for('admin_organization_action', org_id=org.id, action='verify') }}">
@@ -53,6 +55,29 @@
   {% else %}
     <p class="text-muted">No organizations waiting.</p>
   {% endfor %}
+
+  <h2 class="ao-sub" id="logos">Team badges / logos to approve <span class="ao-badge">{{ logo_requests | length }}</span></h2>
+  <p class="small text-muted">Approve only the organization's official team badge / logo. Reject photos of people, places or anything else.</p>
+  {% for org in logo_requests %}
+    <article class="ao-card">
+      <div class="ao-card-main d-flex gap-3 align-items-center">
+        <img src="{{ market_image_url_path(org.logo_pending_path) }}" alt="Proposed logo of {{ org.org_name }}" class="org-logo-preview">
+        <div><strong>{{ org.org_name }}</strong><div class="small text-muted">{{ org.org_type }}{% if org.city %} · {{ org.city }}{% endif %}</div>
+          {% if org.logo_path %}<div class="small">Current: <img src="{{ org_logo_url(org) }}" alt="" class="team-badge"></div>{% endif %}</div>
+      </div>
+      <div class="d-flex flex-wrap gap-2 mt-2">
+        <form method="POST" action="{{ url_for('admin_organization_logo', org_id=org.id, action='approve') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm dart-btn" type="submit"><i class="fa-solid fa-check"></i> Approve logo</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin_organization_logo', org_id=org.id, action='reject') }}" class="d-flex gap-1 flex-grow-1">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input class="form-control form-control-sm" name="note" maxlength="200" required placeholder="Why not, e.g. Not a team badge" aria-label="Reason">
+          <button class="btn btn-sm btn-outline-danger" type="submit">Reject</button>
+        </form>
+      </div>
+    </article>
+  {% else %}<p class="text-muted small">No logos waiting.</p>{% endfor %}
 
   <h2 class="ao-sub">Team name changes <span class="ao-badge">{{ alias_requests | length }}</span></h2>
   {% for org in alias_requests %}
@@ -85,7 +110,7 @@
         <tbody>
           {% for org in verified %}
             <tr>
-              <td><strong>{{ org.org_name }}</strong></td>
+              <td><strong>{{ team_badge(org.org_name) }}{{ org.org_name }}</strong></td>
               <td>{{ org.org_type }}</td>
               <td class="small">{{ (org.approved_aliases or '').splitlines() | join(', ') or '-' }}</td>
               <td>{{ roster_size(org) }}</td>

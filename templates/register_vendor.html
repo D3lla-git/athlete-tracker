@@ -14,17 +14,35 @@
   </section>
   <form method="POST" action="{{ url_for('register_vendor') }}" class="mk-panel" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <fieldset class="mb-3">
+      <legend class="form-label fw-bold fs-6">Registering as</legend>
+      <div class="d-flex flex-wrap gap-3">
+        <label class="form-check"><input class="form-check-input" type="radio" name="vendor_type" value="person" {% if form.get('vendor_type', 'person') == 'person' %}checked{% endif %} data-vendor-type>
+          <span class="form-check-label">A person (my full government name)</span></label>
+        <label class="form-check"><input class="form-check-input" type="radio" name="vendor_type" value="business" {% if form.get('vendor_type') == 'business' %}checked{% endif %} data-vendor-type>
+          <span class="form-check-label">A business (registered / trading name)</span></label>
+      </div>
+    </fieldset>
     <div class="mb-3">
-      <label class="form-label" for="full_name">Your full/Business name (as on your ID)</label>
+      <label class="form-label" for="full_name" id="vendorNameLabel">Your full name (as on your ID)</label>
       <input class="form-control" id="full_name" name="full_name" maxlength="100" required autocomplete="name" data-gov-name
              value="{{ form.get('full_name', '') }}" placeholder="Example: John Felix Brown" aria-describedby="full_nameNote full_nameError">
-      {{ gov_name_note('full_name') }}
+      <div id="vendorGovNote">{{ gov_name_note('full_name') }}</div>
     </div>
     <div class="mb-3">{{ username_field('vendorUsername', value=form.get('username', ''), name_source_id='full_name') }}</div>
     <div class="row">
       <div class="col-md-6 mb-3">
         <label class="form-label" for="shop_name">Shop name (optional)</label>
         <input class="form-control" id="shop_name" name="shop_name" maxlength="80" value="{{ form.get('shop_name', '') }}" placeholder="e.g. Sinkor Sports Shop">
+      </div>
+      <div class="col-md-6 mb-3">
+        <label class="form-label" for="business_location">Town / county</label>
+        <input class="form-control" id="business_location" name="business_location" maxlength="80" required value="{{ form.get('business_location', '') }}" placeholder="Monrovia, Montserrado">
+      </div>
+      <div class="col-12 mb-3">
+        <label class="form-label" for="business_address">Shop / business address</label>
+        <input class="form-control" id="business_address" name="business_address" maxlength="200" required value="{{ form.get('business_address', '') }}" placeholder="Tubman Boulevard, Sinkor, opposite ...">
+        <small class="text-muted">Shown on your business card.</small>
       </div>
       <div class="col-md-6 mb-3">
         <label class="form-label" for="phone">Phone number (buyers call / WhatsApp you)</label>
@@ -49,5 +67,20 @@
   </form>
 </div>
 {{ gov_name_assets() }}
+<script>
+(function () {
+  // Business: a business name (not checked as a government name).
+  var input = document.getElementById('full_name'), label = document.getElementById('vendorNameLabel'), note = document.getElementById('vendorGovNote');
+  function sync() {
+    var biz = (document.querySelector('[data-vendor-type]:checked') || {}).value === 'business';
+    label.textContent = biz ? 'Business name' : 'Your full name (as on your ID)';
+    input.placeholder = biz ? 'Example: Sinkor Sports & Co.' : 'Example: John Felix Brown';
+    if (biz) { input.removeAttribute('data-gov-name'); input.setCustomValidity(''); } else { input.setAttribute('data-gov-name', ''); }
+    note.hidden = biz;
+  }
+  document.querySelectorAll('[data-vendor-type]').forEach(function (r) { r.addEventListener('change', sync); });
+  sync();
+})();
+</script>
 {{ username_assets() }}
 {% endblock %}

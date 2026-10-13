@@ -36,6 +36,7 @@ COUNTERSIGN_ESCALATE_DAYS = 7        # unanswered requests are highlighted for t
 OFFICIAL_TYPES = (
     'Sports journalist', 'League secretary', 'School sports coordinator',
     'Community youth leader', 'Referee / match official',
+    'Linesman / assistant referee', 'Spectator (verified fan)',
 )
 FEDERATION = {'Football': 'Liberia Football Association (LFA)', 'Basketball': 'Liberia Basketball Association (LBA)',
               'Kickball': 'Liberia National Kickball Federation'}

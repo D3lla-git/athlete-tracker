@@ -46,7 +46,7 @@
       {% for t in teams %}
         <li class="cr-team cr-team-{{ t.status }}">
           <div class="cr-team-main">
-            <strong>{{ t.team_name }}</strong>
+            <strong>{{ team_badge(t.team_name) }}{{ t.team_name }}</strong>
             {% if t.is_primary and t.is_active %}<span class="cr-tag cr-tag-main">Main team</span>{% endif %}
             <span class="cr-tag cr-tag-{{ t.status }}">{{ status_label[t.status] }}</span>
             <div class="cr-muted small">{{ t.role }} · {{ t.coach_category }}
@@ -215,7 +215,7 @@
       <li>
         <div class="cr-list-main">
           <strong>{{ coach_results[g.result] }}{% if g.score_for is not none %} {{ g.score_for }}-{{ g.score_against }}{% endif %}</strong>
-          · {{ g.team_name }} vs {{ g.opponent }}
+          · {{ team_badge(g.team_name) }}{{ g.team_name }} vs {{ g.opponent }}
           <div class="cr-muted small">{{ g.sport }}{% if g.competition %} · {{ g.competition }}{% endif %} · {{ g.game_date.strftime('%b %d, %Y') }}
             {% if g.formation %} · {{ g.formation }}{% endif %} · {{ g.substitutions }} subs
             {% if g.yellow_cards %} · {{ g.yellow_cards }} yellow{% endif %}{% if g.red_cards %} · red card{% endif %}

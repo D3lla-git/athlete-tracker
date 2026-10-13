@@ -6,6 +6,7 @@
 
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dart-feed.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-market.css') }}">
 <div class="feed-page" id="feedRoot"
      data-csrf="{{ csrf_token() }}"
      data-can-interact="{{ '1' if can_interact else '0' }}"

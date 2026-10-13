@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ vendor.shop_name or vendor.display_name }} | D.A.R.T Market${% endblock %}
+
+{% block content %}
+{% from '_profile_card.html' import profile_hero %}
+{% from '_market_macros.html' import product_card with context %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-market.css') }}">
+<div class="mk container-xl px-0">
+  <a class="mk-btn-pill mb-3" href="{{ url_for('market_home') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> D.A.R.T Market$</a>
+  {# Business card: full / business name, shop, address, location, D.A.R.T. verification badge. #}
+  {{ profile_hero(info, can_edit=false) }}
+  {% if info.premium_vendor %}<p class="small"><span class="badge text-bg-warning"><i class="fa-solid fa-crown"></i> Premium vendor</span></p>{% endif %}
+  <h2 class="h5 fw-bold mt-3"><i class="fa-solid fa-tags" aria-hidden="true"></i> Products ({{ listings | length }})</h2>
+  {% if listings %}
+    <div class="mk-grid">{% for l in listings %}{{ product_card(l) }}{% endfor %}</div>
+  {% else %}<p class="mk-empty">No products on sale right now.</p>{% endif %}
+</div>
+{% endblock %}

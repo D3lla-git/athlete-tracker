@@ -79,7 +79,7 @@
           {% if user.school %}
             <div class="text-muted">
               <i class="fa-solid fa-people-group"></i>
-              {{ user.school }}
+              {{ team_badge(user.school) }}{{ user.school }}
             </div>
           {% endif %}
 
@@ -374,7 +374,7 @@
 
                 {% if record.team %}
                   <small class="text-muted">
-                    {{ record.team }}
+                    {{ team_badge(record.team) }}{{ record.team }}
                   </small>
                 {% endif %}
 

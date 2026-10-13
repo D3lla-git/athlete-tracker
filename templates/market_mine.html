@@ -2,7 +2,7 @@
 {% block title %}My shop | D.A.R.T Market${% endblock %}
 
 {% block content %}
-{% from '_market_macros.html' import money, status_badge with context %}
+{% from '_market_macros.html' import money, status_badge, order_tracker with context %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dart-market.css') }}">
 <div class="mk container-xl px-0">
   <div class="mk-top">
@@ -15,7 +15,55 @@
     </div>
   </div>
   {% if block_reason %}<div class="alert alert-warning small">{{ block_reason }}</div>{% endif %}
+  {% if current_user.role == 'Vendor' %}
+    {% from '_profile_card.html' import profile_hero %}
+    {{ profile_hero(profile_card_info(current_user, current_user), can_edit=false) }}
+    {% if not current_user.vendor_verified_at %}<p class="small text-muted"><i class="fa-solid fa-circle-info"></i> Your business card gets the D.A.R.T. verified badge once the D.A.R.T Admin has checked your business.</p>{% endif %}
+    {% if not is_premium_vendor(current_user) %}
+      <div class="alert alert-warning d-flex flex-wrap gap-2 align-items-center small">
+        <i class="fa-solid fa-crown"></i> <span class="flex-grow-1"><strong>Vendor Premium:</strong> unlimited products, no ads, and your products advertised at the top of Market$ and in Highlights.</span>
+        <a class="btn btn-sm btn-warning fw-bold" href="{{ url_for('pricing') }}#vendors">See Vendor Premium</a>
+      </div>
+    {% endif %}
+  {% endif %}
 
+  {# ===== Orders from buyers: marking each one sold / not sold is required. ===== #}
+  {% if overdue %}
+    <div class="alert alert-danger small d-flex gap-2 align-items-start" role="alert">
+      <i class="fa-solid fa-triangle-exclamation mt-1"></i>
+      <span><strong>{{ overdue | length }} order{{ '' if overdue | length == 1 else 's' }} waiting more than {{ market_overdue_days }} days.</strong>
+        Mark each one sold or not sold now: the D.A.R.T Admin sees overdue orders and may suspend your account.</span>
+    </div>
+  {% endif %}
+  <h2 class="h5 fw-bold mt-3" id="orders"><i class="fa-solid fa-route"></i> Orders <span class="badge rounded-pill text-bg-success align-middle">{{ orders | selectattr('status', 'equalto', 'requested') | list | length }}</span></h2>
+  <p class="small text-muted">After a deal (paid off D.A.R.T.), click <strong>Sold</strong>: it is required, to avoid account suspension. Stock goes down and the buyer confirms when the product is in their hands.</p>
+  {% for it in orders %}
+    <div class="mk-thread-row mb-2{% if market_order_overdue(it) %} mk-order-overdue{% endif %}">
+      {% if it.listing.cover %}<img src="{{ market_image_url(it.listing.cover) }}" alt="">{% else %}<span class="mk-thumb"></span>{% endif %}
+      <div class="flex-grow-1 min-w-0">
+        <a class="fw-bold text-decoration-none" href="{{ url_for('market_item', listing_id=it.listing.id) }}">{{ it.listing.title }}</a>
+        <div class="small">{{ it.quantity }} × <span class="mk-price">{{ money(it.listing) }}</span>{% if it.size %} · size {{ it.size }}{% endif %}{% if it.color %} · {{ it.color }}{% endif %}
+          · buyer <strong>{{ it.buyer.display_name }}</strong>{% if it.requested_at %} · {{ it.requested_at.strftime('%d %b %Y') }}{% endif %}</div>
+        {{ order_tracker(it) }}
+      </div>
+      {% if it.status == 'requested' %}
+        <div class="d-flex flex-wrap gap-1 justify-content-end">
+          <form method="POST" action="{{ url_for('market_order_action', item_id=it.id, action='sold') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm dart-btn" type="submit"><i class="fa-solid fa-truck-fast"></i> Sold</button>
+          </form>
+          <form method="POST" action="{{ url_for('market_order_action', item_id=it.id, action='not_sold') }}" onsubmit="return confirm('Mark this order not sold?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-secondary" type="submit">Not sold</button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  {% else %}
+    <p class="text-muted small">No orders yet. Buyers' carts sent to you show up here.</p>
+  {% endfor %}
+
+  <h2 class="h5 fw-bold mt-4">My products</h2>
   {% if listings %}
     {% for l in listings %}
       <div class="mk-thread-row">

@@ -6,7 +6,7 @@
 {% macro plan_action(plan) %}
   {% set sub_plan = my_plan %}
   {% if not current_user.is_authenticated %}
-    {% set reg = {'athlete': 'register', 'scout': 'register_scout', 'organization': 'register_organization', 'coach': 'register_coach'}[plan.audience] %}
+    {% set reg = {'athlete': 'register', 'scout': 'register_scout', 'organization': 'register_organization', 'coach': 'register_coach', 'vendor': 'register_vendor'}[plan.audience] %}
     <a href="{{ url_for(reg) }}" class="btn dart-btn pr-btn">Create account to upgrade</a>
   {% elif sub_plan and sub_plan.code == plan.code %}
     <a href="{{ url_for('checkout', plan_code=plan.code) }}" class="btn pr-btn pr-btn-current">
@@ -216,6 +216,44 @@
         </ul>
         {{ methods(scout_plan) }}
         {{ plan_action(scout_plan) }}
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== VENDORS (D.A.R.T Market$) ===================== -->
+  <section id="vendors" class="pr-section" aria-labelledby="vendorsTitle">
+    <div class="pr-section-head">
+      <h2 id="vendorsTitle"><i class="fa-solid fa-store"></i> Vendors · D.A.R.T Market<span style="color:#f5c542">$</span></h2>
+      <p>Sell sports gear to athletes, coaches and fans across Liberia. Buyers contact you directly; D.A.R.T. never handles payments.</p>
+    </div>
+    <div class="pr-grid pr-grid-2" data-pr-slider aria-label="Vendor plans">
+      <article class="pr-card">
+        <div class="pr-card-name">Vendor Free</div>
+        <div class="pr-price">Free</div>
+        <div class="pr-lrd">or LRD equivalent</div>
+        <div class="pr-price-note">Every product checked by the D.A.R.T Admin</div>
+        <ul class="pr-features">
+          <li><i class="fa-solid fa-check"></i> Business card with verification badge</li>
+          <li><i class="fa-solid fa-check"></i> Up to {{ market_free_limit }} products live at a time</li>
+          <li><i class="fa-solid fa-check"></i> Buyer chat, cart lists and phone contact</li>
+          <li class="pr-no"><i class="fa-solid fa-xmark"></i> Products advertised across D.A.R.T.</li>
+          <li class="pr-no"><i class="fa-solid fa-rectangle-ad"></i> Includes ads</li>
+        </ul>
+        {% if not current_user.is_authenticated %}
+          <a href="{{ url_for('register_vendor') }}" class="btn btn-outline-success pr-btn">Register as a vendor</a>
+        {% endif %}
+      </article>
+      <article class="pr-card pr-card-featured">
+        <div class="pr-ribbon">Sell more</div>
+        <div class="pr-card-name">{{ vendor_plan.name }}</div>
+        <div class="pr-price">{{ vendor_plan.price_label }}<span>/month</span></div>
+        <div class="pr-lrd">or LRD equivalent</div>
+        <div class="pr-price-note">Billed monthly · no auto-renewal</div>
+        <ul class="pr-features">
+          {% for f in vendor_plan.features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
+        </ul>
+        {{ methods(vendor_plan) }}
+        {{ plan_action(vendor_plan) }}
       </article>
     </div>
   </section>

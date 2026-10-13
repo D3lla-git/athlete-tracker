@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}My cart | D.A.R.T Market${% endblock %}
+
+{% block content %}
+{% from '_market_macros.html' import money, safety_tips, order_tracker with context %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-market.css') }}">
+<div class="mk container px-0" style="max-width: 900px">
+  <div class="mk-top">
+    <h1 class="mk-title"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i> My cart</h1>
+    <div class="mk-actions"><a class="mk-btn-pill" href="{{ url_for('market_home') }}"><i class="fa-solid fa-store"></i> Keep shopping</a></div>
+  </div>
+  <p class="small text-muted">Your cart is a list to discuss with each seller in the app. You agree on the meeting place and pay the seller directly (off D.A.R.T.).</p>
+  {% if block_reason %}<div class="alert alert-warning small">{{ block_reason }}</div>{% endif %}
+
+  {% for seller, items in groups %}
+    {% set t = totals(items) %}
+    <section class="mk-panel mb-3" aria-label="Products from {{ seller.shop_name or seller.display_name }}">
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <i class="fa-solid fa-store text-success" aria-hidden="true"></i>
+        {% if seller.role == 'Vendor' %}<a class="fw-bold" href="{{ url_for('market_vendor', user_id=seller.id) }}">{{ seller.shop_name or seller.display_name }}</a>
+        {% else %}<strong>{{ seller.shop_name or seller.display_name }}</strong>{% endif %}
+        {% if seller.vendor_verified_at %}<i class="fa-solid fa-circle-check text-success" title="Verified vendor"></i>{% endif %}
+        {% if seller.phone and not block_reason %}<a class="mk-phone ms-auto" href="tel:{{ seller.phone }}"><i class="fa-solid fa-phone"></i> {{ seller.phone | phone }}</a>{% endif %}
+      </div>
+      {% for it in items %}
+        {% set l = it.listing %}
+        <div class="mk-thread-row mb-2">
+          {% if l.cover %}<img src="{{ market_image_url(l.cover) }}" alt="">{% else %}<span class="mk-thumb"></span>{% endif %}
+          <div class="flex-grow-1" style="min-width: 0">
+            <a class="fw-bold text-decoration-none" href="{{ url_for('market_item', listing_id=l.id) }}">{{ l.title }}</a>
+            <div class="small">{{ it.quantity }} × <span class="mk-price">{{ money(l) }}</span>{% if it.size %} · size {{ it.size }}{% endif %}{% if it.color %} · {{ it.color }}{% endif %}</div>
+            {% if l.status != 'approved' and it.status == 'cart' %}<span class="badge text-bg-secondary">No longer on sale</span>{% endif %}
+            {{ order_tracker(it) }}
+            {% if it.status == 'sold' %}
+              {# Only this buyer sees and confirms "sold to me". #}
+              <form method="POST" action="{{ url_for('market_cart_received', item_id=it.id) }}" class="mt-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm dart-btn" type="submit"><i class="fa-solid fa-hand-holding-heart"></i> I received it</button>
+              </form>
+            {% endif %}
+          </div>
+          {% if it.status not in ('requested', 'sold') %}
+          <form method="POST" action="{{ url_for('market_cart_remove', item_id=it.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Remove {{ l.title }}"><i class="fa-solid fa-trash"></i></button>
+          </form>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+        <strong>Total:</strong>
+        {% for cur, amount in t.items() %}<span class="mk-price">{% if cur == 'LRD' %}L${{ '{:,.0f}'.format(amount) }}{% else %}${{ '{:,.2f}'.format(amount) }}{% endif %}</span>{% if not loop.last %} + {% endif %}{% else %}<span class="text-muted small">nothing left to send</span>{% endfor %}
+        {% if t and not block_reason %}
+          <form method="POST" action="{{ url_for('market_cart_contact', seller_id=seller.id) }}" class="ms-auto d-flex gap-2 flex-wrap">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if not current_user.phone %}<input class="form-control form-control-sm" name="phone" type="tel" maxlength="20" required placeholder="Your phone" aria-label="Your phone number" style="max-width: 160px">{% endif %}
+            <button class="btn dart-btn" type="submit"><i class="fa-solid fa-paper-plane"></i> Send this list to the seller</button>
+          </form>
+        {% endif %}
+      </div>
+    </section>
+  {% else %}
+    <div class="mk-empty"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i> Your cart is empty. <a href="{{ url_for('market_home') }}">Browse D.A.R.T Market$</a>.</div>
+  {% endfor %}
+  {{ safety_tips() }}
+</div>
+{% endblock %}

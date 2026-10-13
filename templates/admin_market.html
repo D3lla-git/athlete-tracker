@@ -75,6 +75,42 @@
     </div>
   {% else %}<p class="mk-empty">No open reports.</p>{% endfor %}
 
+  <h2 class="h5 fw-bold mt-4" id="overdue">Overdue orders <span class="badge text-bg-danger">{{ overdue | length }}</span></h2>
+  <p class="small text-muted">Orders a seller has not marked sold / not sold in {{ market_overdue_days }} days. Repeated cases: suspend the seller.</p>
+  {% for it in overdue %}
+    <div class="d-flex flex-wrap gap-2 align-items-center small border-bottom py-1">
+      <strong>{{ it.listing.seller.shop_name or it.listing.seller.display_name }}</strong>
+      <span>{{ it.listing.title }} → {{ it.buyer.display_name }}</span>
+      <span class="text-danger ms-auto">sent {{ it.requested_at.strftime('%d %b %Y') }}</span>
+    </div>
+  {% else %}<p class="text-muted small">No overdue orders.</p>{% endfor %}
+
+  <h2 class="h5 fw-bold mt-4" id="vendors">Vendors (business cards)</h2>
+  <p class="small text-muted">Verify a vendor after checking their business: the D.A.R.T. badge then shows on their business card.</p>
+  <div class="table-responsive mb-3">
+    <table class="table table-sm align-middle">
+      <thead><tr><th scope="col">Vendor</th><th scope="col">Type</th><th scope="col">Shop · location</th><th scope="col">Address</th><th scope="col">Phone</th><th scope="col"></th></tr></thead>
+      <tbody>
+        {% for v in vendors %}
+          <tr>
+            <td><a href="{{ url_for('market_vendor', user_id=v.id) }}">{{ v.display_name }}</a>{% if v.vendor_verified_at %} <i class="fa-solid fa-circle-check text-success" title="Verified"></i>{% endif %}
+              {% if is_premium_vendor(v) %} <span class="badge text-bg-warning">Premium</span>{% endif %}</td>
+            <td class="small">{{ (v.vendor_type or 'person') | title }}</td>
+            <td class="small">{{ v.shop_name or '—' }} · {{ v.business_location or '—' }}</td>
+            <td class="small">{{ v.business_address or '—' }}</td>
+            <td class="small">{{ v.phone | phone if v.phone else '—' }}</td>
+            <td>
+              <form method="POST" action="{{ url_for('admin_market_vendor_verify', user_id=v.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm {{ 'btn-outline-secondary' if v.vendor_verified_at else 'dart-btn' }}" type="submit">{{ 'Remove badge' if v.vendor_verified_at else 'Verify' }}</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}<tr><td colspan="6" class="text-muted">No vendors yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+
   <h2 class="h5 fw-bold mt-4">Recent decisions</h2>
   <div class="table-responsive">
     <table class="table table-sm align-middle">

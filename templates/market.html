@@ -23,11 +23,32 @@
     </section>
   {% else %}
 
+  {% if featured %}
+    <section class="mk-promo mk-showcase" aria-label="Premium vendors' products" aria-roledescription="carousel">
+      <div class="mk-promo-track" data-mk-carousel data-autoplay="4500">
+        {% for l in featured %}
+          <a class="mk-promo-card" href="{{ url_for('market_item', listing_id=l.id) }}" aria-label="{{ l.title }}, {{ money(l) }}">
+            <div>
+              <span class="mk-promo-tag"><i class="fa-solid fa-crown" aria-hidden="true"></i> Premium vendor · {{ l.seller.shop_name or l.seller.display_name }}</span>
+              <div class="mk-promo-name">{{ l.title }}</div>
+              <div class="mk-promo-price">{{ money(l) }}</div>
+              <span class="mk-promo-cta">Shop now</span>
+            </div>
+            <div class="mk-promo-img">{% if l.cover %}<img src="{{ market_image_url(l.cover) }}" alt="" {% if not loop.first %}loading="lazy"{% endif %}>{% endif %}</div>
+          </a>
+        {% endfor %}
+      </div>
+      <div class="mk-dots" aria-hidden="true">{% for l in featured %}<span class="{{ 'on' if loop.first }}"></span>{% endfor %}</div>
+    </section>
+  {% endif %}
+
   <div class="mk-top">
     <h1 class="mk-title"><i class="fa-solid fa-store" aria-hidden="true"></i> D.A.R.T Market<span class="mk-dollar">$</span></h1>
     <div class="mk-actions">
       <a class="mk-btn-pill" href="{{ url_for('market_messages') }}"><i class="fa-solid fa-comments" aria-hidden="true"></i> Messages
         {% set _u = market_unread() %}{% if _u %}<span class="mk-badge">{{ '9+' if _u > 9 else _u }}</span>{% endif %}</a>
+      <a class="mk-btn-pill" href="{{ url_for('market_cart') }}"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i> Cart
+        {% set _c = market_cart_count() %}{% if _c %}<span class="mk-badge">{{ _c }}</span>{% endif %}</a>
       <a class="mk-btn-pill" href="{{ url_for('market_mine') }}"><i class="fa-solid fa-box-open" aria-hidden="true"></i> My shop</a>
       {% if not block_reason %}<a class="mk-btn-pill mk-btn-sell" href="{{ url_for('market_sell') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i> Sell</a>{% endif %}
     </div>
@@ -42,24 +63,6 @@
     <button class="btn btn-outline-secondary mk-filter-toggle" type="button" data-mk-filters aria-controls="mkFilters"><i class="fa-solid fa-sliders" aria-hidden="true"></i> Filter</button>
   </form>
 
-  {% if featured and not filters %}
-    <section class="mk-promo" aria-label="New on D.A.R.T Market$">
-      <div class="mk-promo-track" data-mk-carousel>
-        {% for l in featured %}
-          <a class="mk-promo-card" href="{{ url_for('market_item', listing_id=l.id) }}">
-            <div>
-              <span class="mk-promo-tag">{{ 'New on D.A.R.T Market$' if loop.first else market_categories[l.category][0] }}</span>
-              <div class="mk-promo-name">{{ l.title }}</div>
-              <div class="mk-promo-price">{{ money(l) }}</div>
-              <span class="mk-promo-cta">View</span>
-            </div>
-            <div class="mk-promo-img">{% if l.cover %}<img src="{{ market_image_url(l.cover) }}" alt="" loading="lazy">{% endif %}</div>
-          </a>
-        {% endfor %}
-      </div>
-      <div class="mk-dots" aria-hidden="true">{% for l in featured %}<span class="{{ 'on' if loop.first }}"></span>{% endfor %}</div>
-    </section>
-  {% endif %}
 
   <nav class="mk-cats" aria-label="Categories">
     <a class="mk-cat {{ 'active' if not filters.get('category') }}" href="{{ url_for('market_home', **(filters | dict_without('category', 'page'))) }}">All</a>
@@ -150,14 +153,27 @@
   function open(on) { if (!f) return; f.classList.toggle('is-open', on); if (bd) bd.classList.toggle('is-open', on); }
   document.querySelectorAll('[data-mk-filters]').forEach(function (b) { b.addEventListener('click', function () { open(true); }); });
   document.querySelectorAll('[data-mk-close]').forEach(function (b) { b.addEventListener('click', function () { open(false); }); });
-  // Promo carousel dots
+  // Premium showcase: dots + auto-slideshow (pauses while touched / hovered, off for reduced motion)
   var track = document.querySelector('[data-mk-carousel]');
   if (track) {
     var dots = track.parentElement.querySelectorAll('.mk-dots span');
+    var step = function () { return Math.max(1, track.firstElementChild.getBoundingClientRect().width + 14); };
+    var index = function () { return Math.round(track.scrollLeft / step()); };
     track.addEventListener('scroll', function () {
-      var i = Math.round(track.scrollLeft / Math.max(1, track.firstElementChild.getBoundingClientRect().width + 14));
+      var i = index();
       dots.forEach(function (d, j) { d.classList.toggle('on', j === i); });
     }, { passive: true });
+    var paused = false, n = track.children.length;
+    ['pointerenter', 'touchstart', 'focusin'].forEach(function (t) { track.addEventListener(t, function () { paused = true; }, { passive: true }); });
+    ['pointerleave', 'touchend', 'focusout'].forEach(function (t) { track.addEventListener(t, function () { paused = false; }, { passive: true }); });
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (n > 1 && !reduce) {
+      setInterval(function () {
+        if (paused || document.hidden) return;
+        var next = (index() + 1) % n;
+        track.scrollTo({ left: next * step(), behavior: 'smooth' });
+      }, +track.getAttribute('data-autoplay') || 4500);
+    }
   }
 })();
 </script>

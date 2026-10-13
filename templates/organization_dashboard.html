@@ -16,7 +16,7 @@
   <section class="oh-hero">
     <div class="oh-hero-main">
       <div class="oh-eyebrow"><i class="fa-solid fa-building-shield"></i> Team HQ</div>
-      <h1>{{ org.org_name }}</h1>
+      <h1>{{ team_badge(org.org_name) }}{{ org.org_name }}</h1>
       <div class="oh-meta">
         <span class="oh-verified"><i class="fa-solid fa-circle-check"></i> Verified organization</span>
         <span><i class="fa-solid fa-sitemap"></i> {{ org.org_type }}</span>
@@ -50,7 +50,7 @@
           <li>
             <div class="oh-confirm-who">
               <strong>{{ a.full_name }}</strong> {{ handle_tag(a) }}
-              <span>Team typed: “{{ a.school }}” · {{ a.athlete_category or 'Athlete' }} · registered {{ a.created_at.strftime('%b %d, %Y') if a.created_at else '' }}</span>
+              <span>Team typed: “{{ team_badge(a.school) }}{{ a.school }}” · {{ a.athlete_category or 'Athlete' }} · registered {{ a.created_at.strftime('%b %d, %Y') if a.created_at else '' }}</span>
               <span class="oh-confirm-coach {{ 'is-done' if a.coach_verified }}">
                 <i class="fa-solid {{ 'fa-circle-check' if a.coach_verified else 'fa-hourglass-half' }}"></i>
                 {{ 'Coach has approved' if a.coach_verified else 'Waiting for the coach too' }}

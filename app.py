@@ -5,7 +5,7 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import MultiDict
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare, RecordVerificationEvent, MatchReport, MatchReportLine, AwardContest, AwardEntry, MarketListing, MarketImage, MarketThread, MarketMessage, MarketReport, PredictionQuestion, PredictionPick)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare, RecordVerificationEvent, MatchReport, MatchReportLine, AwardContest, AwardEntry, MarketListing, MarketImage, MarketThread, MarketMessage, MarketReport, PredictionQuestion, PredictionPick, MarketCartItem)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
@@ -54,6 +54,7 @@ import guardian as guardian_mod
 import awards as awards_mod
 import market as market_mod
 import predictions as predictions_mod
+from plans import is_premium_vendor, premium_vendor_ids
 from competitions import (
     CLUB_DIVISIONS,
     ALL_COMPETITIONS,
@@ -1329,6 +1330,8 @@ def pricing():
         free_org_preview=FREE_ORG_ROSTER_PREVIEW,
         scout_plan=PLANS['scout_pro'],
         organization_plan=PLANS['organization_pro'],
+        vendor_plan=PLANS['vendor_pro'],
+        market_free_limit=market_mod.MAX_LIVE_FREE,
         free_limits=FREE_ATHLETE_LIMITS,
         my_eligible=my_eligible,
         my_subscription=active_subscription(current_user),
@@ -2726,16 +2729,8 @@ def register(registration_category=None):
         # ATHLETE PERSONAL INFORMATION VALIDATION
         # ==========================================================
 
-        try:
-            age = int(age_raw)
-        except (TypeError, ValueError):
-            flash('Please enter a valid age.', 'danger')
-            return redirect(
-                url_for(
-                    'register',
-                    registration_category=registration_category
-                )
-            )
+        # Age is worked out from the date of birth (never typed).
+        age = None
 
         try:
             date_of_birth = datetime.strptime(
@@ -2771,6 +2766,7 @@ def register(registration_category=None):
             )
         )
 
+        age = calculated_age
         if age != calculated_age:
             flash(
                 'Age does not match Date of Birth. '
@@ -4641,13 +4637,29 @@ def highlight_limit_error(user, media_type):
     return limit_reached(user, 'videos' if media_type == 'video' else 'photos')
 
 
+def is_journalist(user):
+    """A verified sports journalist (Match Official account of that type): may post sports content."""
+    return bool(
+        getattr(user, 'is_authenticated', False)
+        and user.role == 'Statistician'
+        and user.official_type == 'Sports journalist'
+        and user.is_verified
+        and not user.is_suspended
+    )
+
+
 def can_upload_highlights(user):
-    """Verified athletes; how many per month depends on their plan."""
+    """Verified athletes (and verified sports journalists); how many per month depends on the plan."""
     return (
         user.is_authenticated
-        and user.role == 'Athlete'
-        and bool(user.is_verified)
+        and (
+            (user.role == 'Athlete' and bool(user.is_verified))
+            or is_journalist(user)
+        )
     )
+
+
+app.jinja_env.globals['is_journalist'] = is_journalist
 
 
 def highlights_for(user_id, include_unpublished=False):
@@ -5018,7 +5030,7 @@ def highlight_upload_url():
     """Step 1: check the file details and hand out a one-time upload URL."""
     if not can_upload_highlights(current_user):
         return highlight_error(
-            'Only verified athletes can upload highlights.', 403
+            'Only verified athletes and verified sports journalists can post highlights.', 403
         )
 
     if current_user.media_blocked:
@@ -5154,7 +5166,7 @@ def highlight_upload_url():
 def highlight_complete():
     """Step 2: after the browser uploaded the file, check it and save it."""
     if not can_upload_highlights(current_user):
-        return highlight_error('Only verified athletes can upload highlights.', 403)
+        return highlight_error('Only verified athletes and verified sports journalists can post highlights.', 403)
 
     data = request.get_json(silent=True) or {}
     path = str(data.get('path') or '')
@@ -5269,12 +5281,14 @@ def highlight_complete():
             message += ' ' + MEDIA_BLOCKED_MESSAGE
         return highlight_error(message, 422)
 
+    journalist = is_journalist(current_user)
     auto_ok = (
-        check['decision'] == 'approve'
+        not journalist  # journalists' posts always wait for the D.A.R.T Admin
+        and check['decision'] == 'approve'
         and (HIGHLIGHT_AUTO_APPROVE == 'all' or (HIGHLIGHT_AUTO_APPROVE == 'photos' and media_type == 'photo'))
     )
     # The team's coach approves too (when the team has a coach on D.A.R.T.).
-    coach_needed = team_has_coach(current_user.school)
+    coach_needed = (not journalist) and team_has_coach(current_user.school)
     published = auto_ok and not coach_needed and publish_highlight_file(path)
     now = datetime.utcnow()
 
@@ -5292,7 +5306,7 @@ def highlight_complete():
         ai_checked=bool(check['checked']),
         ai_summary=check['summary'] or None,
         reviewed_at=now if published else None,
-        team_name=(current_user.school or '').strip()[:150] or None,
+        team_name=None if journalist else ((current_user.school or '').strip()[:150] or None),
         admin_approved_at=now if auto_ok else None,
         coach_approval='pending' if coach_needed else 'not_required',
         published_at=now if published else None,
@@ -6789,6 +6803,130 @@ def organization_settings():
     return render_template('organization_settings.html', org=org, removed=removed)
 
 
+# ---------- Organization team badge / logo ----------
+ORG_LOGO_PREFIX = 'org-logos'
+
+
+def org_logo_url(org):
+    if org and org.logo_path:
+        try:
+            return highlight_public_url(org.logo_path)
+        except Exception as e:
+            app.logger.warning('Logo link failed: %s', e)
+    return ''
+
+
+def _team_logo_index():
+    """{normalized team name / alias: logo url} for organizations with an approved logo (once per request)."""
+    if has_request_context() and '_team_logos' in g:
+        return g._team_logos
+    index = {}
+    for org in OrganizationProfile.query.filter(OrganizationProfile.logo_path.isnot(None),
+                                                OrganizationProfile.verification_status == 'verified').all():
+        url = org_logo_url(org)
+        if not url:
+            continue
+        for name in [org.org_name] + OrganizationProfile.split_names(org.approved_aliases):
+            key = normalize_team_name(name)
+            if key:
+                index.setdefault(key, (url, org.org_name))
+    if has_request_context():
+        g._team_logos = index
+    return index
+
+
+def team_logo_url(name):
+    hit = _team_logo_index().get(normalize_team_name(name or '')) if name else None
+    return hit[0] if hit else ''
+
+
+def team_badge(name, size='sm'):
+    """The team's approved badge, shown in front of its name anywhere in the app."""
+    hit = _team_logo_index().get(normalize_team_name(name or '')) if name else None
+    if not hit:
+        return ''
+    return Markup('<img class="team-badge team-badge-{}" src="{}" alt="" title="{} badge" loading="lazy" decoding="async">').format(
+        size, hit[0], hit[1])
+
+
+def private_image_url(path):
+    """Short-lived link to a private (waiting for review) image; '' if it can't be made."""
+    if not path:
+        return ''
+    try:
+        return review_file_url(path) or ''
+    except Exception as e:
+        app.logger.warning('Private image link failed: %s', e)
+        return ''
+
+
+app.jinja_env.globals.update(team_badge=team_badge, team_logo_url=team_logo_url, org_logo_url=org_logo_url,
+                             market_image_url_path=private_image_url)
+
+
+@app.route('/organization/logo', methods=['POST'])
+@login_required
+def organization_logo():
+    """Upload the team badge / logo: it waits for the D.A.R.T Admin before it is shown."""
+    org = require_organization()
+    if request.form.get('is_logo') != 'yes':
+        flash('Confirm that the picture is your official team badge / logo (no other pictures are allowed).', 'warning')
+        return redirect(url_for('organization_settings') + '#teamLogo')
+    f = request.files.get('logo')
+    data = market_mod.clean_image(f) if f and f.filename else None
+    if not data:
+        flash('Upload your badge / logo as a JPG, PNG or WEBP image (up to 6 MB).', 'danger')
+        return redirect(url_for('organization_settings') + '#teamLogo')
+    path = f'{ORG_LOGO_PREFIX}/{org.id}/{uuid.uuid4().hex}.jpg'
+    try:
+        market_store_image(data, path)
+    except Exception as e:
+        app.logger.exception('Logo upload failed: %s', e)
+        flash('We could not upload your logo. Please try again.', 'danger')
+        return redirect(url_for('organization_settings') + '#teamLogo')
+    org.logo_pending_path = path
+    org.logo_status = 'pending'
+    org.logo_note = None
+    create_audit_log(action='organization_logo_submitted', actor_user_id=current_user.id, target_type='OrganizationProfile',
+                     target_id=str(org.id))
+    db.session.commit()
+    flash('Logo sent to the D.A.R.T Admin. It appears next to your team name once approved.', 'success')
+    return redirect(url_for('organization_settings') + '#teamLogo')
+
+
+@app.route('/admin/organizations/<int:org_id>/logo/<action>', methods=['POST'])
+@login_required
+def admin_organization_logo(org_id, action):
+    require_super_admin()
+    org = db.session.get(OrganizationProfile, org_id)
+    if not org or org.logo_status != 'pending' or not org.logo_pending_path or action not in ('approve', 'reject'):
+        abort(400)
+    note = market_mod.clean(request.form.get('note'), 200) or None
+    if action == 'approve':
+        if not publish_highlight_file(org.logo_pending_path):
+            flash('The logo could not be published. Please try again.', 'danger')
+            return redirect(url_for('admin_organizations') + '#logos')
+        org.logo_path = org.logo_pending_path
+        org.logo_status = 'approved'
+        notif.notify(org.user_id, 'logo_approved', 'Your team badge / logo is approved: it now shows next to your team name across D.A.R.T.',
+                     '/organization/settings')
+    else:
+        if not note:
+            flash('Say why the logo is rejected (the organization sees it).', 'warning')
+            return redirect(url_for('admin_organizations') + '#logos')
+        org.logo_status = 'rejected'
+        notif.notify(org.user_id, 'logo_rejected', f'Your logo was not approved: {note}. Upload your official team badge / logo.',
+                     '/organization/settings')
+    org.logo_pending_path = None if action == 'approve' else org.logo_pending_path
+    org.logo_note = note
+    org.logo_reviewed_at = datetime.utcnow()
+    create_audit_log(action=f'organization_logo_{action}', actor_user_id=current_user.id, target_type='OrganizationProfile',
+                     target_id=str(org.id), details={'note': note})
+    db.session.commit()
+    flash('Logo ' + ('approved.' if action == 'approve' else 'rejected.'), 'success')
+    return redirect(url_for('admin_organizations') + '#logos')
+
+
 # ---------- D.A.R.T Admin: verify organizations ----------
 @app.route('/admin/organizations')
 @login_required
@@ -6802,9 +6940,11 @@ def admin_organizations():
     ).all()
     verified = OrganizationProfile.query.filter_by(verification_status='verified').order_by(OrganizationProfile.org_name).all()
 
+    logo_requests = OrganizationProfile.query.filter_by(logo_status='pending').order_by(OrganizationProfile.id).all()
     return render_template(
         'admin_organizations.html',
         pending=pending,
+        logo_requests=logo_requests,
         alias_requests=alias_requests,
         verified=verified,
         roster_size=lambda org: len(roster_athletes(org)),
@@ -7786,7 +7926,8 @@ def admin_terms_acceptances_csv():
 # profile, as the link-preview image, as "Download card" and in the PDF.
 # Only public sport information is used (age, never the date of birth).
 
-PROFILE_CARD_ROLES = ('Athlete', 'Coach', 'Scout')
+# Every account has a shareable card.
+PROFILE_CARD_ROLES = ('Athlete', 'Coach', 'Scout', 'Vendor', 'Organization', 'Statistician', 'System')
 PROFILE_PHOTO_MAX_BYTES = 6 * MB
 
 
@@ -7801,6 +7942,8 @@ def profile_share_path(user):
     """Public address of a user's profile (athletes: the SEO address)."""
     if user.role == 'Athlete':
         return athlete_public_path(user)
+    if user.role == 'Vendor':
+        return url_for('market_vendor', user_id=user.id)
     return url_for('user_profile', user_id=user.id)
 
 
@@ -7865,6 +8008,53 @@ def profile_card_info(user, viewer=None):
             'subtitle': user.school or 'Coach',
             'pill': user.coach_category or 'Coach',
             'stats': [('Team', user.school or '—'), ('Role', 'Coach / Admin')],
+        })
+    elif user.role == 'Vendor':
+        # Business card: name (person or business), shop, address, location, verified badge.
+        live = MarketListing.query.filter_by(seller_id=user.id, status='approved').count()
+        premium = is_premium_vendor(user)
+        info.update({
+            'eyebrow': 'Business Card' if user.vendor_type == 'business' else 'Vendor Card',
+            'subtitle': user.shop_name or 'D.A.R.T Market$ vendor',
+            'pill': 'Premium Vendor' if premium else 'D.A.R.T Market$ Vendor',
+            'verified': bool(user.vendor_verified_at),
+            'stats': [('Shop', user.shop_name or '—'), ('Location', user.business_location or '—'), ('Products', live)],
+            'extra': [('Address', user.business_address)] if user.business_address else [],
+            'premium_vendor': premium,
+        })
+    elif user.role == 'Organization':
+        # The organization's only picture is its approved team badge / logo.
+        org = OrganizationProfile.query.filter_by(user_id=user.id).first()
+        org_ok = bool(org and org.verification_status == 'verified')
+        info.update({
+            'name': org.org_name if org else user.full_name,
+            'eyebrow': 'Organization Card',
+            'subtitle': ' · '.join(x for x in ((org.org_type if org else ''), (org.city if org else '')) if x) or 'Organization',
+            'pill': (org.org_type if org else None) or 'Organization',
+            'verified': org_ok,
+            'picture': None,
+            'picture_url': org_logo_url(org) if org_ok else '',
+            'nationality': '', 'flag': '', 'code': '',
+            'stats': [
+                ('Type', (org.org_type if org else None) or '—'),
+                ('Sports', (org.sports if org and org.sports else '—')),
+                ('Location', ', '.join(x for x in ((org.city if org else None), (org.country if org else None)) if x) or '—'),
+            ],
+        })
+    elif user.role == 'Statistician':
+        journalist = user.official_type == 'Sports journalist'
+        info.update({
+            'eyebrow': 'Journalist Card' if journalist else 'Match Official Card',
+            'subtitle': user.school or ('Sports journalist' if journalist else 'Match Official'),
+            'pill': user.official_type or 'Match Official',
+            'stats': [('Role', user.official_type or 'Match Official'), ('Organization', user.school or '—')],
+        })
+    elif user.role == 'System':
+        info.update({
+            'eyebrow': 'D.A.R.T Admin Card',
+            'subtitle': 'D.A.R.T. platform administration',
+            'pill': 'D.A.R.T Admin',
+            'stats': [('Role', 'D.A.R.T Admin')],
         })
     else:  # Scout
         sp = ScoutProfile.query.filter_by(user_id=user.id).first()
@@ -7962,15 +8152,21 @@ def profile_contacts(user):
 app.jinja_env.filters['phone'] = format_phone
 
 
-def _fetch_profile_photo(user):
-    """The profile picture's bytes for the card image, or None."""
-    if not user.profile_picture:
+def _fetch_profile_photo(user, info=None):
+    """The profile picture's bytes for the card image (organizations: their logo), or None."""
+    logo = (info or {}).get('picture_url') if user.role == 'Organization' else None
+    if user.role == 'Organization' and not logo:
+        return None
+    if not logo and not user.profile_picture:
         return None
     try:
-        result = supabase.storage.from_('profile-pictures').get_public_url(user.profile_picture)
-        if isinstance(result, dict):
-            result = result.get('publicUrl') or result.get('public_url')
-        url = (result or '').rstrip('?')
+        if logo:
+            url = logo
+        else:
+            result = supabase.storage.from_('profile-pictures').get_public_url(user.profile_picture)
+            if isinstance(result, dict):
+                result = result.get('publicUrl') or result.get('public_url')
+            url = (result or '').rstrip('?')
         if not url:
             return None
         response = http_requests.get(url, timeout=5)
@@ -7995,7 +8191,7 @@ def profile_card_png(user):
         teams=info.get('teams') or [],
         contacts=[(f"{c['label']}: " + (f"{c['name']} · " if c['name'] else '') + c['phone']) for c in info.get('contacts') or []],
         verified=info['verified'],
-        photo=_fetch_profile_photo(user),
+        photo=_fetch_profile_photo(user, info),
     ))
 
 
@@ -8040,7 +8236,8 @@ def profile_card_pdf(user_id):
     return response
 
 
-app.jinja_env.globals.update(profile_card_info=profile_card_info, profile_share_path=profile_share_path)
+app.jinja_env.globals.update(profile_card_info=profile_card_info, profile_share_path=profile_share_path,
+                             profile_card_roles=PROFILE_CARD_ROLES)
 
 
 # ========== SUPABASE STORAGE ROUTES ==========
@@ -10381,6 +10578,8 @@ def user_profile(user_id):
     if not user:
         abort(404)
 
+    if user.role == 'Vendor':
+        return redirect(url_for('market_vendor', user_id=user.id))
     # Athletes' canonical public address is /athletes/<id>/<name> (SEO);
     # this page shows the same content and points there.
     return render_user_profile(user)
@@ -10534,6 +10733,10 @@ def recruit_ready_profile(user_id):
 @app.route('/update_profile', methods=['POST'])
 @login_required
 def update_profile():
+    # Organizations: their only picture is the team badge / logo (approved by the D.A.R.T Admin).
+    if current_user.role == 'Organization':
+        flash('Organizations upload only their team badge / logo, here in settings.', 'warning')
+        return redirect(url_for('organization_settings') + '#teamLogo')
     is_coach = current_user.role == 'Coach'
     profile_resent = False
     coach_pro = is_coach and is_coach_pro(current_user)
@@ -10607,6 +10810,10 @@ def update_profile():
     new_preferred_foot = request.form.get('preferred_foot', '').strip()
 
     # ---------- AGE ----------
+    # With a date of birth the age is worked out from it (below); a typed age
+    # is only used for older profiles without a date of birth.
+    if new_dob:
+        new_age = ''
     if new_age:
         try:
             new_age = int(new_age)
@@ -10638,6 +10845,8 @@ def update_profile():
             return redirect(url_for('profile'))
 
         current_user.date_of_birth = parsed_dob
+        today_dob = datetime.utcnow().date()
+        current_user.age = today_dob.year - parsed_dob.year - ((today_dob.month, today_dob.day) < (parsed_dob.month, parsed_dob.day))
     elif 'date_of_birth' in request.form:
         current_user.date_of_birth = None
 
@@ -12298,7 +12507,9 @@ def register_official():
     if current_user.is_authenticated:
         return redirect(url_for(dashboard_endpoint_for(current_user)))
     if request.method == 'GET':
-        return render_template('register_official.html', form={})
+        # /register-official?as=journalist: the sports journalist sign-up.
+        form = {'official_type': 'Sports journalist'} if request.args.get('as') == 'journalist' else {}
+        return render_template('register_official.html', form=form)
 
     form = request.form
 
@@ -12921,8 +13132,7 @@ def market_home():
     query = market_mod.search(request.args)
     total = query.count()
     listings = query.offset((page - 1) * market_mod.PAGE_SIZE).limit(market_mod.PAGE_SIZE).all()
-    featured = (MarketListing.query.filter_by(status='approved').order_by(MarketListing.reviewed_at.desc().nullslast())
-                .limit(5).all())
+    featured = market_showcase(8)
     filters = {k: v for k, v in request.args.items() if k in ('q', 'sport', 'category', 'condition', 'currency', 'min', 'max',
                                                             'size', 'color', 'brand', 'sort') and v}
     return render_template('market.html', gate=False, home_tab='market', listings=listings, total=total, page=page,
@@ -12948,7 +13158,13 @@ def market_item(listing_id):
         thread = MarketThread.query.filter_by(listing_id=listing.id, buyer_id=current_user.id).first()
     more = (MarketListing.query.filter(MarketListing.seller_id == listing.seller_id, MarketListing.status == 'approved',
                                        MarketListing.id != listing.id).order_by(MarketListing.id.desc()).limit(4).all())
+    my_order = None
+    if current_user.id != listing.seller_id:
+        my_order = MarketCartItem.query.filter_by(user_id=current_user.id, listing_id=listing.id).first()
+        if my_order and my_order.status == 'cart':
+            my_order = None
     return render_template('market_item.html', listing=listing, thread=thread, more=more, block_reason=market_block_reason(),
+                           my_order=my_order,
                            is_seller=current_user.id == listing.seller_id,
                            already_reported=MarketReport.query.filter_by(listing_id=listing.id, reporter_id=current_user.id).first())
 
@@ -12983,7 +13199,7 @@ def market_sell():
     if request.method == 'POST':
         values, error = market_mod.validate_listing(request.form)
         if not error:
-            error = market_mod.seller_limits_error(current_user)
+            error = market_mod.seller_limits_error(current_user, is_premium_vendor(current_user))
         files = [f for f in request.files.getlist('images') if f and f.filename]
         if not error and not files:
             error = 'Add at least one clear photo of the product.'
@@ -13077,7 +13293,8 @@ def market_item_status(listing_id):
 def market_mine():
     listings = (MarketListing.query.filter(MarketListing.seller_id == current_user.id, MarketListing.status != 'removed')
                 .order_by(MarketListing.updated_at.desc()).all())
-    return render_template('market_mine.html', listings=listings, block_reason=market_block_reason())
+    return render_template('market_mine.html', listings=listings, block_reason=market_block_reason(),
+                           orders=market_mod.vendor_orders(current_user), overdue=market_mod.overdue_orders(current_user.id))
 
 
 @app.route('/market/phone', methods=['POST'])
@@ -13197,7 +13414,9 @@ def admin_market():
         'sellers': db.session.query(func.count(func.distinct(MarketListing.seller_id))).scalar() or 0,
         'threads': MarketThread.query.count(),
     }
-    return render_template('admin_market.html', pending=pending, reports=reports, recent=recent, stats=stats)
+    vendors = User.query.filter_by(role='Vendor').order_by(User.vendor_verified_at.isnot(None), User.created_at.desc()).limit(100).all()
+    return render_template('admin_market.html', pending=pending, reports=reports, recent=recent, stats=stats, vendors=vendors,
+                           overdue=market_mod.overdue_orders())
 
 
 @app.route('/admin/market/item/<int:listing_id>/<action>', methods=['POST'])
@@ -13266,6 +13485,209 @@ def admin_market_ban(user_id):
 
 
 app.jinja_env.globals['market_pending'] = market_mod.pending_counts
+
+
+def market_showcase(limit=8):
+    """Live products of Vendor Premium sellers (advertised across D.A.R.T.), freshest first."""
+    ids = premium_vendor_ids()
+    if not ids:
+        return []
+    return (MarketListing.query.filter(MarketListing.status == 'approved', MarketListing.seller_id.in_(ids))
+            .order_by(MarketListing.reviewed_at.desc().nullslast(), MarketListing.id.desc()).limit(limit).all())
+
+
+app.jinja_env.globals.update(market_order_steps=market_mod.ORDER_STEPS, market_order_step=market_mod.order_step,
+                             market_order_overdue=market_mod.is_overdue, market_overdue_days=market_mod.ORDER_OVERDUE_DAYS)
+app.jinja_env.globals.update(market_showcase=market_showcase, market_cart_count=lambda: market_mod.cart_count(current_user),
+                             is_premium_vendor=is_premium_vendor)
+
+
+# ---------- Vendor business card + shop page (public) ----------
+@app.route('/market/vendor/<int:user_id>')
+def market_vendor(user_id):
+    vendor = db.session.get(User, user_id)
+    if not vendor or vendor.role != 'Vendor' or vendor.is_suspended:
+        abort(404)
+    listings = (MarketListing.query.filter_by(seller_id=vendor.id, status='approved')
+                .order_by(MarketListing.reviewed_at.desc().nullslast()).limit(60).all())
+    return render_template('market_vendor.html', vendor=vendor, listings=listings,
+                           info=profile_card_info(vendor, current_user if current_user.is_authenticated else None))
+
+
+# ---------- Cart (a list for the deal; payment happens off D.A.R.T.) ----------
+@app.route('/market/item/<int:listing_id>/cart', methods=['POST'])
+@login_required
+def market_cart_add(listing_id):
+    listing = MarketListing.query.get_or_404(listing_id)
+    if listing.status != 'approved' or listing.seller_id == current_user.id or current_user.is_suspended:
+        abort(404)
+    try:
+        qty = int(request.form.get('quantity') or 1)
+    except ValueError:
+        qty = 1
+    qty = max(1, min(qty, listing.quantity or 1, 50))
+    size = request.form.get('size') or None
+    color = request.form.get('color') or None
+    if size and size not in listing.size_list:
+        size = None
+    if color and color not in listing.color_list:
+        color = None
+    item = MarketCartItem.query.filter_by(user_id=current_user.id, listing_id=listing.id).first()
+    if item and item.status in ('requested', 'sold'):
+        flash('This product is already ordered: follow it in your cart.', 'info')
+        return redirect(url_for('market_cart'))
+    if item and item.status in ('received', 'cancelled'):
+        # A new order of the same product starts again from the cart.
+        item.status = 'cart'
+        item.requested_at = item.sold_at = item.received_at = item.cancelled_at = None
+        item.created_at = datetime.utcnow()
+    if not item:
+        if market_mod.cart_count(current_user) >= market_mod.MAX_CART_ITEMS:
+            flash(f'Your cart is full ({market_mod.MAX_CART_ITEMS} products). Remove some first.', 'warning')
+            return redirect(url_for('market_cart'))
+        item = MarketCartItem(user_id=current_user.id, listing_id=listing.id)
+        db.session.add(item)
+    item.quantity, item.size, item.color = qty, size, color
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+    flash(f'Added to your cart: {listing.title}.', 'success')
+    return redirect(request.form.get('next') == 'item' and url_for('market_item', listing_id=listing.id) or url_for('market_cart'))
+
+
+@app.route('/market/cart')
+@login_required
+def market_cart():
+    groups = market_mod.cart_for(current_user)
+    return render_template('market_cart.html', groups=groups, totals=market_mod.cart_totals, block_reason=market_block_reason())
+
+
+@app.route('/market/cart/<int:item_id>/remove', methods=['POST'])
+@login_required
+def market_cart_remove(item_id):
+    item = MarketCartItem.query.get_or_404(item_id)
+    if item.user_id != current_user.id:
+        abort(404)
+    if item.status in ('requested', 'sold'):
+        flash('This order is with the vendor: it stays until it is sold, cancelled or received.', 'warning')
+        return redirect(url_for('market_cart'))
+    db.session.delete(item)
+    db.session.commit()
+    flash('Removed from your cart.', 'info')
+    return redirect(url_for('market_cart'))
+
+
+@app.route('/market/cart/<int:item_id>/received', methods=['POST'])
+@login_required
+def market_cart_received(item_id):
+    """Only the buyer confirms the product reached them ("sold to me")."""
+    item = MarketCartItem.query.get_or_404(item_id)
+    if item.user_id != current_user.id or item.status != 'sold':
+        abort(404)
+    item.status = 'received'
+    item.received_at = datetime.utcnow()
+    notif.notify(item.listing.seller_id, 'market_received',
+                 f'{current_user.display_name} confirmed they received "{item.listing.title}". Order complete.', '/market/mine#orders')
+    create_audit_log(action='market_order_received', actor_user_id=current_user.id, target_type='MarketCartItem', target_id=str(item.id))
+    db.session.commit()
+    flash('Thanks! The order is complete: the product is in your possession.', 'success')
+    back = safe_next_url(request.form.get('next'))
+    return redirect(back or url_for('market_cart'))
+
+
+@app.route('/market/orders/<int:item_id>/<action>', methods=['POST'])
+@login_required
+def market_order_action(item_id, action):
+    """The vendor marks a buyer's order sold (left the shop) or not sold. Mandatory."""
+    item = MarketCartItem.query.get_or_404(item_id)
+    listing = item.listing
+    if listing.seller_id != current_user.id or item.status != 'requested' or action not in ('sold', 'not_sold'):
+        abort(404)
+    now = datetime.utcnow()
+    if action == 'sold':
+        item.status, item.sold_at = 'sold', now
+        listing.quantity = max(0, (listing.quantity or 0) - (item.quantity or 1))
+        notif.notify(item.user_id, 'market_sold',
+                     f'"{listing.title}" left the vendor\'s shop. Confirm in your cart when it is in your hands.', '/market/cart')
+        if listing.quantity == 0 and listing.status == 'approved':
+            # Sold out: off sale, and the system is told.
+            listing.status = 'sold'
+            notif.notify(current_user.id, 'market_sold_out', f'"{listing.title}" is sold out and is no longer on sale.', '/market/mine')
+            create_audit_log(action='market_listing_sold_out', actor_user_id=current_user.id, target_type='MarketListing',
+                             target_id=str(listing.id))
+        flash('Marked sold. The buyer is asked to confirm when they have it.', 'success')
+    else:
+        item.status, item.cancelled_at = 'cancelled', now
+        notif.notify(item.user_id, 'market_not_sold', f'The vendor did not sell you "{listing.title}". You can order it again.', '/market/cart')
+        flash('Marked not sold. The buyer was told.', 'info')
+    create_audit_log(action=f'market_order_{action}', actor_user_id=current_user.id, target_type='MarketCartItem', target_id=str(item.id))
+    db.session.commit()
+    return redirect(url_for('market_mine') + '#orders')
+
+
+@app.route('/market/cart/seller/<int:seller_id>/contact', methods=['POST'])
+@login_required
+def market_cart_contact(seller_id):
+    """Send the seller one message listing everything in the cart from them."""
+    items = [it for it in MarketCartItem.query.filter_by(user_id=current_user.id, status='cart').all()
+             if it.listing.seller_id == seller_id and it.listing.status == 'approved']
+    if not items:
+        abort(404)
+    seller = db.session.get(User, seller_id)
+    reason = market_block_reason() or market_block_reason(seller)
+    if reason:
+        flash(reason, 'warning')
+        return redirect(url_for('market_cart'))
+    if not current_user.phone:
+        error = save_market_phone(request.form.get('phone'))
+        if error:
+            flash('Add your phone number first (the seller sees it, as you see theirs). ' + error, 'warning')
+            return redirect(url_for('market_cart'))
+    error = market_mod.message_rate_error(current_user)
+    listing = items[0].listing
+    thread = MarketThread.query.filter_by(listing_id=listing.id, buyer_id=current_user.id).first()
+    if not error and not thread:
+        error = market_mod.new_thread_error(current_user)
+    if error:
+        flash(error, 'warning')
+        return redirect(url_for('market_cart'))
+    if not thread:
+        thread = MarketThread(listing_id=listing.id, buyer_id=current_user.id, seller_id=seller_id)
+        db.session.add(thread)
+        db.session.flush()
+    db.session.add(MarketMessage(thread_id=thread.id, sender_id=current_user.id, body=market_mod.cart_message(items)))
+    thread.last_message_at = datetime.utcnow()
+    for it in items:
+        it.status, it.requested_at = 'requested', datetime.utcnow()
+    notif.notify(seller_id, 'market_order',
+                 f'{current_user.display_name} sent you an order ({len(items)} product{"s" if len(items) != 1 else ""}). '
+                 f'After the deal, mark it sold or not sold in My shop (required).', '/market/mine#orders')
+    db.session.commit()
+    flash('Your list was sent to the seller. Agree on the meeting place and pay them directly (off D.A.R.T.).', 'success')
+    return redirect(url_for('market_thread', thread_id=thread.id))
+
+
+# ---------- D.A.R.T Admin: verify vendors (badge on their business card) ----------
+@app.route('/admin/market/vendor/<int:user_id>/verify', methods=['POST'])
+@login_required
+def admin_market_vendor_verify(user_id):
+    require_super_admin()
+    vendor = User.query.get_or_404(user_id)
+    if vendor.role != 'Vendor':
+        abort(400)
+    if vendor.vendor_verified_at:
+        vendor.vendor_verified_at = None
+        flash(f'{vendor.display_name}: verification badge removed.', 'info')
+    else:
+        vendor.vendor_verified_at = datetime.utcnow()
+        notif.notify(vendor.id, 'vendor_verified', 'Your D.A.R.T Market$ business is verified: the badge is now on your business card.',
+                     f'/market/vendor/{vendor.id}')
+        flash(f'{vendor.display_name} is verified.', 'success')
+    create_audit_log(action='vendor_verified' if vendor.vendor_verified_at else 'vendor_unverified', actor_user_id=current_user.id,
+                     target_type='User', target_id=str(vendor.id))
+    db.session.commit()
+    return redirect(url_for('admin_market') + '#vendors')
 app.jinja_env.filters['dict_without'] = lambda d, *keys: {k: v for k, v in d.items() if k not in keys}
 
 
@@ -13281,9 +13703,21 @@ def register_vendor():
         return render_template('register_vendor.html', form=form), 400
 
     if request.method == 'POST':
-        full_name, name_error = validate_full_name(form.get('full_name', ''))
+        vendor_type = form.get('vendor_type') if form.get('vendor_type') in ('person', 'business') else None
+        if not vendor_type:
+            return back('Are you registering as a person or as a business?')
+        if vendor_type == 'business':
+            full_name, name_error = market_mod.validate_business_name(form.get('full_name', ''))
+        else:
+            full_name, name_error = validate_full_name(form.get('full_name', ''))
         if name_error:
             return back(name_error)
+        address = market_mod.clean(form.get('business_address'), 200)
+        location = market_mod.clean(form.get('business_location'), 80)
+        if len(address) < 5:
+            return back('Enter your shop / business address (shown on your business card).')
+        if len(location) < 2:
+            return back('Enter your town / county (e.g. Monrovia, Montserrado).')
         username, username_error = check_new_username(form.get('username'))
         if username_error:
             return back(username_error)
@@ -13306,14 +13740,14 @@ def register_vendor():
         if form.get('agree') != 'yes':
             return back('Please confirm you will only sell genuine sports gear.')
         vendor = User(full_name=full_name, username=username, email=email, role='Vendor', school=shop or '', shop_name=shop or None,
-                      phone=phone, is_verified=True)
+                      phone=phone, is_verified=True, vendor_type=vendor_type, business_address=address, business_location=location)
         vendor.set_password(password)
         try:
             db.session.add(vendor)
             db.session.flush()
             record_account_created(vendor)
             create_audit_log(action='vendor_registration_created', actor_user_id=vendor.id, target_type='User',
-                             target_id=str(vendor.id), details={'shop': shop})
+                             target_id=str(vendor.id), details={'shop': shop, 'type': vendor_type})
             db.session.commit()
         except IntegrityError:
             db.session.rollback()

@@ -152,6 +152,17 @@ PLANS = {
             ),
         ),
         Plan(
+            # Price: set by D.A.R.T. (change here; the pricing page follows).
+            code='vendor_pro', audience='vendor', name='Vendor Premium', price=Decimal('14.99'),
+            methods=MOMO_METHODS, highlight=True,
+            features=(
+                'Unlimited live products on D.A.R.T Market$',
+                'Your products advertised across D.A.R.T.: the Market$ showcase and the Highlights feed',
+                'Premium badge on your business card',
+                'No ads',
+            ),
+        ),
+        Plan(
             code='organization_pro', audience='organization', name='Organization Pro',
             price=Decimal('99.99'), methods=('card',) + MOMO_METHODS, advanced_search=True,
             highlight=True,
@@ -188,7 +199,8 @@ def club_division_of(user):
             return row[0]
     return None
 
-AUDIENCE_FOR_ROLE = {'Athlete': 'athlete', 'Scout': 'scout', 'Organization': 'organization', 'Coach': 'coach'}
+AUDIENCE_FOR_ROLE = {'Athlete': 'athlete', 'Scout': 'scout', 'Organization': 'organization', 'Coach': 'coach',
+                     'Vendor': 'vendor'}
 
 # Records an athlete shows to people searching for them. Free athletes:
 # their pinned records (up to FREE_SHOWCASE_RECORDS), topped up with their
@@ -303,7 +315,23 @@ def plan_for_user(user):
         return PLANS['organization_pro']
     if audience == 'coach':
         return PLANS['coach_pro']
+    if audience == 'vendor':
+        return PLANS['vendor_pro']
     return None
+
+
+def is_premium_vendor(user):
+    plan = current_plan(user) if getattr(user, 'role', None) == 'Vendor' else None
+    return bool(plan and plan.code == 'vendor_pro')
+
+
+def premium_vendor_ids():
+    """Vendors with an active Vendor Premium plan (their products are advertised)."""
+    rows = (db.session.query(Subscription.user_id)
+            .filter(Subscription.plan_code == 'vendor_pro', Subscription.status == 'active',
+                    Subscription.current_period_end > utcnow())
+            .distinct().all())
+    return [r[0] for r in rows]
 
 
 def eligibility_error(user, plan):
