@@ -779,6 +779,21 @@
     </div>
   </div>
 
+  <!-- Download the app: asked each time D.A.R.T. is opened in a browser (not in the installed app). pwa.js shows it. -->
+  <section class="pwa-sheet" id="pwaInstallSheet" role="dialog" aria-labelledby="pwaSheetTitle" aria-describedby="pwaSheetText" hidden>
+    <img class="pwa-sheet-icon" src="{{ url_for('static', filename='images/icons/icon-192.png') }}" alt="" width="52" height="52">
+    <div class="pwa-sheet-body">
+      <strong id="pwaSheetTitle">Get the D.A.R.T. app</strong>
+      <span id="pwaSheetText">Free, fast, works offline. Opens from your Home Screen like any app.</span>
+    </div>
+    <div class="pwa-sheet-actions">
+      <button type="button" class="btn pwa-sheet-go" id="pwaSheetInstall">
+        <i class="fa-solid fa-download" aria-hidden="true"></i> <span id="pwaSheetInstallLabel">Download App to phone</span>
+      </button>
+      <button type="button" class="btn btn-link pwa-sheet-later" id="pwaSheetLater">Not now</button>
+    </div>
+  </section>
+
   <!-- ========== LAYOUT HELPERS ========== -->
   <script>
     (function () {

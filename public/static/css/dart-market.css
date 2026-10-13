@@ -211,3 +211,24 @@ html[data-theme="dark"] .mk-track-line { background: rgba(255, 255, 255, 0.15); 
   .mk-track-dot { width: 26px; height: 26px; font-size: 0.72rem; }
   .mk-track-line { margin-top: 12px; }
 }
+
+/* On-sale slider (top of Market$): product + seller details */
+.mk-slide { isolation: isolate; }
+.mk-slide-link { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+.mk-slide-link:focus-visible { outline: 3px solid #fff; outline-offset: -3px; }
+.mk-slide-text { min-width: 0; }
+.mk-slide-meta { font-size: 0.82rem; opacity: 0.8; margin-top: 2px; color: #fff; }
+.mk-slide-seller { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 8px; max-width: 100%; margin-top: 12px;
+  padding: 6px 12px 6px 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff !important; text-decoration: none; }
+.mk-slide-seller:hover { background: rgba(255, 255, 255, 0.22); }
+.mk-slide-seller img, .mk-slide-avatar { width: 32px; height: 32px; flex: 0 0 32px; border-radius: 50%; object-fit: cover; }
+.mk-slide-avatar { display: grid; place-items: center; font-weight: 900; color: #fff; background: var(--dart-primary-gradient, linear-gradient(135deg, #198754, #0d6efd)); }
+.mk-slide-who { min-width: 0; line-height: 1.15; }
+.mk-slide-who strong { display: block; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-slide-who small { display: block; font-size: 0.72rem; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-slide-check { color: #4cd38a; }
+@media (max-width: 575.98px) {
+  .mk-slide .mk-promo-cta { display: none; }
+  .mk-slide-seller { margin-top: 8px; }
+}

@@ -13132,9 +13132,10 @@ def market_home():
     query = market_mod.search(request.args)
     total = query.count()
     listings = query.offset((page - 1) * market_mod.PAGE_SIZE).limit(market_mod.PAGE_SIZE).all()
-    featured = market_showcase(8)
     filters = {k: v for k, v in request.args.items() if k in ('q', 'sport', 'category', 'condition', 'currency', 'min', 'max',
                                                             'size', 'color', 'brand', 'sort') and v}
+    # The on-sale slider tops the main Market$ page (not search / filter results).
+    featured = market_slider(12) if not filters and page == 1 else []
     return render_template('market.html', gate=False, home_tab='market', listings=listings, total=total, page=page,
                            pages=max(1, -(-total // market_mod.PAGE_SIZE)), featured=featured, filters=filters,
                            brands=market_mod.brands(), block_reason=market_block_reason())
@@ -13494,6 +13495,26 @@ def market_showcase(limit=8):
         return []
     return (MarketListing.query.filter(MarketListing.status == 'approved', MarketListing.seller_id.in_(ids))
             .order_by(MarketListing.reviewed_at.desc().nullslast(), MarketListing.id.desc()).limit(limit).all())
+
+
+def market_slider(limit=12):
+    """
+    Top-of-Market$ slider: approved products that are on sale (in stock, seller in
+    good standing). Vendor Premium products come first, then the newest of the rest.
+    """
+    base = (MarketListing.query.join(User, MarketListing.seller_id == User.id)
+            .filter(MarketListing.status == 'approved',
+                    db.or_(MarketListing.quantity.is_(None), MarketListing.quantity > 0),
+                    db.or_(User.is_suspended.is_(None), User.is_suspended.is_(False)),
+                    db.or_(User.market_banned.is_(None), User.market_banned.is_(False))))
+    newest = (MarketListing.reviewed_at.desc().nullslast(), MarketListing.id.desc())
+    ids = premium_vendor_ids()
+    picked = base.filter(MarketListing.seller_id.in_(ids)).order_by(*newest).limit(limit).all() if ids else []
+    if len(picked) < limit:
+        rest = base.filter(MarketListing.id.notin_([l.id for l in picked] or [0])).order_by(*newest).limit(limit - len(picked)).all()
+        picked += rest
+    premium = set(ids or [])
+    return [(l, l.seller_id in premium) for l in picked]
 
 
 app.jinja_env.globals.update(market_order_steps=market_mod.ORDER_STEPS, market_order_step=market_mod.order_step,

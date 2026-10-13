@@ -23,19 +23,31 @@
     </section>
   {% else %}
 
+  {# On sale now: approved, in-stock products with their seller (Vendor Premium first). #}
   {% if featured %}
-    <section class="mk-promo mk-showcase" aria-label="Premium vendors' products" aria-roledescription="carousel">
+    <section class="mk-promo mk-showcase mk-slider" aria-label="On sale now" aria-roledescription="carousel">
       <div class="mk-promo-track" data-mk-carousel data-autoplay="4500">
-        {% for l in featured %}
-          <a class="mk-promo-card" href="{{ url_for('market_item', listing_id=l.id) }}" aria-label="{{ l.title }}, {{ money(l) }}">
-            <div>
-              <span class="mk-promo-tag"><i class="fa-solid fa-crown" aria-hidden="true"></i> Premium vendor · {{ l.seller.shop_name or l.seller.display_name }}</span>
+        {% for l, premium in featured %}
+          {% set s = l.seller %}
+          <article class="mk-promo-card mk-slide" aria-label="{{ l.title }}, {{ money(l) }}">
+            <a class="mk-slide-link" href="{{ url_for('market_item', listing_id=l.id) }}" aria-label="{{ l.title }}, {{ money(l) }}"></a>
+            <div class="mk-slide-text">
+              <span class="mk-promo-tag">{% if premium %}<i class="fa-solid fa-crown" aria-hidden="true"></i> Premium vendor{% else %}<i class="fa-solid fa-tag" aria-hidden="true"></i> On sale{% endif %}</span>
               <div class="mk-promo-name">{{ l.title }}</div>
               <div class="mk-promo-price">{{ money(l) }}</div>
-              <span class="mk-promo-cta">Shop now</span>
+              <div class="mk-slide-meta">{{ 'New' if l.condition == 'new' else 'Used' }}{% if l.quantity %} · {{ l.quantity }} in stock{% endif %}</div>
+              <a class="mk-slide-seller" href="{{ url_for('market_vendor', user_id=s.id) if s.role == 'Vendor' else url_for('user_profile', user_id=s.id) }}"
+                 aria-label="Seller: {{ s.shop_name or s.display_name }}">
+                {% if s.profile_picture %}<img src="{{ url_for('profile_picture', filename=s.profile_picture) }}" alt="" loading="lazy">
+                {% else %}<span class="mk-slide-avatar" aria-hidden="true">{{ (s.shop_name or s.display_name or '?')[0] | upper }}</span>{% endif %}
+                <span class="mk-slide-who">
+                  <strong>{{ s.shop_name or s.display_name }}{% if s.vendor_verified_at or (s.role != 'Vendor' and s.is_verified) %} <i class="fa-solid fa-circle-check mk-slide-check" title="Verified by D.A.R.T." aria-label="Verified"></i>{% endif %}</strong>
+                  <small>{{ 'Business' if s.vendor_type == 'business' else (s.role | role_label) }}{% if s.business_location or l.location %} · <i class="fa-solid fa-location-dot" aria-hidden="true"></i> {{ s.business_location or l.location }}{% endif %}</small>
+                </span>
+              </a>
             </div>
             <div class="mk-promo-img">{% if l.cover %}<img src="{{ market_image_url(l.cover) }}" alt="" {% if not loop.first %}loading="lazy"{% endif %}>{% endif %}</div>
-          </a>
+          </article>
         {% endfor %}
       </div>
       <div class="mk-dots" aria-hidden="true">{% for l in featured %}<span class="{{ 'on' if loop.first }}"></span>{% endfor %}</div>

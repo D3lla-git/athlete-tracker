@@ -1776,3 +1776,23 @@ html[data-theme="dark"] .dart-slider-dot.is-active { background: #4cd38a; }
 
 /* Organization card: the approved team badge instead of a photo */
 .pc-photo.pc-photo-logo { object-fit: contain; background: #fff; }
+
+/* ===== Download the app sheet (every visit in a browser) ===== */
+.pwa-sheet { position: fixed; z-index: 1045; left: 12px; right: 12px; bottom: calc(58px + env(safe-area-inset-bottom) + 12px);
+  max-width: 560px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 16px;
+  border-radius: 20px; color: #fff; background: var(--dart-primary-gradient, linear-gradient(135deg, #0d2413, #198754));
+  border: 1px solid rgba(255, 255, 255, 0.18); box-shadow: 0 18px 45px rgba(0, 0, 0, 0.4); animation: pwaSheetIn 0.35s ease-out; }
+.pwa-sheet[hidden] { display: none !important; }
+.pwa-sheet-icon { width: 52px; height: 52px; border-radius: 14px; flex: 0 0 52px; background: #0d2413; }
+.pwa-sheet-body { flex: 1 1 180px; min-width: 0; line-height: 1.25; }
+.pwa-sheet-body strong { display: block; font-size: 1rem; }
+.pwa-sheet-body span { display: block; font-size: 0.8rem; opacity: 0.85; margin-top: 2px; }
+.pwa-sheet-actions { display: flex; align-items: center; gap: 6px; flex: 1 1 100%; }
+.pwa-sheet-go { flex: 1 1 auto; font-weight: 800; border-radius: 999px; padding: 10px 16px; color: #0d2413 !important;
+  background: #fff !important; border: 0; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25); }
+.pwa-sheet-go:hover, .pwa-sheet-go:focus-visible { background: #e9fff2 !important; }
+.pwa-sheet-later { color: rgba(255, 255, 255, 0.85) !important; text-decoration: none; font-weight: 600; white-space: nowrap; }
+@media (min-width: 992px) { .pwa-sheet { bottom: 20px; left: auto; right: 20px; margin: 0; } }
+@media (min-width: 576px) { .pwa-sheet-actions { flex: 0 0 auto; } }
+@keyframes pwaSheetIn { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pwa-sheet { animation: none; } }

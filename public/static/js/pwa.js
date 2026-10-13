@@ -204,6 +204,139 @@
     }
 
     // ==========================================================
+    // "DOWNLOAD THE APP" SHEET (every visit in a browser)
+    // ==========================================================
+    // Each time D.A.R.T. is opened in a browser (not the installed app), a
+    // sheet offers the app. One tap on "Download App to phone":
+    //   Android / desktop Chrome, Edge, Samsung Internet: the browser's own
+    //     install dialog opens (browsers always ask the user to confirm it;
+    //     no website can install an app silently).
+    //   iPhone / iPad: Apple has no install button for websites, so the
+    //     Share -> Add to Home Screen steps are shown.
+    //   Android in-app browsers (Facebook, Instagram, ...) that can't install:
+    //     D.A.R.T. reopens in Chrome, where the install dialog works.
+    // "Not now" hides it until the next visit (browser session).
+    var SHEET_SEEN_KEY = 'dartInstallSheetClosed';
+
+    function isAndroid() {
+        return /android/i.test(window.navigator.userAgent);
+    }
+
+    function isMobile() {
+        return isAndroid() || isIos() || /mobi/i.test(window.navigator.userAgent);
+    }
+
+    // Real Chrome on Android (not a WebView / in-app browser / other browser).
+    function isAndroidChrome() {
+        var ua = window.navigator.userAgent;
+        return isAndroid() && /Chrome\//.test(ua) &&
+            !/; wv\)|SamsungBrowser|Firefox|EdgA|OPR|FBAN|FBAV|Instagram|Line\/|Snapchat|TikTok|MiuiBrowser|UCBrowser/i.test(ua);
+    }
+
+    function openInChrome() {
+        var url = window.location;
+        window.location.href = 'intent://' + url.host + url.pathname + url.search +
+            '#Intent;scheme=' + url.protocol.replace(':', '') + ';package=com.android.chrome;end';
+    }
+
+    function setUpInstallSheet() {
+        var sheet = document.getElementById('pwaInstallSheet');
+
+        if (!sheet || isStandalone()) {
+            return;
+        }
+
+        try {
+            if (window.sessionStorage.getItem(SHEET_SEEN_KEY)) {
+                return;
+            }
+        } catch (e) {}
+
+        var go = document.getElementById('pwaSheetInstall');
+        var label = document.getElementById('pwaSheetInstallLabel');
+        var text = document.getElementById('pwaSheetText');
+        var mode = null;
+
+        if (!isMobile()) {
+            label.textContent = 'Install App on this computer';
+        }
+
+        function close() {
+            sheet.hidden = true;
+            try {
+                window.sessionStorage.setItem(SHEET_SEEN_KEY, '1');
+            } catch (e) {}
+        }
+
+        function show(newMode) {
+            mode = newMode;
+            if (mode === 'chrome') {
+                label.textContent = 'Download App to phone';
+                text.textContent = 'This app browser can\'t install apps. One tap opens D.A.R.T. in Chrome to install it.';
+            }
+            sheet.hidden = false;
+        }
+
+        document.getElementById('pwaSheetLater').addEventListener('click', close);
+
+        go.addEventListener('click', function () {
+            if (mode === 'ios') {
+                close();
+                var iosModal = document.getElementById('pwaIosInstallModal');
+                if (iosModal && typeof bootstrap !== 'undefined') {
+                    bootstrap.Modal.getOrCreateInstance(iosModal).show();
+                }
+                return;
+            }
+            if (mode === 'chrome') {
+                close();
+                openInChrome();
+                return;
+            }
+            var promptEvent = window.dartDeferredInstallPrompt;
+            if (!promptEvent) {
+                close();
+                return;
+            }
+            // A prompt event can only be used once.
+            window.dartDeferredInstallPrompt = null;
+            close();
+            promptEvent.prompt();
+            promptEvent.userChoice.catch(function () {});
+        });
+
+        window.addEventListener('appinstalled', close);
+
+        if (isIos()) {
+            show('ios');
+            return;
+        }
+
+        if (window.dartDeferredInstallPrompt) {
+            show('prompt');
+            return;
+        }
+
+        window.addEventListener('beforeinstallprompt', function (event) {
+            event.preventDefault();
+            window.dartDeferredInstallPrompt = event;
+            if (sheet.hidden) {
+                show('prompt');
+            }
+        });
+
+        // No install dialog after a few seconds on Android: in-app / other
+        // browsers get "open in Chrome". In Chrome itself this means the app
+        // is already installed, so nothing is shown.
+        window.setTimeout(function () {
+            if (mode || !isAndroid() || isAndroidChrome()) {
+                return;
+            }
+            show('chrome');
+        }, 3500);
+    }
+
+    // ==========================================================
     // OFFLINE PAGE PRIVACY (shared devices)
     // ==========================================================
     // The service worker keeps a copy of the athlete dashboard for
@@ -281,6 +414,7 @@
 
     function onReady() {
         setUpInstallButton();
+        setUpInstallSheet();
         protectOfflinePages();
         rememberOfflineAthlete();
     }
