@@ -56,7 +56,9 @@
       </div>
       <div class="fp-sub">
         {% if athlete.username %}<span class="fp-handle" translate="no">@{{ athlete.username }}</span>{% endif %}
-        {% if athlete.school %}<span>{{ team_badge(athlete.school) }}{{ athlete.school }}</span>{% endif %}
+        {% if athlete.school %}{% set _org_url = team_org_url(athlete.school) %}
+          {% if _org_url %}<a class="fp-org" href="{{ _org_url }}" title="{{ athlete.school }} on D.A.R.T.">{{ team_badge(athlete.school) }}{{ athlete.school }}</a>
+          {% else %}<span>{{ team_badge(athlete.school) }}{{ athlete.school }}</span>{% endif %}{% endif %}
         {% if h.sport %}<span class="fp-sport fp-sport-{{ h.sport | lower }}">{{ h.sport }}</span>{% endif %}
       </div>
     </div>

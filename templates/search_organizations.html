@@ -71,7 +71,8 @@
       </div>
 
       <div class="os-actions">
-        <a href="{{ url_for('search', school=o.org_name) }}" class="btn btn-sm dart-btn os-btn"><i class="fa-solid fa-person-running me-1"></i> Athletes</a>
+        <a href="{{ url_for('organization_public', org_id=o.id) }}" class="btn btn-sm dart-btn os-btn"><i class="fa-solid fa-building-shield me-1"></i> Profile</a>
+        <a href="{{ url_for('search', school=o.org_name) }}" class="btn btn-sm btn-outline-success os-btn"><i class="fa-solid fa-person-running me-1"></i> Athletes</a>
         <a href="{{ url_for('search', mode='coaches', team=o.org_name) }}" class="btn btn-sm btn-outline-secondary os-btn"><i class="fa-solid fa-clipboard-user me-1"></i> Coaches</a>
         {% if o.website and o.website.startswith(('http://', 'https://')) %}
           <a href="{{ o.website }}" class="btn btn-sm btn-outline-secondary os-btn" target="_blank" rel="noopener nofollow"><i class="fa-solid fa-globe me-1"></i> Website</a>

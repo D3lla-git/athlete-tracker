@@ -112,10 +112,11 @@
 
         <div class="row g-3 mb-3">
           <div class="col-md-6">
-            <label class="form-label" for="orgEmail">Official email <span class="text-danger">*</span> <i class="fa-solid fa-envelope"></i></label>
-            <input type="email" class="form-control" id="orgEmail" name="email" required maxlength="255" autocomplete="email"
+            <label class="form-label" for="orgEmail">Official email <span class="text-muted small">(optional)</span> <i class="fa-solid fa-envelope"></i></label>
+            <input type="email" class="form-control" id="orgEmail" name="email" maxlength="255" autocomplete="email"
                    value="{{ google_signup.email if google_signup else form.get('email', '') }}"
                    {% if google_signup %}readonly{% endif %} placeholder="e.g. sports@yourschool.edu.lr">
+            <small class="text-muted d-block">Optional: add it now or within 2 business days (we email you a link to verify it).</small>
           </div>
           <div class="col-md-6">
             <label class="form-label" for="orgPhone">Phone <span class="text-danger">*</span> <i class="fa-solid fa-phone"></i></label>

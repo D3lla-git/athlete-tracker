@@ -227,3 +227,14 @@ a.adx-mini:hover { transform: translateY(-1px); box-shadow: var(--adx-shadow); }
 }
 @media (prefers-reduced-motion: reduce) { .adx-mini, .adx-action { transition: none; } }
 @media (forced-colors: active) { .adx-split-bar span, .adx-meter span { forced-color-adjust: none; } }
+
+/* Review menu: a queue with something waiting shows its number in yellow. */
+.adx-menu-count.is-hot { background: #ffc107 !important; color: #212529 !important; font-weight: 900; box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.35); }
+/* Live now */
+.adx-live-dot { width: 9px; height: 9px; margin-left: auto; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6);
+  animation: adxLive 1.8s ease-out infinite; }
+@keyframes adxLive { 70% { box-shadow: 0 0 0 9px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+@media (prefers-reduced-motion: reduce) { .adx-live-dot { animation: none; } }
+.adx-everyone { grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); }
+/* KPI row: as many tiles as fit (Live now was added). */
+.adx-kpis:not(.adx-kpis-4) { grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }

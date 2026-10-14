@@ -9,18 +9,9 @@
 
   {% if gate %}
     {# Visitors: D.A.R.T Market$ is for registered members. #}
-    <section class="mk-gate" aria-label="D.A.R.T Market$">
-      <i class="fa-solid fa-store fa-2x mb-2" aria-hidden="true"></i>
-      <h1>D.A.R.T Market<span style="color:#f5c542">$</span></h1>
-      <p>Buy and sell sports gear only: football boots, basketball sneakers, kickball skips, jerseys, socks, balls and more.
-         Every product is checked by the D.A.R.T Admin before it goes live. Create a free D.A.R.T. account to shop or sell.</p>
-      <div class="mk-gate-cats">{% for key, (label, sport, icon) in market_categories.items() %}<span><i class="fa-solid {{ icon }}" aria-hidden="true"></i> {{ label }}</span>{% endfor %}</div>
-      <div class="d-flex flex-wrap justify-content-center gap-2 mt-3">
-        <a class="btn btn-light fw-bold" href="{{ url_for('login', next=url_for('market_home')) }}"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> Log in</a>
-        <a class="btn btn-outline-light fw-bold" href="{{ url_for('register') }}">Register as an athlete</a>
-        <a class="btn btn-outline-light fw-bold" href="{{ url_for('register_vendor') }}"><i class="fa-solid fa-store" aria-hidden="true"></i> Register as a vendor</a>
-      </div>
-    </section>
+    {# Visitors: products on sale, the welcome, and Register as Buyer / Vendor. #}
+    {% include '_visitor_welcome.html' %}
+    <div class="mk-gate-cats mb-3">{% for key, (label, sport, icon) in market_categories.items() %}<span><i class="fa-solid {{ icon }}" aria-hidden="true"></i> {{ label }}</span>{% endfor %}</div>
   {% else %}
 
   {# On sale now: approved, in-stock products with their seller (Vendor Premium first). #}
@@ -61,8 +52,8 @@
         {% set _u = market_unread() %}{% if _u %}<span class="mk-badge">{{ '9+' if _u > 9 else _u }}</span>{% endif %}</a>
       <a class="mk-btn-pill" href="{{ url_for('market_cart') }}"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i> Cart
         {% set _c = market_cart_count() %}{% if _c %}<span class="mk-badge">{{ _c }}</span>{% endif %}</a>
-      <a class="mk-btn-pill" href="{{ url_for('market_mine') }}"><i class="fa-solid fa-box-open" aria-hidden="true"></i> My shop</a>
-      {% if not block_reason %}<a class="mk-btn-pill mk-btn-sell" href="{{ url_for('market_sell') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i> Sell</a>{% endif %}
+      {% if current_user.role != 'Buyer' %}<a class="mk-btn-pill" href="{{ url_for('market_mine') }}"><i class="fa-solid fa-box-open" aria-hidden="true"></i> My shop</a>{% endif %}
+      {% if not block_reason and current_user.role != 'Buyer' %}<a class="mk-btn-pill mk-btn-sell" href="{{ url_for('market_sell') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i> Sell</a>{% endif %}
     </div>
   </div>
   {% if block_reason %}<div class="alert alert-warning small"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> {{ block_reason }}</div>{% endif %}
@@ -73,6 +64,14 @@
     {% for k, v in filters.items() if k != 'q' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
     <button class="btn dart-btn" type="submit" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
     <button class="btn btn-outline-secondary mk-filter-toggle" type="button" data-mk-filters aria-controls="mkFilters"><i class="fa-solid fa-sliders" aria-hidden="true"></i> Filter</button>
+  </form>
+  {# Shops: by shop / business name or by address / location. #}
+  <form class="mk-shop-search" method="get" action="{{ url_for('search') }}" role="search" aria-label="Find a shop">
+    <input type="hidden" name="mode" value="shops">
+    <i class="fa-solid fa-store" aria-hidden="true"></i>
+    <label class="visually-hidden" for="mkShopQ">Shop name, address or location</label>
+    <input class="form-control form-control-sm" id="mkShopQ" name="q" maxlength="80" placeholder="Find a shop: name, address or location">
+    <button class="btn btn-sm btn-outline-success" type="submit">Find shops</button>
   </form>
 
 

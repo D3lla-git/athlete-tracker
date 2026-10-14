@@ -97,23 +97,18 @@
           {% if s.reviews_pending %}<span class="badge rounded-pill" data-stat="reviews_pending">{{ s.reviews_pending }}</span>{% endif %}
         </button>
         <ul class="dropdown-menu dropdown-menu-end adx-review-menu" aria-labelledby="adxReviewMenu">
-          <li><h6 class="dropdown-header">Content reviews</h6></li>
-          <li><a class="dropdown-item" href="#pendingRecords"><i class="fa-solid fa-file-lines"></i> Sports records <span class="adx-menu-count">{{ s.records_pending }}</span></a></li>
-          <li><a class="dropdown-item" href="{{ url_for('admin_highlights') }}"><i class="fa-solid fa-photo-film"></i> Photos &amp; videos <span class="adx-menu-count">{{ media_awaiting or 0 }}</span></a></li>
-          <li><a class="dropdown-item" href="{{ url_for('verification_center') }}"><i class="fa-solid fa-scale-balanced"></i> Record verification &amp; disputes <span class="adx-menu-count">{{ (verification_counts.verifying + verification_counts.disputed + verification_counts.proof) if verification_counts else 0 }}</span></a></li>
-          <li><a class="dropdown-item" href="{{ url_for('admin_awards') }}"><i class="fa-solid fa-trophy"></i> Award entries (week / month) <span class="adx-menu-count">{{ awards_pending_count() }}</span></a></li>
-          <li><a class="dropdown-item" href="{{ url_for('admin_market') }}"><i class="fa-solid fa-store"></i> Market$ listings &amp; reports <span class="adx-menu-count">{% set _mp = market_pending() %}{{ _mp.listings + _mp.reports }}</span></a></li>
+          {# Every queue; a yellow number = something is waiting there. #}
+          {% set _queues = admin_queues() %}
+          {% for grp, title in (('content', 'Content reviews'), ('accounts', 'Accounts'), ('money', 'Money')) %}
+            {% if not loop.first %}<li><hr class="dropdown-divider"></li>{% endif %}
+            <li><h6 class="dropdown-header">{{ title }}</h6></li>
+            {% for q in _queues if q.group == grp %}
+              <li><a class="dropdown-item" href="{{ q.url }}"><i class="fa-solid {{ q.icon }}"></i> {{ q.label }}
+                <span class="adx-menu-count{{ ' is-hot' if q.count }}">{{ q.count }}</span></a></li>
+            {% endfor %}
+          {% endfor %}
+          <li><hr class="dropdown-divider"></li>
           <li><a class="dropdown-item" href="{{ url_for('admin_predictions') }}"><i class="fa-solid fa-bullseye"></i> Predictions (free game)</a></li>
-          <li><a class="dropdown-item" href="#pendingAthletes"><i class="fa-solid fa-user-clock"></i> Athletes not live yet <span class="adx-menu-count">{{ s.athletes_pending }}</span></a></li>
-          <li><hr class="dropdown-divider"></li>
-          <li><h6 class="dropdown-header">Accounts</h6></li>
-          <li><a class="dropdown-item" href="#pendingCoaches"><i class="fa-solid fa-user-tie"></i> Coaches <span class="adx-menu-count">{{ s.coaches_pending }}</span></a></li>
-          <li><a class="dropdown-item" href="{{ url_for('admin_coach_review') }}"><i class="fa-solid fa-clipboard-user"></i> Coach teams &amp; careers <span class="adx-menu-count">{{ coach_review_awaiting or 0 }}</span></a></li>
-          <li><a class="dropdown-item" href="#pendingScouts"><i class="fa-solid fa-binoculars"></i> Scouts <span class="adx-menu-count">{{ s.scouts_pending }}</span></a></li>
-          <li><a class="dropdown-item" href="{{ url_for('verification_center') }}#officials"><i class="fa-solid fa-clipboard-check"></i> Match officials <span class="adx-menu-count">{{ verification_counts.officials if verification_counts else 0 }}</span></a></li>
-          <li><a class="dropdown-item" href="{{ url_for('admin_organizations') }}"><i class="fa-solid fa-building-shield"></i> Organizations <span class="adx-menu-count">{{ s.orgs_pending }}</span></a></li>
-          <li><hr class="dropdown-divider"></li>
-          <li><a class="dropdown-item" href="{{ url_for('admin_payments') }}"><i class="fa-solid fa-money-check-dollar"></i> Payments <span class="adx-menu-count">{{ payments_awaiting or 0 }}</span></a></li>
           <li><a class="dropdown-item" href="{{ url_for('admin_terms_acceptances') }}"><i class="fa-solid fa-file-signature"></i> Agreements</a></li>
         </ul>
       </div>
@@ -130,6 +125,14 @@
 
   {# ================= KPI row ================= #}
   <section class="adx-kpis" aria-label="Key numbers">
+    <div class="adx-kpi adx-kpi-live">
+      <div class="adx-kpi-head"><span class="adx-kpi-icon adx-green"><i class="fa-solid fa-signal"></i></span> Live now <span class="adx-live-dot" aria-hidden="true"></span></div>
+      <div class="adx-kpi-value" data-stat="live_total">{{ s.live_total }}</div>
+      <span class="adx-delta adx-delta-flat"><span data-stat="live_members">{{ s.live_members }}</span> members ·
+        <span data-stat="live_visitors">{{ s.live_visitors }}</span> visitors</span>
+      <span class="adx-delta adx-delta-flat">Last 24 h: <span data-stat="members_24h">{{ s.members_24h }}</span> members ·
+        <span data-stat="visitors_24h">{{ s.visitors_24h }}</span> visitors</span>
+    </div>
     <div class="adx-kpi">
       <div class="adx-kpi-head"><span class="adx-kpi-icon adx-blue"><i class="fa-solid fa-users"></i></span> Total users</div>
       <div class="adx-kpi-value" data-stat="users_total">{{ s.users_total }}</div>
@@ -286,6 +289,32 @@
       {{ month_table('New scouts per month', [('Scouts', a.scouts.signups)]) }}
     </section>
   </div>
+
+  {# ================= Everyone on D.A.R.T. (every category) ================= #}
+  <section class="adx-section" aria-labelledby="adxEveryoneTitle" id="adxEveryone">
+    <header class="adx-section-head">
+      <h3 id="adxEveryoneTitle"><span class="adx-section-icon adx-blue"><i class="fa-solid fa-people-group"></i></span> Everyone on D.A.R.T.</h3>
+      <span class="adx-muted"><span data-stat="users_total">{{ s.users_total }}</span> accounts · <span data-stat="live_total">{{ s.live_total }}</span> live now</span>
+    </header>
+    <div class="adx-mini-row adx-everyone">
+      {{ mini('athletes_total', 'Athletes', 'fa-solid fa-person-running', 'good') }}
+      {{ mini('coaches_total', 'Coaches', 'fa-solid fa-user-shield', 'neutral') }}
+      {{ mini('scouts_total', 'Scouts', 'fa-solid fa-binoculars', 'neutral') }}
+      {{ mini('orgs_total', 'Organizations', 'fa-solid fa-building-shield', 'neutral') }}
+      {{ mini('vendors_total', 'Vendors', 'fa-solid fa-store', 'neutral') }}
+      {{ mini('buyers_total', 'Buyers', 'fa-solid fa-bag-shopping', 'neutral') }}
+      {{ mini('journalists_total', 'Sports journalists', 'fa-solid fa-newspaper', 'neutral') }}
+      {{ mini('officials_referee', 'Referees', 'fa-solid fa-flag', 'neutral') }}
+      {{ mini('officials_linesman', 'Linesmen / assistant referees', 'fa-regular fa-flag', 'neutral') }}
+      {{ mini('officials_spectator', 'Spectators (sports fans)', 'fa-solid fa-people-line', 'neutral') }}
+      {{ mini('officials_secretary', 'League secretaries', 'fa-solid fa-file-pen', 'neutral') }}
+      {{ mini('officials_coordinator', 'School sports coordinators', 'fa-solid fa-school', 'neutral') }}
+      {{ mini('officials_youth_leader', 'Community youth leaders', 'fa-solid fa-hands-holding-child', 'neutral') }}
+      {{ mini('officials_other', 'Other match officials', 'fa-solid fa-clipboard-check', 'neutral') }}
+      {{ mini('live_members', 'Members live now', 'fa-solid fa-user-check', 'good') }}
+      {{ mini('live_visitors', 'Visitors live now (no account)', 'fa-solid fa-eye', 'gold') }}
+    </div>
+  </section>
 
   {# ================= Vendors · Match officials · Sports journalists ================= #}
   <section class="adx-section" aria-labelledby="adxMoreRolesTitle" id="adxMoreRoles">

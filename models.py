@@ -47,6 +47,13 @@ class User(UserMixin, db.Model):
     # 'on' = athlete chose to be listed, 'off' = athlete chose not to be.
     search_visibility = db.Column(db.String(10), nullable=True)
     email = db.Column(db.String(255), nullable=True, unique=True)
+    # Email is optional at registration. It must be added and verified within
+    # 2 business days (email_due_at); otherwise the D.A.R.T Admin can hold the
+    # account (not live) until it is verified.
+    email_verified_at = db.Column(db.DateTime, nullable=True)
+    email_verify_token = db.Column(db.String(64), nullable=True, index=True)   # sha256 of the link token
+    email_verify_sent_at = db.Column(db.DateTime, nullable=True)
+    email_due_at = db.Column(db.DateTime, nullable=True)
 
         # Password reset security fields
     reset_token = db.Column(db.String(128), nullable=True, unique=True)
@@ -1644,3 +1651,17 @@ class CoachAchievement(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     coach = db.relationship('User', foreign_keys=[coach_id])
+
+
+class SitePresence(db.Model):
+    """
+    Who is on D.A.R.T. right now: one row per browser session (member or
+    visitor without an account), touched at most once a minute. "Live" =
+    seen in the last few minutes. No personal data: a random session id.
+    """
+    __tablename__ = 'site_presence'
+
+    sid = db.Column(db.String(32), primary_key=True)
+    user_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=True, index=True)
+    first_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    last_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)

@@ -310,8 +310,7 @@
                                 for="email"
                                 class="form-label"
                             >
-                                Email Address
-                                <span class="text-danger">*</span>
+                                Email Address <span class="text-muted small">(optional)</span>
                             </label>
 
                             <input
@@ -322,9 +321,9 @@
                                 maxlength="255"
                                 value="{{ google_signup.email if google_signup else '' }}"
                                 {% if google_signup %}readonly{% endif %}
-                                required
                                 autocomplete="email"
                             >
+    <small class="text-muted d-block">Optional: add it now or within 2 business days (we email you a link to verify it).</small>
 
                         </div>
 

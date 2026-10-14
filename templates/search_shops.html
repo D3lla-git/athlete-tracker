@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Search Shops | D.A.R.T Market${% endblock %}
+{% block meta_description %}Find sports gear shops on D.A.R.T Market$ in Liberia by shop name, address or location.{% endblock %}
+
+{% block content %}
+<div class="container py-4 ss-page">
+  <h2 class="mb-4">Search Shops <i class="fa-solid fa-store"></i></h2>
+  {% set active = 'shops' %}{% include '_search_tabs.html' %}
+
+  <form method="GET" action="{{ url_for('search') }}" class="ss-panel" role="search">
+    <input type="hidden" name="mode" value="shops">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label" for="ssQ">Shop or business name <i class="fa-solid fa-store"></i></label>
+        <input type="text" id="ssQ" name="q" value="{{ filters.q }}" class="form-control" maxlength="80" placeholder="e.g. Sinkor Sports" autocomplete="off">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="ssPlace">Address / location <i class="fa-solid fa-location-dot"></i></label>
+        <input type="text" id="ssPlace" name="place" value="{{ filters.place }}" class="form-control" maxlength="80" placeholder="e.g. Tubman Boulevard, Monrovia">
+      </div>
+    </div>
+    <div class="d-flex gap-2 mt-3">
+      <button type="submit" class="btn dart-btn ss-btn"><i class="fa-solid fa-magnifying-glass me-1"></i> Search shops</button>
+      {% if search_active %}<a href="{{ url_for('search', mode='shops') }}" class="btn btn-outline-secondary ss-btn"><i class="fa-solid fa-rotate-left me-1"></i> Clear</a>{% endif %}
+    </div>
+  </form>
+
+  <p class="ss-count">{{ total }} shop{{ 's' if total != 1 }} found{% if total > shops | length %} · showing the first {{ shops | length }}{% endif %}</p>
+  <div class="ss-grid">
+    {% for s in shops %}
+      <article class="ss-card">
+        <div class="ss-head">
+          {% if s.profile_picture %}<img class="ss-logo" src="{{ url_for('profile_picture', filename=s.profile_picture) }}" alt="" loading="lazy">
+          {% else %}<span class="ss-logo" aria-hidden="true">{{ (s.shop_name or s.display_name or '?')[0] | upper }}</span>{% endif %}
+          <div class="ss-who">
+            <div class="ss-name">{{ s.shop_name or s.display_name }}
+              {% if s.vendor_verified_at %}<i class="fa-solid fa-circle-check ss-verified" title="Verified by D.A.R.T." aria-label="Verified"></i>{% endif %}</div>
+            <div class="ss-sub">{{ 'Business' if s.vendor_type == 'business' else s.display_name }}
+              {% if s.id in premium %}<span class="ss-premium"><i class="fa-solid fa-crown"></i> Premium</span>{% endif %}</div>
+          </div>
+        </div>
+        {% if s.business_address %}<div class="ss-line"><i class="fa-solid fa-map-pin"></i> {{ s.business_address }}</div>{% endif %}
+        {% if s.business_location %}<div class="ss-line"><i class="fa-solid fa-location-dot"></i> {{ s.business_location }}</div>{% endif %}
+        <div class="ss-foot">
+          <span><strong>{{ live.get(s.id, 0) }}</strong> product{{ 's' if live.get(s.id, 0) != 1 }} on sale</span>
+          <a class="btn btn-sm dart-btn ss-btn" href="{{ url_for('market_vendor', user_id=s.id) }}"><i class="fa-solid fa-store me-1"></i> Visit shop</a>
+        </div>
+      </article>
+    {% else %}
+      <div class="alert alert-light">No shops found{{ ' for that search' if search_active }}.</div>
+    {% endfor %}
+  </div>
+</div>
+<style>
+  .ss-page { max-width: 1080px; }
+  .ss-panel { padding: 18px; margin-bottom: 16px; border-radius: 20px; background: var(--surface-bg); border: 1px solid var(--surface-border);
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.06); }
+  .ss-panel .form-label { font-size: 0.8rem; font-weight: 700; margin-bottom: 4px; }
+  .ss-btn { border-radius: 999px; }
+  .ss-count { color: var(--muted-text, #6c757d); font-size: 0.9rem; }
+  .ss-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+  .ss-grid > .alert { grid-column: 1 / -1; }
+  .ss-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 20px; min-width: 0;
+    background: var(--surface-bg); border: 1px solid var(--surface-border); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05); }
+  .ss-head { display: flex; gap: 12px; align-items: center; }
+  .ss-logo { flex: 0 0 52px; width: 52px; height: 52px; border-radius: 14px; object-fit: cover; display: grid; place-items: center;
+    font-weight: 900; font-size: 1.3rem; color: #fff; background: var(--dart-primary-gradient, #198754); }
+  .ss-who { min-width: 0; }
+  .ss-name { font-size: 1.08rem; font-weight: 800; overflow-wrap: anywhere; }
+  .ss-verified { color: #198754; font-size: 0.9rem; }
+  .ss-sub { font-size: 0.85rem; color: var(--muted-text, #6c757d); }
+  .ss-premium { margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: rgba(245, 197, 66, 0.2); color: #8a6d00; font-weight: 800; font-size: 0.75rem; }
+  html[data-theme="dark"] .ss-premium { color: #f5c542; }
+  .ss-line { font-size: 0.88rem; overflow-wrap: anywhere; }
+  .ss-line i { color: #198754; width: 16px; }
+  .ss-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 6px; font-size: 0.85rem; }
+</style>
+{% endblock %}

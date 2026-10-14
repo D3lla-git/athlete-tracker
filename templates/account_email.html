@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}My email | D.A.R.T.{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 640px">
+  <h1 class="h3 mb-3"><i class="fa-solid fa-envelope-circle-check text-success"></i> My email</h1>
+
+  {% if held %}
+    <div class="alert alert-danger" role="alert">
+      <strong>Your account is on hold (not live).</strong> Add and verify your email address: your account goes live again as soon as you click the link we send you.
+    </div>
+  {% endif %}
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      {% if current_user.email and current_user.email_verified_at %}
+        <p class="mb-3"><i class="fa-solid fa-circle-check text-success"></i> <strong>{{ current_user.email }}</strong> is verified.</p>
+      {% elif current_user.email %}
+        <p class="mb-2"><i class="fa-solid fa-hourglass-half text-warning"></i> <strong>{{ current_user.email }}</strong> is not verified yet.
+          Open the link we emailed you{% if not held %} before <strong>{{ due.strftime('%A %d %B') }}</strong>{% endif %}.</p>
+        <form method="POST" class="mb-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="resend">
+          <button class="btn btn-sm btn-outline-success" type="submit"><i class="fa-solid fa-paper-plane"></i> Send the link again</button>
+        </form>
+      {% else %}
+        <p class="mb-3">You haven't added an email yet.{% if not held %} Please add one before <strong>{{ due.strftime('%A %d %B') }}</strong>
+          ({{ 'past the deadline: your account can be put on hold' if overdue else '2 business days after you registered' }}).{% endif %}</p>
+      {% endif %}
+
+      <form method="POST" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="form-label" for="email">{{ 'Change email' if current_user.email else 'Email address' }}</label>
+        <input class="form-control mb-2" id="email" name="email" type="email" maxlength="150" required autocomplete="email"
+               value="{{ current_user.email or '' }}" placeholder="name@example.com">
+        {% if current_user.email %}
+          <label class="form-label" for="password">Current password <span class="text-muted small">(only to change it)</span></label>
+          <input class="form-control mb-2" id="password" name="password" type="password" autocomplete="current-password">
+        {% endif %}
+        <button class="btn dart-btn" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save and send me the link</button>
+      </form>
+      <p class="small text-muted mt-3 mb-0">We use your email only for your account: verification and password reset. It is never shown on your profile.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Email deadline | D.A.R.T Admin{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 980px">
+  <h1 class="h3"><i class="fa-solid fa-envelope-circle-check text-success"></i> Email deadline</h1>
+  <p class="text-muted small">Members must add and verify an email within 2 business days of registering. Held accounts are not live
+    (hidden like a suspended account); they can still sign in, only to verify an email, and go live again the moment they do.</p>
+
+  <h2 class="h5 mt-4" id="overdue">Past the deadline <span class="badge text-bg-warning">{{ overdue | length }}</span></h2>
+  {% if overdue %}
+    <form method="POST" action="{{ url_for('admin_email_hold') }}" onsubmit="return confirm('Hold the selected accounts until they verify an email?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead><tr><th scope="col"><span class="visually-hidden">Select</span></th><th scope="col">Account</th><th scope="col">Type</th><th scope="col">Email</th><th scope="col">Deadline</th></tr></thead>
+          <tbody>
+            {% for u in overdue %}
+              <tr>
+                <td><input class="form-check-input" type="checkbox" name="user_id" value="{{ u.id }}" aria-label="Select {{ u.display_name }}"></td>
+                <td><strong>{{ u.display_name }}</strong>{% if u.username %} <span class="text-muted small">@{{ u.username }}</span>{% endif %}</td>
+                <td>{{ u.role | role_label }}</td>
+                <td>{{ 'added, not verified' if u.email else 'none' }}</td>
+                <td class="text-danger">{{ email_due(u).strftime('%d %b %Y') }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-sm btn-warning fw-bold" type="submit"><i class="fa-solid fa-user-lock"></i> Hold selected</button>
+        <button class="btn btn-sm btn-outline-danger" type="submit" name="all" value="yes"><i class="fa-solid fa-users-slash"></i> Hold all {{ overdue | length }}</button>
+      </div>
+    </form>
+  {% else %}<p class="text-muted">Nobody is past the deadline.</p>{% endif %}
+
+  <h2 class="h5 mt-4" id="held">On hold until the email is verified <span class="badge text-bg-secondary">{{ held | length }}</span></h2>
+  {% for u in held %}
+    <div class="d-flex flex-wrap align-items-center gap-2 border-bottom py-2">
+      <strong>{{ u.display_name }}</strong> <span class="text-muted small">{{ u.role | role_label }} · held {{ u.suspended_at.strftime('%d %b %Y') if u.suspended_at else '' }}</span>
+      <form method="POST" action="{{ url_for('admin_email_release', user_id=u.id) }}" class="ms-auto">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-outline-success" type="submit">Release (new deadline)</button>
+      </form>
+    </div>
+  {% else %}<p class="text-muted">No accounts on hold.</p>{% endfor %}
+</div>
+{% endblock %}

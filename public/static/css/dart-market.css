@@ -232,3 +232,10 @@ html[data-theme="dark"] .mk-track-line { background: rgba(255, 255, 255, 0.15); 
   .mk-slide .mk-promo-cta { display: none; }
   .mk-slide-seller { margin-top: 8px; }
 }
+
+/* Find a shop (Market$): name, address or location */
+.mk-shop-search { display: flex; align-items: center; gap: 8px; margin: -4px 0 14px; padding: 8px 10px; border-radius: 14px;
+  background: var(--surface-bg, #fff); border: 1px dashed rgba(25, 135, 84, 0.45); }
+.mk-shop-search i { color: #198754; }
+.mk-shop-search input { flex: 1 1 auto; min-width: 0; }
+.mk-shop-search button { white-space: nowrap; }

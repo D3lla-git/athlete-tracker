@@ -55,9 +55,13 @@
       {% if voted %}<p class="aw-voted-note"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Thank you, you have voted in this award.</p>{% endif %}
       {% set rows = ranked(c) %}
       {% if rows %}
-        <div class="aw-grid">
+        {# Live votes: swipe cards (arrows on bigger screens). #}
+        <div class="aw-swipe" data-aw-swipe>
+          <button type="button" class="aw-swipe-btn aw-swipe-prev" data-aw-dir="-1" aria-label="Previous entry"><i class="fa-solid fa-chevron-left"></i></button>
+          <div class="aw-swipe-track" tabindex="0" aria-label="Entries in {{ c.title }}: swipe to see them all" aria-roledescription="carousel">
           {% for e, votes in rows %}
-            <div class="aw-entry{{ ' is-mine-vote' if voted == e.id }}">
+            <div class="aw-entry aw-swipe-card{{ ' is-mine-vote' if voted == e.id }}" aria-roledescription="slide" aria-label="{{ loop.index }} of {{ rows | length }}">
+              {% if loop.index <= 3 and votes %}<span class="aw-rank">#{{ loop.index }}</span>{% endif %}
               {{ entry_media(e.highlight) }}
               <div class="aw-entry-body">
                 <a class="aw-name text-decoration-none" href="{{ url_for('user_profile', user_id=e.athlete_id) }}">{{ e.athlete.full_name }}</a>
@@ -83,6 +87,9 @@
               </div>
             </div>
           {% endfor %}
+          </div>
+          <button type="button" class="aw-swipe-btn aw-swipe-next" data-aw-dir="1" aria-label="Next entry"><i class="fa-solid fa-chevron-right"></i></button>
+          <div class="aw-swipe-meta"><span data-aw-pos>1</span> / {{ rows | length }} · <i class="fa-solid fa-hand-pointer"></i> Swipe to see every entry</div>
         </div>
       {% else %}<p class="aw-empty mb-0">No entries in the vote.</p>{% endif %}
     </article>
@@ -199,6 +206,47 @@
   </div>
   {% if not ns.any %}<p class="aw-empty">Winners appear here when voting closes.</p>{% endif %}
 </div>
+<style>
+  /* Live votes: swipe cards */
+  .aw-swipe { position: relative; }
+  .aw-swipe-track { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none;
+    overscroll-behavior-x: contain; padding: 4px 2px 10px; -webkit-overflow-scrolling: touch; }
+  .aw-swipe-track::-webkit-scrollbar { display: none; }
+  .aw-swipe-track:focus-visible { outline: 3px solid rgba(11, 94, 215, 0.4); outline-offset: 2px; border-radius: 14px; }
+  .aw-swipe-card { position: relative; flex: 0 0 min(82%, 290px); scroll-snap-align: center; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.1); }
+  .aw-rank { position: absolute; z-index: 2; left: 10px; top: 10px; padding: 3px 10px; border-radius: 999px; font-weight: 900; font-size: 0.8rem;
+    color: #111; background: #f5c542; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25); }
+  .aw-swipe-btn { position: absolute; z-index: 3; top: 40%; width: 40px; height: 40px; border-radius: 50%; border: 0; display: grid; place-items: center;
+    color: #fff; background: rgba(11, 94, 215, 0.92); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25); }
+  .aw-swipe-btn[disabled] { opacity: 0; pointer-events: none; }
+  .aw-swipe-prev { left: -6px; } .aw-swipe-next { right: -6px; }
+  .aw-swipe-meta { text-align: center; font-size: 0.8rem; color: var(--muted-text, #6c757d); }
+  @media (hover: none), (max-width: 575.98px) { .aw-swipe-btn { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .aw-swipe-track { scroll-behavior: auto; } }
+</style>
+<script>
+  // Live votes: arrows + "2 / 7" while swiping.
+  document.querySelectorAll('[data-aw-swipe]').forEach(function (box) {
+    var track = box.querySelector('.aw-swipe-track'), pos = box.querySelector('[data-aw-pos]');
+    var prev = box.querySelector('.aw-swipe-prev'), next = box.querySelector('.aw-swipe-next');
+    function step() { var c = track.firstElementChild; return c ? c.getBoundingClientRect().width + 12 : track.clientWidth; }
+    function sync() {
+      var i = Math.round(track.scrollLeft / step());
+      if (pos) pos.textContent = Math.min(track.children.length, i + 1);
+      if (prev) prev.disabled = track.scrollLeft <= 2;
+      if (next) next.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 2;
+    }
+    box.querySelectorAll('[data-aw-dir]').forEach(function (b) {
+      b.addEventListener('click', function () { track.scrollBy({ left: +b.getAttribute('data-aw-dir') * step() }); });
+    });
+    track.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); track.scrollBy({ left: (e.key === 'ArrowRight' ? 1 : -1) * step() }); }
+    });
+    track.addEventListener('scroll', sync, { passive: true });
+    window.addEventListener('resize', sync);
+    sync();
+  });
+</script>
 <script>
   // "Share & ask for votes": the phone's share sheet, otherwise copy the link.
   document.addEventListener('click', function (e) {

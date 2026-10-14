@@ -1,0 +1,93 @@
+{# Visitors without an account (Market$ tab only): products on sale at the top,
+   a welcome, and the two simple ways in: buyer or vendor. #}
+{% set vw = visitor_welcome() %}
+{% from '_market_macros.html' import money with context %}
+<section class="vw" aria-labelledby="vwTitle">
+  {% if vw.products %}
+    <div class="vw-ads" aria-label="On sale now on D.A.R.T Market$" aria-roledescription="carousel">
+      <div class="vw-ads-track" data-vw-track>
+        {% for l, premium in vw.products %}
+          <a class="vw-ad" href="{{ url_for('register_buyer', next=url_for('market_item', listing_id=l.id)) }}" aria-label="{{ l.title }}, {{ money(l) }}: buy now">
+            <span class="vw-ad-img">{% if l.cover %}<img src="{{ market_image_url(l.cover) }}" alt="" loading="lazy">{% endif %}
+              <span class="vw-ad-tag">{% if premium %}<i class="fa-solid fa-crown"></i> {% endif %}On sale</span></span>
+            <span class="vw-ad-name">{{ l.title }}</span>
+            <span class="vw-ad-price">{{ money(l) }}</span>
+            <span class="vw-ad-cta"><i class="fa-solid fa-cart-shopping"></i> Buy now</span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="vw-hero">
+    <span class="vw-eyebrow"><i class="fa-solid fa-circle-dot"></i> Liberia's sports, live</span>
+    <h1 id="vwTitle">Welcome to D.A.R.T.</h1>
+    <p>Watch verified football, basketball and kickball action, cheer your favourite athletes and shop genuine sports gear from local sellers.</p>
+    <div class="vw-stats" aria-label="D.A.R.T. today">
+      <span><strong>{{ vw.athletes }}</strong> verified athletes</span>
+      <span><strong>{{ vw.highlights }}</strong> highlights</span>
+      <span><strong>{{ vw.on_sale }}</strong> products on sale</span>
+    </div>
+    <div class="vw-cta">
+      <a class="btn vw-btn vw-btn-buy" href="{{ url_for('register_buyer') }}"><i class="fa-solid fa-bag-shopping"></i> Register as Buyer</a>
+      <a class="btn vw-btn vw-btn-sell" href="{{ url_for('register_vendor') }}"><i class="fa-solid fa-store"></i> Register as Vendor</a>
+    </div>
+    <p class="vw-small">Free. Athlete, coach, scout, club or match official? <a href="{{ url_for('index') }}#homeRegister">See every account type</a> ·
+      <a href="{{ url_for('login', next=request.path) }}">Log in</a></p>
+  </div>
+</section>
+<style>
+  .vw { margin: 0 0 18px; }
+  .vw-ads-track { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 2px 2px 8px; overscroll-behavior-x: contain; }
+  .vw-ads-track::-webkit-scrollbar { display: none; }
+  .vw-ad { flex: 0 0 140px; scroll-snap-align: start; display: flex; flex-direction: column; gap: 3px; padding: 8px; border-radius: 16px; text-decoration: none;
+    color: inherit !important; background: var(--surface-bg, #fff); border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08); transition: transform 0.2s ease; }
+  .vw-ad:hover { transform: translateY(-3px); }
+  .vw-ad-img { position: relative; display: block; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: #eee; }
+  .vw-ad-img img { width: 100%; height: 100%; object-fit: cover; }
+  .vw-ad-tag { position: absolute; left: 6px; top: 6px; padding: 2px 8px; border-radius: 999px; font-size: 0.68rem; font-weight: 900;
+    color: #111; background: #f5c542; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); }
+  .vw-ad-name { font-size: 0.8rem; font-weight: 700; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.4em; }
+  .vw-ad-price { font-weight: 900; color: #198754; font-size: 0.92rem; }
+  html[data-theme="dark"] .vw-ad-price { color: #4cd38a; }
+  .vw-ad-cta { margin-top: 2px; padding: 5px 0; border-radius: 999px; text-align: center; font-size: 0.75rem; font-weight: 800; color: #fff;
+    background: var(--dart-primary-gradient, linear-gradient(135deg, #198754, #0d6efd)); }
+  .vw-hero { position: relative; overflow: hidden; margin-top: 6px; padding: 22px 20px; border-radius: 24px; color: #fff; text-align: center;
+    background: radial-gradient(circle at 85% 20%, rgba(57, 185, 114, 0.35), transparent 40%),
+                var(--dart-primary-gradient, linear-gradient(135deg, #071208, #0d2413 55%, #198754));
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22); }
+  .vw-eyebrow { display: inline-flex; gap: 6px; align-items: center; padding: 4px 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.14);
+    font-size: 0.75rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+  .vw-eyebrow i { color: #4cd38a; animation: vwPulse 1.6s ease-in-out infinite; }
+  .vw-hero h1 { margin: 10px 0 6px; font-size: clamp(1.6rem, 5vw, 2.3rem); font-weight: 900; }
+  .vw-hero p { margin: 0 auto; max-width: 560px; opacity: 0.92; }
+  .vw-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 14px 0; }
+  .vw-stats span { padding: 6px 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); font-size: 0.82rem; }
+  .vw-stats strong { color: #f5c542; font-size: 1rem; }
+  .vw-cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .vw-btn { flex: 1 1 200px; max-width: 260px; padding: 11px 16px; border-radius: 999px; font-weight: 800; }
+  .vw-btn-buy { color: #0d2413 !important; background: #fff !important; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25); }
+  .vw-btn-sell { color: #111 !important; background: #f5c542 !important; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25); }
+  .vw-btn:hover { filter: brightness(0.95); }
+  .vw-small { margin-top: 12px !important; font-size: 0.8rem; opacity: 0.85 !important; }
+  .vw-small a { color: #fff; font-weight: 700; }
+  @keyframes vwPulse { 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) { .vw-eyebrow i { animation: none; } .vw-ad { transition: none; } }
+</style>
+<script>
+(function () {
+  // The sale cards slide by themselves (paused while touched / hovered).
+  var t = document.querySelector('[data-vw-track]');
+  if (!t || t.children.length < 2 || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+  var paused = false;
+  ['pointerenter', 'touchstart', 'focusin'].forEach(function (e) { t.addEventListener(e, function () { paused = true; }, { passive: true }); });
+  ['pointerleave', 'touchend', 'focusout'].forEach(function (e) { t.addEventListener(e, function () { paused = false; }, { passive: true }); });
+  setInterval(function () {
+    if (paused || document.hidden) return;
+    var step = t.firstElementChild.getBoundingClientRect().width + 10;
+    var end = t.scrollLeft + t.clientWidth >= t.scrollWidth - 4;
+    t.scrollTo({ left: end ? 0 : t.scrollLeft + step, behavior: 'smooth' });
+  }, 3000);
+})();
+</script>

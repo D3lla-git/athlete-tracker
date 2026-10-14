@@ -5,7 +5,7 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import MultiDict
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare, RecordVerificationEvent, MatchReport, MatchReportLine, AwardContest, AwardEntry, MarketListing, MarketImage, MarketThread, MarketMessage, MarketReport, PredictionQuestion, PredictionPick, MarketCartItem)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare, RecordVerificationEvent, MatchReport, MatchReportLine, AwardContest, AwardEntry, MarketListing, MarketImage, MarketThread, MarketMessage, MarketReport, PredictionQuestion, PredictionPick, MarketCartItem, SitePresence)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
@@ -54,6 +54,7 @@ import guardian as guardian_mod
 import awards as awards_mod
 import market as market_mod
 import predictions as predictions_mod
+import presence as presence_mod
 from plans import is_premium_vendor, premium_vendor_ids
 from competitions import (
     CLUB_DIVISIONS,
@@ -1986,8 +1987,32 @@ def organization_member_counts(orgs):
     return athletes, coaches
 
 
+def shop_search():
+    """Find D.A.R.T Market$ shops by shop / business name, or by address / location."""
+    q = market_mod.clean(request.args.get('q'), 80)
+    place = market_mod.clean(request.args.get('place'), 80)
+    query = User.query.filter(User.role == 'Vendor', User.is_suspended.is_(False), User.market_banned.is_(False))
+    if q:
+        query = query.filter(or_(text_matches(User.shop_name, q), text_matches(User.full_name, q), text_matches(User.username, q),
+                                 text_matches(User.business_address, q), text_matches(User.business_location, q)))
+    if place:
+        query = query.filter(or_(text_matches(User.business_address, place), text_matches(User.business_location, place)))
+    total = query.count()
+    shops = (query.order_by(User.vendor_verified_at.is_(None), func.lower(func.coalesce(User.shop_name, User.full_name)))
+             .limit(60).all())
+    ids = [s.id for s in shops]
+    live = dict(db.session.query(MarketListing.seller_id, func.count(MarketListing.id))
+                .filter(MarketListing.seller_id.in_(ids), MarketListing.status == 'approved')
+                .group_by(MarketListing.seller_id).all()) if ids else {}
+    premium = set(premium_vendor_ids())
+    return render_template('search_shops.html', shops=shops, total=total, live=live, premium=premium,
+                           filters={'q': q, 'place': place}, search_active=bool(q or place))
+
+
 @app.route('/search')
 def search():
+    if request.args.get('mode') == 'shops':
+        return shop_search()
     if request.args.get('mode') == 'coaches':
         return coach_search()
     if request.args.get('mode') == 'organizations':
@@ -2675,7 +2700,10 @@ def register(registration_category=None):
             return redirect(url_for('register', registration_category=registration_category))
         gender = request.form.get('gender', '').strip()
         nationality = request.form.get('nationality', '').strip()
-        email = request.form['email'].strip().lower()
+        email, email_error = clean_optional_email(request.form.get('email'))
+        if email_error:
+            flash(email_error, 'danger')
+            return redirect(url_for('register', registration_category=registration_category))
         password = request.form['password']
         age_raw = request.form.get('age', '').strip()
         date_of_birth_raw = request.form.get('date_of_birth', '').strip()
@@ -2852,7 +2880,7 @@ def register(registration_category=None):
         # FIND EXISTING ACCOUNT BY EMAIL
         # ==========================================================
 
-        existing = User.query.filter_by(email=email).first()
+        existing = User.query.filter_by(email=email).first() if email else None
 
         # ==========================================================
         # USERNAME (unique @handle; an existing account keeps its own)
@@ -3465,8 +3493,9 @@ def continue_login(user):
     # Make the authenticated session permanent
     session.permanent = True
 
-    # Suspended accounts (e.g. 3 fake records) can't sign in at all.
-    if user.is_suspended:
+    # Suspended accounts (e.g. 3 fake records) can't sign in at all. (An email
+    # hold only keeps the account off-line: they sign in to verify the email.)
+    if user.is_suspended and not is_email_held(user):
         flash(SUSPENDED_MESSAGE, 'danger')
         return redirect(url_for('login'))
 
@@ -3522,6 +3551,11 @@ def continue_login(user):
     if user.role == 'Athlete':
         login_user(user)
         return redirect_after_login('student_dashboard')
+
+    # Buyers: scroll D.A.R.T. and shop on D.A.R.T Market$.
+    if user.role == 'Buyer':
+        login_user(user)
+        return redirect_after_login('market_home')
 
     # D.A.R.T Market$ vendors (sell sports gear only; every listing is checked).
     if user.role == 'Vendor':
@@ -3897,8 +3931,117 @@ def pop_celebration():
 app.jinja_env.globals['pop_celebration'] = pop_celebration
 
 
+# ==========================================================
+# EMAIL: optional at registration, verified within 2 business days
+# ==========================================================
+# Every registration form accepts an empty email. New accounts get a
+# deadline (EMAIL_DUE_BUSINESS_DAYS business days); a reminder shows on
+# every page until the email is added and verified by its link. Past the
+# deadline, the D.A.R.T Admin can hold the account (not live: hidden like a
+# suspended account) until the email is verified. A held member can still
+# sign in, but only to add / verify the email; verifying lifts the hold.
+EMAIL_DUE_BUSINESS_DAYS = 2
+EMAIL_HOLD_REASON = 'Email not verified'
+EMAIL_TOKEN_HOURS = 72
+EMAIL_RESEND_SECONDS = 60
+EMAIL_HOLD_ENDPOINTS = {'account_email', 'verify_email', 'logout', 'session_keepalive', 'presence_ping'}
+_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+
+def clean_optional_email(raw):
+    """(email or None, error or None). Empty is fine: it can be added later."""
+    email = (raw or '').strip().lower()
+    if not email:
+        return None, None
+    if len(email) > 150 or not _EMAIL_RE.match(email):
+        return None, 'Enter a valid email address, or leave it empty and add it within 2 business days.'
+    return email, None
+
+
+def email_taken(email, exclude_id=None):
+    if not email:
+        return False
+    query = User.query.filter(func.lower(User.email) == email.lower())
+    if exclude_id:
+        query = query.filter(User.id != exclude_id)
+    return query.first() is not None
+
+
+def add_business_days(start, days):
+    """start + `days` working days (Saturday and Sunday don't count)."""
+    moment = start
+    while days > 0:
+        moment += timedelta(days=1)
+        if moment.weekday() < 5:
+            days -= 1
+    return moment
+
+
+def email_due(user):
+    return user.email_due_at or add_business_days(user.created_at or datetime.utcnow(), EMAIL_DUE_BUSINESS_DAYS)
+
+
+def needs_email(user):
+    return bool(getattr(user, 'is_authenticated', False) and user.role != 'System' and not user.email_verified_at)
+
+
+def is_email_held(user):
+    return bool(user and user.is_suspended and user.suspension_reason == EMAIL_HOLD_REASON)
+
+
+def send_email(to, subject, body):
+    """Send one plain-text email. False (logged) if it could not be sent."""
+    if not to or not app.config.get('MAIL_SERVER'):
+        return False
+    try:
+        msg = Message(subject=subject, sender=app.config['MAIL_DEFAULT_SENDER'], recipients=[to])
+        msg.body = body
+        mail.send(msg)
+        return True
+    except Exception as e:
+        app.logger.warning('Email to a member could not be sent: %s', e)
+        return False
+
+
+def _email_token_hash(token):
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
+
+
+def start_email_verification(user):
+    """New one-time link (72 h) to the user's email. True if the email was sent."""
+    token = secrets.token_urlsafe(32)
+    user.email_verify_token = _email_token_hash(token)
+    user.email_verify_sent_at = datetime.utcnow()
+    link = url_for('verify_email', token=token, _external=True)
+    return send_email(user.email, 'Verify your email for D.A.R.T.', (
+        f'Hello {user.display_name},\n\n'
+        'Please confirm this is your email address for your D.A.R.T. account:\n\n'
+        f'{link}\n\n'
+        f'The link works for {EMAIL_TOKEN_HOURS} hours. If you did not create a D.A.R.T. account, ignore this email.\n\n'
+        'D.A.R.T. (D3ll Athlete Records Tracker)'
+    ))
+
+
+def email_banner():
+    """The reminder shown on every page to members who still need to add / verify their email."""
+    if not needs_email(current_user) or request.endpoint in ('account_email', 'verify_email'):
+        return None
+    due = email_due(current_user)
+    return {'due': due, 'overdue': datetime.utcnow() > due, 'has_email': bool(current_user.email)}
+
+
+app.jinja_env.globals.update(email_banner=email_banner, needs_email=needs_email, email_due=email_due)
+
+
 def record_account_created(user):
     """Mark a brand-new account so its first login is celebrated."""
+    # Email: deadline to add / verify it; Google sign-ups are verified by Google.
+    if user.email_due_at is None:
+        user.email_due_at = add_business_days(datetime.utcnow(), EMAIL_DUE_BUSINESS_DAYS)
+    if user.email and user.google_sub:
+        user.email_verified_at = user.email_verified_at or datetime.utcnow()
+    elif user.email and not user.email_verified_at:
+        start_email_verification(user)
     create_audit_log(
         action='account_created',
         actor_user_id=user.id,
@@ -4121,6 +4264,7 @@ ROLE_DASHBOARDS = {
     'Organization': ('organization_dashboard', 'Team HQ', 'Team', 'fa-solid fa-building-shield'),
     'Statistician': ('official_dashboard', 'Match Official', 'Official', 'fa-solid fa-clipboard-check'),
     'Vendor': ('market_mine', 'My Shop', 'Shop', 'fa-solid fa-store'),
+    'Buyer': ('market_cart', 'My Cart', 'Cart', 'fa-solid fa-cart-shopping'),
 }
 
 
@@ -6493,7 +6637,7 @@ def register_organization():
         contact_name = re.sub(r'\s+', ' ', form.get('contact_name', '')).strip()
         contact_title = form.get('contact_title', '').strip()
         contact_phone = form.get('contact_phone', '').strip()
-        email = form.get('email', '').strip().lower()
+        email, email_error = clean_optional_email(form.get('email'))
         password = form.get('password', '')
         confirm_password = form.get('confirm_password', '')
         document = request.files.get('document')
@@ -6529,7 +6673,7 @@ def register_organization():
             return back('Password must be at least 8 characters and include upper and lower case letters, a number and a symbol.')
         if form.get('accept_terms') != 'yes' or form.get('authorized') != 'yes':
             return back('Please confirm you are authorized and accept the Organization Data Use Terms.')
-        if User.query.filter(func.lower(User.email) == email).first():
+        if email_taken(email):
             return back('An account with this email address already exists.')
         # Organizations log in with their organization name.
         if User.query.filter(func.lower(User.full_name) == org_name.lower()).first():
@@ -6872,6 +7016,29 @@ def _team_logo_index():
     return index
 
 
+def _team_org_index():
+    """{normalized team name / alias: organization id} for verified organizations (once per request)."""
+    if has_request_context() and '_team_orgs' in g:
+        return g._team_orgs
+    index = {}
+    rows = (OrganizationProfile.query.join(User, User.id == OrganizationProfile.user_id)
+            .filter(OrganizationProfile.verification_status == 'verified', User.is_suspended.is_(False)).all())
+    for org in rows:
+        for name in [org.org_name] + OrganizationProfile.split_names(org.approved_aliases):
+            key = normalize_team_name(name)
+            if key:
+                index.setdefault(key, org.id)
+    if has_request_context():
+        g._team_orgs = index
+    return index
+
+
+def team_org_url(name):
+    """Link to the team's D.A.R.T. organization page when the team is a verified organization, else ''."""
+    org_id = _team_org_index().get(normalize_team_name(name or '')) if name else None
+    return url_for('organization_public', org_id=org_id) if org_id else ''
+
+
 def team_logo_url(name):
     hit = _team_logo_index().get(normalize_team_name(name or '')) if name else None
     return hit[0] if hit else ''
@@ -6897,7 +7064,7 @@ def private_image_url(path):
         return ''
 
 
-app.jinja_env.globals.update(team_badge=team_badge, team_logo_url=team_logo_url, org_logo_url=org_logo_url,
+app.jinja_env.globals.update(team_badge=team_badge, team_logo_url=team_logo_url, org_logo_url=org_logo_url, team_org_url=team_org_url,
                              market_image_url_path=private_image_url)
 
 
@@ -6962,6 +7129,37 @@ def admin_organization_logo(org_id, action):
     db.session.commit()
     flash('Logo ' + ('approved.' if action == 'approve' else 'rejected.'), 'success')
     return redirect(url_for('admin_organizations') + '#logos')
+
+
+# ---------- Organization page (public, read only) ----------
+@app.route('/org/<int:org_id>')
+def organization_public(org_id):
+    """A verified organization's page: details and its official athletes, sport by sport."""
+    org = db.session.get(OrganizationProfile, org_id)
+    owner = db.session.get(User, org.user_id) if org else None
+    if not org or org.verification_status != 'verified' or not owner or owner.is_suspended:
+        abort(404)
+    athletes = [a for a in roster_athletes(org) if not a.is_suspended]
+    ids = [a.id for a in athletes]
+    records = (SportRecord.query.filter(SportRecord.user_id.in_(ids), SportRecord.status == 'approved').all() if ids else [])
+    per = {}
+    for r in records:
+        slot = per.setdefault((r.user_id, r.sport), {})
+        if r.position:
+            slot[r.position] = slot.get(r.position, 0) + 1
+    by_sport = {s: [] for s in ('Football', 'Basketball', 'Kickball')}
+    placed = set()
+    for a in athletes:
+        for sport in by_sport:
+            if (a.id, sport) in per:
+                positions = per[(a.id, sport)]
+                by_sport[sport].append((a, max(positions, key=positions.get) if positions else ''))
+                placed.add(a.id)
+    others = [a for a in athletes if a.id not in placed]
+    coaches = sorted({c.id: c for name in org.roster_names for c in integrity._active_coaches_of(name)}.values(),
+                     key=lambda c: c.full_name or '')
+    return render_template('organization_public.html', org=org, owner=owner, by_sport=by_sport, others=others,
+                           coaches=coaches, total=len(athletes))
 
 
 # ---------- D.A.R.T Admin: verify organizations ----------
@@ -7555,6 +7753,134 @@ SUSPENDED_MESSAGE = (
 NO_ACCOUNT_ENDPOINTS = {'static', 'service_worker', 'offline', 'robots_txt', 'sitemap_xml'}
 
 
+# ---------- Email: add / change / verify ----------
+@app.route('/account/email', methods=['GET', 'POST'])
+@login_required
+def account_email():
+    user = current_user
+    if request.method == 'POST':
+        now = datetime.utcnow()
+        if request.form.get('action') == 'resend':
+            if not user.email:
+                flash('Add your email address first.', 'warning')
+            elif user.email_verified_at:
+                flash('Your email is already verified.', 'info')
+            elif user.email_verify_sent_at and (now - user.email_verify_sent_at).total_seconds() < EMAIL_RESEND_SECONDS:
+                flash('A link was just sent. Please wait a minute before asking again.', 'warning')
+            elif start_email_verification(user):
+                flash(f'A new verification link was sent to {user.email}.', 'success')
+            else:
+                flash('We could not send the email right now. Please try again later.', 'danger')
+            db.session.commit()
+            return redirect(url_for('account_email'))
+        email, error = clean_optional_email(request.form.get('email'))
+        if not email:
+            error = error or 'Enter your email address.'
+        elif email_taken(email, exclude_id=user.id):
+            error = 'This email address is already used by another D.A.R.T. account.'
+        elif user.email and user.email.lower() != email and user.password_hash and not user.check_password(request.form.get('password', '')):
+            error = 'Enter your current password to change your email address.'
+        if error:
+            flash(error, 'danger')
+            return redirect(url_for('account_email'))
+        if (user.email or '').lower() != email or not user.email_verified_at:
+            user.email = email
+            user.email_verified_at = None
+            sent = start_email_verification(user)
+            create_audit_log(action='email_added', actor_user_id=user.id, target_type='User', target_id=str(user.id))
+            db.session.commit()
+            flash(f'Check {email}: we sent you a link to verify it.' if sent else
+                  'Email saved, but we could not send the verification link. Use "Send the link again" in a minute.',
+                  'success' if sent else 'warning')
+        return redirect(url_for('account_email'))
+    return render_template('account_email.html', due=email_due(user), overdue=datetime.utcnow() > email_due(user),
+                           held=is_email_held(user))
+
+
+@app.route('/account/email/verify/<token>')
+def verify_email(token):
+    if is_prefetch():
+        return ('', 204)
+    user = User.query.filter_by(email_verify_token=_email_token_hash(token)).first() if 20 <= len(token or '') <= 100 else None
+    if (not user or not user.email or not user.email_verify_sent_at
+            or datetime.utcnow() - user.email_verify_sent_at > timedelta(hours=EMAIL_TOKEN_HOURS)):
+        flash('This verification link is not valid any more. Log in and send a new one.', 'warning')
+        return redirect(url_for('account_email') if current_user.is_authenticated else url_for('login'))
+    user.email_verified_at = datetime.utcnow()
+    user.email_verify_token = None
+    lifted = is_email_held(user)
+    if lifted:
+        user.is_suspended = False
+        user.suspended_at = None
+        user.suspension_reason = None
+        notif.notify(user.id, 'email_verified', 'Email verified: your account is live again.', '/')
+    create_audit_log(action='email_verified', actor_user_id=user.id, target_type='User', target_id=str(user.id),
+                     details={'hold_lifted': lifted})
+    db.session.commit()
+    flash('Email verified. Thank you!' + (' Your account is live again.' if lifted else ''), 'success')
+    return redirect(url_for('account_email') if current_user.is_authenticated else url_for('login'))
+
+
+def email_overdue_query():
+    """Members past their email deadline who are not held yet."""
+    now = datetime.utcnow()
+    return User.query.filter(
+        User.role != 'System', User.email_verified_at.is_(None), User.is_suspended.is_(False),
+        db.or_(User.email_due_at < now,
+               db.and_(User.email_due_at.is_(None), User.created_at < now - timedelta(days=4))),
+    )
+
+
+@app.route('/admin/email-holds')
+@login_required
+def admin_email_holds():
+    require_super_admin()
+    overdue = email_overdue_query().order_by(User.email_due_at.asc().nullsfirst(), User.id).limit(300).all()
+    held = (User.query.filter(User.is_suspended.is_(True), User.suspension_reason == EMAIL_HOLD_REASON)
+            .order_by(User.suspended_at.desc()).limit(300).all())
+    return render_template('admin_email_holds.html', overdue=overdue, held=held, email_due=email_due)
+
+
+@app.route('/admin/email-holds/hold', methods=['POST'])
+@login_required
+def admin_email_hold():
+    """Hold accounts past the deadline: not live until they verify an email."""
+    require_super_admin()
+    ids = {int(x) for x in request.form.getlist('user_id') if str(x).isdigit()}
+    query = email_overdue_query()
+    if request.form.get('all') != 'yes':
+        query = query.filter(User.id.in_(ids or {0}))
+    held = 0
+    for user in query.limit(500).all():
+        user.is_suspended = True
+        user.suspended_at = datetime.utcnow()
+        user.suspension_reason = EMAIL_HOLD_REASON
+        notif.notify(user.id, 'email_hold', 'Your account is on hold (not live) until you add and verify your email address.',
+                     '/account/email')
+        create_audit_log(action='email_hold', actor_user_id=current_user.id, target_type='User', target_id=str(user.id))
+        held += 1
+    db.session.commit()
+    flash(f'{held} account{"s" if held != 1 else ""} on hold until the email is verified.' if held else 'Nobody to hold.', 'success' if held else 'info')
+    return redirect(url_for('admin_email_holds'))
+
+
+@app.route('/admin/email-holds/<int:user_id>/release', methods=['POST'])
+@login_required
+def admin_email_release(user_id):
+    require_super_admin()
+    user = db.session.get(User, user_id)
+    if not is_email_held(user):
+        abort(404)
+    user.is_suspended = False
+    user.suspended_at = None
+    user.suspension_reason = None
+    user.email_due_at = add_business_days(datetime.utcnow(), EMAIL_DUE_BUSINESS_DAYS)   # a new deadline
+    create_audit_log(action='email_hold_released', actor_user_id=current_user.id, target_type='User', target_id=str(user.id))
+    db.session.commit()
+    flash(f'{user.display_name} is live again, with a new deadline to verify an email.', 'success')
+    return redirect(url_for('admin_email_holds'))
+
+
 # ---------- Sign out after inactivity ----------
 # A signed-in user is signed out after SESSION_IDLE_SECONDS without real
 # activity (opening pages, submitting forms, or using the page: the
@@ -7563,7 +7889,7 @@ NO_ACCOUNT_ENDPOINTS = {'static', 'service_worker', 'offline', 'robots_txt', 'si
 # refresh, link prefetching, offline sync and service-worker saves.
 SESSION_IDLE_SECONDS = int(app.permanent_session_lifetime.total_seconds())   # config.py: 5 minutes
 SESSION_WARNING_SECONDS = 60          # "Stay signed in" prompt in the last minute
-BACKGROUND_ENDPOINTS = {'admin_dashboard_stats', 'record_sync_status'}
+BACKGROUND_ENDPOINTS = {'admin_dashboard_stats', 'record_sync_status', 'presence_ping'}
 IDLE_SIGNOUT_MESSAGE = (f'For your security you were signed out after {SESSION_IDLE_SECONDS // 60} minutes without activity. '
                         'Please log in again.')
 
@@ -7585,6 +7911,35 @@ def _start_activity_clock(sender, user, **extra):
     session['_last_active'] = time.time()
 
 
+@app.after_request
+def track_presence(response):
+    """Count live users (members and visitors): real page views only, no bots."""
+    try:
+        if (request.method == 'GET' and response.status_code == 200 and response.mimetype == 'text/html'
+                and request.endpoint not in NO_ACCOUNT_ENDPOINTS and not is_background_request()
+                and not presence_mod.is_bot(request.headers.get('User-Agent', ''))):
+            presence_mod.touch(session, current_user.id if current_user.is_authenticated else None, time.time())
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning('Presence not saved: %s', e)
+    return response
+
+
+@app.route('/presence', methods=['POST'])
+@csrf.exempt
+def presence_ping():
+    """The page is still open (every 2 minutes): still live. Only touches this browser's own row."""
+    if presence_mod.is_bot(request.headers.get('User-Agent', '')):
+        return ('', 204)
+    try:
+        presence_mod.touch(session, current_user.id if current_user.is_authenticated else None, time.time())
+    except Exception:
+        db.session.rollback()
+    response = make_response('', 204)
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
 @app.route('/session/keepalive', methods=['POST'])
 def session_keepalive():
     """The page is being used (reading, typing): keep the sign-in alive."""
@@ -7599,8 +7954,14 @@ def require_terms_acceptance():
     if request.endpoint is None or request.endpoint in NO_ACCOUNT_ENDPOINTS:
         return None
 
+    # Email hold: signed in, but only the email page until it is verified.
+    if current_user.is_authenticated and is_email_held(current_user):
+        if request.endpoint not in EMAIL_HOLD_ENDPOINTS:
+            if request.path.startswith('/api/'):
+                return _no_store_json({'ok': False, 'reason': 'email_hold', 'error': 'Verify your email to use D.A.R.T. again.'}, 403)
+            return redirect(url_for('account_email'))
     # Suspended accounts are signed out everywhere, at once.
-    if current_user.is_authenticated and current_user.is_suspended:
+    elif current_user.is_authenticated and current_user.is_suspended:
         logout_user()
         if request.path.startswith('/api/'):
             return _no_store_json({'ok': False, 'reason': 'suspended', 'error': SUSPENDED_MESSAGE}, 403)
@@ -7964,7 +8325,7 @@ def admin_terms_acceptances_csv():
 # Only public sport information is used (age, never the date of birth).
 
 # Every account has a shareable card.
-PROFILE_CARD_ROLES = ('Athlete', 'Coach', 'Scout', 'Vendor', 'Organization', 'Statistician', 'System')
+PROFILE_CARD_ROLES = ('Athlete', 'Coach', 'Scout', 'Vendor', 'Buyer', 'Organization', 'Statistician', 'System')
 PROFILE_PHOTO_MAX_BYTES = 6 * MB
 
 
@@ -8085,6 +8446,13 @@ def profile_card_info(user, viewer=None):
             'subtitle': user.school or ('Sports journalist' if journalist else 'Match Official'),
             'pill': user.official_type or 'Match Official',
             'stats': [('Role', user.official_type or 'Match Official'), ('Organization', user.school or '—')],
+        })
+    elif user.role == 'Buyer':
+        info.update({
+            'eyebrow': 'Buyer Card',
+            'subtitle': 'D.A.R.T Market$ buyer',
+            'pill': 'Buyer',
+            'stats': [('Role', 'Buyer'), ('Location', user.business_location or '—')],
         })
     elif user.role == 'System':
         info.update({
@@ -9757,6 +10125,13 @@ def paid_subscriber_ids():
     }
 
 
+# Match official types shown one by one on the D.A.R.T Admin dashboard.
+OFFICIAL_TYPE_KEYS = {
+    'Referee / match official': 'referee', 'Linesman / assistant referee': 'linesman', 'Spectator (verified fan)': 'spectator',
+    'League secretary': 'secretary', 'School sports coordinator': 'coordinator', 'Community youth leader': 'youth_leader',
+}
+
+
 def super_admin_dashboard_stats():
     records_by_status = dict(
         db.session.query(SportRecord.status, func.count(SportRecord.id))
@@ -9819,7 +10194,20 @@ def super_admin_dashboard_stats():
         'journalists_total': User.query.filter(User.role == 'Statistician', User.official_type == 'Sports journalist').count(),
         'journalists_verified': User.query.filter(User.role == 'Statistician', User.official_type == 'Sports journalist',
                                                   User.is_verified.is_(True)).count(),
+        # Every category of account.
+        'coaches_total': users_by_role.get('Coach', 0),
+        'scouts_total': total_scouts,
+        'buyers_total': users_by_role.get('Buyer', 0),
     }
+    by_type = dict(db.session.query(User.official_type, func.count(User.id)).filter(User.role == 'Statistician')
+                   .group_by(User.official_type).all())
+    for official_type, key in OFFICIAL_TYPE_KEYS.items():
+        stats['officials_' + key] = by_type.get(official_type, 0)
+    stats['officials_other'] = sum(n for t, n in by_type.items() if t not in OFFICIAL_TYPE_KEYS and t != 'Sports journalist')
+    # Live now: members and visitors without an account (last few minutes).
+    live = presence_mod.live_counts()
+    stats.update({'live_total': live['total'], 'live_members': live['members'], 'live_visitors': live['visitors'],
+                  'members_24h': live['members_24h'], 'visitors_24h': live['visitors_24h']})
     stats['reviews_pending'] = (stats['records_pending'] + stats['coaches_pending'] + stats['scouts_pending']
                                 + stats['orgs_pending'] + stats['media_pending'] + stats['athletes_pending'])
     stats['approval_rate'] = (round(stats['records_approved'] * 100 / (stats['records_approved'] + stats['records_rejected']))
@@ -10628,6 +11016,10 @@ def user_profile(user_id):
 
     if user.role == 'Vendor':
         return redirect(url_for('market_vendor', user_id=user.id))
+    if user.role == 'Organization':
+        org = OrganizationProfile.query.filter_by(user_id=user.id, verification_status='verified').first()
+        if org:
+            return redirect(url_for('organization_public', org_id=org.id))
     # Athletes' canonical public address is /athletes/<id>/<name> (SEO);
     # this page shows the same content and points there.
     return render_user_profile(user)
@@ -11762,7 +12154,10 @@ def register_coach(registration_category=None):
         school = request.form['school'].strip()
         gender = request.form.get('gender', '').strip()
         nationality = request.form.get('nationality', '').strip()
-        email = request.form['email'].strip().lower()
+        email, email_error = clean_optional_email(request.form.get('email'))
+        if email_error:
+            flash(email_error, 'danger')
+            return redirect(url_for('register_coach', registration_category=registration_category))
         password = request.form['password']
 
         # ======== PASSWORD STRENGTH CHECK ========== #
@@ -11780,8 +12175,8 @@ def register_coach(registration_category=None):
 
         secret_code = request.form['secret_code'].strip()
 
-        # Email must be unique.
-        existing_email = User.query.filter_by(email=email).first()
+        # Email must be unique (when given).
+        existing_email = email_taken(email)
         if existing_email:
             flash('An account with this email address already exists.', 'danger')
             return redirect(url_for(
@@ -11879,7 +12274,7 @@ def register_scout():
             'years_experience',
             ''
         ).strip()
-        email = request.form.get('email', '').strip().lower()
+        email, email_error = clean_optional_email(request.form.get('email'))
         password = request.form.get('password', '')
         confirm_password = request.form.get('confirm_password', '')
         gender = request.form.get('gender', '').strip()
@@ -11903,8 +12298,8 @@ def register_scout():
             flash('Organization or scouting agency is required.', 'danger')
             return redirect(url_for('register_scout'))
 
-        if not email:
-            flash('Email address is required.', 'danger')
+        if email_error:
+            flash(email_error, 'danger')
             return redirect(url_for('register_scout'))
 
         if not password:
@@ -11951,9 +12346,7 @@ def register_scout():
         # -----------------------------
         # Email uniqueness
         # -----------------------------
-        existing_email = User.query.filter_by(
-            email=email
-        ).first()
+        existing_email = email_taken(email)
 
         if existing_email:
             flash(
@@ -12571,9 +12964,9 @@ def register_official():
     username, username_error = check_new_username(form.get('username'))
     if username_error:
         return back(username_error)
-    email = (form.get('email') or '').strip().lower()
-    if not email or len(email) > 150 or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
-        return back('Enter a valid email address.')
+    email, email_error = clean_optional_email(form.get('email'))
+    if email_error:
+        return back(email_error)
     password = form.get('password', '')
     if password != form.get('confirm_password', ''):
         return back('Passwords do not match.')
@@ -12590,7 +12983,7 @@ def register_official():
         return back('Enter a Liberian Orange (077) or Lonestar (088 / 055) mobile number.')
     if integrity.phone_taken(phone):
         return back('This number is already tied to another D.A.R.T. account.')
-    if User.query.filter_by(email=email).first():
+    if email_taken(email):
         return back('An account with this email address already exists.')
 
     document = request.files.get('id_document')
@@ -13240,6 +13633,9 @@ def _store_listing_images(listing, files):
 @app.route('/market/sell', methods=['GET', 'POST'])
 @login_required
 def market_sell():
+    if current_user.role == 'Buyer':
+        flash('Buyer accounts shop on D.A.R.T Market$. To sell sports gear, register a vendor account.', 'info')
+        return redirect(url_for('market_home'))
     reason = market_block_reason()
     if reason:
         flash(reason, 'warning')
@@ -13536,6 +13932,65 @@ def admin_market_ban(user_id):
 app.jinja_env.globals['market_pending'] = market_mod.pending_counts
 
 
+def admin_queues():
+    """
+    Everything waiting for the D.A.R.T Admin, section by section:
+    [{'key', 'label', 'icon', 'count', 'url', 'group'}]. Used by the
+    dashboard's Review menu and the admin's notification bell.
+    """
+    if 'admin_queues' in g:
+        return g.admin_queues
+    vc = verification_counts()
+    mp = market_mod.pending_counts()
+    dash = url_for('admin_dashboard')
+    rows = [
+        ('records', 'Sports records', 'fa-file-lines', SportRecord.query.filter_by(status='pending').count(), dash + '#pendingRecords', 'content'),
+        ('media', 'Photos & videos', 'fa-photo-film',
+         AthleteHighlight.query.filter(AthleteHighlight.status == 'pending', AthleteHighlight.admin_approved_at.is_(None)).count(),
+         url_for('admin_highlights'), 'content'),
+        ('verification', 'Record verification & disputes', 'fa-scale-balanced', vc['verifying'] + vc['disputed'] + vc['proof'],
+         url_for('verification_center'), 'content'),
+        ('awards', 'Award entries (week / month)', 'fa-trophy', awards_pending_count(), url_for('admin_awards'), 'content'),
+        ('market', 'Market$ listings & reports', 'fa-store', mp['listings'] + mp['reports'], url_for('admin_market') + '#pending', 'content'),
+        ('orders', 'Overdue Market$ orders', 'fa-truck-fast', len(market_mod.overdue_orders()), url_for('admin_market') + '#overdue', 'content'),
+        ('athletes', 'Athletes not live yet', 'fa-user-clock',
+         User.query.filter(User.role == 'Athlete', User.is_verified.is_(False)).count(), dash + '#pendingAthletes', 'content'),
+        ('coaches', 'Coaches', 'fa-user-tie', User.query.filter_by(role='Coach', is_verified=False).count(), dash + '#pendingCoaches', 'accounts'),
+        ('coach_review', 'Coach teams & careers', 'fa-clipboard-user', sum(coaching.pending_counts().values()),
+         url_for('admin_coach_review'), 'accounts'),
+        ('scouts', 'Scouts', 'fa-binoculars', User.query.filter_by(role='Scout', is_verified=False).count(), dash + '#pendingScouts', 'accounts'),
+        ('officials', 'Match officials & journalists', 'fa-clipboard-check', vc['officials'], url_for('verification_center') + '#officials', 'accounts'),
+        ('orgs', 'Organizations', 'fa-building-shield', OrganizationProfile.query.filter(or_(
+            OrganizationProfile.verification_status == 'pending',
+            db.and_(OrganizationProfile.verification_status == 'verified', OrganizationProfile.requested_aliases.isnot(None)))).count(),
+         url_for('admin_organizations'), 'accounts'),
+        ('logos', 'Team badges / logos', 'fa-shield-halved', OrganizationProfile.query.filter_by(logo_status='pending').count(),
+         url_for('admin_organizations') + '#logos', 'accounts'),
+        ('vendors', 'Vendors to verify', 'fa-store',
+         User.query.filter(User.role == 'Vendor', User.vendor_verified_at.is_(None), User.is_suspended.is_(False)).count(),
+         url_for('admin_market') + '#vendors', 'accounts'),
+        ('emails', 'Accounts past the email deadline', 'fa-envelope-circle-check', email_overdue_query().count(),
+         url_for('admin_email_holds'), 'accounts'),
+        ('payments', 'Payments', 'fa-money-check-dollar', Payment.query.filter_by(status='awaiting_review').count(),
+         url_for('admin_payments'), 'money'),
+    ]
+    g.admin_queues = [{'key': k, 'label': label, 'icon': icon, 'count': n, 'url': url, 'group': grp}
+                      for k, label, icon, n, url, grp in rows]
+    return g.admin_queues
+
+
+def admin_bell():
+    """The D.A.R.T Admin's bell: sections with something waiting + unread notifications."""
+    if not (current_user.is_authenticated and current_user.role == 'System'):
+        return None
+    items = [q for q in admin_queues() if q['count']]
+    unread = notif.unread_count(current_user)
+    return {'items': items, 'unread': unread, 'total': sum(q['count'] for q in items) + unread}
+
+
+app.jinja_env.globals.update(admin_queues=admin_queues, admin_bell=admin_bell)
+
+
 def market_showcase(limit=8):
     """Live products of Vendor Premium sellers (advertised across D.A.R.T.), freshest first."""
     ids = premium_vendor_ids()
@@ -13543,6 +13998,22 @@ def market_showcase(limit=8):
         return []
     return (MarketListing.query.filter(MarketListing.status == 'approved', MarketListing.seller_id.in_(ids))
             .order_by(MarketListing.reviewed_at.desc().nullslast(), MarketListing.id.desc()).limit(limit).all())
+
+
+def visitor_welcome():
+    """Products on sale + a few numbers for the visitors' welcome (no account needed)."""
+    if 'visitor_welcome' in g:
+        return g.visitor_welcome
+    g.visitor_welcome = {
+        'products': market_slider(8),
+        'athletes': User.query.filter(User.role == 'Athlete', User.is_verified.is_(True), User.is_suspended.is_(False)).count(),
+        'highlights': AthleteHighlight.query.filter(AthleteHighlight.status == 'approved').count(),
+        'on_sale': MarketListing.query.filter(MarketListing.status == 'approved').count(),
+    }
+    return g.visitor_welcome
+
+
+app.jinja_env.globals['visitor_welcome'] = lambda: visitor_welcome()
 
 
 def market_slider(limit=12):
@@ -13790,10 +14261,10 @@ def register_vendor():
         username, username_error = check_new_username(form.get('username'))
         if username_error:
             return back(username_error)
-        email = (form.get('email') or '').strip().lower()
-        if not email or len(email) > 150 or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
-            return back('Enter a valid email address.')
-        if User.query.filter_by(email=email).first():
+        email, email_error = clean_optional_email(form.get('email'))
+        if email_error:
+            return back(email_error)
+        if email_taken(email):
             return back('An account with this email address already exists.')
         password = form.get('password', '')
         if password != form.get('confirm_password', ''):
@@ -13824,6 +14295,63 @@ def register_vendor():
         flash('Vendor account created. Log in to post your sports gear on D.A.R.T Market$.', 'success')
         return redirect(url_for('login'))
     return render_template('register_vendor.html', form=form)
+
+
+# ---------- Buyers: scroll D.A.R.T. and buy sports gear ----------
+# (A real-money D.A.R.T. wallet comes later, once cleared with the Central Bank of Liberia.)
+@app.route('/register-buyer', methods=['GET', 'POST'])
+def register_buyer():
+    if current_user.is_authenticated:
+        return redirect(url_for('market_home'))
+    form = request.form if request.method == 'POST' else {}
+
+    def back(message):
+        flash(message, 'danger')
+        return render_template('register_buyer.html', form=form), 400
+
+    if request.method == 'POST':
+        full_name, name_error = validate_full_name(form.get('full_name', ''))
+        if name_error:
+            return back(name_error)
+        username, username_error = check_new_username(form.get('username'))
+        if username_error:
+            return back(username_error)
+        email, email_error = clean_optional_email(form.get('email'))
+        if email_error:
+            return back(email_error)
+        if email_taken(email):
+            return back('An account with this email address already exists.')
+        phone = guardian_mod.clean_phone(form.get('phone'))
+        if not phone:
+            return back('Enter your phone number (sellers call or WhatsApp you on it).')
+        if User.query.filter_by(phone=phone).first():
+            return back('This phone number is already used by another D.A.R.T. account.')
+        location = market_mod.clean(form.get('location'), 80) or None
+        password = form.get('password', '')
+        if password != form.get('confirm_password', ''):
+            return back('Passwords do not match.')
+        if not is_strong_password(password):
+            return back('Password must meet the required security requirements.')
+        if form.get('adult') != 'yes':
+            return back('Buyer accounts are for people aged 18 or older.')
+        if form.get('agree') != 'yes':
+            return back('Please confirm you will meet sellers safely and pay only when you see the item.')
+        buyer = User(full_name=full_name, username=username, email=email, role='Buyer', school='', phone=phone,
+                     is_verified=True, business_location=location)
+        buyer.set_password(password)
+        try:
+            db.session.add(buyer)
+            db.session.flush()
+            record_account_created(buyer)
+            create_audit_log(action='buyer_registration_created', actor_user_id=buyer.id, target_type='User', target_id=str(buyer.id))
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return back('This email, username or phone number is already in use.')
+        flash('Buyer account created. Log in to shop on D.A.R.T Market$.'
+              + ('' if email else ' Remember to add your email within 2 business days.'), 'success')
+        return redirect(url_for('login', next=safe_next_url(request.args.get('next')) or None))
+    return render_template('register_buyer.html', form=form)
 
 
 # ==========================================================

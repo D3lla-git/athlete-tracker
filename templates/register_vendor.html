@@ -50,8 +50,9 @@
       </div>
     </div>
     <div class="mb-3">
-      <label class="form-label" for="email">Email</label>
-      <input class="form-control" id="email" name="email" type="email" maxlength="150" required autocomplete="email" value="{{ form.get('email', '') }}">
+      <label class="form-label" for="email">Email <span class="text-muted small">(optional)</span></label>
+      <input class="form-control" id="email" name="email" type="email" maxlength="150" autocomplete="email" value="{{ form.get('email', '') }}">
+      <small class="text-muted d-block">Optional: add it now or within 2 business days (we email you a link to verify it).</small>
     </div>
     <div class="row">
       <div class="col-md-6 mb-3"><label class="form-label" for="password">Password</label>
