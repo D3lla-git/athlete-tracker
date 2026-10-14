@@ -1,0 +1,49 @@
+{# Shop address + exact place on the map. Used in vendor registration and My shop.
+   lat / lng come from "Use my current location"; map_link takes a Google Maps link or coordinates. #}
+{% macro shop_location_fields(address='', location='', lat=None, lng=None, show_address=true) %}
+{% if show_address %}
+<div class="row">
+  <div class="col-md-6 mb-3">
+    <label class="form-label" for="business_location">Town / county</label>
+    <input class="form-control" id="business_location" name="business_location" maxlength="80" required value="{{ location }}" placeholder="Monrovia, Montserrado">
+  </div>
+  <div class="col-md-6 mb-3">
+    <label class="form-label" for="business_address">Shop / business address</label>
+    <input class="form-control" id="business_address" name="business_address" maxlength="200" required value="{{ address }}" placeholder="Tubman Boulevard, Sinkor, opposite ...">
+  </div>
+</div>
+{% endif %}
+<fieldset class="mk-pin mb-3" data-shop-pin>
+  <legend class="form-label fw-bold fs-6 mb-1"><i class="fa-solid fa-location-dot text-danger"></i> Your shop on the map <span class="text-muted small fw-normal">(for Google Maps directions)</span></legend>
+  <p class="small text-muted mb-2">Standing in your shop? Tap <strong>Use my current location</strong>. Or paste your shop's Google Maps link / coordinates.
+    Only pin a shop, store or market stall, never your home.</p>
+  <input type="hidden" name="lat" value="" data-pin-lat>
+  <input type="hidden" name="lng" value="" data-pin-lng>
+  <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+    <button type="button" class="btn btn-sm btn-outline-success" data-pin-here><i class="fa-solid fa-crosshairs"></i> Use my current location</button>
+    <span class="small" data-pin-status>{% if lat is not none and lng is not none %}<i class="fa-solid fa-circle-check text-success"></i> Pinned ({{ '%.5f' % lat }}, {{ '%.5f' % lng }}){% else %}Not pinned yet{% endif %}</span>
+  </div>
+  <label class="visually-hidden" for="map_link">Google Maps link or coordinates</label>
+  <input class="form-control form-control-sm" id="map_link" name="map_link" maxlength="600" placeholder="Paste a Google Maps link or coordinates, e.g. 6.3005, -10.7969" autocomplete="off">
+</fieldset>
+<script>
+(function () {
+  document.querySelectorAll('[data-shop-pin]').forEach(function (box) {
+    var btn = box.querySelector('[data-pin-here]'), st = box.querySelector('[data-pin-status]');
+    var lat = box.querySelector('[data-pin-lat]'), lng = box.querySelector('[data-pin-lng]');
+    if (!btn) return;
+    if (!navigator.geolocation) { btn.hidden = true; return; }
+    btn.addEventListener('click', function () {
+      st.textContent = 'Finding your location…';
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        lat.value = pos.coords.latitude.toFixed(6); lng.value = pos.coords.longitude.toFixed(6);
+        st.innerHTML = '<i class="fa-solid fa-circle-check text-success"></i> Pinned here (' + (+lat.value).toFixed(5) + ', ' + (+lng.value).toFixed(5) +
+          ', ±' + Math.round(pos.coords.accuracy) + ' m). Save to keep it.';
+      }, function () {
+        st.textContent = 'Location not available: allow location for D.A.R.T., or paste a Google Maps link.';
+      }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    });
+  });
+})();
+</script>
+{% endmacro %}

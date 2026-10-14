@@ -14,6 +14,7 @@ on listings, new conversations and messages; reports + seller bans.
 """
 import io
 import re
+from urllib.parse import quote
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -85,9 +86,77 @@ def clean_list(text, limit=12):
     return ', '.join(items[:limit]) or None
 
 
+# ---------- shop on the map (Google Maps directions) ----------
+# Vendors pin their shop with "Use my current location" (standing in the shop)
+# or by pasting a Google Maps link / coordinates. Only numbers are stored;
+# links are never fetched by the server. Buyers get a Google Maps
+# directions link (exact pin, else the written address).
+_COORD_PATTERNS = (
+    re.compile(r'!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)'),                                  # place pin: ...!3d6.30!4d-10.79
+    re.compile(r'@(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)'),                                  # map centre: .../@6.30,-10.79,17z
+    re.compile(r'[?&](?:q|query|ll|destination|daddr|center)=(-?\d{1,2}\.\d+)(?:,|%2C)\s*(-?\d{1,3}\.\d+)', re.I),
+    re.compile(r'^\s*(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$'),               # "6.3005, -10.7969"
+)
+SHORT_MAP_LINK_RE = re.compile(r'(maps\.app\.goo\.gl|goo\.gl/maps)', re.I)
+
+
+def parse_map_location(raw):
+    """(lat, lng) from coordinates or a full Google Maps link, else None."""
+    text = (raw or '').strip()[:600]
+    if not text:
+        return None
+    for pattern in _COORD_PATTERNS:
+        m = pattern.search(text)
+        if m:
+            lat, lng = float(m.group(1)), float(m.group(2))
+            if -90 <= lat <= 90 and -180 <= lng <= 180 and not (lat == 0 and lng == 0):
+                return round(lat, 6), round(lng, 6)
+    return None
+
+
+def valid_coords(lat, lng):
+    try:
+        lat, lng = float(lat), float(lng)
+    except (TypeError, ValueError):
+        return None
+    if -90 <= lat <= 90 and -180 <= lng <= 180 and not (lat == 0 and lng == 0):
+        return round(lat, 6), round(lng, 6)
+    return None
+
+
+def directions_url(user):
+    """Google Maps directions to the shop: the pin, else the written address (Liberia)."""
+    if not user or getattr(user, 'role', None) != 'Vendor':
+        return ''
+    if user.shop_lat is not None and user.shop_lng is not None:
+        destination = f'{user.shop_lat:.6f},{user.shop_lng:.6f}'
+    elif user.business_address:
+        destination = ', '.join(x for x in (user.business_address, user.business_location, 'Liberia') if x)
+    else:
+        return ''
+    return 'https://www.google.com/maps/dir/?api=1&destination=' + quote(destination, safe=',')
+
+
+def map_embed_url(user):
+    """A small embedded Google map of the pinned shop ('' without a pin)."""
+    if not user or user.shop_lat is None or user.shop_lng is None:
+        return ''
+    return f'https://www.google.com/maps?q={user.shop_lat:.6f},{user.shop_lng:.6f}&z=17&output=embed'
+
+
 # ---------- who can do what ----------
 def age_of(user, age_fn):
     return age_fn(user) if user.role == 'Athlete' else None
+
+
+def is_rejected(user):
+    """A vendor / buyer the D.A.R.T Admin did not approve (until they fix it and resubmit)."""
+    return bool(user and getattr(user, 'role', None) in ('Vendor', 'Buyer') and user.market_status == 'rejected')
+
+
+def rejected_ids_query():
+    """Sellers whose account is rejected: their products are hidden until they are approved."""
+    return db.session.query(User.id).filter(User.market_status == 'rejected')
 
 
 def market_block_reason(user, age_fn):
@@ -96,6 +165,9 @@ def market_block_reason(user, age_fn):
         return 'Create a D.A.R.T. account (or log in) to use D.A.R.T Market$.'
     if user.is_suspended or user.market_banned:
         return 'Your account cannot sell or message on D.A.R.T Market$.'
+    if is_rejected(user):
+        return ('The D.A.R.T Admin did not approve this account: ' + (user.market_reject_reason or 'see your notifications') +
+                '. Fix it and resubmit to use D.A.R.T Market$ again.')
     if user.role == 'System':
         return 'The D.A.R.T Admin reviews listings; it does not sell.'
     if user.role == 'Athlete':
@@ -298,7 +370,7 @@ def cart_message(items):
 # ---------- browsing ----------
 def search(args):
     """Live (approved) listings matching the filters, newest first by default."""
-    q = MarketListing.query.filter(MarketListing.status == 'approved')
+    q = MarketListing.query.filter(MarketListing.status == 'approved', ~MarketListing.seller_id.in_(rejected_ids_query()))
     text = clean(args.get('q'), 60)
     if text:
         like = f'%{text}%'

@@ -10,6 +10,20 @@
   {# Business card: full / business name, shop, address, location, D.A.R.T. verification badge. #}
   {{ profile_hero(info, can_edit=false) }}
   {% if info.premium_vendor %}<p class="small"><span class="badge text-bg-warning"><i class="fa-solid fa-crown"></i> Premium vendor</span></p>{% endif %}
+  {% from '_market_macros.html' import shop_directions %}
+  {% if shop_directions_url(vendor) %}
+    <section class="mk-panel mb-3" aria-label="Shop location">
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <i class="fa-solid fa-location-dot text-danger" aria-hidden="true"></i>
+        <span class="flex-grow-1"><strong>{{ vendor.business_address or '' }}</strong>{% if vendor.business_location %} · {{ vendor.business_location }}{% endif %}</span>
+        {{ shop_directions(vendor, 'btn btn-sm dart-btn') }}
+      </div>
+      {% set _emb = shop_map_embed(vendor) %}
+      {% if _emb %}<iframe class="mk-map" src="{{ _emb }}" title="{{ vendor.shop_name or vendor.display_name }} on the map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+      {% else %}<p class="small text-muted mb-0">Directions use the written address (the shop has not pinned its exact place yet).</p>{% endif %}
+      <p class="small text-muted mt-2 mb-0"><i class="fa-solid fa-shield-halved"></i> Meet in the shop or a busy public place, check the item, then pay.</p>
+    </section>
+  {% endif %}
   <h2 class="h5 fw-bold mt-3"><i class="fa-solid fa-tags" aria-hidden="true"></i> Products ({{ listings | length }})</h2>
   {% if listings %}
     <div class="mk-grid">{% for l in listings %}{{ product_card(l) }}{% endfor %}</div>

@@ -1,5 +1,6 @@
 {# As-you-type name suggestions under a text input.
-   name_suggest(input_id, kind): kind = 'athletes', 'coaches' or 'organizations'.
+   name_suggest(input_id, kind): kind = 'athletes', 'coaches', 'organizations' or 'shops'.
+   Any name containing what is typed is suggested (best matches first).
    Place the input inside a .position-relative wrapper. #}
 {% macro name_suggest(input_id, kind) %}
 <div id="{{ input_id }}Suggest" class="list-group position-absolute w-100 shadow-sm name-suggest" role="listbox" hidden></div>
@@ -34,6 +35,12 @@
               tag.textContent = '@' + item.username;
               btn.appendChild(tag);
             }
+            if (item.detail) {
+              var sub = document.createElement('small');
+              sub.className = 'd-block text-muted';
+              sub.textContent = item.detail;
+              btn.appendChild(sub);
+            }
             btn.addEventListener('click', function () {
               input.value = item.username ? '@' + item.username : item.full_name;
               hide();
@@ -54,6 +61,7 @@
 })();
 </script>
 <style>
-  .name-suggest { z-index: 1050; max-height: 250px; overflow-y: auto; top: 100%; left: 0; }
+  .name-suggest { z-index: 1050; max-height: 250px; overflow-y: auto; overflow-x: hidden; top: 100%; left: 0; }
+  .name-suggest .list-group-item { white-space: normal; overflow-wrap: anywhere; }
 </style>
 {% endmacro %}

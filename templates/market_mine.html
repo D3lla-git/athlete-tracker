@@ -19,6 +19,24 @@
     {% from '_profile_card.html' import profile_hero %}
     {{ profile_hero(profile_card_info(current_user, current_user), can_edit=false) }}
     {% if not current_user.vendor_verified_at %}<p class="small text-muted"><i class="fa-solid fa-circle-info"></i> Your business card gets the D.A.R.T. verified badge once the D.A.R.T Admin has checked your business.</p>{% endif %}
+    {# Shop location: address + map pin, so buyers get Google Maps directions. #}
+    {% from '_shop_location_fields.html' import shop_location_fields %}
+    {% from '_market_macros.html' import shop_directions %}
+    <section class="mk-panel mb-3" id="shopLocation" aria-labelledby="shopLocationTitle">
+      <h2 class="h6 fw-bold" id="shopLocationTitle"><i class="fa-solid fa-map-location-dot text-success"></i> Shop location &amp; directions</h2>
+      {% set _emb = shop_map_embed(current_user) %}
+      {% if _emb %}<iframe class="mk-map mb-2" src="{{ _emb }}" title="Your shop on the map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>{% endif %}
+      <form method="POST" action="{{ url_for('market_shop_location') }}" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ shop_location_fields(current_user.business_address or '', current_user.business_location or '', current_user.shop_lat, current_user.shop_lng) }}
+        {% if current_user.vendor_verified_at %}<p class="small text-muted">Changing the written address sends your business to the D.A.R.T Admin to be verified again.</p>{% endif %}
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <button class="btn btn-sm dart-btn" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save location</button>
+          {{ shop_directions(current_user) }}
+          {% if current_user.shop_lat is not none %}<button class="btn btn-sm btn-link text-danger" type="submit" name="action" value="clear" formnovalidate>Remove map pin</button>{% endif %}
+        </div>
+      </form>
+    </section>
     {% if not is_premium_vendor(current_user) %}
       <div class="alert alert-warning d-flex flex-wrap gap-2 align-items-center small">
         <i class="fa-solid fa-crown"></i> <span class="flex-grow-1"><strong>Vendor Premium:</strong> unlimited products, no ads, and your products advertised at the top of Market$ and in Highlights.</span>

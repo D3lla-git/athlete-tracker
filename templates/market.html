@@ -70,8 +70,9 @@
     <input type="hidden" name="mode" value="shops">
     <i class="fa-solid fa-store" aria-hidden="true"></i>
     <label class="visually-hidden" for="mkShopQ">Shop name, address or location</label>
-    <input class="form-control form-control-sm" id="mkShopQ" name="q" maxlength="80" placeholder="Find a shop: name, address or location">
+    <input class="form-control form-control-sm" id="mkShopQ" name="q" maxlength="80" placeholder="Find a shop: name, address or location" autocomplete="off">
     <button class="btn btn-sm btn-outline-success" type="submit">Find shops</button>
+    {% from '_name_suggest.html' import name_suggest %}{{ name_suggest('mkShopQ', 'shops') }}
   </form>
 
 

@@ -390,7 +390,7 @@ def add_security_headers(response):
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = (
-        'camera=(), microphone=(), geolocation=()'
+        'camera=(), microphone=(), geolocation=(self)'   # location: only our own pages (vendors pin their shop)
     )
     # Force HTTPS for a year. Browsers ignore this header on plain-HTTP
     # localhost, so it is safe during local development.
@@ -863,6 +863,19 @@ def suggest_names():
             .order_by(*suggestion_order(OrganizationProfile.org_name, q)).limit(8).all()
         )
         return jsonify([{'full_name': n} for (n,) in names])
+
+    if kind == 'shops':
+        # Shops: by shop / business name, or by address / location.
+        shop_name = func.coalesce(User.shop_name, User.full_name)
+        shops = (User.query.filter(
+            User.role == 'Vendor', User.is_suspended.is_(False), User.market_banned.is_(False),
+            db.or_(User.market_status.is_(None), User.market_status != 'rejected'),
+            or_(name_suggestion_filter(shop_name, q), name_suggestion_filter(User.full_name, q),
+                name_suggestion_filter(func.coalesce(User.business_location, ''), q),
+                name_suggestion_filter(func.coalesce(User.business_address, ''), q)))
+            .order_by(*suggestion_order(shop_name, q)).limit(8).all())
+        return jsonify([{'full_name': s.shop_name or s.display_name,
+                         'detail': ' · '.join(x for x in (s.business_location, s.business_address) if x)[:80]} for s in shops])
 
     role = 'Coach' if kind == 'coaches' else 'Athlete'
     users = User.query.filter(
@@ -1777,17 +1790,20 @@ def word_starts_with(column, word):
 
 
 def name_suggestion_filter(column, text):
-    """As-you-type suggestions: every typed word starts a word of the name."""
+    """As-you-type suggestions: every typed letter / word is somewhere in the name ("o" finds "Test Coach")."""
     words = search_words(text)
     if not words:
         return sa_false()
-    return and_(*[word_starts_with(column, word) for word in words])
+    plain = func.replace(func.replace(func.replace(column, "'", ''), '’', ''), '.', '')
+    return and_(*[plain.ilike(_like(word), escape='\\') for word in words])
 
 
 def suggestion_order(column, text):
-    """Names that start with what was typed come first, then A-Z."""
-    first = _escape_like((text or '').strip().lower())
-    return (case((column.ilike(f'{first}%', escape='\\'), 0), else_=1), column)
+    """Best matches first: the name starts with it, then a word of the name does, then anywhere; then A-Z."""
+    words = search_words(text)
+    first = _escape_like((text or '').strip().lstrip('@').lower())
+    word_start = word_starts_with(column, words[0]) if words else sa_false()
+    return (case((column.ilike(f'{first}%', escape='\\'), 0), (word_start, 1), else_=2), column)
 
 
 app.jinja_env.globals['search_words'] = search_words
@@ -1811,7 +1827,7 @@ def name_or_username(text):
 
 
 def name_or_username_suggestion(text):
-    """As-you-type: a word of the name starts with it, or the username does."""
+    """As-you-type: what was typed is in the name, or the username starts with it."""
     handle = uname.normalize_username(text)
     by_name = name_suggestion_filter(User.full_name, (text or '').lstrip('@'))
     if not handle or ' ' in handle:
@@ -1991,7 +2007,8 @@ def shop_search():
     """Find D.A.R.T Market$ shops by shop / business name, or by address / location."""
     q = market_mod.clean(request.args.get('q'), 80)
     place = market_mod.clean(request.args.get('place'), 80)
-    query = User.query.filter(User.role == 'Vendor', User.is_suspended.is_(False), User.market_banned.is_(False))
+    query = User.query.filter(User.role == 'Vendor', User.is_suspended.is_(False), User.market_banned.is_(False),
+                              db.or_(User.market_status.is_(None), User.market_status != 'rejected'))
     if q:
         query = query.filter(or_(text_matches(User.shop_name, q), text_matches(User.full_name, q), text_matches(User.username, q),
                                  text_matches(User.business_address, q), text_matches(User.business_location, q)))
@@ -8451,7 +8468,8 @@ def profile_card_info(user, viewer=None):
         info.update({
             'eyebrow': 'Buyer Card',
             'subtitle': 'D.A.R.T Market$ buyer',
-            'pill': 'Buyer',
+            'pill': 'Verified Buyer' if user.vendor_verified_at else 'Buyer',
+            'verified': bool(user.vendor_verified_at),
             'stats': [('Role', 'Buyer'), ('Location', user.business_location or '—')],
         })
     elif user.role == 'System':
@@ -13537,7 +13555,7 @@ def market_viewer_ok():
 
 
 def market_listing_visible(listing):
-    if listing.status == 'approved':
+    if listing.status == 'approved' and not market_mod.is_rejected(listing.seller):
         return market_viewer_ok()
     return current_user.is_authenticated and (current_user.id == listing.seller_id or current_user.role == 'System')
 
@@ -13859,7 +13877,10 @@ def admin_market():
         'sellers': db.session.query(func.count(func.distinct(MarketListing.seller_id))).scalar() or 0,
         'threads': MarketThread.query.count(),
     }
-    vendors = User.query.filter_by(role='Vendor').order_by(User.vendor_verified_at.isnot(None), User.created_at.desc()).limit(100).all()
+    # Vendors and buyers: waiting (new / resubmitted) first, then rejected, then verified.
+    vendors = (User.query.filter(User.role.in_(('Vendor', 'Buyer')))
+               .order_by(User.vendor_verified_at.isnot(None), (User.market_status == 'rejected'),
+                         User.market_resubmitted_at.desc().nullslast(), User.created_at.desc()).limit(200).all())
     return render_template('admin_market.html', pending=pending, reports=reports, recent=recent, stats=stats, vendors=vendors,
                            overdue=market_mod.overdue_orders())
 
@@ -13966,8 +13987,7 @@ def admin_queues():
          url_for('admin_organizations'), 'accounts'),
         ('logos', 'Team badges / logos', 'fa-shield-halved', OrganizationProfile.query.filter_by(logo_status='pending').count(),
          url_for('admin_organizations') + '#logos', 'accounts'),
-        ('vendors', 'Vendors to verify', 'fa-store',
-         User.query.filter(User.role == 'Vendor', User.vendor_verified_at.is_(None), User.is_suspended.is_(False)).count(),
+        ('vendors', 'Vendors & buyers to review', 'fa-store', market_members_waiting().count(),
          url_for('admin_market') + '#vendors', 'accounts'),
         ('emails', 'Accounts past the email deadline', 'fa-envelope-circle-check', email_overdue_query().count(),
          url_for('admin_email_holds'), 'accounts'),
@@ -13996,7 +14016,8 @@ def market_showcase(limit=8):
     ids = premium_vendor_ids()
     if not ids:
         return []
-    return (MarketListing.query.filter(MarketListing.status == 'approved', MarketListing.seller_id.in_(ids))
+    return (MarketListing.query.filter(MarketListing.status == 'approved', MarketListing.seller_id.in_(ids),
+                                       ~MarketListing.seller_id.in_(market_mod.rejected_ids_query()))
             .order_by(MarketListing.reviewed_at.desc().nullslast(), MarketListing.id.desc()).limit(limit).all())
 
 
@@ -14025,7 +14046,8 @@ def market_slider(limit=12):
             .filter(MarketListing.status == 'approved',
                     db.or_(MarketListing.quantity.is_(None), MarketListing.quantity > 0),
                     db.or_(User.is_suspended.is_(None), User.is_suspended.is_(False)),
-                    db.or_(User.market_banned.is_(None), User.market_banned.is_(False))))
+                    db.or_(User.market_banned.is_(None), User.market_banned.is_(False)),
+                    db.or_(User.market_status.is_(None), User.market_status != 'rejected')))
     newest = (MarketListing.reviewed_at.desc().nullslast(), MarketListing.id.desc())
     ids = premium_vendor_ids()
     picked = base.filter(MarketListing.seller_id.in_(ids)).order_by(*newest).limit(limit).all() if ids else []
@@ -14036,6 +14058,7 @@ def market_slider(limit=12):
     return [(l, l.seller_id in premium) for l in picked]
 
 
+app.jinja_env.globals.update(shop_directions_url=market_mod.directions_url, shop_map_embed=market_mod.map_embed_url)
 app.jinja_env.globals.update(market_order_steps=market_mod.ORDER_STEPS, market_order_step=market_mod.order_step,
                              market_order_overdue=market_mod.is_overdue, market_overdue_days=market_mod.ORDER_OVERDUE_DAYS)
 app.jinja_env.globals.update(market_showcase=market_showcase, market_cart_count=lambda: market_mod.cart_count(current_user),
@@ -14047,6 +14070,10 @@ app.jinja_env.globals.update(market_showcase=market_showcase, market_cart_count=
 def market_vendor(user_id):
     vendor = db.session.get(User, user_id)
     if not vendor or vendor.role != 'Vendor' or vendor.is_suspended:
+        abort(404)
+    # A rejected shop is hidden until the D.A.R.T Admin approves it (the vendor and the admin still see it).
+    if market_mod.is_rejected(vendor) and not (current_user.is_authenticated
+                                               and (current_user.id == vendor.id or current_user.role == 'System')):
         abort(404)
     listings = (MarketListing.query.filter_by(seller_id=vendor.id, status='approved')
                 .order_by(MarketListing.reviewed_at.desc().nullslast()).limit(60).all())
@@ -14212,22 +14239,161 @@ def market_cart_contact(seller_id):
 @app.route('/admin/market/vendor/<int:user_id>/verify', methods=['POST'])
 @login_required
 def admin_market_vendor_verify(user_id):
+    """Verify a vendor or a buyer (badge), or remove the badge again."""
     require_super_admin()
     vendor = User.query.get_or_404(user_id)
-    if vendor.role != 'Vendor':
+    if vendor.role not in ('Vendor', 'Buyer'):
         abort(400)
+    kind = 'business' if vendor.role == 'Vendor' else 'buyer account'
     if vendor.vendor_verified_at:
         vendor.vendor_verified_at = None
+        vendor.market_status = 'pending'
         flash(f'{vendor.display_name}: verification badge removed.', 'info')
     else:
         vendor.vendor_verified_at = datetime.utcnow()
-        notif.notify(vendor.id, 'vendor_verified', 'Your D.A.R.T Market$ business is verified: the badge is now on your business card.',
-                     f'/market/vendor/{vendor.id}')
-        flash(f'{vendor.display_name} is verified.', 'success')
+        vendor.market_status = 'verified'
+        vendor.market_reject_reason = None
+        vendor.market_reviewed_at = datetime.utcnow()
+        notif.notify(vendor.id, 'vendor_verified',
+                     'Your D.A.R.T Market$ business is verified: the badge is now on your business card.' if vendor.role == 'Vendor'
+                     else 'Your D.A.R.T Market$ buyer account is verified.',
+                     f'/market/vendor/{vendor.id}' if vendor.role == 'Vendor' else '/market')
+        flash(f'{vendor.display_name}: {kind} verified.', 'success')
     create_audit_log(action='vendor_verified' if vendor.vendor_verified_at else 'vendor_unverified', actor_user_id=current_user.id,
-                     target_type='User', target_id=str(vendor.id))
+                     target_type='User', target_id=str(vendor.id), details={'role': vendor.role})
     db.session.commit()
     return redirect(url_for('admin_market') + '#vendors')
+
+
+def market_members_waiting():
+    """Vendors and buyers waiting for the D.A.R.T Admin (new, or resubmitted after a rejection)."""
+    return User.query.filter(User.role.in_(('Vendor', 'Buyer')), User.vendor_verified_at.is_(None), User.is_suspended.is_(False),
+                             db.or_(User.market_status.is_(None), User.market_status == 'pending'))
+
+
+@app.route('/admin/market/member/<int:user_id>/reject', methods=['POST'])
+@login_required
+def admin_market_member_reject(user_id):
+    """Reject a vendor / buyer with a reason: they can't sell or message until they fix it and resubmit."""
+    require_super_admin()
+    member = User.query.get_or_404(user_id)
+    if member.role not in ('Vendor', 'Buyer'):
+        abort(400)
+    reason = market_mod.clean(request.form.get('reason'), 300)
+    if len(reason) < 5:
+        flash('Write the reason (the vendor / buyer sees it and fixes it).', 'warning')
+        return redirect(url_for('admin_market') + '#vendors')
+    member.market_status = 'rejected'
+    member.market_reject_reason = reason
+    member.market_reviewed_at = datetime.utcnow()
+    member.vendor_verified_at = None
+    notif.notify(member.id, 'market_rejected', f'Your D.A.R.T Market$ account was not approved: {reason}. Fix it and resubmit.',
+                 '/market/account-review')
+    create_audit_log(action='market_member_rejected', actor_user_id=current_user.id, target_type='User', target_id=str(member.id),
+                     details={'role': member.role, 'reason': reason})
+    db.session.commit()
+    flash(f'{member.display_name} rejected. They were told why and can resubmit.', 'success')
+    return redirect(url_for('admin_market') + '#vendors')
+
+
+@app.route('/market/shop-location', methods=['POST'])
+@login_required
+def market_shop_location():
+    """A vendor sets the shop's address and its exact place on the map (Google Maps directions for buyers)."""
+    me = current_user
+    if me.role != 'Vendor':
+        abort(403)
+    back = url_for('market_mine') + '#shopLocation'
+    if request.form.get('action') == 'clear':
+        me.shop_lat = me.shop_lng = None
+        me.shop_location_updated_at = datetime.utcnow()
+        create_audit_log(action='shop_location_cleared', actor_user_id=me.id, target_type='User', target_id=str(me.id))
+        db.session.commit()
+        flash('Map pin removed. Buyers get directions from your written address.', 'info')
+        return redirect(back)
+    address = market_mod.clean(request.form.get('business_address'), 200)
+    location = market_mod.clean(request.form.get('business_location'), 80)
+    if len(address) < 5 or len(location) < 2:
+        flash('Enter your shop / business address and town / county.', 'danger')
+        return redirect(back)
+    coords = market_mod.valid_coords(request.form.get('lat'), request.form.get('lng')) if request.form.get('lat') else None
+    link = (request.form.get('map_link') or '').strip()
+    if not coords and link:
+        coords = market_mod.parse_map_location(link)
+        if not coords:
+            flash('That map link could not be read. ' + ('Short links (maps.app.goo.gl) only work after opening them: copy the full link '
+                  'from the address bar, or use "Use my current location" in your shop.' if market_mod.SHORT_MAP_LINK_RE.search(link)
+                  else 'Paste the full Google Maps link, or coordinates like 6.3005, -10.7969.'), 'danger')
+            return redirect(back)
+    address_changed = (address != (me.business_address or '')) or (location != (me.business_location or ''))
+    me.business_address, me.business_location = address, location
+    if coords:
+        me.shop_lat, me.shop_lng = coords
+    me.shop_location_updated_at = datetime.utcnow()
+    # A verified business that moves is checked again (the badge vouches for the address).
+    rechecked = bool(address_changed and me.vendor_verified_at)
+    if rechecked:
+        me.vendor_verified_at = None
+        me.market_status = 'pending'
+    create_audit_log(action='shop_location_updated', actor_user_id=me.id, target_type='User', target_id=str(me.id),
+                     details={'address_changed': address_changed, 'pinned': bool(coords), 'recheck': rechecked})
+    db.session.commit()
+    flash('Shop location saved: buyers can now get Google Maps directions to your shop.'
+          + (' Your new address goes to the D.A.R.T Admin to be verified again.' if rechecked else ''), 'success')
+    return redirect(back)
+
+
+@app.route('/market/account-review', methods=['GET', 'POST'])
+@login_required
+def market_account_review():
+    """A vendor / buyer sees the review result; when rejected, fixes the details and resubmits."""
+    me = current_user
+    if me.role not in ('Vendor', 'Buyer'):
+        return redirect(url_for(dashboard_endpoint_for(me)))
+    form = request.form if request.method == 'POST' else {}
+    if request.method == 'POST':
+        if me.market_status != 'rejected':
+            flash('There is nothing to resubmit.', 'info')
+            return redirect(url_for('market_account_review'))
+
+        def back(message):
+            flash(message, 'danger')
+            return render_template('market_account_review.html', form=form), 400
+
+        if me.role == 'Vendor' and me.vendor_type == 'business':
+            full_name, name_error = market_mod.validate_business_name(form.get('full_name', ''))
+        else:
+            full_name, name_error = validate_full_name(form.get('full_name', ''))
+        if name_error:
+            return back(name_error)
+        phone = guardian_mod.clean_phone(form.get('phone'))
+        if not phone:
+            return back('Enter your phone number.')
+        if User.query.filter(User.phone == phone, User.id != me.id).first():
+            return back('This phone number is already used by another D.A.R.T. account.')
+        location = market_mod.clean(form.get('business_location'), 80)
+        note = market_mod.clean(form.get('note'), 300)
+        if len(note) < 5:
+            return back('Tell the D.A.R.T Admin what you fixed.')
+        if me.role == 'Vendor':
+            address = market_mod.clean(form.get('business_address'), 200)
+            if len(address) < 5:
+                return back('Enter your shop / business address.')
+            if len(location) < 2:
+                return back('Enter your town / county.')
+            me.business_address = address
+            me.shop_name = market_mod.clean(form.get('shop_name'), 80) or None
+            me.school = me.shop_name or ''
+        me.full_name, me.phone, me.business_location = full_name, phone, location or None
+        me.market_status = 'pending'
+        me.market_resubmitted_at = datetime.utcnow()
+        me.market_resubmit_note = note
+        create_audit_log(action='market_member_resubmitted', actor_user_id=me.id, target_type='User', target_id=str(me.id),
+                         details={'role': me.role, 'note': note})
+        db.session.commit()
+        flash('Sent to the D.A.R.T Admin for review again. You are told as soon as it is checked.', 'success')
+        return redirect(url_for('market_account_review'))
+    return render_template('market_account_review.html', form=form)
 app.jinja_env.filters['dict_without'] = lambda d, *keys: {k: v for k, v in d.items() if k not in keys}
 
 
@@ -14277,10 +14443,16 @@ def register_vendor():
         if User.query.filter_by(phone=phone).first():
             return back('This phone number is already used by another D.A.R.T. account.')
         shop = market_mod.clean(form.get('shop_name'), 80)
+        pin = market_mod.valid_coords(form.get('lat'), form.get('lng')) if form.get('lat') else None
+        if not pin and (form.get('map_link') or '').strip():
+            pin = market_mod.parse_map_location(form.get('map_link'))
+            if not pin:
+                return back('That map link could not be read. Paste the full Google Maps link or coordinates (e.g. 6.3005, -10.7969), or leave it empty.')
         if form.get('agree') != 'yes':
             return back('Please confirm you will only sell genuine sports gear.')
         vendor = User(full_name=full_name, username=username, email=email, role='Vendor', school=shop or '', shop_name=shop or None,
-                      phone=phone, is_verified=True, vendor_type=vendor_type, business_address=address, business_location=location)
+                      phone=phone, is_verified=True, vendor_type=vendor_type, business_address=address, business_location=location,
+                      shop_lat=pin[0] if pin else None, shop_lng=pin[1] if pin else None)
         vendor.set_password(password)
         try:
             db.session.add(vendor)

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}My Market$ account review | D.A.R.T.{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-market.css') }}">
+{% set me = current_user %}
+{% set vendor = me.role == 'Vendor' %}
+<div class="mk container py-3" style="max-width: 720px">
+  <h1 class="h3 mb-3"><i class="fa-solid fa-clipboard-check text-success"></i> My {{ 'shop' if vendor else 'buyer account' }}: D.A.R.T Admin review</h1>
+
+  {% if me.vendor_verified_at %}
+    <div class="alert alert-success"><i class="fa-solid fa-circle-check"></i> Verified by the D.A.R.T Admin{{ ': the badge is on your business card' if vendor else '' }}.</div>
+  {% elif me.market_status == 'rejected' %}
+    <div class="alert alert-danger" role="alert">
+      <strong>Not approved.</strong> Reason from the D.A.R.T Admin: <strong>{{ me.market_reject_reason }}</strong>
+      <div class="small mt-1">Until it is fixed you can't {{ 'sell or message buyers, and your products are hidden' if vendor else 'message sellers' }}.
+        Correct your details below and resubmit.</div>
+    </div>
+  {% elif me.market_resubmitted_at %}
+    <div class="alert alert-info"><i class="fa-solid fa-hourglass-half"></i> Resubmitted {{ me.market_resubmitted_at.strftime('%d %b %Y') }}: waiting for the D.A.R.T Admin.
+      {% if me.market_resubmit_note %}<div class="small mt-1">What you fixed: {{ me.market_resubmit_note }}</div>{% endif %}</div>
+  {% else %}
+    <div class="alert alert-info"><i class="fa-solid fa-hourglass-half"></i> Waiting for the D.A.R.T Admin to check your details. You can already use D.A.R.T Market$.</div>
+  {% endif %}
+
+  {% if me.market_status == 'rejected' %}
+    <form method="POST" class="mk-panel" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="mb-3">
+        <label class="form-label" for="full_name">{{ 'Business name' if vendor and me.vendor_type == 'business' else 'Your full name (as on your ID)' }}</label>
+        <input class="form-control" id="full_name" name="full_name" maxlength="100" required value="{{ form.get('full_name', me.full_name) }}">
+      </div>
+      {% if vendor %}
+        <div class="row">
+          <div class="col-md-6 mb-3"><label class="form-label" for="shop_name">Shop name (optional)</label>
+            <input class="form-control" id="shop_name" name="shop_name" maxlength="80" value="{{ form.get('shop_name', me.shop_name or '') }}"></div>
+          <div class="col-md-6 mb-3"><label class="form-label" for="business_location">Town / county</label>
+            <input class="form-control" id="business_location" name="business_location" maxlength="80" required value="{{ form.get('business_location', me.business_location or '') }}"></div>
+          <div class="col-12 mb-3"><label class="form-label" for="business_address">Shop / business address</label>
+            <input class="form-control" id="business_address" name="business_address" maxlength="200" required value="{{ form.get('business_address', me.business_address or '') }}"></div>
+        </div>
+      {% else %}
+        <div class="mb-3"><label class="form-label" for="business_location">Town / county <span class="text-muted small">(optional)</span></label>
+          <input class="form-control" id="business_location" name="business_location" maxlength="80" value="{{ form.get('business_location', me.business_location or '') }}"></div>
+      {% endif %}
+      <div class="mb-3"><label class="form-label" for="phone">Phone number</label>
+        <input class="form-control" id="phone" name="phone" type="tel" maxlength="20" required value="{{ form.get('phone', me.phone or '') }}"></div>
+      <div class="mb-3"><label class="form-label" for="note">What did you fix? <span class="text-muted small">(for the D.A.R.T Admin)</span></label>
+        <textarea class="form-control" id="note" name="note" rows="2" maxlength="300" required placeholder="e.g. Corrected the shop address and added my shop name">{{ form.get('note', '') }}</textarea></div>
+      <button class="btn dart-btn w-100 py-2" type="submit"><i class="fa-solid fa-paper-plane"></i> Resubmit for review</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

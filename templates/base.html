@@ -345,6 +345,16 @@
       {% endfor %}
     {% endwith %}
     {% include '_approval_prompt.html' %}
+    {# Vendors / buyers rejected by the D.A.R.T Admin: why, and how to resubmit. #}
+    {% if current_user.is_authenticated and current_user.role in ('Vendor', 'Buyer') and current_user.market_status == 'rejected'
+          and request.endpoint != 'market_account_review' and not is_prefetch() %}
+      <div class="alert alert-danger d-flex flex-wrap align-items-center gap-2 market-rejected-note" role="alert">
+        <i class="fa-solid fa-ban" aria-hidden="true"></i>
+        <span class="flex-grow-1">The D.A.R.T Admin did not approve your {{ 'shop' if current_user.role == 'Vendor' else 'buyer account' }}:
+          <strong>{{ current_user.market_reject_reason }}</strong>. Fix it and resubmit.</span>
+        <a class="btn btn-sm btn-light fw-bold" href="{{ url_for('market_account_review') }}">Fix and resubmit</a>
+      </div>
+    {% endif %}
     {# Email: add / verify it within 2 business days of registering. #}
     {% set _eb = email_banner() if current_user.is_authenticated and not is_prefetch() else None %}
     {% if _eb %}

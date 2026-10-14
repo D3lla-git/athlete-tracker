@@ -4,6 +4,7 @@
 {% block content %}
 {% from '_gov_name.html' import gov_name_note, gov_name_assets %}
 {% from '_username_field.html' import username_field, username_assets %}
+{% from '_shop_location_fields.html' import shop_location_fields %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dart-market.css') }}">
 <div class="mk container py-3" style="max-width: 760px">
   <section class="mk-gate mb-3" aria-label="Vendor registration">
@@ -36,19 +37,11 @@
         <input class="form-control" id="shop_name" name="shop_name" maxlength="80" value="{{ form.get('shop_name', '') }}" placeholder="e.g. Sinkor Sports Shop">
       </div>
       <div class="col-md-6 mb-3">
-        <label class="form-label" for="business_location">Town / county</label>
-        <input class="form-control" id="business_location" name="business_location" maxlength="80" required value="{{ form.get('business_location', '') }}" placeholder="Monrovia, Montserrado">
-      </div>
-      <div class="col-12 mb-3">
-        <label class="form-label" for="business_address">Shop / business address</label>
-        <input class="form-control" id="business_address" name="business_address" maxlength="200" required value="{{ form.get('business_address', '') }}" placeholder="Tubman Boulevard, Sinkor, opposite ...">
-        <small class="text-muted">Shown on your business card.</small>
-      </div>
-      <div class="col-md-6 mb-3">
         <label class="form-label" for="phone">Phone number (buyers call / WhatsApp you)</label>
         <input class="form-control" id="phone" name="phone" type="tel" maxlength="20" required value="{{ form.get('phone', '') }}" placeholder="0770 123 456">
       </div>
     </div>
+    {{ shop_location_fields(form.get('business_address', ''), form.get('business_location', '')) }}
     <div class="mb-3">
       <label class="form-label" for="email">Email <span class="text-muted small">(optional)</span></label>
       <input class="form-control" id="email" name="email" type="email" maxlength="150" autocomplete="email" value="{{ form.get('email', '') }}">

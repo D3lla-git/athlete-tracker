@@ -54,6 +54,18 @@ class User(UserMixin, db.Model):
     email_verify_token = db.Column(db.String(64), nullable=True, index=True)   # sha256 of the link token
     email_verify_sent_at = db.Column(db.DateTime, nullable=True)
     email_due_at = db.Column(db.DateTime, nullable=True)
+    # D.A.R.T Market$ review of vendors and buyers by the D.A.R.T Admin:
+    # None / 'pending' = waiting (new or resubmitted), 'verified' (badge:
+    # vendor_verified_at), 'rejected' (with a reason; they fix it and resubmit).
+    market_status = db.Column(db.String(12), nullable=True)
+    market_reject_reason = db.Column(db.String(300), nullable=True)
+    market_reviewed_at = db.Column(db.DateTime, nullable=True)
+    market_resubmitted_at = db.Column(db.DateTime, nullable=True)
+    market_resubmit_note = db.Column(db.String(300), nullable=True)
+    # Vendor shop / store on the map (Google Maps directions for buyers).
+    shop_lat = db.Column(db.Float, nullable=True)
+    shop_lng = db.Column(db.Float, nullable=True)
+    shop_location_updated_at = db.Column(db.DateTime, nullable=True)
 
         # Password reset security fields
     reset_token = db.Column(db.String(128), nullable=True, unique=True)

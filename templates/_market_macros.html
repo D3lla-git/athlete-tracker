@@ -48,6 +48,13 @@
 {% if it.status == 'cancelled' %}<div class="small text-danger mt-1"><i class="fa-solid fa-ban"></i> The vendor did not sell this order.</div>{% endif %}
 {% endmacro %}
 
+{# Google Maps directions to a vendor's shop (pin, else written address). #}
+{% macro shop_directions(user, cls='btn btn-sm btn-outline-success') %}
+{% set _d = shop_directions_url(user) %}
+{% if _d %}<a class="{{ cls }} mk-directions" href="{{ _d }}" target="_blank" rel="noopener noreferrer"
+   aria-label="Directions to {{ user.shop_name or user.display_name }} in Google Maps"><i class="fa-solid fa-diamond-turn-right" aria-hidden="true"></i> Directions</a>{% endif %}
+{% endmacro %}
+
 {% macro safety_tips() %}
   <div class="mk-safety" role="note">
     <strong><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Stay safe: D.A.R.T. never handles payments</strong>

@@ -26,7 +26,8 @@
       <div class="d-flex flex-wrap align-items-baseline justify-content-between gap-2">
         <div class="mk-item-price">{{ money(listing) }}</div>
         <div class="small">Seller: {% if listing.seller.role == 'Vendor' %}<a href="{{ url_for('market_vendor', user_id=listing.seller_id) }}"><strong>{{ listing.seller.shop_name or listing.seller.display_name }}</strong></a>{% if listing.seller.vendor_verified_at %} <i class="fa-solid fa-circle-check text-success" title="Verified vendor" aria-label="Verified vendor"></i>{% endif %}{% else %}<strong>{{ listing.seller.shop_name or listing.seller.display_name }}</strong>{% endif %}
-          {% if listing.seller.username %}<span class="text-muted">@{{ listing.seller.username }}</span>{% endif %}</div>
+          {% if listing.seller.username %}<span class="text-muted">@{{ listing.seller.username }}</span>{% endif %}
+          {% if listing.seller.role == 'Vendor' and shop_directions_url(listing.seller) %}{% from '_market_macros.html' import shop_directions %}{{ shop_directions(listing.seller, 'btn btn-sm btn-outline-success ms-1 py-0') }}{% endif %}</div>
       </div>
       <div class="mk-meta">
         <span>{{ listing.sport }}</span><span>{{ market_categories[listing.category][0] }}</span><span>{{ market_conditions[listing.condition] }}</span>
