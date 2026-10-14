@@ -134,8 +134,9 @@ def _active_coaches_of(team_name):
 def opposing_coaches(record, approving_coach_id=None):
     """Coaches of the opponent who have no stake in the athlete's team."""
     own_key = coaching._key(record.team)
+    # Assistant coaches only attest their own team's records, never the opponent's.
     return [c for c in _active_coaches_of(record.team_played_against)
-            if c.id != approving_coach_id and own_key not in coaching.team_keys(c)]
+            if c.id != approving_coach_id and own_key not in coaching.team_keys(c) and not coaching.is_assistant(c)]
 
 
 def official_independent(official, record):

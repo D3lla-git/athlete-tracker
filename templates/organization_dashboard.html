@@ -281,12 +281,14 @@
     <div class="col-lg-5">
       <section class="oh-upgrade">
         <div class="oh-upgrade-crown" aria-hidden="true"><i class="fa-solid fa-crown"></i></div>
-        <h2>Organization Pro</h2>
-        <div class="oh-upgrade-price">{{ plans['organization_pro'].price_label }}<span>/month</span></div>
+        {% set _op = org_plan_for(current_user) %}
+        <h2>{{ _op.name }}</h2>
+        <div class="oh-upgrade-price">{{ _op.price_label }}<span>/month</span></div>
+        {% if not org.ownership %}<p class="small">Choose your ownership in <a href="{{ url_for('organization_settings') }}">settings</a>: Government $5.99 · Private local $10.99 · Private international $15.99.</p>{% endif %}
         <ul>
-          {% for f in plans['organization_pro'].features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
+          {% for f in _op.features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
         </ul>
-        <a href="{{ url_for('checkout', plan_code='organization_pro') }}" class="btn dart-btn oh-btn w-100"><i class="fa-solid fa-crown me-1"></i> Upgrade now</a>
+        <a href="{{ url_for('checkout', plan_code=_op.code) }}" class="btn dart-btn oh-btn w-100"><i class="fa-solid fa-crown me-1"></i> Upgrade now</a>
         <div class="oh-upgrade-methods">Orange Money · MTN MoMo · Card (coming soon)</div>
       </section>
     </div>

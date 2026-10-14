@@ -36,6 +36,17 @@
             <input type="text" name="school" placeholder="Example: St. John's High School" class="form-control" required>
           </div>
 
+          <fieldset class="mb-3">
+            <legend class="form-label fs-6 mb-1">Your position <i class="fa-solid fa-user-tie"></i></legend>
+            <div class="d-flex flex-wrap gap-3">
+              {% for pos in coach_positions %}
+                <label class="form-check"><input class="form-check-input" type="radio" name="coach_position" value="{{ pos }}" required {% if loop.first %}checked{% endif %}>
+                  <span class="form-check-label">{{ pos }}</span></label>
+              {% endfor %}
+            </div>
+            <small class="text-muted">Assistant coaches attest only records uploaded by athletes of their own team; the head coach and the D.A.R.T Admin verify athlete accounts.</small>
+          </fieldset>
+
           <div class="mb-3">
   <label class="form-label">
     Gender <i class="fa-solid fa-venus-mars"></i>

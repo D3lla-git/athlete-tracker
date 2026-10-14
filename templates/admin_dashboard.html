@@ -25,7 +25,8 @@
           {% for coach in pending_coaches %}
           <tr>
             <td><a href="{% if current_user.id == coach.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=coach.id) }}{% endif %}" class="text-decoration-none"><strong>{{ coach.full_name }}</strong></a> {{ handle_tag(coach) }}</td>
-            <td>{{ team_badge(coach.school) }}{{ coach.school }}</td>
+            <td>{{ team_badge(coach.school) }}{{ coach.school }}
+              <span class="badge {{ 'text-bg-info' if coach.coach_position == 'Assistant coach' else 'text-bg-success' }} ms-1">{{ coach.coach_position or 'Head coach' }}</span></td>
             <td>
               <form method="POST"
       action="{{ url_for('approve_coach', user_id=coach.id) }}"

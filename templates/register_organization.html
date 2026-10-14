@@ -26,7 +26,7 @@
         <div>
           <strong>Free to register.</strong> We verify every organization against an official document
           before its roster is shown. Upgrade to <a href="{{ url_for('pricing') }}#organizations">Organization Pro</a>
-          ({{ plans['organization_pro'].price_label }}/month) for the full roster, records and exports.
+          (from ${{ '%.2f' % org_pro_from() }}/month: Government $5.99 · Private local $10.99 · Private international $15.99) for the full roster, records and exports.
         </div>
       </div>
 
@@ -51,6 +51,13 @@
             <select class="form-select" id="orgType" name="org_type" required>
               <option value="">Select type</option>
               {% for t in org_types %}<option value="{{ t }}" {% if form.get('org_type') == t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="orgOwnership">Ownership <span class="text-danger">*</span> <i class="fa-solid fa-landmark"></i></label>
+            <select class="form-select" id="orgOwnership" name="ownership" required>
+              <option value="">Select ownership</option>
+              {% for o in org_ownerships %}<option value="{{ o }}" {% if form.get('ownership') == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
             </select>
           </div>
           <div class="col-md-6">

@@ -13,6 +13,7 @@
       <h1 id="opName">{{ org.org_name }} <i class="fa-solid fa-circle-check op-check" title="Verified by D.A.R.T." aria-label="Verified"></i></h1>
       <div class="op-facts">
         {% if org.city or org.country %}<span><i class="fa-solid fa-location-dot"></i> {{ [org.city, org.country] | select | join(', ') }}</span>{% endif %}
+        {% if org.ownership %}<span><i class="fa-solid fa-landmark"></i> {{ org.ownership }}</span>{% endif %}
         {% if org.sports %}<span><i class="fa-solid fa-medal"></i> {{ org.sports }}</span>{% endif %}
         {% if org.website and org.website.startswith(('http://', 'https://')) %}
           <a href="{{ org.website }}" target="_blank" rel="noopener nofollow"><i class="fa-solid fa-globe"></i> Website</a>{% endif %}

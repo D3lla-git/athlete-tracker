@@ -283,18 +283,21 @@
         {% endif %}
       </article>
 
-      <article class="pr-card pr-card-featured">
-        <div class="pr-ribbon">Teams</div>
-        <div class="pr-card-name">{{ organization_plan.name }}</div>
-        <div class="pr-price">{{ organization_plan.price_label }}<span>/month</span></div>
-        <div class="pr-lrd">or LRD equivalent</div>
-        <div class="pr-price-note">Billed monthly · no auto-renewal</div>
-        <ul class="pr-features">
-          {% for f in organization_plan.features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
-        </ul>
-        {{ methods(organization_plan) }}
-        {{ plan_action(organization_plan) }}
-      </article>
+      {# Organization Pro: the price depends on who owns the organization. #}
+      {% for op in organization_plans %}
+        <article class="pr-card {{ 'pr-card-featured' if (my_org_plan and my_org_plan.code == op.code) or (not my_org_plan and op.code == 'organization_pro') }}">
+          {% if my_org_plan and my_org_plan.code == op.code %}<div class="pr-ribbon">Your plan</div>{% endif %}
+          <div class="pr-card-name">{{ op.name }}</div>
+          <div class="pr-price">{{ op.price_label }}<span>/month</span></div>
+          <div class="pr-lrd">or LRD equivalent</div>
+          <div class="pr-price-note">For {{ op.ownerships | join(' / ') }} organizations · billed monthly · no auto-renewal</div>
+          <ul class="pr-features">
+            {% for f in op.features %}<li><i class="fa-solid fa-check"></i> {{ f }}</li>{% endfor %}
+          </ul>
+          {{ methods(op) }}
+          {{ plan_action(op) }}
+        </article>
+      {% endfor %}
     </div>
   </section>
 

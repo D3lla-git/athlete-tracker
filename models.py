@@ -33,6 +33,8 @@ class User(UserMixin, db.Model):
     # Athlete / Coach category permissions
     athlete_category = db.Column(db.String(50), nullable=True)
     coach_category = db.Column(db.String(50), nullable=True)
+    # Coaches: 'Head coach' (default, also for older accounts) or 'Assistant coach'.
+    coach_position = db.Column(db.String(20), nullable=True)
     gender = db.Column(db.String(10), nullable=True)
     # Athlete / Coach personal information
     age = db.Column(db.Integer, nullable=True)
@@ -525,6 +527,7 @@ class OrganizationProfile(db.Model):
     )
     org_name = db.Column(db.String(150), nullable=False)
     org_type = db.Column(db.String(50), nullable=False)
+    ownership = db.Column(db.String(40), nullable=True)   # ORG_OWNERSHIPS (government / private, local / international)
     sports = db.Column(db.String(200), nullable=True)
     country = db.Column(db.String(100), nullable=True)
     city = db.Column(db.String(100), nullable=True)

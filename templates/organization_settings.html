@@ -61,6 +61,14 @@
               </div>
             </div>
 
+            <div class="mb-3">
+              <label class="form-label" for="osOwnership">Ownership <i class="fa-solid fa-landmark"></i></label>
+              <select class="form-select" id="osOwnership" name="ownership" required>
+                {% if not org.ownership %}<option value="">Select ownership</option>{% endif %}
+                {% for o in org_ownerships %}<option value="{{ o }}" {% if org.ownership == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+              </select>
+            </div>
+
             <div class="row g-3 mb-3">
               <div class="col-md-6">
                 <label class="form-label" for="osPhone">Phone <i class="fa-solid fa-phone"></i></label>

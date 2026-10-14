@@ -70,6 +70,7 @@ class Plan:
     visible_in_search: bool = False
     highlight: bool = False        # "most popular" style emphasis
     division: str | None = None    # Club League plans: the club's division
+    ownerships: tuple = ()          # Organization Pro: the ownership types this price is for
 
     @property
     def price_label(self):
@@ -163,10 +164,38 @@ PLANS = {
                 'No ads',
             ),
         ),
+        # Organization Pro: price by ownership (Organization settings / registration).
         Plan(
-            code='organization_pro', audience='organization', name='Organization Pro',
-            price=Decimal('99.99'), methods=('card',) + MOMO_METHODS, advanced_search=True,
-            highlight=True,
+            code='organization_pro_gov', audience='organization', name='Organization Pro · Government',
+            price=Decimal('5.99'), methods=('card',) + MOMO_METHODS, advanced_search=True,
+            ownerships=('Government owned (local)', 'Government owned (international)'),
+            features=(
+                'Full roster of every athlete registered under your name',
+                'Approved records, highlights and team leaders',
+                'Roster search, filters and sport breakdown',
+                'Secure roster export (audited)',
+                'Advanced search filters',
+                'No ads',
+            ),
+        ),
+        Plan(
+            # The original code: existing subscriptions keep working (now the private, local price).
+            code='organization_pro', audience='organization', name='Organization Pro · Private (local)',
+            price=Decimal('10.99'), methods=('card',) + MOMO_METHODS, advanced_search=True,
+            highlight=True, ownerships=('Private-owned (local)',),
+            features=(
+                'Full roster of every athlete registered under your name',
+                'Approved records, highlights and team leaders',
+                'Roster search, filters and sport breakdown',
+                'Secure roster export (audited)',
+                'Advanced search filters',
+                'No ads',
+            ),
+        ),
+        Plan(
+            code='organization_pro_intl', audience='organization', name='Organization Pro · Private (international)',
+            price=Decimal('15.99'), methods=('card',) + MOMO_METHODS, advanced_search=True,
+            ownerships=('Private-owned (international)',),
             features=(
                 'Full roster of every athlete registered under your name',
                 'Approved records, highlights and team leaders',
@@ -183,6 +212,14 @@ ATHLETE_PLAN_BY_CATEGORY = {
     plan.category: plan for plan in PLANS.values() if plan.audience == 'athlete' and plan.division in (None, '1st Division')
 }
 CLUB_PLAN_BY_DIVISION = {plan.division: plan for plan in PLANS.values() if plan.division}
+ORG_PLANS = [plan for plan in PLANS.values() if plan.ownerships]
+ORG_PLAN_BY_OWNERSHIP = {o: plan for plan in ORG_PLANS for o in plan.ownerships}
+
+
+def organization_ownership(user):
+    from models import OrganizationProfile
+    profile = OrganizationProfile.query.filter_by(user_id=user.id).first()
+    return profile.ownership if profile else None
 
 
 def club_division_of(user):
@@ -313,7 +350,8 @@ def plan_for_user(user):
     if audience == 'scout':
         return PLANS['scout_pro']
     if audience == 'organization':
-        return PLANS['organization_pro']
+        # Price by ownership; not chosen yet: the private (local) price is shown.
+        return ORG_PLAN_BY_OWNERSHIP.get(organization_ownership(user)) or PLANS['organization_pro']
     if audience == 'coach':
         return PLANS['coach_pro']
     if audience == 'vendor':
@@ -351,6 +389,14 @@ def eligibility_error(user, plan):
             f'{plan.name} is for verified {plan.category}s. Your category is '
             f'{user.athlete_category or "not set"}.'
         )
+
+    if plan.ownerships:
+        ownership = organization_ownership(user)
+        if not ownership:
+            return 'Choose who owns your organization in Organization settings first (the price depends on it).'
+        if ownership not in plan.ownerships:
+            mine = ORG_PLAN_BY_OWNERSHIP.get(ownership)
+            return f'{plan.name} is for {" / ".join(plan.ownerships)} organizations. Your plan is {mine.name if mine else "different"}.'
 
     if plan.division and plan_for_user(user) is not plan:
         mine = plan_for_user(user)

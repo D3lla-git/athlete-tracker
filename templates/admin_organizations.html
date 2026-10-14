@@ -4,6 +4,7 @@
 {% macro org_facts(org) %}
   <dl class="ao-facts">
     <div><dt>Type</dt><dd>{{ org.org_type }}</dd></div>
+    <div><dt>Ownership</dt><dd>{{ org.ownership or '-' }}</dd></div>
     <div><dt>Sports</dt><dd>{{ org.sports or '-' }}</dd></div>
     <div><dt>Location</dt><dd>{{ org.city ~ ', ' if org.city }}{{ org.country or '-' }}</dd></div>
     <div><dt>Contact</dt><dd>{{ org.contact_name }}{% if org.contact_title %} · {{ org.contact_title }}{% endif %}</dd></div>

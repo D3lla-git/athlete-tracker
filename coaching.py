@@ -96,9 +96,22 @@ def team_keys(coach):
     return {key for key, _, _ in active_teams(coach)}
 
 
+COACH_POSITIONS = ('Head coach', 'Assistant coach')
+
+
+def is_assistant(coach):
+    return getattr(coach, 'role', None) == 'Coach' and getattr(coach, 'coach_position', None) == 'Assistant coach'
+
+
 def manages_record(coach, record, can_manage_competition):
     """Coach may approve / reject this record (team + category rules)."""
     record_key = _key(record.team)
+    if is_assistant(coach):
+        # Assistant coaches attest only records of THEIR team, uploaded by athletes of that team.
+        own = _key(coach.school)
+        athlete = getattr(record, 'user', None)
+        return (bool(own) and record_key == own and _key(getattr(athlete, 'school', '')) == own
+                and can_manage_competition(coach.coach_category, record.competition_category))
     return any(
         key == record_key and can_manage_competition(category, record.competition_category)
         for key, _, category in active_teams(coach)
@@ -106,7 +119,9 @@ def manages_record(coach, record, can_manage_competition):
 
 
 def manages_athlete(coach, athlete):
-    """Coach may verify / view the ID document of this athlete (same team)."""
+    """Coach may verify / view the ID document / guardian of this athlete (same team). Head coaches only."""
+    if is_assistant(coach):
+        return False
     return _key(getattr(athlete, 'school', '')) in team_keys(coach)
 
 

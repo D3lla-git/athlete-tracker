@@ -1344,6 +1344,8 @@ def pricing():
         free_org_preview=FREE_ORG_ROSTER_PREVIEW,
         scout_plan=PLANS['scout_pro'],
         organization_plan=PLANS['organization_pro'],
+        organization_plans=[PLANS['organization_pro_gov'], PLANS['organization_pro'], PLANS['organization_pro_intl']],
+        my_org_plan=plan_for_user(current_user) if current_user.is_authenticated and current_user.role == 'Organization' else None,
         vendor_plan=PLANS['vendor_pro'],
         market_free_limit=market_mod.MAX_LIVE_FREE,
         free_limits=FREE_ATHLETE_LIMITS,
@@ -6386,6 +6388,9 @@ ORG_TYPES = (
     'County Team', 'Federation / Association', 'Other',
 )
 ORG_SPORTS = ('Football', 'Basketball', 'Kickball')
+# Who owns the organization (asked at registration, shown to the D.A.R.T Admin and on its page).
+ORG_OWNERSHIPS = ('Government owned (local)', 'Government owned (international)',
+                  'Private-owned (local)', 'Private-owned (international)')
 ORG_TERMS_VERSION = '2026-10'
 ORG_MAX_ALIASES = 10
 ORG_DOCUMENT_MAX_BYTES = 5 * MB
@@ -6646,6 +6651,7 @@ def register_organization():
     if request.method == 'POST':
         org_name = re.sub(r'\s+', ' ', form.get('org_name', '')).strip()
         org_type = form.get('org_type', '').strip()
+        ownership = form.get('ownership', '').strip()
         sports = [s for s in form.getlist('sports') if s in ORG_SPORTS]
         country = form.get('country', '').strip()
         city = form.get('city', '').strip()
@@ -6668,6 +6674,8 @@ def register_organization():
             return back('Please enter your organization name (up to 150 characters).')
         if org_type not in ORG_TYPES:
             return back('Please choose your organization type.')
+        if ownership not in ORG_OWNERSHIPS:
+            return back('Please choose who owns your organization (government or private, local or international).')
         if not sports:
             return back('Please choose at least one sport.')
         if not country or len(country) > 100 or len(city) > 100:
@@ -6737,6 +6745,7 @@ def register_organization():
             user_id=user.id,
             org_name=org_name,
             org_type=org_type,
+            ownership=ownership,
             sports=', '.join(sports),
             country=country,
             city=city or None,
@@ -6954,9 +6963,13 @@ def organization_settings():
         contact_name = re.sub(r'\s+', ' ', request.form.get('contact_name', '')).strip()
         contact_title = request.form.get('contact_title', '').strip()
         aliases = clean_alias_text(request.form.get('aliases', ''))
+        ownership = request.form.get('ownership', '').strip()
 
         if website and (len(website) > 255 or not re.match(r'^https?://[^\s]+\.[^\s]+$', website)):
             flash('Please enter a full website address starting with https://, or leave it empty.', 'danger')
+            return redirect(url_for('organization_settings'))
+        if ownership not in ORG_OWNERSHIPS:
+            flash('Please choose who owns your organization.', 'danger')
             return redirect(url_for('organization_settings'))
         if not PAYER_PHONE_PATTERN.match(contact_phone):
             flash('Please enter a valid contact phone number.', 'danger')
@@ -6969,6 +6982,8 @@ def organization_settings():
             flash('Contact person: ' + name_error[0].lower() + name_error[1:], 'danger')
             return redirect(url_for('organization_settings'))
 
+        ownership_changed = org.ownership != ownership
+        org.ownership = ownership
         org.website = website or None
         org.contact_phone = contact_phone
         org.contact_name = contact_name
@@ -6988,6 +7003,7 @@ def organization_settings():
             actor_user_id=current_user.id,
             target_type='OrganizationProfile',
             target_id=str(org.id),
+            details={'ownership': ownership} if ownership_changed else None,
         )
         db.session.commit()
         return redirect(url_for('organization_settings'))
@@ -7081,6 +7097,10 @@ def private_image_url(path):
         return ''
 
 
+app.jinja_env.globals['org_ownerships'] = ORG_OWNERSHIPS
+app.jinja_env.globals['coach_positions'] = coaching.COACH_POSITIONS
+app.jinja_env.globals['org_plan_for'] = lambda user: plan_for_user(user)
+app.jinja_env.globals['org_pro_from'] = lambda: min(p.price for p in PLANS.values() if p.ownerships)
 app.jinja_env.globals.update(team_badge=team_badge, team_logo_url=team_logo_url, org_logo_url=org_logo_url, team_org_url=team_org_url,
                              market_image_url_path=private_image_url)
 
@@ -8418,11 +8438,12 @@ def profile_card_info(user, viewer=None):
             'career': career_summary(public_records_for(user, current_user)),
         })
     elif user.role == 'Coach':
+        position = user.coach_position or 'Head coach'
         info.update({
-            'eyebrow': 'Coach Profile',
+            'eyebrow': 'Assistant Coach Profile' if position == 'Assistant coach' else 'Coach Profile',
             'subtitle': user.school or 'Coach',
             'pill': user.coach_category or 'Coach',
-            'stats': [('Team', user.school or '—'), ('Role', 'Coach / Admin')],
+            'stats': [('Team', user.school or '—'), ('Position', position)],
         })
     elif user.role == 'Vendor':
         # Business card: name (person or business), shop, address, location, verified badge.
@@ -12192,6 +12213,10 @@ def register_coach(registration_category=None):
             ))
 
         secret_code = request.form['secret_code'].strip()
+        coach_position = request.form.get('coach_position', '').strip()
+        if coach_position not in coaching.COACH_POSITIONS:
+            flash('Are you the head coach or an assistant coach?', 'danger')
+            return redirect(url_for('register_coach', registration_category=registration_category))
 
         # Email must be unique (when given).
         existing_email = email_taken(email)
@@ -12243,6 +12268,7 @@ def register_coach(registration_category=None):
             email=email,
             role='Coach',
             coach_category=selected_category,
+            coach_position=coach_position,
             username=username,
             is_verified=False          # Pending D.A.R.T Admin approval
         )
