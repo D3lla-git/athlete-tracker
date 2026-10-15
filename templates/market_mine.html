@@ -61,7 +61,7 @@
       <div class="flex-grow-1 min-w-0">
         <a class="fw-bold text-decoration-none" href="{{ url_for('market_item', listing_id=it.listing.id) }}">{{ it.listing.title }}</a>
         <div class="small">{{ it.quantity }} × <span class="mk-price">{{ money(it.listing) }}</span>{% if it.size %} · size {{ it.size }}{% endif %}{% if it.color %} · {{ it.color }}{% endif %}
-          · buyer <strong>{{ it.buyer.display_name }}</strong>{% if it.requested_at %} · {{ it.requested_at.strftime('%d %b %Y') }}{% endif %}</div>
+          · buyer <strong>{{ user_link(it.buyer, text=it.buyer.display_name) }}</strong>{% if it.requested_at %} · {{ it.requested_at.strftime('%d %b %Y') }}{% endif %}</div>
         {{ order_tracker(it) }}
       </div>
       {% if it.status == 'requested' %}

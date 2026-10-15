@@ -18,7 +18,7 @@
         <article class="ap-card">
           <div class="ap-card-main">
             <div class="ap-user">
-              <strong>{{ p.user.full_name }}</strong>
+              <strong>{{ user_link(p.user) }}</strong>
               <span>{{ p.user.role_label }}{% if p.user.athlete_category %} · {{ p.user.athlete_category }}{% endif %}</span>
             </div>
             <dl class="ap-facts">
@@ -64,14 +64,14 @@
           {% for p in reviewed %}
             <tr>
               <td>{{ p.reviewed_at.strftime('%b %d, %H:%M') if p.reviewed_at else '-' }}</td>
-              <td>{{ p.user.full_name }}</td>
+              <td>{{ user_link(p.user) }}</td>
               <td>{{ plans[p.plan_code].name if p.plan_code in plans else '-' }}</td>
               <td>${{ '%.2f' | format(p.amount) }}</td>
               <td>
                 {% if p.status == 'succeeded' %}<span class="badge bg-success">Confirmed</span>
                 {% else %}<span class="badge bg-danger">Rejected</span> <small>{{ p.failure_reason }}</small>{% endif %}
               </td>
-              <td>{{ p.reviewer.full_name if p.reviewer else '-' }}</td>
+              <td>{{ user_link(p.reviewer, fallback='-') }}</td>
             </tr>
           {% endfor %}
         </tbody>

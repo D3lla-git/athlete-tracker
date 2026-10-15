@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Games &amp; line-ups | {{ org.org_name }}{% endblock %}
+
+{% block content %}
+<div class="container py-4 og-page">
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <h1 class="h3 mb-0 flex-grow-1">{{ team_badge(org.org_name) }}<i class="fa-solid fa-calendar-check text-success"></i> Games, line-ups &amp; results</h1>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('organization_dashboard') }}">Team HQ</a>
+  </div>
+
+  {% if not pro %}
+    <div class="alert alert-warning d-flex flex-wrap gap-2 align-items-center">
+      <i class="fa-solid fa-crown"></i>
+      <span class="flex-grow-1"><strong>Organization Pro:</strong> post your games and results, enter each line-up (locked 5 minutes before kick-off,
+        downloadable as PDF), confirmed by the D.A.R.T Admin and linked to head-to-head and your athletes' match records.</span>
+      <a class="btn btn-sm btn-warning fw-bold" href="{{ url_for('pricing') }}#organizations">See Organization Pro</a>
+    </div>
+  {% else %}
+    <form method="POST" class="og-panel mb-4" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h2 class="h5 fw-bold"><i class="fa-solid fa-plus"></i> Add a game</h2>
+      <div class="row g-2">
+        <div class="col-md-4"><label class="form-label" for="ogSport">Sport</label>
+          <select class="form-select" id="ogSport" name="sport" required>{% for s in gm.GAME_SPORTS %}<option>{{ s }}</option>{% endfor %}</select></div>
+        <div class="col-md-4"><label class="form-label" for="ogComp">Competition</label>
+          <select class="form-select" id="ogComp" name="competition" required>{% for c in gm.COMPETITIONS %}<option>{{ c }}</option>{% endfor %}</select></div>
+        <div class="col-md-4"><label class="form-label" for="ogOpp">Opponent</label>
+          <input class="form-control" id="ogOpp" name="opponent" maxlength="150" required placeholder="e.g. LPRC Oilers"></div>
+        <div class="col-md-4"><label class="form-label" for="ogKick">Kick-off (Liberia time)</label>
+          <input class="form-control" id="ogKick" name="kickoff_at" type="datetime-local" required></div>
+        <div class="col-md-4"><label class="form-label" for="ogVenue">Venue</label>
+          <input class="form-control" id="ogVenue" name="venue" maxlength="150" required placeholder="e.g. SKD Sports Complex"></div>
+        <div class="col-md-2"><label class="form-label" for="ogCap">Capacity</label>
+          <input class="form-control" id="ogCap" name="capacity" type="number" min="0" max="200000" placeholder="optional"></div>
+        <div class="col-md-2"><label class="form-label" for="ogHome">Home / away</label>
+          <select class="form-select" id="ogHome" name="is_home"><option value="home">Home</option><option value="away">Away</option></select></div>
+      </div>
+      <p class="small text-muted mt-2 mb-2"><i class="fa-solid fa-lock"></i> The line-up is required and locks {{ gm.LINEUP_LOCK_MINUTES }} minutes before kick-off.</p>
+      <button class="btn dart-btn" type="submit"><i class="fa-solid fa-calendar-plus"></i> Add game</button>
+    </form>
+  {% endif %}
+
+  <h2 class="h5 fw-bold">Your games</h2>
+  {% for g in games %}
+    {% set res = gm.result_label(g) %}
+    <article class="og-row">
+      <div class="og-when"><strong>{{ g.kickoff_at.strftime('%d %b') }}</strong><span>{{ g.kickoff_at.strftime('%H:%M') }}</span></div>
+      <div class="og-what">
+        <a class="fw-bold" href="{{ url_for('game_public', game_id=g.id) }}">{{ g.sport }} · vs {{ g.opponent }}</a>
+        <div class="small text-muted">{{ g.competition }} · {{ 'Home' if g.is_home else 'Away' }} · {{ g.venue }}</div>
+        <div class="d-flex flex-wrap gap-1 mt-1">
+          {% if g.lineup_confirmed_at %}<span class="badge text-bg-success"><i class="fa-solid fa-circle-check"></i> Line-up confirmed</span>
+          {% elif g.lineup_saved_at %}<span class="badge text-bg-info">Line-up saved</span>
+          {% elif gm.lineup_open(g, now) %}<span class="badge text-bg-warning">Line-up due by {{ gm.lineup_deadline(g).strftime('%d %b, %H:%M') }}</span>
+          {% else %}<span class="badge text-bg-danger">No line-up (locked)</span>{% endif %}
+          {% if res %}<span class="badge og-res og-res-{{ res }}">{{ res }} {{ g.score_for }}-{{ g.score_against }}</span>{% endif %}
+        </div>
+      </div>
+      {% if pro %}<a class="btn btn-sm dart-btn" href="{{ url_for('org_game_manage', game_id=g.id) }}">{{ 'Result' if gm.started(g, now) else 'Line-up' }}</a>{% endif %}
+    </article>
+  {% else %}<p class="text-muted">No games yet.</p>{% endfor %}
+</div>
+<style>
+  .og-page { max-width: 980px; }
+  .og-panel { padding: 16px; border-radius: 20px; background: var(--surface-bg, #fff); border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1)); }
+  .og-row { display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 8px; border-radius: 16px;
+    background: var(--surface-bg, #fff); border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1)); }
+  .og-when { flex: 0 0 64px; text-align: center; padding: 6px; border-radius: 12px; color: #fff; background: var(--dart-primary-gradient, #198754); }
+  .og-when strong, .og-when span { display: block; line-height: 1.2; }
+  .og-when span { font-size: 0.8rem; opacity: 0.85; }
+  .og-what { flex: 1 1 auto; min-width: 0; }
+  .og-what a { text-decoration: none; }
+  .og-res { background: #6c757d; } .og-res-W { background: #198754; } .og-res-L { background: #dc3545; } .og-res-D { background: #fd7e14; }
+</style>
+{% endblock %}

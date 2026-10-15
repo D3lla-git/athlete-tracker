@@ -20,7 +20,7 @@
   <div class="mk-contact mt-0 mb-3">
     <div class="row g-2">
       <div class="col-sm-6">
-        <div class="small text-muted">{{ 'Seller' if me_buyer else 'Buyer' }}: {{ other.shop_name or other.display_name }}</div>
+        <div class="small text-muted">{{ 'Seller' if me_buyer else 'Buyer' }}: {{ user_link(other, text=other.shop_name or other.display_name) }}</div>
         {% if other.phone %}
           <a class="mk-phone" href="tel:{{ other.phone }}"><i class="fa-solid fa-phone"></i> {{ other.phone | phone }}</a>
           <a class="btn btn-sm btn-success ms-1" href="https://wa.me/{{ other.phone | replace('+', '') }}" target="_blank" rel="noopener noreferrer"><i class="fa-brands fa-whatsapp"></i></a>

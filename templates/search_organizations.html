@@ -55,7 +55,7 @@
           <span class="os-logo" aria-hidden="true"><i class="fa-solid fa-building-shield"></i></span>
         {% endif %}
         <div class="os-who">
-          <div class="os-name">{{ o.org_name }} <i class="fa-solid fa-circle-check os-verified" title="Verified by D.A.R.T."></i></div>
+          <div class="os-name">{{ org_link(o) }} <i class="fa-solid fa-circle-check os-verified" title="Verified by D.A.R.T."></i></div>
           <div class="os-sub">{{ o.org_type }}{% if o.city or o.country %} · <i class="fa-solid fa-location-dot"></i> {{ [o.city, o.country] | select | join(', ') }}{% endif %}</div>
           {% if o.ownership %}<div class="os-sub"><i class="fa-solid fa-landmark"></i> {{ o.ownership }}</div>{% endif %}
           {% if o.sports %}<div class="os-sub"><i class="fa-solid fa-medal"></i> {{ o.sports }}</div>{% endif %}

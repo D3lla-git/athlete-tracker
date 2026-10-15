@@ -98,18 +98,18 @@
 {% macro countersign_card(r, next='', people=none) %}
   <article class="integrity-cs-card">
     <header>
-      <strong>{{ r.user.full_name }}</strong> {% if r.user.username %}<span class="text-muted">@{{ r.user.username }}</span>{% endif %}
+      <strong>{{ user_link(r.user) }}</strong> {% if r.user.username %}<span class="text-muted">@{{ r.user.username }}</span>{% endif %}
       <span class="integrity-sport">{{ r.sport }}</span>
     </header>
     <div class="integrity-cs-match">
       <i class="fa-regular fa-calendar-days" aria-hidden="true"></i> {{ r.game_date.strftime('%d %b %Y') if r.game_date else r.year }}
-      · {{ team_badge(r.team) }}{{ r.team }} <span class="text-muted">vs</span> {{ r.team_played_against }}
+      · {{ team_badge(r.team) }}{{ team_name_link(r.team) }} <span class="text-muted">vs</span> {{ team_name_link(r.team_played_against) }}
       · {{ r.competition_display or r.competition_category }}
     </div>
     {# Every field of the record, not just the headline numbers: any of them could be false. #}
     <div class="integrity-cs-stats">{{ record_line(r) }}{% if r.games_played and r.games_played > 1 %} ({{ r.games_played }} games){% endif %}</div>
     <div class="integrity-cs-all" aria-label="All numbers in this record">{{ record_card_grid(r) }}</div>
-    {% if people and r.coach_approved_by in people %}<div class="small text-muted">Approved by coach {{ people[r.coach_approved_by].full_name }} · {{ r.coach_approved_at.strftime('%d %b %Y') if r.coach_approved_at }}</div>{% endif %}
+    {% if people and r.coach_approved_by in people %}<div class="small text-muted">Approved by coach {{ user_link(people[r.coach_approved_by]) }} · {{ r.coach_approved_at.strftime('%d %b %Y') if r.coach_approved_at }}</div>{% endif %}
     {{ proof_note(r) }}
     {{ countersign_actions(r, next) }}
   </article>

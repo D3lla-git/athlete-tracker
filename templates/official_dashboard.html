@@ -104,7 +104,7 @@
           <td>{{ rep.match_date.strftime('%d %b %Y') }}</td>
           <td>{{ rep.home_team }} <span class="text-muted">vs</span> {{ rep.away_team }}{% if rep.competition %}<br><small class="text-muted">{{ rep.competition }}</small>{% endif %}</td>
           <td>{{ rep.sport }}</td>
-          <td>{% for line in rep.lines %}@{{ line.athlete.username or line.athlete.full_name }}{% if rep.sport == 'Football' %} {{ line.goals }}G {{ line.assists }}A{% elif rep.sport == 'Basketball' %} {{ line.points }}P {{ line.rebounds }}R {{ line.blocks }}B{% else %} {{ line.home_runs }}HR{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+          <td>{% for line in rep.lines %}@{{ user_link(line.athlete, text=line.athlete.username or line.athlete.full_name) }}{% if rep.sport == 'Football' %} {{ line.goals }}G {{ line.assists }}A{% elif rep.sport == 'Basketball' %} {{ line.points }}P {{ line.rebounds }}R {{ line.blocks }}B{% else %} {{ line.home_runs }}HR{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</td>
         </tr>
         {% endfor %}
       </tbody>

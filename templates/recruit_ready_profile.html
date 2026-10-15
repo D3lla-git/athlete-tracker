@@ -79,7 +79,7 @@
           {% if user.school %}
             <div class="text-muted">
               <i class="fa-solid fa-people-group"></i>
-              {{ team_badge(user.school) }}{{ user.school }}
+              {{ team_badge(user.school) }}{{ team_name_link(user.school) }}
             </div>
           {% endif %}
 
@@ -374,7 +374,7 @@
 
                 {% if record.team %}
                   <small class="text-muted">
-                    {{ team_badge(record.team) }}{{ record.team }}
+                    {{ team_badge(record.team) }}{{ team_name_link(record.team) }}
                   </small>
                 {% endif %}
 
@@ -407,7 +407,7 @@
               {% if record.team_played_against %}
                 <div class="col-md-6">
                   <strong>Opponent:</strong>
-                  {{ record.team_played_against }}
+                  {{ team_name_link(record.team_played_against) }}
                 </div>
               {% endif %}
 

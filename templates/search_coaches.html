@@ -101,7 +101,7 @@
         <div class="cs-who">
           <a href="{{ url_for('user_profile', user_id=c.id) }}" class="cs-name">{{ c.full_name }}</a> {{ handle_tag(c) }}
           {% if item.pro %}<span class="cs-pro"><i class="fa-solid fa-crown"></i> Coach Pro</span>{% endif %}
-          <div class="cs-sub"><i class="fa-solid fa-people-group"></i> {{ team_badge(c.school) }}{{ c.school }} · {{ c.coach_position or 'Head coach' }} · {{ c.coach_category or 'Coach' }}</div>
+          <div class="cs-sub"><i class="fa-solid fa-people-group"></i> {{ team_badge(c.school) }}{{ team_name_link(c.school) }} · {{ c.coach_position or 'Head coach' }} · {{ c.coach_category or 'Coach' }}</div>
           {% if current_user.is_authenticated and c.phone and not c.license_revoked %}<div class="cs-sub"><i class="fa-solid fa-phone"></i> <a href="tel:{{ c.phone }}" translate="no">{{ c.phone | phone }}</a></div>{% endif %}
           {% if item.summary.teams | length > 1 %}<div class="cs-sub">Teams coached: {{ item.summary.teams | join(', ') }}</div>{% endif %}
         </div>

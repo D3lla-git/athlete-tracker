@@ -39,12 +39,12 @@
     <ul class="go-live-steps">
       <li class="{{ 'is-done' if u.coach_verified }}">
         <i class="fa-solid {{ 'fa-circle-check' if u.coach_verified else 'fa-hourglass-half' }}"></i>
-        <span><strong>Your coach</strong> at {{ u.school }} ({{ 'approved' if u.coach_verified else 'checks your ID and approves your profile' }})</span>
+        <span><strong>Your coach</strong> at {{ team_name_link(u.school) }} ({{ 'approved' if u.coach_verified else 'checks your ID and approves your profile' }})</span>
       </li>
       {% if u.org_approval == 'not_required' %}
         <li class="is-skip">
           <i class="fa-solid fa-minus"></i>
-          <span><strong>{{ u.school }}</strong> has no organization account on D.A.R.T. yet, so your coach's approval is enough.</span>
+          <span><strong>{{ team_name_link(u.school) }}</strong> has no organization account on D.A.R.T. yet, so your coach's approval is enough.</span>
         </li>
       {% elif u.org_approval == 'rejected' %}
         <li class="is-no">

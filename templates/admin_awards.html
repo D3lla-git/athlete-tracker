@@ -143,7 +143,7 @@
                 {% else %}<img src="{{ highlight_url(e.highlight) }}" alt="{{ e.highlight.caption or 'Highlight' }}" loading="lazy">{% endif %}
               </div>
               <div class="aw-entry-body">
-                <span class="aw-name">{{ e.athlete.full_name }}{% if is_individual_athlete(e.athlete) %} <span class="badge text-bg-success">Individual</span>{% endif %}</span>
+                <span class="aw-name">{{ user_link(e.athlete) }}{% if is_individual_athlete(e.athlete) %} <span class="badge text-bg-success">Individual</span>{% endif %}</span>
                 {% if e.note %}<span class="aw-note">{{ e.note }}</span>{% endif %}
                 <div class="d-flex gap-2 mt-auto">
                   {% for action, cls, label in (('approve', 'dart-btn', 'Approve'), ('reject', 'btn-outline-danger', 'Reject')) %}
@@ -175,7 +175,7 @@
                 {% set d = bd.get(e.id, {'members': 0, 'visitors': 0, 'total': 0}) %}
                 <tr>
                   <td>{{ loop.index }}</td>
-                  <td>{{ e.athlete.full_name }}{% if c.winner_entry_id == e.id %} <span class="aw-winner-badge"><i class="fa-solid fa-trophy"></i> Winner</span>{% endif %}</td>
+                  <td>{{ user_link(e.athlete) }}{% if c.winner_entry_id == e.id %} <span class="aw-winner-badge"><i class="fa-solid fa-trophy"></i> Winner</span>{% endif %}</td>
                   <td class="small text-muted">{{ e.note or '' }}</td>
                   <td class="text-end">{{ d.members }}</td>
                   <td class="text-end">{{ d.visitors }}</td>

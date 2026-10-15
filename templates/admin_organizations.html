@@ -24,7 +24,7 @@
   {% for org in pending %}
     <article class="ao-card">
       <div class="ao-card-main">
-        <h3>{{ org.org_name }}</h3>
+        <h3>{{ org_link(org) }}</h3>
         {{ org_facts(org) }}
         {% if org.requested_aliases %}
           <div class="ao-aliases"><strong>Other team names requested:</strong> {{ org.requested_aliases.splitlines() | join(' · ') }}</div>
@@ -63,7 +63,7 @@
     <article class="ao-card">
       <div class="ao-card-main d-flex gap-3 align-items-center">
         <img src="{{ market_image_url_path(org.logo_pending_path) }}" alt="Proposed logo of {{ org.org_name }}" class="org-logo-preview">
-        <div><strong>{{ org.org_name }}</strong><div class="small text-muted">{{ org.org_type }}{% if org.city %} · {{ org.city }}{% endif %}</div>
+        <div><strong>{{ org_link(org) }}</strong><div class="small text-muted">{{ org.org_type }}{% if org.city %} · {{ org.city }}{% endif %}</div>
           {% if org.logo_path %}<div class="small">Current: <img src="{{ org_logo_url(org) }}" alt="" class="team-badge"></div>{% endif %}</div>
       </div>
       <div class="d-flex flex-wrap gap-2 mt-2">
@@ -84,7 +84,7 @@
   {% for org in alias_requests %}
     <article class="ao-card">
       <div class="ao-card-main">
-        <h3>{{ org.org_name }}</h3>
+        <h3>{{ org_link(org) }}</h3>
         <div class="ao-aliases"><strong>Now:</strong> {{ (org.approved_aliases or '').splitlines() | join(' · ') or 'none' }}</div>
         <div class="ao-aliases"><strong>Requested:</strong> {{ (org.requested_aliases or '').splitlines() | join(' · ') or 'remove all' }}</div>
       </div>
@@ -111,7 +111,7 @@
         <tbody>
           {% for org in verified %}
             <tr>
-              <td><strong>{{ team_badge(org.org_name) }}{{ org.org_name }}</strong></td>
+              <td><strong>{{ team_badge(org.org_name) }}{{ org_link(org) }}</strong></td>
               <td>{{ org.org_type }}</td>
               <td class="small">{{ (org.approved_aliases or '').splitlines() | join(', ') or '-' }}</td>
               <td>{{ roster_size(org) }}</td>

@@ -5,7 +5,7 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import MultiDict
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare, RecordVerificationEvent, MatchReport, MatchReportLine, AwardContest, AwardEntry, MarketListing, MarketImage, MarketThread, MarketMessage, MarketReport, PredictionQuestion, PredictionPick, MarketCartItem, SitePresence)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare, RecordVerificationEvent, MatchReport, MatchReportLine, AwardContest, AwardEntry, MarketListing, MarketImage, MarketThread, MarketMessage, MarketReport, PredictionQuestion, PredictionPick, MarketCartItem, SitePresence, OrgGame)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
@@ -54,7 +54,9 @@ import guardian as guardian_mod
 import awards as awards_mod
 import market as market_mod
 import predictions as predictions_mod
+import json
 import presence as presence_mod
+import org_games as games_mod
 from plans import is_premium_vendor, premium_vendor_ids
 from competitions import (
     CLUB_DIVISIONS,
@@ -6684,7 +6686,7 @@ ORG_SPORTS = ('Football', 'Basketball', 'Kickball')
 # Who owns the organization (asked at registration, shown to the D.A.R.T Admin and on its page).
 ORG_OWNERSHIPS = ('Government owned (local)', 'Government owned (international)',
                   'Private-owned (local)', 'Private-owned (international)')
-ORG_TERMS_VERSION = '2026-10'
+ORG_TERMS_VERSION = '2026-10-15'
 ORG_MAX_ALIASES = 10
 ORG_DOCUMENT_MAX_BYTES = 5 * MB
 ORG_DOCUMENT_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf'}
@@ -7403,6 +7405,37 @@ def private_image_url(path):
         return ''
 
 
+def user_link(user, text=None, fallback=''):
+    """A registered user's name as a link to their read-only profile (admins stay plain text)."""
+    if not user:
+        return fallback
+    label = text if text is not None else (user.full_name or user.display_name or user.username or '')
+    if not label:
+        return fallback
+    if getattr(user, 'role', None) == 'System' or not getattr(user, 'id', None):
+        return label
+    return Markup('<a class="name-link" href="{}">{}</a>').format(profile_share_path(user), label)
+
+
+def org_link(org, text=None):
+    """An organization's name, linked to its read-only page once verified."""
+    if not org:
+        return ''
+    label = text if text is not None else org.org_name
+    if getattr(org, 'verification_status', None) != 'verified':
+        return label
+    return Markup('<a class="name-link" href="{}">{}</a>').format(url_for('organization_public', org_id=org.id), label)
+
+
+def team_name_link(name, fallback=''):
+    """A team / school name, linked to its organization page when it is a verified organization."""
+    if not name:
+        return fallback
+    url = team_org_url(name)
+    return Markup('<a class="name-link" href="{}">{}</a>').format(url, name) if url else name
+
+
+app.jinja_env.globals.update(user_link=user_link, org_link=org_link, team_name_link=team_name_link)
 app.jinja_env.globals['org_ownerships'] = ORG_OWNERSHIPS
 app.jinja_env.globals['org_directions_url'] = lambda org: market_mod.place_directions_url(
     org.map_lat, org.map_lng, ', '.join(x for x in (org.address, org.city) if x)) if org else ''
@@ -7475,6 +7508,233 @@ def admin_organization_logo(org_id, action):
     db.session.commit()
     flash('Logo ' + ('approved.' if action == 'approve' else 'rejected.'), 'success')
     return redirect(url_for('admin_organizations') + '#logos')
+
+
+# ---------- Organization Pro: games, line-ups, results ----------
+def _org_pro_or_redirect(org):
+    if not is_premium(current_user):
+        flash('Games, line-ups and results are part of Organization Pro.', 'warning')
+        return redirect(url_for('pricing') + '#organizations')
+    return None
+
+
+def _own_game_or_404(org, game_id):
+    game = db.session.get(OrgGame, game_id)
+    if not game or game.org_id != org.id:
+        abort(404)
+    return game
+
+
+def opponent_org_for(game):
+    """The opponent as a verified organization on D.A.R.T. (or None)."""
+    key = normalize_team_name(game.opponent)
+    for org in OrganizationProfile.query.filter_by(verification_status='verified').all():
+        if key in {normalize_team_name(n) for n in org.roster_names}:
+            return org
+    return None
+
+
+def paired_game(game):
+    """The opponent organization's own entry for the same game (same sport and day), if any."""
+    other = opponent_org_for(game)
+    if not other:
+        return None
+    mine = {normalize_team_name(n) for n in game.org.roster_names}
+    day = game.kickoff_at.date()
+    for g in OrgGame.query.filter(OrgGame.org_id == other.id, OrgGame.sport == game.sport).all():
+        if g.kickoff_at.date() == day and normalize_team_name(g.opponent) in mine:
+            return g
+    return None
+
+
+def game_records(game):
+    """Athletes' approved match records of this game (their team = this organization, same day, same opponent)."""
+    names = {normalize_team_name(n) for n in game.org.roster_names}
+    rows = SportRecord.query.filter(SportRecord.status == 'approved', SportRecord.sport == game.sport,
+                                    SportRecord.game_date == game.kickoff_at.date()).all()
+    opp = normalize_team_name(game.opponent)
+    return [r for r in rows if normalize_team_name(r.team) in names and normalize_team_name(r.team_played_against) == opp]
+
+
+@app.route('/organization/games', methods=['GET', 'POST'])
+@login_required
+def org_games():
+    org = require_organization()
+    pro = is_premium(current_user)
+    if request.method == 'POST':
+        blocked = _org_pro_or_redirect(org)
+        if blocked:
+            return blocked
+        f = request.form
+        sport = f.get('sport')
+        competition = f.get('competition')
+        opponent = games_mod.clean(f.get('opponent'), 150)
+        venue = games_mod.clean(f.get('venue'), 150)
+        try:
+            kickoff = datetime.strptime(f.get('kickoff_at', ''), '%Y-%m-%dT%H:%M')
+        except ValueError:
+            kickoff = None
+        capacity = games_mod.as_int(f.get('capacity'), 0, 200000) if (f.get('capacity') or '').strip() else None
+        error = None
+        if sport not in games_mod.GAME_SPORTS:
+            error = 'Choose the sport.'
+        elif competition not in games_mod.COMPETITIONS:
+            error = 'Choose the competition (LFA, LBA, MYS or Friendly).'
+        elif len(opponent) < 2:
+            error = 'Enter the opponent.'
+        elif normalize_team_name(opponent) in {normalize_team_name(n) for n in org.roster_names}:
+            error = "The opponent can't be your own team."
+        elif not kickoff or kickoff <= datetime.utcnow() + timedelta(minutes=games_mod.LINEUP_LOCK_MINUTES):
+            error = f'Kick-off must be more than {games_mod.LINEUP_LOCK_MINUTES} minutes from now (time in Liberia).'
+        elif len(venue) < 2:
+            error = 'Enter the venue (or "Behind closed doors").'
+        elif (f.get('capacity') or '').strip() and capacity is None:
+            error = 'Capacity must be a number.'
+        if error:
+            flash(error, 'danger')
+            return redirect(url_for('org_games'))
+        game = OrgGame(org_id=org.id, sport=sport, competition=competition, opponent=opponent, is_home=f.get('is_home') != 'away',
+                       kickoff_at=kickoff, venue=venue, capacity=capacity)
+        db.session.add(game)
+        db.session.flush()
+        create_audit_log(action='org_game_created', actor_user_id=current_user.id, target_type='OrgGame', target_id=str(game.id),
+                         details={'opponent': opponent, 'kickoff': kickoff.isoformat()})
+        db.session.commit()
+        flash(f'Game added. Enter your line-up before {games_mod.lineup_deadline(game).strftime("%d %b, %H:%M")} (it locks 5 minutes before kick-off).', 'success')
+        return redirect(url_for('org_game_manage', game_id=game.id))
+    games = OrgGame.query.filter_by(org_id=org.id).order_by(OrgGame.kickoff_at.desc()).all()
+    return render_template('org_games.html', org=org, games=games, pro=pro, now=datetime.utcnow(), gm=games_mod)
+
+
+@app.route('/organization/games/<int:game_id>', methods=['GET', 'POST'])
+@login_required
+def org_game_manage(game_id):
+    org = require_organization()
+    blocked = _org_pro_or_redirect(org)
+    if blocked:
+        return blocked
+    game = _own_game_or_404(org, game_id)
+    roster = roster_athletes(org)
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'lineup':
+            if not games_mod.lineup_open(game):
+                flash('The line-up is locked (5 minutes before kick-off).', 'danger')
+                return redirect(url_for('org_game_manage', game_id=game.id))
+            players, error = games_mod.parse_lineup(request.form, game.sport, {a.full_name.lower(): a.id for a in roster})
+            if error:
+                flash(error, 'danger')
+                return redirect(url_for('org_game_manage', game_id=game.id) + '#lineup')
+            game.lineup = json.dumps(players)
+            game.lineup_saved_at = datetime.utcnow()
+            game.lineup_confirmed_at = None
+            create_audit_log(action='org_lineup_saved', actor_user_id=current_user.id, target_type='OrgGame', target_id=str(game.id),
+                             details={'players': len(players)})
+            db.session.commit()
+            flash('Line-up saved. You can change it until 5 minutes before kick-off.', 'success')
+            return redirect(url_for('org_game_manage', game_id=game.id) + '#lineup')
+        if action == 'result':
+            if not games_mod.started(game):
+                flash('Post the result after the game.', 'warning')
+                return redirect(url_for('org_game_manage', game_id=game.id))
+            if not game.lineup_saved_at:
+                flash('No line-up was saved before kick-off: the result can not be posted. Contact the D.A.R.T Admin.', 'danger')
+                return redirect(url_for('org_game_manage', game_id=game.id))
+            f = request.form
+            score_for, score_against = games_mod.as_int(f.get('score_for'), 0, 300), games_mod.as_int(f.get('score_against'), 0, 300)
+            summary, error = games_mod.clean_summary(f.get('summary'))
+            if score_for is None or score_against is None:
+                error = 'Enter the final score.'
+            numbers = {}
+            for key in ('yellow_cards', 'red_cards', 'fouls', 'gk_saves', 'standing_position', 'standing_played', 'standing_points'):
+                raw = (f.get(key) or '').strip()
+                value = games_mod.as_int(raw, 0, 999) if raw else None
+                if raw and value is None:
+                    error = error or 'Numbers must be 0 or more.'
+                numbers[key] = value
+            if error:
+                flash(error, 'danger')
+                return redirect(url_for('org_game_manage', game_id=game.id) + '#result')
+            game.score_for, game.score_against, game.summary = score_for, score_against, summary or None
+            for key, value in numbers.items():
+                setattr(game, key, value)
+            game.result_posted_at = datetime.utcnow()
+            create_audit_log(action='org_result_posted', actor_user_id=current_user.id, target_type='OrgGame', target_id=str(game.id),
+                             details={'score': f'{score_for}-{score_against}'})
+            db.session.commit()
+            flash('Result posted.', 'success')
+            return redirect(url_for('game_public', game_id=game.id))
+        abort(400)
+    return render_template('org_game_manage.html', org=org, game=game, gm=games_mod, roster=roster,
+                           lineup=games_mod.lineup_of(game), size=games_mod.LINEUP_SIZES[game.sport], now=datetime.utcnow())
+
+
+@app.route('/organization/games/<int:game_id>/lineup.pdf')
+@login_required
+def org_game_lineup_pdf(game_id):
+    game = db.session.get(OrgGame, game_id)
+    if not game or not game.lineup_saved_at:
+        abort(404)
+    if current_user.role != 'System' and (current_user.role != 'Organization' or game.org.user_id != current_user.id):
+        abort(404)
+    response = make_response(games_mod.lineup_pdf(game, game.org.org_name))
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'attachment; filename="DART-lineup-{slugify(game.org.org_name)}-{game.kickoff_at:%Y%m%d}.pdf"'
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
+
+
+@app.route('/games/<int:game_id>')
+def game_public(game_id):
+    """A game: result, line-up (after kick-off), head-to-head, the players' match records. Read only."""
+    game = db.session.get(OrgGame, game_id)
+    if not game or game.org.verification_status != 'verified':
+        abort(404)
+    owner = current_user.is_authenticated and (current_user.role == 'System' or game.org.user_id == current_user.id)
+    show_lineup = owner or games_mod.started(game)
+    key = normalize_team_name(game.opponent)
+    h2h_games = [g for g in OrgGame.query.filter_by(org_id=game.org_id, sport=game.sport).order_by(OrgGame.kickoff_at.desc()).all()
+                 if normalize_team_name(g.opponent) == key]
+    return render_template('game_public.html', game=game, gm=games_mod, show_lineup=show_lineup,
+                           lineup=games_mod.lineup_of(game) if show_lineup else [], h2h=games_mod.head_to_head(h2h_games),
+                           pair=paired_game(game), records=game_records(game), owner=owner)
+
+
+@app.route('/admin/org-games')
+@login_required
+def admin_org_games():
+    require_super_admin()
+    games = (OrgGame.query.filter(OrgGame.kickoff_at <= datetime.utcnow() + timedelta(days=7))
+             .order_by(OrgGame.lineup_confirmed_at.isnot(None), OrgGame.kickoff_at.desc()).limit(200).all())
+    rows = [(g, paired_game(g)) for g in games]
+    return render_template('admin_org_games.html', rows=rows, gm=games_mod, now=datetime.utcnow())
+
+
+@app.route('/admin/org-games/<int:game_id>/confirm', methods=['POST'])
+@login_required
+def admin_org_game_confirm(game_id):
+    """The D.A.R.T Admin confirms the line-ups (both teams when the opponent is on D.A.R.T.)."""
+    require_super_admin()
+    game = db.session.get(OrgGame, game_id)
+    if not game or not game.lineup_saved_at:
+        abort(404)
+    pair = paired_game(game)
+    for g in [game] + ([pair] if pair and pair.lineup_saved_at else []):
+        g.lineup_confirmed_at = datetime.utcnow()
+        g.lineup_confirmed_by = current_user.id
+        notif.notify(g.org.user_id, 'lineup_confirmed', f'The D.A.R.T Admin confirmed your line-up vs {g.opponent}.', f'/games/{g.id}')
+    create_audit_log(action='org_lineups_confirmed', actor_user_id=current_user.id, target_type='OrgGame', target_id=str(game.id),
+                     details={'pair': pair.id if pair else None})
+    db.session.commit()
+    flash('Line-up' + ('s of both teams' if pair and pair.lineup_saved_at else '') + ' confirmed.', 'success')
+    return redirect(url_for('admin_org_games'))
+
+
+def recent_org_games(org, limit=5):
+    return OrgGame.query.filter_by(org_id=org.id).order_by(OrgGame.kickoff_at.desc()).limit(limit).all()
+
+
+app.jinja_env.globals.update(recent_org_games=recent_org_games, games_mod=games_mod)
 
 
 # ---------- Organization page (public, read only) ----------
@@ -7936,7 +8196,7 @@ def sitemap_xml():
 
 
 # ---------- Legal pages ----------
-LEGAL_UPDATED = 'October 13, 2026'
+LEGAL_UPDATED = 'October 15, 2026'
 
 
 @app.route('/privacy')
@@ -7970,7 +8230,7 @@ def organization_terms():
 # registering, or on their next login for existing accounts). Raise
 # TERMS_VERSION when the terms change: everyone is asked again, and each
 # acceptance is stored in TermsAcceptance as a permanent record.
-TERMS_VERSION = '2026-10-13'
+TERMS_VERSION = '2026-10-15'
 
 # The D.A.R.T Admin runs the platform and is not asked.
 TERMS_EXEMPT_ROLES = ('System',)
@@ -8974,6 +9234,7 @@ def _fetch_profile_photo(user, info=None):
 
 def profile_card_png(user):
     info = profile_card_info(user)
+    photo = _fetch_profile_photo(user, info)
     return render_profile_card(CardData(
         name=info['name'],
         eyebrow=info['eyebrow'].upper(),
@@ -8986,8 +9247,38 @@ def profile_card_png(user):
         teams=info.get('teams') or [],
         contacts=[(f"{c['label']}: " + (f"{c['name']} · " if c['name'] else '') + c['phone']) for c in info.get('contacts') or []],
         verified=info['verified'],
-        photo=_fetch_profile_photo(user, info),
+        photo=photo,
+        name_badge=photo if info.get('name_badge') and info.get('name_badge') == info.get('picture_url') else _fetch_card_logo(info.get('name_badge')),
+        team_badges=_card_team_badges(info),
     ))
+
+
+def _fetch_card_logo(url):
+    """A team logo's bytes for the card image (cached for the request), or None."""
+    if not url:
+        return None
+    cache = g.setdefault('_card_logos', {}) if has_request_context() else {}
+    if url not in cache:
+        cache[url] = None
+        try:
+            response = http_requests.get(url, timeout=5)
+            if response.status_code == 200 and len(response.content) <= PROFILE_PHOTO_MAX_BYTES:
+                cache[url] = response.content
+        except Exception as e:
+            app.logger.warning('Team logo for card failed: %s', e)
+    return cache[url]
+
+
+def _card_team_badges(info):
+    """{team name: logo bytes} for the teams the card names (Team facts, Plays for), as shown on the app's card."""
+    names = [str(v) for k, v in list(info.get('stats') or []) + list(info.get('extra') or []) if k == 'Team' and v]
+    names += [team for team, _kind in info.get('teams') or []]
+    out = {}
+    for name in names[:4]:
+        logo = _fetch_card_logo(team_logo_url(name))
+        if logo:
+            out[name] = logo
+    return out
 
 
 def _card_user_or_404(user_id):
@@ -14440,6 +14731,9 @@ def admin_queues():
          url_for('admin_market') + '#vendors', 'accounts'),
         ('emails', 'Accounts past the email deadline', 'fa-envelope-circle-check', email_overdue_query().count(),
          url_for('admin_email_holds'), 'accounts'),
+        ('org_games', 'Organization line-ups to confirm', 'fa-people-line',
+         OrgGame.query.filter(OrgGame.lineup_saved_at.isnot(None), OrgGame.lineup_confirmed_at.is_(None),
+                              OrgGame.kickoff_at <= datetime.utcnow()).count(), url_for('admin_org_games'), 'content'),
         ('payments', 'Payments', 'fa-money-check-dollar', Payment.query.filter_by(status='awaiting_review').count(),
          url_for('admin_payments'), 'money'),
     ]

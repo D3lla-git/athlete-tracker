@@ -26,12 +26,12 @@
   <div class="integrity-cs-grid">
     {% for r in disputed %}
     <article class="integrity-cs-card">
-      <header><strong>{{ r.user.full_name }}</strong>{% if r.user.username %} <span class="text-muted">@{{ r.user.username }}</span>{% endif %}<span class="integrity-sport">{{ r.sport }}</span></header>
-      <div class="integrity-cs-match">{{ r.game_date.strftime('%d %b %Y') if r.game_date else r.year }} · {{ team_badge(r.team) }}{{ r.team }} <span class="text-muted">vs</span> {{ r.team_played_against }}</div>
+      <header><strong>{{ user_link(r.user) }}</strong>{% if r.user.username %} <span class="text-muted">@{{ r.user.username }}</span>{% endif %}<span class="integrity-sport">{{ r.sport }}</span></header>
+      <div class="integrity-cs-match">{{ r.game_date.strftime('%d %b %Y') if r.game_date else r.year }} · {{ team_badge(r.team) }}{{ team_name_link(r.team) }} <span class="text-muted">vs</span> {{ team_name_link(r.team_played_against) }}</div>
       <div class="integrity-cs-stats">{{ record_line(r) }}</div>
       <div class="integrity-cs-all" aria-label="All numbers in this record">{{ record_card_grid(r) }}</div>
       <div class="small">
-        Approved by coach <strong>{{ people[r.coach_approved_by].full_name if r.coach_approved_by in people else '—' }}</strong>{% if r.coach_approved_by in people and people[r.coach_approved_by].fraud_flags %} <span class="integrity-revoked">{{ people[r.coach_approved_by].fraud_flags }} fraud flag(s)</span>{% endif %}<br>
+        Approved by coach <strong>{{ user_link(people[r.coach_approved_by] if r.coach_approved_by in people else none, fallback='—') }}</strong>{% if r.coach_approved_by in people and people[r.coach_approved_by].fraud_flags %} <span class="integrity-revoked">{{ people[r.coach_approved_by].fraud_flags }} fraud flag(s)</span>{% endif %}<br>
         Disputed by <strong>{{ people[r.disputed_by].display_name if r.disputed_by in people else 'a match report' }}</strong>{% if r.disputed_by in people %} ({{ people[r.disputed_by].role_label }}){% endif %}:
         <em>“{{ r.dispute_reason }}”</em>
       </div>
@@ -77,8 +77,8 @@
       <tbody>
       {% for r in proofs %}
         <tr>
-          <td>{{ r.user.full_name }}{% if r.user.username %}<br><small class="text-muted">@{{ r.user.username }}</small>{% endif %}</td>
-          <td>{{ r.sport }} · {{ r.game_date.strftime('%d %b %Y') if r.game_date else r.year }}<br><small class="text-muted">{{ team_badge(r.team) }}{{ r.team }} vs {{ r.team_played_against }}</small></td>
+          <td>{{ user_link(r.user) }}{% if r.user.username %}<br><small class="text-muted">@{{ r.user.username }}</small>{% endif %}</td>
+          <td>{{ r.sport }} · {{ r.game_date.strftime('%d %b %Y') if r.game_date else r.year }}<br><small class="text-muted">{{ team_badge(r.team) }}{{ team_name_link(r.team) }} vs {{ team_name_link(r.team_played_against) }}</small></td>
           <td>{{ record_line(r) }}</td>
           <td class="small">{{ r.anomaly_flags }}</td>
           <td>{% if r.needs_proof %}<span class="text-muted small">Not yet</span>{% else %}<a href="{{ url_for('record_proof', record_id=r.id) }}" target="_blank" rel="noopener">View</a>{% endif %}</td>
@@ -95,8 +95,8 @@
   <div class="integrity-cs-grid">
     {% for o in officials %}
     <article class="integrity-cs-card">
-      <header><strong>{{ o.full_name }}</strong>{% if o.username %} <span class="text-muted">@{{ o.username }}</span>{% endif %}</header>
-      <div class="small">{{ o.official_type }} · {{ o.school }}<br>{{ o.email }} · {{ o.phone or 'no phone' }}<br>Registered {{ o.created_at.strftime('%d %b %Y') if o.created_at }}</div>
+      <header><strong>{{ user_link(o) }}</strong>{% if o.username %} <span class="text-muted">@{{ o.username }}</span>{% endif %}</header>
+      <div class="small">{{ o.official_type }} · {{ team_name_link(o.school) }}<br>{{ o.email }} · {{ o.phone or 'no phone' }}<br>Registered {{ o.created_at.strftime('%d %b %Y') if o.created_at }}</div>
       {% if o.id_document %}<a class="small" href="{{ url_for('id_document', filename=o.id_document) }}" target="_blank" rel="noopener"><i class="fa-solid fa-id-card" aria-hidden="true"></i> View ID document</a>{% endif %}
       <form method="POST" action="{{ url_for('review_official', user_id=o.id) }}" class="d-flex flex-wrap gap-2 align-items-center mt-1">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -122,8 +122,8 @@
       <tbody>
       {% for c in coaches %}
         <tr>
-          <td>{{ c.full_name }}{% if c.username %}<br><small class="text-muted">@{{ c.username }}</small>{% endif %}</td>
-          <td>{{ team_badge(c.school) }}{{ c.school }}</td>
+          <td>{{ user_link(c) }}{% if c.username %}<br><small class="text-muted">@{{ c.username }}</small>{% endif %}</td>
+          <td>{{ team_badge(c.school) }}{{ team_name_link(c.school) }}</td>
           <td>{{ c.phone or '—' }}</td>
           <td><strong>{{ c.fraud_flags }}</strong> of {{ fraud_flag_limit }}</td>
           <td>{% if c.license_revoked %}<span class="integrity-revoked">Licence revoked</span>{% else %}Warned{% endif %}</td>
@@ -144,7 +144,7 @@
       <tbody>
       {% for u in phones %}
         <tr>
-          <td>{{ u.full_name }}</td><td>{{ u.role_label }}</td><td>{{ u.phone }}</td>
+          <td>{{ user_link(u) }}</td><td>{{ u.role_label }}</td><td>{{ u.phone }}</td>
           <td>
             <form method="POST" action="{{ url_for('review_phone', user_id=u.id) }}" class="d-flex gap-2">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

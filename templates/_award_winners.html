@@ -26,10 +26,10 @@
           <div class="aw-entry-body">
             <span class="aw-winner-badge"><i class="fa-solid fa-trophy" aria-hidden="true"></i> {{ r.contest.title }}</span>
             <a class="aw-name text-decoration-none" href="{{ url_for('user_profile', user_id=w.athlete_id) }}">{{ w.athlete.full_name }}</a>
-            <span class="aw-note">{{ team_badge(w.athlete.school) }}{{ w.athlete.school or 'Individual athlete' }} · {{ r.contest.voting_ends_at.strftime('%d %b %Y') }}</span>
+            <span class="aw-note">{{ team_badge(w.athlete.school) }}{{ team_name_link(w.athlete.school, 'Individual athlete') }} · {{ r.contest.voting_ends_at.strftime('%d %b %Y') }}</span>
             <ol class="aw-podium">
               {% for e, votes in r.podium %}
-                <li><span>{{ e.athlete.full_name }}</span><strong>{{ votes }} vote{{ '' if votes == 1 else 's' }}</strong></li>
+                <li><span>{{ user_link(e.athlete) }}</span><strong>{{ votes }} vote{{ '' if votes == 1 else 's' }}</strong></li>
               {% endfor %}
             </ol>
           </div>

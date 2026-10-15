@@ -37,6 +37,8 @@ class CardData:
     contacts: list = field(default_factory=list)  # ["Coach contact: Name · +231 ..."] footer line
     verified: bool = False
     photo: bytes | None = None
+    name_badge: bytes | None = None   # the organization's approved logo, next to the name (as on the app's card)
+    team_badges: dict = field(default_factory=dict)   # {team name: logo bytes}: drawn before that team's name
 
 
 def _font(size, bold=False):
@@ -133,6 +135,23 @@ def _photo(data):
     return photo, mask
 
 
+def _badge(img, data, x, y, size):
+    """Paste a team logo (rounded, on a white tile so dark logos stay visible). Returns its width (0 if none)."""
+    if not data:
+        return 0
+    try:
+        logo = Image.open(io.BytesIO(data)).convert('RGBA')
+    except Exception:
+        return 0
+    logo = ImageOps.contain(logo, (size - 6, size - 6), method=Image.LANCZOS)
+    tile = Image.new('RGBA', (size, size), (255, 255, 255, 255))
+    tile.alpha_composite(logo, ((size - logo.width) // 2, (size - logo.height) // 2))
+    mask = Image.new('L', (size, size), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, size - 1, size - 1), radius=max(6, size // 5), fill=255)
+    img.paste(tile.convert('RGB'), (int(x), int(y)), mask)
+    return size
+
+
 def _verified_badge(draw, x, y, r=17):
     # Rosette-style badge with a check mark.
     draw.ellipse((x - r, y - r, x + r, y + r), fill=GREEN_LIGHT)
@@ -159,8 +178,13 @@ def render_card(data: CardData) -> bytes:
     x0 = 340
     _text(draw, (x0, 74), data.eyebrow, 22, LABEL, spacing=4)
 
-    name, size = _fit(draw, data.name, WIDTH - x0 - 140, 58)
-    end = _text(draw, (x0, 108), name, size, WHITE, bold=True)
+    nb = 56 if data.name_badge else 0
+    name, size = _fit(draw, data.name, WIDTH - x0 - 140 - (nb + 14 if nb else 0), 58)
+    if nb and _badge(img, data.name_badge, x0, 114 + max(0, (size - nb) // 2), nb):
+        nx = x0 + nb + 14
+    else:
+        nx = x0
+    end = _text(draw, (nx, 108), name, size, WHITE, bold=True)
     if data.verified:
         _verified_badge(draw, int(end) + 30, 108 + size // 2 + 4)
 
@@ -178,8 +202,11 @@ def render_card(data: CardData) -> bytes:
     cols = [64, 520, 790]
     for (label, value), x in zip(data.stats[:3], cols):
         _text(draw, (x, 352), label.upper(), 20, LABEL, spacing=3)
-        value, vs = _fit(draw, str(value), (cols[cols.index(x) + 1] - x - 30) if x != cols[-1] else 300, 40, 24)
-        _text(draw, (x, 384), value, vs, WHITE)
+        room = (cols[cols.index(x) + 1] - x - 30) if x != cols[-1] else 300
+        logo = data.team_badges.get(str(value)) if label == 'Team' else None
+        bw = _badge(img, logo, x, 384, 42) if logo else 0
+        value, vs = _fit(draw, str(value), room - (bw + 10 if bw else 0), 40, 24)
+        _text(draw, (x + (bw + 10 if bw else 0), 384), value, vs, WHITE)
 
     # Nationality (+ extra facts)
     if data.nationality:
@@ -197,13 +224,16 @@ def render_card(data: CardData) -> bytes:
         # e.g. an All Athlete: school + club / community team, one per line.
         _text(draw, (520, 470), 'PLAYS FOR', 20, LABEL, spacing=3)
         for i, (team, kind) in enumerate(data.teams[:2]):
-            line, ls = _fit(draw, f'{team} ({kind})', 350, 28, 18)
-            _text(draw, (520, 500 + i * 34), line, ls, WHITE)
+            bw = _badge(img, data.team_badges.get(team), 520, 498 + i * 34, 30)
+            line, ls = _fit(draw, f'{team} ({kind})', 350 - (bw + 8 if bw else 0), 28, 18)
+            _text(draw, (520 + (bw + 8 if bw else 0), 500 + i * 34), line, ls, WHITE)
     else:
         for (label, value), x in zip(data.extra[:2], [520, 790]):
             _text(draw, (x, 470), label.upper(), 20, LABEL, spacing=3)
-            value, vs = _fit(draw, str(value), 250, 36, 22)
-            _text(draw, (x, 502), value, vs, WHITE)
+            logo = data.team_badges.get(str(value)) if label == 'Team' else None
+            bw = _badge(img, logo, x, 500, 38) if logo else 0
+            value, vs = _fit(draw, str(value), 250 - (bw + 10 if bw else 0), 36, 22)
+            _text(draw, (x + (bw + 10 if bw else 0), 502), value, vs, WHITE)
 
     # Coach contact (footer line)
     if data.contacts:

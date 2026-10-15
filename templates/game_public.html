@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}{{ game.org.org_name }} vs {{ game.opponent }} | D.A.R.T.{% endblock %}
+
+{% block content %}
+{% set res = gm.result_label(game) %}
+<div class="container py-4" style="max-width: 980px">
+  <section class="gp-head" aria-label="Match">
+    <span class="gp-eyebrow">{{ game.sport }} · {{ game.competition }} · {{ game.kickoff_at.strftime('%d %b %Y, %H:%M') }}</span>
+    <div class="gp-teams">
+      <div class="gp-team">{{ team_badge(game.org.org_name, 'lg') }}<a href="{{ url_for('organization_public', org_id=game.org.id) }}">{{ game.org.org_name }}</a></div>
+      <div class="gp-score">{% if res %}{{ game.score_for }}<span>-</span>{{ game.score_against }}{% else %}vs{% endif %}</div>
+      <div class="gp-team">{{ team_badge(game.opponent, 'lg') }}{% set _opp_url = team_org_url(game.opponent) %}{% if _opp_url %}<a href="{{ _opp_url }}">{{ game.opponent }}</a>{% else %}<span>{{ game.opponent }}</span>{% endif %}</div>
+    </div>
+    {% if game.summary %}<p class="gp-summary">“{{ game.summary }}”</p>{% endif %}
+    <div class="gp-facts">
+      <span><i class="fa-solid fa-location-dot"></i> {{ game.venue }}</span>
+      {% if game.capacity %}<span><i class="fa-solid fa-people-group"></i> {{ '{:,}'.format(game.capacity) }}</span>{% endif %}
+      <span><i class="fa-solid fa-house"></i> {{ 'Home' if game.is_home else 'Away' }}</span>
+      {% if game.lineup_confirmed_at %}<span class="gp-ok"><i class="fa-solid fa-circle-check"></i> Line-ups confirmed by D.A.R.T.</span>{% endif %}
+    </div>
+  </section>
+
+  <div class="gp-cols">
+    <section class="gp-panel" aria-labelledby="gpStats">
+      <h2 id="gpStats">Match stats</h2>
+      <dl class="gp-dl">
+        {% if game.sport != 'Basketball' %}<div><dt>Yellow cards</dt><dd>{{ game.yellow_cards if game.yellow_cards is not none else '—' }}</dd></div>
+        <div><dt>Red cards</dt><dd>{{ game.red_cards if game.red_cards is not none else '—' }}</dd></div>{% endif %}
+        <div><dt>Fouls</dt><dd>{{ game.fouls if game.fouls is not none else '—' }}</dd></div>
+        {% if game.sport == 'Football' %}<div><dt>Goalkeeper saves</dt><dd>{{ game.gk_saves if game.gk_saves is not none else '—' }}</dd></div>{% endif %}
+      </dl>
+      {% if game.standing_position is not none %}
+        <h3 class="h6 fw-bold mt-3">Standings · {{ game.competition }}</h3>
+        <dl class="gp-dl"><div><dt>Position</dt><dd>{{ game.standing_position }}</dd></div><div><dt>Played</dt><dd>{{ game.standing_played if game.standing_played is not none else '—' }}</dd></div>
+          <div><dt>Points</dt><dd>{{ game.standing_points if game.standing_points is not none else '—' }}</dd></div></dl>
+      {% endif %}
+    </section>
+
+    <section class="gp-panel" aria-labelledby="gpH2h">
+      <h2 id="gpH2h">Head-to-head vs {{ game.opponent }}</h2>
+      <div class="gp-h2h"><span class="gp-w">{{ h2h.w }} W</span><span class="gp-d">{{ h2h.d }} D</span><span class="gp-l">{{ h2h.l }} L</span>
+        <span class="text-muted small">Goals / points {{ h2h['for'] }}-{{ h2h.against }}</span></div>
+      <ul class="gp-h2h-list">
+        {% for g in h2h.games[:8] %}{% set r = gm.result_label(g) %}
+          <li><a href="{{ url_for('game_public', game_id=g.id) }}"><span class="gp-r gp-r-{{ r }}">{{ r }}</span> {{ g.score_for }}-{{ g.score_against }} · {{ g.competition }} · {{ g.kickoff_at.strftime('%d %b %Y') }}</a></li>
+        {% else %}<li class="text-muted small">No finished games against this opponent yet.</li>{% endfor %}
+      </ul>
+    </section>
+  </div>
+
+  <section class="gp-panel" aria-labelledby="gpLineups">
+    <h2 id="gpLineups">Line-ups</h2>
+    {% if show_lineup %}
+      <div class="gp-cols">
+        {% for label, team_game, team_lineup in ((game.org.org_name, game, lineup), (game.opponent, pair, (gm.lineup_of(pair) if pair and pair.lineup_saved_at else []))) %}
+          <div>
+            <h3 class="h6 fw-bold">{{ team_badge(label) }}{{ label }}</h3>
+            {% if team_lineup %}
+              {% for role, title in (('starter', 'Starters'), ('sub', 'Substitutes')) %}
+                <div class="gp-sub">{{ title }}</div>
+                <ol class="gp-list">{% for p in team_lineup if p.role == role %}
+                  <li>{% if p.shirt %}<b>#{{ p.shirt }}</b> {% endif %}{% if p.athlete_id %}<a href="{{ url_for('user_profile', user_id=p.athlete_id) }}">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}{% if p.position %} <small>· {{ p.position }}</small>{% endif %}</li>
+                {% endfor %}</ol>
+              {% endfor %}
+            {% else %}<p class="small text-muted">{{ 'Not on D.A.R.T. or no line-up entered.' if loop.index == 2 else 'No line-up.' }}</p>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      {% if owner and game.lineup_saved_at %}<a class="btn btn-sm btn-outline-success" href="{{ url_for('org_game_lineup_pdf', game_id=game.id) }}"><i class="fa-solid fa-file-pdf"></i> Download line-up (PDF)</a>{% endif %}
+    {% else %}
+      <p class="small text-muted mb-0"><i class="fa-solid fa-lock"></i> Line-ups are shown from kick-off.</p>
+    {% endif %}
+  </section>
+
+  <section class="gp-panel" aria-labelledby="gpRecords">
+    <h2 id="gpRecords">Players' match records</h2>
+    {% for r in records %}
+      <a class="gp-rec" href="{{ url_for('user_profile', user_id=r.user_id) }}"><strong>{{ r.user.full_name }}</strong>
+        <span>{{ r.position or '' }}{% if r.sport == 'Football' %} · {{ r.goals or 0 }} goals · {{ r.assists or 0 }} assists{% elif r.sport == 'Basketball' %} · {{ r.points or 0 }} pts{% endif %}</span></a>
+    {% else %}<p class="small text-muted mb-0">Approved match records from this game appear here.</p>{% endfor %}
+  </section>
+</div>
+<style>
+  .gp-head { padding: 22px; margin-bottom: 14px; border-radius: 24px; color: #fff; text-align: center;
+    background: radial-gradient(circle at 80% 20%, rgba(57, 185, 114, 0.3), transparent 40%), linear-gradient(135deg, #071208, #0d2413 55%, #061008); }
+  .gp-eyebrow { font-size: 0.78rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.8; }
+  .gp-teams { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; margin: 14px 0 8px; }
+  .gp-team { display: flex; flex-direction: column; align-items: center; gap: 6px; font-weight: 800; font-size: 1.05rem; overflow-wrap: anywhere; }
+  .gp-team a { color: #fff !important; text-decoration: none; border-bottom: 2px solid rgba(76, 211, 138, 0.7); }
+  .gp-team a:hover, .gp-team a:focus-visible { color: #4cd38a !important; }
+  .gp-score { font-size: clamp(2rem, 7vw, 3.4rem); font-weight: 900; }
+  .gp-score span { opacity: 0.6; margin: 0 6px; }
+  .gp-summary { font-style: italic; opacity: 0.9; }
+  .gp-facts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 16px; font-size: 0.85rem; opacity: 0.9; }
+  .gp-ok { color: #4cd38a; font-weight: 800; }
+  .gp-cols { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+  .gp-panel { padding: 16px; margin-bottom: 14px; border-radius: 20px; background: var(--surface-bg, #fff); border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1)); }
+  .gp-panel h2 { font-size: 1.05rem; font-weight: 800; }
+  .gp-dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin: 0; }
+  .gp-dl div { padding: 8px; border-radius: 12px; background: rgba(25, 135, 84, 0.07); }
+  .gp-dl dt { font-size: 0.72rem; color: var(--muted-text, #6c757d); font-weight: 700; }
+  .gp-dl dd { margin: 0; font-size: 1.2rem; font-weight: 900; }
+  .gp-h2h { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .gp-h2h > span:not(.text-muted) { padding: 4px 12px; border-radius: 999px; font-weight: 900; color: #fff; }
+  .gp-w, .gp-r-W { background: #198754; } .gp-d, .gp-r-D { background: #fd7e14; } .gp-l, .gp-r-L { background: #dc3545; }
+  .gp-h2h-list { list-style: none; padding: 0; margin: 0; }
+  .gp-h2h-list a { display: block; padding: 4px 0; text-decoration: none; }
+  .gp-r { display: inline-block; width: 22px; text-align: center; border-radius: 6px; color: #fff; font-weight: 900; font-size: 0.75rem; }
+  .gp-sub { font-size: 0.72rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-text, #6c757d); margin-top: 6px; }
+  .gp-list { padding-left: 20px; margin-bottom: 4px; }
+  .gp-rec { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 10px; margin-bottom: 6px; border-radius: 12px; text-decoration: none; color: inherit !important;
+    background: rgba(25, 135, 84, 0.06); }
+  .gp-rec span { color: var(--muted-text, #6c757d); }
+  @media (max-width: 575.98px) { .gp-team { font-size: 0.9rem; } }
+</style>
+{% endblock %}

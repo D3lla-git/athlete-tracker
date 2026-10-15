@@ -18,7 +18,7 @@
       <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
         <i class="fa-solid fa-store text-success" aria-hidden="true"></i>
         {% if seller.role == 'Vendor' %}<a class="fw-bold" href="{{ url_for('market_vendor', user_id=seller.id) }}">{{ seller.shop_name or seller.display_name }}</a>
-        {% else %}<strong>{{ seller.shop_name or seller.display_name }}</strong>{% endif %}
+        {% else %}<strong>{{ user_link(seller, text=seller.shop_name or seller.display_name) }}</strong>{% endif %}
         {% if seller.vendor_verified_at %}<i class="fa-solid fa-circle-check text-success" title="Verified vendor"></i>{% endif %}
         {% if seller.phone and not block_reason %}<a class="mk-phone ms-auto" href="tel:{{ seller.phone }}"><i class="fa-solid fa-phone"></i> {{ seller.phone | phone }}</a>{% endif %}
         {% from '_market_macros.html' import shop_directions %}{{ shop_directions(seller) }}

@@ -576,6 +576,42 @@ class OrganizationProfile(db.Model):
         return [self.org_name] + self.split_names(self.approved_aliases)
 
 
+class OrgGame(db.Model):
+    """
+    Organization Pro: a game of the organization's team. The line-up locks
+    5 minutes before kick-off and is required before the result is posted.
+    """
+    __tablename__ = 'org_game'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    org_id = db.Column(db.BigInteger, db.ForeignKey('organization_profile.id', ondelete='CASCADE'), nullable=False, index=True)
+    sport = db.Column(db.String(20), nullable=False)
+    competition = db.Column(db.String(60), nullable=False)       # LFA / LBA / MYS agenda (or Friendly)
+    opponent = db.Column(db.String(150), nullable=False)
+    is_home = db.Column(db.Boolean, nullable=False, default=True)
+    kickoff_at = db.Column(db.DateTime, nullable=False, index=True)   # UTC (Liberia time)
+    venue = db.Column(db.String(150), nullable=False)
+    capacity = db.Column(db.Integer, nullable=True)
+    lineup = db.Column(db.Text, nullable=True)                   # JSON list of players
+    lineup_saved_at = db.Column(db.DateTime, nullable=True)
+    lineup_confirmed_at = db.Column(db.DateTime, nullable=True)  # checked by the D.A.R.T Admin against the opponent
+    lineup_confirmed_by = db.Column(db.BigInteger, nullable=True)
+    score_for = db.Column(db.Integer, nullable=True)
+    score_against = db.Column(db.Integer, nullable=True)
+    summary = db.Column(db.String(120), nullable=True)           # 10 words at most
+    yellow_cards = db.Column(db.Integer, nullable=True)
+    red_cards = db.Column(db.Integer, nullable=True)
+    fouls = db.Column(db.Integer, nullable=True)
+    gk_saves = db.Column(db.Integer, nullable=True)
+    standing_position = db.Column(db.Integer, nullable=True)
+    standing_played = db.Column(db.Integer, nullable=True)
+    standing_points = db.Column(db.Integer, nullable=True)
+    result_posted_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    org = db.relationship('OrganizationProfile')
+
+
 class OrganizationRosterExclusion(db.Model):
     """An athlete an organization removed from its roster (wrong match)."""
     __tablename__ = 'organization_roster_exclusion'

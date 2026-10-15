@@ -37,20 +37,46 @@
     </div>
   </section>
 
+  <!-- ===================== GAMES, LINE-UPS, RESULTS (Organization Pro) ===================== -->
+  <section class="oh-panel oh-games" id="games" aria-labelledby="ohGamesTitle">
+    <div class="oh-panel-head d-flex flex-wrap align-items-center gap-2">
+      <h2 class="oh-panel-title flex-grow-1" id="ohGamesTitle"><i class="fa-solid fa-calendar-check"></i> Games, line-ups &amp; results</h2>
+      <a class="btn btn-sm dart-btn" href="{{ url_for('org_games') }}">{{ 'Manage games' if data.full else 'See Organization Pro' }}</a>
+    </div>
+    {% set _games = recent_org_games(org, 5) %}
+    {% if _games %}
+      <ul class="oh-game-list">
+        {% for gm_ in _games %}
+          {% set _res = games_mod.result_label(gm_) %}
+          <li>
+            <a href="{{ url_for('game_public', game_id=gm_.id) }}"><strong>{{ gm_.sport }}</strong> vs {{ gm_.opponent }}</a>
+            <span class="text-muted small">{{ gm_.kickoff_at.strftime('%d %b, %H:%M') }} · {{ gm_.competition }}</span>
+            {% if _res %}<span class="oh-res oh-res-{{ _res }}">{{ _res }} {{ gm_.score_for }}-{{ gm_.score_against }}</span>
+            {% elif gm_.lineup_saved_at %}<span class="badge text-bg-success">Line-up saved</span>
+            {% elif games_mod.lineup_open(gm_) %}<span class="badge text-bg-warning">Line-up due {{ games_mod.lineup_deadline(gm_).strftime('%d %b, %H:%M') }}</span>
+            {% else %}<span class="badge text-bg-danger">No line-up</span>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="small text-muted mb-0">{{ 'No games yet. Add your next game and its line-up.' if data.full else 'With Organization Pro you post your games, line-ups (PDF) and results, linked to head-to-head and your athletes\' match records.' }}</p>
+    {% endif %}
+  </section>
+
   <!-- ===================== CONFIRM NEW ATHLETES (free + Pro) ===================== -->
   <section class="oh-confirm" id="confirm-athletes" aria-labelledby="ohConfirmTitle">
     <div class="oh-confirm-head">
       <h2 id="ohConfirmTitle"><i class="fa-solid fa-user-check"></i> Confirm your athletes
         {% if athletes_to_confirm %}<span class="oh-confirm-badge">{{ athletes_to_confirm | length }}</span>{% endif %}</h2>
-      <p>New athletes who registered under <strong>{{ org.org_name }}</strong>. Confirm only people who really play for you: their profile goes live once you and their coach have approved it. Their coach approves their game records.</p>
+      <p>New athletes who registered under <strong>{{ org_link(org) }}</strong>. Confirm only people who really play for you: their profile goes live once you and their coach have approved it. Their coach approves their game records.</p>
     </div>
     {% if athletes_to_confirm %}
       <ul class="oh-confirm-list">
         {% for a in athletes_to_confirm %}
           <li>
             <div class="oh-confirm-who">
-              <strong>{{ a.full_name }}</strong> {{ handle_tag(a) }}
-              <span>Team typed: “{{ team_badge(a.school) }}{{ a.school }}” · {{ a.athlete_category or 'Athlete' }} · registered {{ a.created_at.strftime('%b %d, %Y') if a.created_at else '' }}</span>
+              <strong>{{ user_link(a) }}</strong> {{ handle_tag(a) }}
+              <span>Team typed: “{{ team_badge(a.school) }}{{ team_name_link(a.school) }}” · {{ a.athlete_category or 'Athlete' }} · registered {{ a.created_at.strftime('%b %d, %Y') if a.created_at else '' }}</span>
               <span class="oh-confirm-coach {{ 'is-done' if a.coach_verified }}">
                 <i class="fa-solid {{ 'fa-circle-check' if a.coach_verified else 'fa-hourglass-half' }}"></i>
                 {{ 'Coach has approved' if a.coach_verified else 'Waiting for the coach too' }}
@@ -118,7 +144,7 @@
         <div class="oh-panel-head">
           <div>
             <h2 class="oh-panel-title" id="ohRosterTitle"><i class="fa-solid fa-users"></i> Roster</h2>
-            <div class="oh-panel-sub">Verified athletes registered under {{ org.org_name }}{% if org.approved_aliases %} or its approved team names{% endif %}</div>
+            <div class="oh-panel-sub">Verified athletes registered under {{ org_link(org) }}{% if org.approved_aliases %} or its approved team names{% endif %}</div>
           </div>
           <span class="oh-count" id="ohRosterCount">{{ data.roster | length }}</span>
         </div>
@@ -176,7 +202,7 @@
         {% else %}
           <div class="oh-empty">
             <i class="fa-solid fa-user-plus"></i>
-            <div>No athletes yet. Athletes appear here when they register with the team name <strong>{{ org.org_name }}</strong>
+            <div>No athletes yet. Athletes appear here when they register with the team name <strong>{{ org_link(org) }}</strong>
               {% if org.approved_aliases %}or an approved team name{% endif %}.</div>
           </div>
         {% endif %}
@@ -193,7 +219,7 @@
               <a href="{{ url_for('user_profile', user_id=r.user.id) }}" class="oh-feed-name">{{ r.user.full_name }}</a> {{ handle_tag(r.user) }}
               <span class="oh-sport-chip">{{ r.sport }}</span>
               <div class="oh-feed-sub">
-                vs {{ r.team_played_against or '-' }} · {{ r.competition_display }}
+                vs {{ team_name_link(r.team_played_against, '-') }} · {{ r.competition_display }}
                 {% if r.game_date %} · {{ r.game_date.strftime('%b %d, %Y') }}{% endif %}
               </div>
             </div>
@@ -260,7 +286,7 @@
         <div class="oh-panel-head">
           <div>
             <h2 class="oh-panel-title"><i class="fa-solid fa-users"></i> Your roster</h2>
-            <div class="oh-panel-sub">Verified athletes registered under {{ org.org_name }}</div>
+            <div class="oh-panel-sub">Verified athletes registered under {{ org_link(org) }}</div>
           </div>
           <span class="oh-count">{{ data.roster_size }}</span>
         </div>
@@ -270,7 +296,7 @@
           </div>
         {% else %}
           <div class="oh-empty"><i class="fa-solid fa-user-plus"></i>
-            <div>No athletes yet. They appear here when they register with the team name <strong>{{ org.org_name }}</strong>.</div>
+            <div>No athletes yet. They appear here when they register with the team name <strong>{{ org_link(org) }}</strong>.</div>
           </div>
         {% endfor %}
         {% if data.roster_size > data.preview | length %}

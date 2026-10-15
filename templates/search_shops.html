@@ -35,7 +35,7 @@
           {% if s.profile_picture %}<img class="ss-logo" src="{{ url_for('profile_picture', filename=s.profile_picture) }}" alt="" loading="lazy">
           {% else %}<span class="ss-logo" aria-hidden="true">{{ (s.shop_name or s.display_name or '?')[0] | upper }}</span>{% endif %}
           <div class="ss-who">
-            <div class="ss-name">{{ s.shop_name or s.display_name }}
+            <div class="ss-name">{{ user_link(s, text=s.shop_name or s.display_name) }}
               {% if s.vendor_verified_at %}<i class="fa-solid fa-circle-check ss-verified" title="Verified by D.A.R.T." aria-label="Verified"></i>{% endif %}</div>
             <div class="ss-sub">{{ 'Business' if s.vendor_type == 'business' else s.display_name }}
               {% if s.id in premium %}<span class="ss-premium"><i class="fa-solid fa-crown"></i> Premium</span>{% endif %}</div>

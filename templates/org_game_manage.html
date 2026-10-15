@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}vs {{ game.opponent }} | {{ org.org_name }}{% endblock %}
+
+{% block content %}
+{% set open = gm.lineup_open(game, now) %}
+{% set started = gm.started(game, now) %}
+<div class="container py-4" style="max-width: 980px">
+  <a class="btn btn-sm btn-outline-secondary mb-3" href="{{ url_for('org_games') }}"><i class="fa-solid fa-arrow-left"></i> Games</a>
+  <section class="mg-head">
+    <div>
+      <span class="mg-eyebrow">{{ game.sport }} · {{ game.competition }} · {{ 'Home' if game.is_home else 'Away' }}</span>
+      <h1 class="h3 mb-1">{{ org.org_name }} vs {{ game.opponent }}</h1>
+      <div class="small">{{ game.kickoff_at.strftime('%A %d %B %Y, %H:%M') }} · {{ game.venue }}{% if game.capacity %} · capacity {{ '{:,}'.format(game.capacity) }}{% endif %}</div>
+    </div>
+    {% if game.lineup_saved_at %}<a class="btn btn-sm btn-light fw-bold" href="{{ url_for('org_game_lineup_pdf', game_id=game.id) }}"><i class="fa-solid fa-file-pdf"></i> Line-up PDF</a>{% endif %}
+  </section>
+
+  {# ---------- Line-up ---------- #}
+  <section class="mg-panel" id="lineup" aria-labelledby="mgLineup">
+    <h2 class="h5 fw-bold" id="mgLineup"><i class="fa-solid fa-people-line"></i> Line-up
+      <small class="text-muted fw-normal">{{ size[0] }} starters + up to {{ size[1] }} substitutes</small></h2>
+    {% if open %}
+      <p class="small"><i class="fa-solid fa-lock-open text-success"></i> Required. Save it before <strong>{{ gm.lineup_deadline(game).strftime('%d %b, %H:%M') }}</strong>
+        (5 minutes before kick-off); then it locks.{% if game.lineup_confirmed_at is none and game.lineup_saved_at %} Saved {{ game.lineup_saved_at.strftime('%d %b, %H:%M') }}.{% endif %}</p>
+      <form method="POST" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="lineup">
+        <datalist id="mgRoster">{% for a in roster %}<option value="{{ a.full_name }}">{% endfor %}</datalist>
+        <div class="mg-grid">
+          {% for i in range(size[0] + size[1]) %}
+            {% set p = lineup[i] if i < lineup | length else {} %}
+            {% if i == 0 %}<div class="mg-sub">Starters</div>{% elif i == size[0] %}<div class="mg-sub">Substitutes</div>{% endif %}
+            <div class="mg-row">
+              <input type="hidden" name="role_{{ i }}" value="{{ 'starter' if i < size[0] else 'sub' }}">
+              <input class="form-control form-control-sm mg-shirt" name="shirt_{{ i }}" inputmode="numeric" maxlength="2" placeholder="#" value="{{ p.shirt or '' }}" aria-label="Shirt number {{ i + 1 }}">
+              <input class="form-control form-control-sm" name="name_{{ i }}" list="mgRoster" maxlength="80" placeholder="{{ 'Starter' if i < size[0] else 'Substitute' }} {{ i + 1 if i < size[0] else i + 1 - size[0] }}" value="{{ p.name or '' }}" aria-label="Player {{ i + 1 }}">
+              <input class="form-control form-control-sm mg-pos" name="position_{{ i }}" maxlength="20" placeholder="Pos." value="{{ p.position or '' }}" aria-label="Position {{ i + 1 }}">
+            </div>
+          {% endfor %}
+        </div>
+        <button class="btn dart-btn mt-2" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save line-up</button>
+      </form>
+    {% elif game.lineup_saved_at %}
+      <p class="small"><i class="fa-solid fa-lock text-secondary"></i> Locked. {{ 'Confirmed by the D.A.R.T Admin.' if game.lineup_confirmed_at else 'Waiting for D.A.R.T Admin confirmation.' }}</p>
+      <ol class="mg-list">{% for p in lineup %}<li>{% if p.shirt %}<b>#{{ p.shirt }}</b> {% endif %}{{ p.name }}{% if p.position %} · {{ p.position }}{% endif %}{% if p.role == 'sub' %} <em>(sub)</em>{% endif %}</li>{% endfor %}</ol>
+    {% else %}
+      <div class="alert alert-danger small mb-0"><i class="fa-solid fa-triangle-exclamation"></i> No line-up was saved before the 5-minute lock. The result can not be posted: contact the D.A.R.T Admin.</div>
+    {% endif %}
+  </section>
+
+  {# ---------- Result (after the game) ---------- #}
+  <section class="mg-panel" id="result" aria-labelledby="mgResult">
+    <h2 class="h5 fw-bold" id="mgResult"><i class="fa-solid fa-flag-checkered"></i> Result</h2>
+    {% if not started %}
+      <p class="small text-muted mb-0">Post the result after kick-off.</p>
+    {% elif not game.lineup_saved_at %}
+      <p class="small text-danger mb-0">A line-up is required before the result can be posted.</p>
+    {% else %}
+      <form method="POST" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="result">
+        <div class="row g-2">
+          <div class="col-6 col-md-3"><label class="form-label" for="mgFor">{{ org.org_name }}</label>
+            <input class="form-control" id="mgFor" name="score_for" type="number" min="0" max="300" required value="{{ game.score_for if game.score_for is not none else '' }}"></div>
+          <div class="col-6 col-md-3"><label class="form-label" for="mgAgainst">{{ game.opponent }}</label>
+            <input class="form-control" id="mgAgainst" name="score_against" type="number" min="0" max="300" required value="{{ game.score_against if game.score_against is not none else '' }}"></div>
+          <div class="col-md-6"><label class="form-label" for="mgSummary">Summary <span class="text-muted small">(optional, {{ gm.SUMMARY_MAX_WORDS }} words)</span></label>
+            <input class="form-control" id="mgSummary" name="summary" maxlength="120" value="{{ game.summary or '' }}" placeholder="e.g. Late winner secures top spot"></div>
+          {% if game.sport != 'Basketball' %}
+            <div class="col-4 col-md-2"><label class="form-label" for="mgY">Yellow cards</label><input class="form-control" id="mgY" name="yellow_cards" type="number" min="0" value="{{ game.yellow_cards if game.yellow_cards is not none else '' }}"></div>
+            <div class="col-4 col-md-2"><label class="form-label" for="mgR">Red cards</label><input class="form-control" id="mgR" name="red_cards" type="number" min="0" value="{{ game.red_cards if game.red_cards is not none else '' }}"></div>
+          {% endif %}
+          <div class="col-4 col-md-2"><label class="form-label" for="mgF">Fouls</label><input class="form-control" id="mgF" name="fouls" type="number" min="0" value="{{ game.fouls if game.fouls is not none else '' }}"></div>
+          {% if game.sport == 'Football' %}
+            <div class="col-4 col-md-2"><label class="form-label" for="mgS">Goalkeeper saves</label><input class="form-control" id="mgS" name="gk_saves" type="number" min="0" value="{{ game.gk_saves if game.gk_saves is not none else '' }}"></div>
+          {% endif %}
+          <div class="col-12"><span class="form-label fw-bold d-block mt-1">Standings after the game ({{ game.competition }})</span></div>
+          <div class="col-4 col-md-2"><label class="form-label" for="mgPos">Position</label><input class="form-control" id="mgPos" name="standing_position" type="number" min="0" value="{{ game.standing_position if game.standing_position is not none else '' }}"></div>
+          <div class="col-4 col-md-2"><label class="form-label" for="mgPl">Played</label><input class="form-control" id="mgPl" name="standing_played" type="number" min="0" value="{{ game.standing_played if game.standing_played is not none else '' }}"></div>
+          <div class="col-4 col-md-2"><label class="form-label" for="mgPts">Points</label><input class="form-control" id="mgPts" name="standing_points" type="number" min="0" value="{{ game.standing_points if game.standing_points is not none else '' }}"></div>
+        </div>
+        <button class="btn dart-btn mt-3" type="submit"><i class="fa-solid fa-paper-plane"></i> {{ 'Update result' if game.result_posted_at else 'Post result' }}</button>
+      </form>
+    {% endif %}
+  </section>
+</div>
+<style>
+  .mg-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 18px; margin-bottom: 14px;
+    border-radius: 22px; color: #fff; background: var(--dart-primary-gradient, linear-gradient(135deg, #0d2413, #198754)); }
+  .mg-eyebrow { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.85; }
+  .mg-panel { padding: 16px; margin-bottom: 14px; border-radius: 20px; background: var(--surface-bg, #fff); border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1)); }
+  .mg-grid { display: grid; gap: 6px; }
+  .mg-sub { margin-top: 6px; font-size: 0.78rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-text, #6c757d); }
+  .mg-row { display: grid; grid-template-columns: 54px 1fr 90px; gap: 6px; }
+  .mg-list { columns: 2; padding-left: 20px; }
+  @media (max-width: 575.98px) { .mg-list { columns: 1; } .mg-row { grid-template-columns: 48px 1fr 70px; } }
+</style>
+{% endblock %}

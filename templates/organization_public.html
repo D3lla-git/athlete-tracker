@@ -33,6 +33,20 @@
     <iframe class="op-map" src="{{ org_map_embed(org) }}" title="{{ org.org_name }} on the map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
   {% endif %}
 
+  {% set _games = recent_org_games(org, 6) %}
+  {% if _games %}
+    <h2 class="op-title"><i class="fa-solid fa-calendar-check"></i> Recent games</h2>
+    <div class="op-games">
+      {% for g in _games %}{% set _res = games_mod.result_label(g) %}
+        <a class="op-game" href="{{ url_for('game_public', game_id=g.id) }}">
+          <span class="op-game-res op-res-{{ _res or 'N' }}">{{ _res or '·' }}</span>
+          <span><strong>vs {{ g.opponent }}</strong><small>{{ g.sport }} · {{ g.competition }} · {{ g.kickoff_at.strftime('%d %b %Y') }}</small></span>
+          <span class="ms-auto fw-bold">{% if _res %}{{ g.score_for }}-{{ g.score_against }}{% else %}{{ g.kickoff_at.strftime('%H:%M') }}{% endif %}</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
   <h2 class="op-title"><i class="fa-solid fa-list-check"></i> Official athletes</h2>
   <p class="text-muted small">Verified athletes of {{ org.org_name }}, sport by sport, from games approved by their coaches.</p>
   <div class="op-sports">
@@ -68,6 +82,12 @@
 </div>
 <style>
   .op-page { max-width: 1040px; }
+  .op-games { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+  .op-game { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; text-decoration: none; color: inherit !important;
+    background: var(--surface-bg, #fff); border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1)); }
+  .op-game small { display: block; color: var(--muted-text, #6c757d); }
+  .op-game-res { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 9px; display: grid; place-items: center; font-weight: 900; color: #fff; background: #6c757d; }
+  .op-res-W { background: #198754; } .op-res-L { background: #dc3545; } .op-res-D { background: #fd7e14; }
   .op-map { display: block; width: 100%; height: 240px; margin-top: 14px; border: 0; border-radius: 20px; background: #e9ecef; }
   .op-hero { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 22px; border-radius: 24px; color: #fff;
     background: var(--dart-primary-gradient, linear-gradient(135deg, #0d2413, #198754)); box-shadow: 0 14px 38px rgba(0, 0, 0, 0.18); }

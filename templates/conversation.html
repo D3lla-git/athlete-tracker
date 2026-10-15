@@ -497,14 +497,14 @@
 
       <div class="conversation-header-info">
         <p class="conversation-header-name">
-          {{ recipient.display_name }} {{ handle_tag(recipient) }}
+          {{ user_link(recipient, text=recipient.display_name) }} {{ handle_tag(recipient) }}
           {% if recipient.nationality and show_personal(recipient) %}
             <span class="ms-1">{{ country_flag(recipient.nationality) }}</span>
           {% endif %}
         </p>
 
         <div class="conversation-header-role">
-          {{ recipient.role_label }}{% if recipient.school %} · {{ team_badge(recipient.school) }}{{ recipient.school }}{% endif %}
+          {{ recipient.role_label }}{% if recipient.school %} · {{ team_badge(recipient.school) }}{{ team_name_link(recipient.school) }}{% endif %}
         </div>
       </div>
 

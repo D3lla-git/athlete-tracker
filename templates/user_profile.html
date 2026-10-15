@@ -278,7 +278,7 @@
               <div class="up-record-main">
                 <strong>{{ r.sport }}</strong> · {{ record_headline(r) }}
                 <div class="up-record-sub">
-                  {{ r.competition_display }}{% if r.game_date %} · {{ r.game_date.strftime('%b %d, %Y') }}{% endif %}{% if r.team %} · {{ team_badge(r.team) }}{{ r.team }}{% endif %}
+                  {{ r.competition_display }}{% if r.game_date %} · {{ r.game_date.strftime('%b %d, %Y') }}{% endif %}{% if r.team %} · {{ team_badge(r.team) }}{{ team_name_link(r.team) }}{% endif %}
                 </div>
               </div>
               {% from '_share.html' import share_button %}
@@ -371,7 +371,7 @@
           {% if user.school %}
             <div class="small text-muted">
               <i class="fa-solid fa-people-group"></i>
-              {{ team_badge(user.school) }}{{ user.school }}
+              {{ team_badge(user.school) }}{{ team_name_link(user.school) }}
             </div>
           {% endif %}
         </div>
@@ -708,7 +708,7 @@
                     {% if record.team %}
                       <div class="small text-muted">
                         <i class="fa-solid fa-people-group"></i>
-                        {{ team_badge(record.team) }}{{ record.team }}
+                        {{ team_badge(record.team) }}{{ team_name_link(record.team) }}
                       </div>
                     {% endif %}
 
@@ -746,7 +746,7 @@
                     <div class="col-12">
                       <div class="small">
                         <strong>Opponent:</strong>
-                        {{ record.team_played_against }}
+                        {{ team_name_link(record.team_played_against) }}
                       </div>
                     </div>
                   {% endif %}

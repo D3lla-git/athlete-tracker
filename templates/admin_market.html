@@ -30,7 +30,7 @@
             {% if l.brand %}<span>{{ l.brand }}</span>{% endif %}{% if l.sizes %}<span>Sizes {{ l.sizes }}</span>{% endif %}</div>
           <p class="small mb-1" style="white-space: pre-line">{{ l.description }}</p>
           {% if l.specs %}<p class="small text-muted mb-1" style="white-space: pre-line">{{ l.specs }}</p>{% endif %}
-          <p class="small mb-2">Seller: <strong>{{ l.seller.shop_name or l.seller.display_name }}</strong> ({{ l.seller.role_label }}{% if l.seller.username %}, @{{ l.seller.username }}{% endif %})
+          <p class="small mb-2">Seller: <strong>{{ user_link(l.seller, text=l.seller.shop_name or l.seller.display_name) }}</strong> ({{ l.seller.role_label }}{% if l.seller.username %}, @{{ l.seller.username }}{% endif %})
             · {{ l.seller.phone | phone if l.seller.phone else 'no phone' }} · submitted {{ l.updated_at.strftime('%d %b %H:%M') }}</p>
           <div class="d-flex flex-wrap gap-2 align-items-start">
             <form method="POST" action="{{ url_for('admin_market_item', listing_id=l.id, action='approve') }}">
@@ -79,8 +79,8 @@
   <p class="small text-muted">Orders a seller has not marked sold / not sold in {{ market_overdue_days }} days. Repeated cases: suspend the seller.</p>
   {% for it in overdue %}
     <div class="d-flex flex-wrap gap-2 align-items-center small border-bottom py-1">
-      <strong>{{ it.listing.seller.shop_name or it.listing.seller.display_name }}</strong>
-      <span>{{ it.listing.title }} → {{ it.buyer.display_name }}</span>
+      <strong>{{ user_link(it.listing.seller, text=it.listing.seller.shop_name or it.listing.seller.display_name) }}</strong>
+      <span>{{ it.listing.title }} → {{ user_link(it.buyer, text=it.buyer.display_name) }}</span>
       <span class="text-danger ms-auto">sent {{ it.requested_at.strftime('%d %b %Y') }}</span>
     </div>
   {% else %}<p class="text-muted small">No overdue orders.</p>{% endfor %}
@@ -130,7 +130,7 @@
       <thead><tr><th scope="col">Listing</th><th scope="col">Seller</th><th scope="col">Price</th><th scope="col">Status</th><th scope="col">Note</th></tr></thead>
       <tbody>
         {% for l in recent %}
-          <tr><td><a href="{{ url_for('market_item', listing_id=l.id) }}">{{ l.title }}</a></td><td>{{ l.seller.shop_name or l.seller.display_name }}</td>
+          <tr><td><a href="{{ url_for('market_item', listing_id=l.id) }}">{{ l.title }}</a></td><td>{{ user_link(l.seller, text=l.seller.shop_name or l.seller.display_name) }}</td>
             <td>{{ money(l) }}</td><td>{{ status_badge(l) }}</td><td class="small">{{ l.review_note or '' }}</td></tr>
         {% else %}<tr><td colspan="5" class="text-muted">Nothing yet.</td></tr>{% endfor %}
       </tbody>

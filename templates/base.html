@@ -383,7 +383,7 @@
       <div class="alert alert-info d-flex flex-wrap align-items-center gap-2 terms-update-note" role="status">
         <i class="fa-solid fa-file-signature" aria-hidden="true"></i>
         <span class="flex-grow-1">We updated our <a href="{{ url_for('terms_page') }}">Terms of Use</a> and
-          <a href="{{ url_for('privacy_page') }}">Privacy Policy</a> (version {{ terms_version_label }}). By continuing to use D.A.R.T. you agree to them.</span>
+          <a href="{{ url_for('privacy_page') }}">Privacy Policy</a> (version {{ terms_version_label }}): <a href="{{ url_for('terms_page') }}#changes">see what changed</a>. By continuing to use D.A.R.T. you agree to them.</span>
         <form method="POST" action="{{ url_for('acknowledge_terms_update') }}" class="m-0">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">

@@ -60,7 +60,7 @@
             {% else %}<i class="fa-solid fa-image"></i>{% endif %}
           </a>
           <div class="fa-info">
-            <div class="fa-who"><strong>{{ h.user.full_name if h.user else 'Athlete' }}</strong> {{ handle_tag(h.user) }}
+            <div class="fa-who"><strong>{{ user_link(h.user, fallback='Athlete') }}</strong> {{ handle_tag(h.user) }}
               {% if h.sport %}<span class="fa-sport">{{ h.sport }}</span>{% endif %}
               {% if h.status != 'approved' %}<span class="fa-gone">no longer live</span>{% endif %}</div>
             {% if h.caption %}<div class="fa-caption">{{ h.caption }}</div>{% endif %}

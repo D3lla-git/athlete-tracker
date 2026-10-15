@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Organization line-ups | D.A.R.T Admin{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 1080px">
+  <h1 class="h3"><i class="fa-solid fa-people-line text-success"></i> Organization games &amp; line-ups</h1>
+  <p class="small text-muted">Compare each team's line-up with the opponent's (when the opponent is also on D.A.R.T.) and confirm. Confirmed line-ups show on the game page.</p>
+  {% for g, pair in rows %}
+    <article class="ag-row{{ ' ag-done' if g.lineup_confirmed_at }}">
+      <div class="ag-head">
+        <strong><a href="{{ url_for('game_public', game_id=g.id) }}">{{ g.org.org_name }} vs {{ g.opponent }}</a></strong>
+        <span class="small text-muted">{{ g.sport }} · {{ g.competition }} · {{ g.kickoff_at.strftime('%d %b %Y, %H:%M') }} · {{ g.venue }}</span>
+      </div>
+      <div class="ag-cols">
+        {% for label, item in ((g.org.org_name, g), (g.opponent, pair)) %}
+          <div class="ag-col">
+            <div class="fw-bold small">{{ label }}</div>
+            {% if item and item.lineup_saved_at %}
+              <ol class="ag-list">{% for p in gm.lineup_of(item) %}<li>{% if p.shirt %}#{{ p.shirt }} {% endif %}{{ p.name }}{% if p.role == 'sub' %} <em>(sub)</em>{% endif %}</li>{% endfor %}</ol>
+              <a class="small" href="{{ url_for('org_game_lineup_pdf', game_id=item.id) }}"><i class="fa-solid fa-file-pdf"></i> PDF</a>
+            {% elif item %}<span class="badge text-bg-danger">No line-up</span>
+            {% else %}<span class="small text-muted">Opponent not on D.A.R.T. (or no game entered)</span>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        {% if g.lineup_confirmed_at %}<span class="badge text-bg-success"><i class="fa-solid fa-circle-check"></i> Confirmed {{ g.lineup_confirmed_at.strftime('%d %b') }}</span>
+        {% elif g.lineup_saved_at %}
+          <form method="POST" action="{{ url_for('admin_org_game_confirm', game_id=g.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm dart-btn" type="submit"><i class="fa-solid fa-check-double"></i> Confirm line-up{{ 's (both teams)' if pair and pair.lineup_saved_at }}</button>
+          </form>
+        {% else %}<span class="small text-danger">The team did not save a line-up.</span>{% endif %}
+        {% if gm.result_label(g) %}<span class="small">Result: {{ g.score_for }}-{{ g.score_against }}</span>{% endif %}
+      </div>
+    </article>
+  {% else %}<p class="text-muted">No games yet.</p>{% endfor %}
+</div>
+<style>
+  .ag-row { padding: 14px; margin-bottom: 10px; border-radius: 16px; background: var(--surface-bg, #fff); border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1));
+    border-left: 4px solid #ffc107; }
+  .ag-row.ag-done { border-left-color: #198754; }
+  .ag-head { display: flex; flex-direction: column; margin-bottom: 8px; }
+  .ag-cols { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); margin-bottom: 8px; }
+  .ag-col { padding: 8px 10px; border-radius: 12px; background: rgba(25, 135, 84, 0.05); }
+  .ag-list { padding-left: 18px; margin: 4px 0; font-size: 0.85rem; columns: 2; }
+</style>
+{% endblock %}

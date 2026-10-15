@@ -108,7 +108,7 @@
     <ul class="mr-list">
       {% for u in blocked %}
         <li>
-          <span><strong>{{ u.full_name }}</strong> · {{ u.role_label }} · {{ u.media_strikes }} strike{{ 's' if u.media_strikes != 1 }}</span>
+          <span><strong>{{ user_link(u) }}</strong> · {{ u.role_label }} · {{ u.media_strikes }} strike{{ 's' if u.media_strikes != 1 }}</span>
           <form method="POST" action="{{ url_for('admin_media_restore', user_id=u.id) }}"
                 onsubmit="return confirm('Restore photo and video uploads for {{ u.full_name | e }}?');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -126,7 +126,7 @@
     <ul class="mr-list">
       {% for u in suspended %}
         <li>
-          <span><strong>{{ u.full_name }}</strong> · {{ team_badge(u.school) }}{{ u.school }} · {{ u.fake_record_strikes }} fake record{{ 's' if u.fake_record_strikes != 1 }}
+          <span><strong>{{ user_link(u) }}</strong> · {{ team_badge(u.school) }}{{ team_name_link(u.school) }} · {{ u.fake_record_strikes }} fake record{{ 's' if u.fake_record_strikes != 1 }}
             <span class="text-muted small">· since {{ u.suspended_at.strftime('%b %d, %Y') if u.suspended_at else '-' }}</span></span>
           <form method="POST" action="{{ url_for('admin_unsuspend', user_id=u.id) }}"
                 onsubmit="return confirm('Lift the suspension for {{ u.full_name | e }}? Their fake-record count starts again from 0.');">
@@ -144,7 +144,7 @@
     <h2 class="mr-sub">Fake-record warnings</h2>
     <ul class="mr-list">
       {% for u in warned %}
-        <li><span><strong>{{ u.full_name }}</strong> · {{ team_badge(u.school) }}{{ u.school }}</span>
+        <li><span><strong>{{ user_link(u) }}</strong> · {{ team_badge(u.school) }}{{ team_name_link(u.school) }}</span>
           <span class="mr-strikes">{{ u.fake_record_strikes }} of {{ fake_record_suspend_at }}</span></li>
       {% endfor %}
     </ul>
@@ -157,7 +157,7 @@
         <li>
           <span>
             <span class="mr-dot {{ 'mr-dot-ok' if h.status == 'approved' else 'mr-dot-no' }}"></span>
-            <strong>{{ h.user.full_name if h.user else 'Athlete' }}</strong> · {{ h.media_type }} · {{ h.status }}
+            <strong>{{ user_link(h.user, fallback='Athlete') }}</strong> · {{ h.media_type }} · {{ h.status }}
             {% if h.review_reason %}<span class="text-muted small">· {{ h.review_reason }}</span>{% endif %}
           </span>
           <span class="text-muted small">{{ h.reviewed_at.strftime('%b %d, %H:%M') }}</span>

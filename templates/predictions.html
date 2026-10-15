@@ -21,7 +21,7 @@
     {% for q in open_q %}
       {% set yes, no = split(q) %}
       <article class="aw-contest mb-0" id="q{{ q.id }}">
-        <div class="aw-name">{{ q.athlete.full_name }}</div>
+        <div class="aw-name">{{ user_link(q.athlete) }}</div>
         <p class="mb-1">Will reach <strong>{{ q.line }}+ {{ stat_label(q.stat) }}</strong> ({{ q.sport }}){% if q.match_label %} · {{ q.match_label }}{% endif %} on {{ q.match_date.strftime('%d %b %Y') }}?</p>
         <div class="aw-when">Closes {{ q.closes_at.strftime('%d %b, %H:%M') }} UTC · {{ yes + no }} prediction{{ '' if yes + no == 1 else 's' }}</div>
         {% if mine.get(q.id) %}
@@ -39,7 +39,7 @@
 
   {% if waiting %}
     <h2 class="aw-section"><i class="fa-solid fa-clipboard-check" aria-hidden="true"></i> Waiting for the verified result</h2>
-    <ul class="small">{% for q in waiting %}<li>{{ q.athlete.full_name }}: {{ q.line }}+ {{ stat_label(q.stat) }} on {{ q.match_date.strftime('%d %b') }}{% if mine.get(q.id) %} · your pick {{ mine[q.id].pick | title }}{% endif %}</li>{% endfor %}</ul>
+    <ul class="small">{% for q in waiting %}<li>{{ user_link(q.athlete) }}: {{ q.line }}+ {{ stat_label(q.stat) }} on {{ q.match_date.strftime('%d %b') }}{% if mine.get(q.id) %} · your pick {{ mine[q.id].pick | title }}{% endif %}</li>{% endfor %}</ul>
   {% endif %}
 
   <div class="row g-3 mt-1">
@@ -47,7 +47,7 @@
       <h2 class="aw-section"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> Results</h2>
       {% for q in settled %}
         <div class="aw-contest mb-2 py-2">
-          <strong>{{ q.athlete.full_name }}</strong>: {{ q.line }}+ {{ stat_label(q.stat) }} on {{ q.match_date.strftime('%d %b') }}
+          <strong>{{ user_link(q.athlete) }}</strong>: {{ q.line }}+ {{ stat_label(q.stat) }} on {{ q.match_date.strftime('%d %b') }}
           {% if q.status == 'void' %}<span class="badge text-bg-secondary">Cancelled</span>
           {% else %}→ <strong>{{ q.result_value }}</strong> <span class="badge {{ 'text-bg-success' if q.result_value >= q.line else 'text-bg-danger' }}">{{ 'Yes' if q.result_value >= q.line else 'No' }}</span>{% endif %}
           {% if mine.get(q.id) %}<span class="small ms-1">· you: {{ mine[q.id].pick | title }}, +{{ mine[q.id].points or 0 }} pts</span>{% endif %}

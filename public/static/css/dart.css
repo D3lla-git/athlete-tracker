@@ -1821,3 +1821,16 @@ html[data-theme="dark"] .dart-slider-dot.is-active { background: #4cd38a; }
 }
 .nav-bell .fp-edit-link { display: none; }
 .fp-edit-link { font-size: 0.75rem; font-weight: 700; color: #198754 !important; text-decoration: none; }
+
+/* Organization dashboard: games */
+.oh-games { margin: 16px 0; }
+.oh-game-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.oh-game-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: rgba(25, 135, 84, 0.06); }
+.oh-game-list li > a { font-weight: 700; text-decoration: none; }
+.oh-res { margin-left: auto; padding: 2px 10px; border-radius: 999px; font-weight: 900; color: #fff; background: #6c757d; }
+.oh-res-W { background: #198754; } .oh-res-L { background: #dc3545; } .oh-res-D { background: #fd7e14; }
+
+/* Names linked to read-only profiles (users, organizations, teams) */
+a.name-link { color: inherit; font-weight: inherit; text-decoration: none; border-bottom: 1px dotted currentColor; }
+a.name-link:hover, a.name-link:focus-visible { color: #198754; border-bottom-style: solid; }
+[data-bs-theme="dark"] a.name-link:hover, [data-bs-theme="dark"] a.name-link:focus-visible { color: #4cd38a; }

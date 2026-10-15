@@ -36,10 +36,10 @@
         <!-- Match: team vs opponent -->
         <td class="rt-match">
           <div class="rt-strong" title="{{ r.team or '' }}">
-            <i class="fa-solid fa-users rt-icon" aria-hidden="true"></i>{{ team_badge(r.team) }}{{ r.team or '-' }}
+            <i class="fa-solid fa-users rt-icon" aria-hidden="true"></i>{{ team_badge(r.team) }}{{ team_name_link(r.team, '-') }}
           </div>
           <div class="rt-muted" title="{{ r.team_played_against or '' }}">
-            <i class="fa-solid fa-shield-halved rt-icon text-danger" aria-hidden="true"></i>vs {{ r.team_played_against or '-' }}
+            <i class="fa-solid fa-shield-halved rt-icon text-danger" aria-hidden="true"></i>vs {{ team_name_link(r.team_played_against, '-') }}
           </div>
           {% if r.venue %}<div class="rt-muted" title="Venue"><i class="fa-solid fa-location-dot rt-icon" aria-hidden="true"></i>{{ r.venue }}</div>{% endif %}
         </td>
@@ -109,8 +109,8 @@
 {% macro record_card_grid(r) %}
 {% set award = 'QOTM' if r.sport == 'Kickball' else 'MOTM' %}
 <div class="card-grid">
-  <div><strong>Team <i class="fa-solid fa-users"></i> :</strong> {{ team_badge(r.team or r.user.school) }}{{ r.team or r.user.school or '-' }}</div>
-  <div><strong>Opponent <i class="fa-solid fa-shield-halved"></i> :</strong> {{ r.team_played_against or '-' }}</div>
+  <div><strong>Team <i class="fa-solid fa-users"></i> :</strong> {{ team_badge(r.team or r.user.school) }}{{ team_name_link(r.team or r.user.school, '-') }}</div>
+  <div><strong>Opponent <i class="fa-solid fa-shield-halved"></i> :</strong> {{ team_name_link(r.team_played_against, '-') }}</div>
   {% if r.venue %}<div><strong>Venue <i class="fa-solid fa-location-dot"></i> :</strong> {{ r.venue }}</div>{% endif %}
   <div><strong>Season <i class="fa-solid fa-calendar" style="color: green;"></i> :</strong> {{ r.year }}</div>
   <div><strong>Position <i class="fa-solid fa-shirt"></i> :</strong> {{ r.position or '-' }}{% if r.shirt_number %} <span class="rt-shirt">#{{ r.shirt_number }}</span>{% endif %}</div>
@@ -173,7 +173,7 @@
               <a href="{% if current_user.id == r.user.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=r.user.id) }}{% endif %}"
                  class="rt-strong text-decoration-none">{{ r.user.full_name }}</a> {{ handle_tag(r.user) }}
               <div class="rt-muted">
-                <i class="fa-solid fa-school" aria-hidden="true"></i> {{ team_badge(r.user.school) }}{{ r.user.school or '-' }}
+                <i class="fa-solid fa-school" aria-hidden="true"></i> {{ team_badge(r.user.school) }}{{ team_name_link(r.user.school, '-') }}
               </div>
             </div>
           </div>

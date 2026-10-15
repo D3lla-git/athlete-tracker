@@ -36,7 +36,7 @@
           {% set reason = record_reject_reasons.get(r.rejection_reason) %}
           <li>
             <span class="rw-tag rw-tag-{{ r.rejection_reason or 'none' }}">{{ reason[0] if reason else 'Rejected' }}</span>
-            <span class="rw-what">{{ r.sport }}{% if r.team_played_against %} vs {{ r.team_played_against }}{% endif %}{% if r.game_date %} · {{ r.game_date.strftime('%b %d, %Y') }}{% endif %}</span>
+            <span class="rw-what">{{ r.sport }}{% if r.team_played_against %} vs {{ team_name_link(r.team_played_against) }}{% endif %}{% if r.game_date %} · {{ r.game_date.strftime('%b %d, %Y') }}{% endif %}</span>
             {% if r.rejection_reason == 'inaccurate' %}<span class="rw-help">Correct the details and resubmit it.</span>
             {% elif r.rejection_reason == 'fake' %}<span class="rw-help">This counts as a fake record.</span>{% endif %}
             {% if r.rejection_note %}<span class="rw-note">Coach: “{{ r.rejection_note }}”</span>{% endif %}

@@ -36,7 +36,7 @@
     {% set yes, no = split(q) %}
     <article class="aw-contest">
       <div class="d-flex flex-wrap gap-2 align-items-center">
-        <strong>{{ q.athlete.full_name }}</strong> · {{ q.line }}+ {{ stat_label(q.stat) }} ({{ q.sport }}) on {{ q.match_date.strftime('%d %b %Y') }}
+        <strong>{{ user_link(q.athlete) }}</strong> · {{ q.line }}+ {{ stat_label(q.stat) }} ({{ q.sport }}) on {{ q.match_date.strftime('%d %b %Y') }}
         <span class="badge {{ 'text-bg-success' if q.status == 'open' else 'text-bg-secondary' }}">{{ q.status }}</span>
         <span class="small text-muted">Yes {{ yes }} · No {{ no }}{% if q.result_value is not none %} · result {{ q.result_value }}{% endif %}</span>
       </div>

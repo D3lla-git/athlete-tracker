@@ -7,8 +7,8 @@
 <div class="container py-3">
   <section class="integrity-hero" aria-label="Record history">
     <h2><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Record #{{ record.id }} history</h2>
-    <p>{{ record.user.full_name }} · {{ record.sport }} · {{ record.game_date.strftime('%d %b %Y') if record.game_date else record.year }} ·
-       {{ record.team }} vs {{ record.team_played_against }} · {{ record_line(record) }}</p>
+    <p>{{ user_link(record.user) }} · {{ record.sport }} · {{ record.game_date.strftime('%d %b %Y') if record.game_date else record.year }} ·
+       {{ team_name_link(record.team) }} vs {{ team_name_link(record.team_played_against) }} · {{ record_line(record) }}</p>
     <div class="mt-2">{{ record_status_badge(record) }}</div>
   </section>
 
