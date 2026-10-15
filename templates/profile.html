@@ -1103,4 +1103,35 @@ function confirmAccountDeletion() {
   .mp-edit { scroll-margin-top: 90px; }
   .mp-edit > .card-header h4 i { color: #198754; margin-right: 4px; }
 </style>
+
+{# ===== Bookmarks: posts saved in Highlights, for later ===== #}
+{% set _bm, _bm_total = my_bookmarks(12) %}
+<section class="card shadow mt-4 mp-bookmarks" id="bookmarks" aria-labelledby="bookmarksTitle">
+  <div class="card-header d-flex align-items-center gap-2">
+    <h5 class="mb-0 flex-grow-1" id="bookmarksTitle"><i class="fa-solid fa-bookmark text-success"></i> Bookmarks</h5>
+    {% if _bm_total %}<a class="small fw-bold" href="{{ url_for('feed', tab='saved') }}">See all {{ _bm_total }}</a>{% endif %}
+  </div>
+  <div class="card-body">
+    {% if _bm %}
+      <div class="mp-bm-grid">
+        {% for h in _bm %}
+          <a class="mp-bm" href="{{ url_for('feed_post', highlight_id=h.id) }}" aria-label="Saved post by {{ h.user.full_name }}">
+            {% if h.is_video %}<video src="{{ highlight_media_url(h) }}#t=0.1" preload="metadata" muted playsinline tabindex="-1"></video>
+            {% else %}<img src="{{ highlight_media_url(h) }}" alt="" loading="lazy">{% endif %}
+            <span class="mp-bm-who">{{ h.user.full_name }}{% if h.sport %} · {{ h.sport }}{% endif %}</span>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-muted mb-0"><i class="fa-regular fa-bookmark"></i> Tap <i class="fa-regular fa-bookmark"></i> on any highlight to keep it here for later.</p>
+    {% endif %}
+  </div>
+</section>
+<style>
+  .mp-bm-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(46%, 150px), 1fr)); }
+  .mp-bm { position: relative; display: block; aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: #0d2413; }
+  .mp-bm img, .mp-bm video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .mp-bm-who { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 6px; color: #fff; font-size: 0.75rem; font-weight: 700;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.75)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
 {% endblock %}

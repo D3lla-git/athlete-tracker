@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Join as an O-D.A.R.T user | D.A.R.T.{% endblock %}
+
+{% block content %}
+{% from '_username_field.html' import username_field, username_assets %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dart-market.css') }}">
+<div class="mk container py-3" style="max-width: 640px">
+  <section class="mk-gate mb-3" aria-label="O-D.A.R.T user">
+    <i class="fa-solid fa-face-smile fa-2x mb-2" aria-hidden="true"></i>
+    <h1 class="h2">Curious about D.A.R.T.?</h1>
+    <p>Join as an <strong>O-D.A.R.T user</strong> (other D.A.R.T. user) in seconds: just a username and a password.
+       React to highlights, comment, and upgrade this same account to athlete, coach, scout, organization, official, vendor or buyer any time.</p>
+  </section>
+  <form method="POST" action="{{ url_for('register_member') }}" class="mk-panel" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3">{{ username_field('memberUsername', value=form.get('username', '')) }}</div>
+    <div class="mb-3">
+      <label class="form-label" for="full_name">Your name <span class="text-muted small">(optional)</span></label>
+      <input class="form-control" id="full_name" name="full_name" maxlength="100" autocomplete="name" value="{{ form.get('full_name', '') }}" placeholder="Example: John Felix Brown">
+      <small class="text-muted">Leave it empty to be shown as your @username.</small>
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="email">Email <span class="text-muted small">(optional)</span></label>
+      <input class="form-control" id="email" name="email" type="email" maxlength="150" autocomplete="email" value="{{ form.get('email', '') }}">
+      <small class="text-muted">Optional: add it now or within 2 business days (we email you a link to verify it).</small>
+    </div>
+    <div class="row">
+      <div class="col-md-6 mb-3"><label class="form-label" for="password">Password</label>
+        <input class="form-control" id="password" name="password" type="password" required minlength="8" autocomplete="new-password"></div>
+      <div class="col-md-6 mb-3"><label class="form-label" for="confirm_password">Confirm password</label>
+        <input class="form-control" id="confirm_password" name="confirm_password" type="password" required minlength="8" autocomplete="new-password"></div>
+    </div>
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" id="agree" name="agree" value="yes" required>
+      <label class="form-check-label small" for="agree">I accept the D.A.R.T. <a href="{{ url_for('terms_page') }}" target="_blank" rel="noopener">Terms of Use</a>
+        and keep comments about the sport: no insults, no links, no personal details.</label>
+    </div>
+    <button class="btn dart-btn w-100 py-2" type="submit"><i class="fa-solid fa-face-smile"></i> Join D.A.R.T.</button>
+    <p class="small text-center mt-3 mb-0">Already on D.A.R.T.? <a href="{{ url_for('login') }}">Log in</a> ·
+      <a href="{{ url_for('index') }}#homeRegister">Other account types</a></p>
+  </form>
+</div>
+{{ username_assets() }}
+{% endblock %}

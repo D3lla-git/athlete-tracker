@@ -41,6 +41,7 @@
           <div class="rt-muted" title="{{ r.team_played_against or '' }}">
             <i class="fa-solid fa-shield-halved rt-icon text-danger" aria-hidden="true"></i>vs {{ r.team_played_against or '-' }}
           </div>
+          {% if r.venue %}<div class="rt-muted" title="Venue"><i class="fa-solid fa-location-dot rt-icon" aria-hidden="true"></i>{{ r.venue }}</div>{% endif %}
         </td>
 
         <!-- Competition, division / team / age group, trophy -->
@@ -110,6 +111,7 @@
 <div class="card-grid">
   <div><strong>Team <i class="fa-solid fa-users"></i> :</strong> {{ team_badge(r.team or r.user.school) }}{{ r.team or r.user.school or '-' }}</div>
   <div><strong>Opponent <i class="fa-solid fa-shield-halved"></i> :</strong> {{ r.team_played_against or '-' }}</div>
+  {% if r.venue %}<div><strong>Venue <i class="fa-solid fa-location-dot"></i> :</strong> {{ r.venue }}</div>{% endif %}
   <div><strong>Season <i class="fa-solid fa-calendar" style="color: green;"></i> :</strong> {{ r.year }}</div>
   <div><strong>Position <i class="fa-solid fa-shirt"></i> :</strong> {{ r.position or '-' }}{% if r.shirt_number %} <span class="rt-shirt">#{{ r.shirt_number }}</span>{% endif %}</div>
   <div><strong>Competition <i class="fa-solid fa-trophy"></i> :</strong> {{ r.competition_category or '-' }}</div>

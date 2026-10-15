@@ -1,5 +1,5 @@
 {# A page of feed posts (first page inside feed.html; later pages are fetched while scrolling). #}
-{% from '_feed_card.html' import feed_card %}
+{% from '_feed_card.html' import feed_card with context %}
 {% for h in posts %}
   {{ feed_card(h, state, can_interact, slides=slides) }}
   {% if loop.index == 3 %}

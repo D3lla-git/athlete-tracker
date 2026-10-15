@@ -3,6 +3,26 @@
      owner      - the athlete the highlights belong to
      can_manage - true on the athlete's own pages (upload + delete) #}
 
+{% macro hl_edit_form(h, count=1) %}
+{# The athlete edits the caption / sport, before or after approval. #}
+<details class="hl-edit">
+  <summary><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit {{ 'post' if count > 1 else 'caption' }}</summary>
+  <form method="POST" action="{{ url_for('edit_highlight', highlight_id=h.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="next" value="{{ request.path }}#highlights">
+    <label class="visually-hidden" for="hlCap{{ h.id }}">Caption</label>
+    <textarea class="form-control form-control-sm" id="hlCap{{ h.id }}" name="caption" rows="2" maxlength="150" placeholder="Caption (no links)">{{ h.caption or '' }}</textarea>
+    <div class="d-flex gap-1 mt-1">
+      <label class="visually-hidden" for="hlSport{{ h.id }}">Sport</label>
+      <select class="form-select form-select-sm" id="hlSport{{ h.id }}" name="sport" required>
+        {% for s in highlight_sports %}<option value="{{ s }}" {{ 'selected' if h.sport == s }}>{{ s }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-sm dart-btn" type="submit">Save</button>
+    </div>
+  </form>
+</details>
+{% endmacro %}
+
 {# One tile for a post with several photos / videos (desktop). #}
 {% macro post_tile(items, can_manage, is_admin) %}
 {% set first = items[0] %}
@@ -42,8 +62,9 @@
     <span class="hl-date">
       <i class="fa-solid fa-layer-group"></i>
       {% if photos %}{{ photos }} photo{{ 's' if photos != 1 }}{% endif %}{% if photos and videos %} + {% endif %}{% if videos %}{{ videos }} video{{ 's' if videos != 1 }}{% endif %}
-      · {% if first.sport %}{{ first.sport }} · {% endif %}{{ first.created_at.strftime('%b %d, %Y') }}
+      · {% if first.sport %}{{ first.sport }} · {% endif %}{{ first.created_at.strftime('%b %d, %Y') }}{% if first.edited_at %} · edited{% endif %}
     </span>
+    {% if can_manage %}{{ hl_edit_form(first, items | length) }}{% endif %}
   </figcaption>
 </figure>
 {% endmacro %}
@@ -77,6 +98,31 @@
 
     {% if can_manage %}{{ highlight_uploader() }}{% endif %}
 
+    {# ---------- Match images: 3 previews + "+N" (opens the viewer at that clip) ---------- #}
+    {% set live_items = highlights | selectattr('status', 'equalto', 'approved') | list %}
+    {% if live_items %}
+      {% set strip = [] %}
+      {% for it in live_items %}{% set _ = strip.append({'type': it.media_type, 'src': highlight_url(it), 'caption': it.caption or ''}) %}{% endfor %}
+      <div class="hl-strip" aria-label="Match images">
+        <div class="hl-strip-head">
+          <span class="hl-strip-title">Match images</span>
+          <a class="hl-strip-count" href="#hlGrid{{ owner.id }}">{{ live_items | length }} clip{{ 's' if live_items | length != 1 }}{{ ', not 1' if live_items | length > 1 }}</a>
+        </div>
+        <div class="hl-strip-row">
+          {% for it in live_items[:4] %}
+            {% set more = live_items | length - 4 %}
+            <button type="button" class="hl-media hl-strip-tile" data-hl-items='{{ strip | tojson }}' data-hl-start="{{ loop.index0 }}"
+                    aria-label="{{ 'See all ' ~ (live_items | length) ~ ' clips' if loop.index == 4 and more > 0 else 'Open ' ~ ('video' if it.is_video else 'photo') }}">
+              {% if it.is_video %}<video src="{{ highlight_url(it) }}#t=0.1" preload="metadata" muted playsinline tabindex="-1"></video>
+                <span class="hl-strip-play" aria-hidden="true"><i class="fa-solid fa-play"></i></span>
+              {% else %}<img src="{{ highlight_url(it) }}" alt="" loading="lazy">{% endif %}
+              {% if loop.index == 4 and more > 0 %}<span class="hl-strip-more">+{{ more }}</span>{% endif %}
+            </button>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
     {# ---------- Gallery ---------- #}
     {% if highlights %}
       {# Files posted together (one post): on desktop they show as ONE tile
@@ -84,7 +130,7 @@
       {% set posts = {} %}
       {% for h in highlights %}{% if h.post_key and h.status != 'rejected' %}{% set _ = posts.setdefault(h.post_key, []).append(h) %}{% endif %}{% endfor %}
       {% set shown_posts = [] %}
-      <div class="hl-grid">
+      <div class="hl-grid" id="hlGrid{{ owner.id }}">
         {% for h in highlights %}
           {% set grp = posts.get(h.post_key) if (h.post_key and h.status != 'rejected') else none %}
           {% set multi = grp is not none and grp | length > 1 %}
@@ -157,8 +203,9 @@
               {% if h.caption %}<span class="hl-caption">{{ h.caption }}</span>{% endif %}
               <span class="hl-date">
                 <i class="fa-solid {{ 'fa-video' if h.is_video else 'fa-image' }}"></i>
-                {% if h.sport %}{{ h.sport }} · {% endif %}{{ h.created_at.strftime('%b %d, %Y') }}
+                {% if h.sport %}{{ h.sport }} · {% endif %}{{ h.created_at.strftime('%b %d, %Y') }}{% if h.edited_at %} · edited{% endif %}
               </span>
+              {% if can_manage %}{{ hl_edit_form(h) }}{% endif %}
             </figcaption>
           </figure>
           {% endif %}
@@ -722,6 +769,28 @@
 
   .hl-tile figcaption { padding: 6px 2px 0; font-size: 0.82rem; }
   .hl-caption { display: block; font-weight: 600; overflow-wrap: anywhere; }
+  /* Match images strip */
+  .hl-strip { margin-bottom: 16px; padding: 14px; border-radius: 20px; background: var(--surface-bg, #fff); border: 1px solid var(--surface-border, rgba(0,0,0,.08));
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.06); }
+  .hl-strip-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .hl-strip-title { font-size: 0.82rem; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted-text, #6c757d); }
+  .hl-strip-count { font-weight: 800; text-decoration: none; background: var(--dart-primary-gradient, linear-gradient(135deg, #198754, #0d6efd));
+    -webkit-background-clip: text; background-clip: text; color: transparent !important; }
+  html[data-theme="dark"] .hl-strip-count { color: #4cd38a !important; background: none; }
+  .hl-strip-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .hl-strip-tile { position: relative; aspect-ratio: 3 / 4; padding: 0; border: 0; border-radius: 16px; overflow: hidden; background: #0d2413; cursor: pointer;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15); transition: transform 0.2s ease; }
+  .hl-strip-tile:hover { transform: translateY(-3px); }
+  .hl-strip-tile img, .hl-strip-tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .hl-strip-more { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 1.4rem; font-weight: 900;
+    background: linear-gradient(180deg, rgba(7, 18, 8, 0.45), rgba(7, 18, 8, 0.8)); }
+  .hl-strip-play { position: absolute; right: 8px; bottom: 8px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+    color: #fff; background: rgba(0, 0, 0, 0.55); font-size: 0.7rem; }
+  .hl-edit { margin-top: 6px; }
+  .hl-edit summary { cursor: pointer; font-size: 0.78rem; font-weight: 700; color: #198754; list-style: none; }
+  .hl-edit summary::-webkit-details-marker { display: none; }
+  .hl-edit form { margin-top: 6px; }
+  @media (prefers-reduced-motion: reduce) { .hl-strip-tile { transition: none; } }
   .hl-date { color: var(--muted-text, #6c757d); font-size: 0.75rem; }
 
   .hl-empty {
@@ -812,7 +881,7 @@
         slides = [{ type: tile.dataset.hlType, src: tile.dataset.hlSrc, caption: tile.dataset.hlCaption }];
       }
       if (!slides.length) return;
-      showSlide(0);
+      showSlide(+tile.dataset.hlStart || 0);
       bootstrap.Modal.getOrCreateInstance(viewer).show();
     });
     prevBtn.addEventListener('click', function () { showSlide(at - 1); });

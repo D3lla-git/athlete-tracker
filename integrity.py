@@ -38,6 +38,8 @@ OFFICIAL_TYPES = (
     'Community youth leader', 'Referee / match official',
     'Linesman / assistant referee', 'Spectator (verified fan)',
 )
+# Only these name the newspaper / league / school / group they work with.
+OFFICIAL_TYPES_WITH_ORG = ('Sports journalist', 'League secretary', 'School sports coordinator', 'Community youth leader')
 FEDERATION = {'Football': 'Liberia Football Association (LFA)', 'Basketball': 'Liberia Basketball Association (LBA)',
               'Kickball': 'Liberia National Kickball Federation'}
 

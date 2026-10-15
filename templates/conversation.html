@@ -242,6 +242,30 @@
     white-space: nowrap;
   }
 
+  /* Reply / Reply all / Forward / Edit (1 min) / Delete for me */
+  .message-meta { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+  .message-menu-btn { border: 0; background: transparent; color: inherit; opacity: 0.6; padding: 0 4px; line-height: 1; font-size: 0.85rem; }
+  .message-menu-btn:hover, .message-menu-btn[aria-expanded="true"] { opacity: 1; }
+  .message-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(127, 127, 127, 0.25); }
+  .message-actions[hidden] { display: none; }
+  .message-actions form { margin: 0; }
+  .message-actions a, .message-actions button { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; border: 0;
+    font-size: 0.74rem; font-weight: 700; text-decoration: none; color: inherit !important; background: rgba(127, 127, 127, 0.18); }
+  .message-actions a:hover, .message-actions button:hover { background: rgba(127, 127, 127, 0.32); }
+  .message-row.sent .message-actions .text-danger { color: #ffb4b4 !important; }
+  .message-head { font-size: 0.7rem; opacity: 0.75; margin-bottom: 3px; }
+  .message-quote { display: block; margin-bottom: 4px; padding: 4px 8px; border-left: 3px solid #39b972; border-radius: 6px; font-size: 0.78rem;
+    text-decoration: none; color: inherit !important; background: rgba(127, 127, 127, 0.15); }
+  .message-quote strong { display: block; font-size: 0.72rem; }
+  .message-quote span { display: block; opacity: 0.85; overflow-wrap: anywhere; }
+  .message-edit textarea { min-width: min(240px, 60vw); }
+  .reply-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin-bottom: 6px; border-radius: 12px; font-size: 0.82rem;
+    border-left: 3px solid #39b972; background: var(--surface-bg); }
+  .reply-bar[hidden] { display: none; }
+  .reply-bar-text { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conversation-delete { border: 0; background: transparent; color: inherit; opacity: 0.7; padding: 6px 8px; border-radius: 999px; }
+  .conversation-delete:hover { opacity: 1; color: #dc3545; background: rgba(220, 53, 69, 0.1); }
+
   .conversation-empty {
     height: 100%;
     display: flex;
@@ -484,6 +508,14 @@
         </div>
       </div>
 
+      {% if messages %}
+        <form method="POST" action="{{ url_for('conversation_delete_for_me', user_id=recipient.id) }}" class="ms-auto"
+              onsubmit="return confirm('Delete this whole chat for you? {{ recipient.display_name }} keeps it.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="conversation-delete" title="Delete chat for me" aria-label="Delete chat for me"><i class="fa-solid fa-trash-can"></i></button>
+        </form>
+      {% endif %}
+
     </div>
 
 
@@ -508,13 +540,39 @@
 
           {# The body sits directly inside its div (no spaces or new lines
              around it) so pre-wrap does not add blank space to bubbles. #}
-          <div class="message-row {{ 'sent' if message.sender_id == current_user.id else 'received' }}">
+          {% set mine = message.sender_id == current_user.id %}
+          {% set editable = message_can_edit(message, current_user.id) %}
+          <div class="message-row {{ 'sent' if mine else 'received' }}" id="m{{ message.id }}">
             <div class="message-bubble">
+              {% if message.header_line %}<div class="message-head">{{ message.header_line }}{% if message.is_bcc and not mine %} · <em>you were Bcc</em>{% endif %}</div>{% endif %}
+              {% if message.forwarded %}<div class="message-head"><i class="fa-solid fa-share" aria-hidden="true"></i> Forwarded</div>{% endif %}
+              {% set q = quotes.get(message.reply_to_id) if message.reply_to_id else None %}
+              {% if q %}<a class="message-quote" href="#m{{ q.id }}"><strong>{{ quote_names.get(q.sender_id, 'Message') }}</strong><span>{{ q.body | truncate(140, True, '…') }}</span></a>{% endif %}
               <div class="message-body">{{ message.body }}</div>
-              {# Time only (the date is in the day divider); full date on hover. #}
-              <time class="message-time"
-                    datetime="{{ message.created_at.strftime('%Y-%m-%dT%H:%M') }}"
-                    title="{{ message.created_at.strftime('%b %d, %Y · %I:%M %p') }}">{{ message.created_at.strftime('%I:%M %p') }}</time>
+              <div class="message-meta">
+                {# Time only (the date is in the day divider); full date on hover. #}
+                <time class="message-time"
+                      datetime="{{ message.created_at.strftime('%Y-%m-%dT%H:%M') }}"
+                      title="{{ message.created_at.strftime('%b %d, %Y · %I:%M %p') }}">{{ message.created_at.strftime('%I:%M %p') }}{% if message.edited_at %} · edited{% endif %}</time>
+                <button type="button" class="message-menu-btn" data-msg-menu aria-label="Message options" aria-expanded="false"><i class="fa-solid fa-ellipsis"></i></button>
+              </div>
+              <div class="message-actions" hidden>
+                <button type="button" data-reply data-id="{{ message.id }}" data-name="{{ 'You' if mine else recipient.display_name }}" data-snippet="{{ message.body | truncate(80, True, '…') }}"><i class="fa-solid fa-reply"></i> Reply</button>
+                {% if message.header_line %}<a href="{{ url_for('new_message', reply_all=message.id) }}"><i class="fa-solid fa-reply-all"></i> Reply all</a>{% endif %}
+                <a href="{{ url_for('new_message', forward=message.id) }}"><i class="fa-solid fa-share"></i> Forward</a>
+                {% if editable %}<button type="button" data-edit-toggle data-left="{{ (message_edit_seconds - message_age_seconds(message.created_at)) | int }}"><i class="fa-solid fa-pen"></i> Edit</button>{% endif %}
+                <form method="POST" action="{{ url_for('message_delete_for_me', message_id=message.id) }}" onsubmit="return confirm('Delete this message for you? The other person keeps it.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="text-danger"><i class="fa-solid fa-trash"></i> Delete for me</button>
+                </form>
+              </div>
+              {% if editable %}
+                <form class="message-edit" method="POST" action="{{ url_for('message_edit', message_id=message.id) }}" hidden>
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <textarea name="body" rows="2" maxlength="5000" class="form-control form-control-sm" aria-label="Edit message">{{ message.body }}</textarea>
+                  <div class="d-flex gap-1 justify-content-end mt-1"><button type="button" class="btn btn-sm btn-light" data-edit-cancel>Cancel</button><button type="submit" class="btn btn-sm btn-success">Save</button></div>
+                </form>
+              {% endif %}
             </div>
           </div>
 
@@ -543,12 +601,19 @@
 
       <div class="emoji-panel" id="emojiPanel" role="dialog" aria-label="Choose an emoji" hidden></div>
 
+      <div class="reply-bar" id="replyBar" hidden>
+        <i class="fa-solid fa-reply" aria-hidden="true"></i>
+        <span class="reply-bar-text">Replying to <strong data-reply-name></strong>: <span data-reply-snippet></span></span>
+        <button type="button" class="btn btn-sm" data-reply-cancel aria-label="Cancel reply"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
       <form
         method="POST"
         action="{{ url_for('conversation', user_id=recipient.id) }}"
         id="messageForm">
 
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="reply_to" id="replyTo" value="">
 
         <button
           type="button"
@@ -691,6 +756,57 @@
 
     messageForm.addEventListener('submit', function () {
       setPanel(false);
+    });
+
+    // ===== Message options: Reply, Reply all, Forward, Edit (1 minute), Delete for me =====
+    const replyBar = document.getElementById('replyBar');
+    const replyTo = document.getElementById('replyTo');
+    document.addEventListener('click', function (event) {
+      const menuBtn = event.target.closest('[data-msg-menu]');
+      if (menuBtn) {
+        const actions = menuBtn.closest('.message-bubble').querySelector('.message-actions');
+        const open = actions.hidden;
+        document.querySelectorAll('.message-actions').forEach(function (a) { a.hidden = true; });
+        document.querySelectorAll('[data-msg-menu]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+        actions.hidden = !open;
+        menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        return;
+      }
+      const reply = event.target.closest('[data-reply]');
+      if (reply) {
+        replyTo.value = reply.dataset.id;
+        replyBar.querySelector('[data-reply-name]').textContent = reply.dataset.name;
+        replyBar.querySelector('[data-reply-snippet]').textContent = reply.dataset.snippet;
+        replyBar.hidden = false;
+        reply.closest('.message-actions').hidden = true;
+        messageInput.focus();
+        return;
+      }
+      if (event.target.closest('[data-reply-cancel]')) {
+        replyTo.value = '';
+        replyBar.hidden = true;
+        return;
+      }
+      const editBtn = event.target.closest('[data-edit-toggle]');
+      if (editBtn) {
+        const bubble = editBtn.closest('.message-bubble');
+        bubble.querySelector('.message-edit').hidden = false;
+        bubble.querySelector('.message-body').hidden = true;
+        editBtn.closest('.message-actions').hidden = true;
+        bubble.querySelector('.message-edit textarea').focus();
+        return;
+      }
+      const cancel = event.target.closest('[data-edit-cancel]');
+      if (cancel) {
+        const bubble = cancel.closest('.message-bubble');
+        bubble.querySelector('.message-edit').hidden = true;
+        bubble.querySelector('.message-body').hidden = false;
+      }
+    });
+    // The Edit option disappears when the minute is over.
+    document.querySelectorAll('[data-edit-toggle]').forEach(function (btn) {
+      const left = Math.max(0, parseInt(btn.dataset.left, 10) || 0);
+      setTimeout(function () { btn.remove(); }, left * 1000);
     });
   });
 </script>

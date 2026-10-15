@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Upgrade my account | D.A.R.T.{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 860px">
+  <h1 class="h3 mb-2"><i class="fa-solid fa-arrow-up-right-dots text-success"></i> Upgrade my account</h1>
+  <p class="text-muted">Choose what you want to be on D.A.R.T. You fill in that registration form and <strong>this same account</strong> is upgraded:
+    your username, comments, reactions and bookmarks stay yours. Some accounts are checked by the D.A.R.T Admin (or your coach) first,
+    so you sign in again once it is approved.</p>
+  <div class="up-grid">
+    {% for endpoint, args, icon, label, hint in (
+        ('register', {}, 'fa-person-running', 'Athlete', 'Your sports CV: records, highlights, awards'),
+        ('register_coach', {}, 'fa-user-shield', 'Coach / Admin', 'Head or assistant coach: approve your team\'s records'),
+        ('register_scout', {}, 'fa-binoculars', 'Scout', 'Discover and evaluate talent'),
+        ('register_organization', {}, 'fa-building-shield', 'Organization', 'Club · Academy · School · Enterprise'),
+        ('register_official', {}, 'fa-clipboard-check', 'Match Official', 'Referee · Linesman · Spectator · Secretary'),
+        ('register_official', {'as': 'journalist'}, 'fa-newspaper', 'Sports Journalist', 'Post sports content'),
+        ('register_vendor', {}, 'fa-store', 'Vendor (Seller)', 'Sell sports gear on D.A.R.T Market$'),
+        ('register_buyer', {}, 'fa-bag-shopping', 'Buyer', 'Buy sports gear on D.A.R.T Market$'),
+    ) %}
+      <a class="up-card" href="{{ url_for(endpoint, **args) }}">
+        <span class="up-icon"><i class="fa-solid {{ icon }}" aria-hidden="true"></i></span>
+        <span><strong>{{ label }}</strong><small>{{ hint }}</small></span>
+        <i class="fa-solid fa-chevron-right ms-auto" aria-hidden="true"></i>
+      </a>
+    {% endfor %}
+  </div>
+</div>
+<style>
+  .up-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); margin-top: 14px; }
+  .up-card { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 18px; text-decoration: none; color: inherit !important;
+    background: var(--surface-bg, #fff); border: 1px solid var(--surface-border, rgba(0, 0, 0, 0.1)); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+    transition: transform 0.2s ease; }
+  .up-card:hover { transform: translateY(-2px); }
+  .up-card strong { display: block; }
+  .up-card small { display: block; color: var(--muted-text, #6c757d); }
+  .up-icon { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; border-radius: 13px; color: #fff;
+    background: var(--dart-primary-gradient, linear-gradient(135deg, #198754, #0d6efd)); }
+  @media (prefers-reduced-motion: reduce) { .up-card { transition: none; } }
+</style>
+{% endblock %}

@@ -7,7 +7,7 @@
 {% block twitter_card %}{{ 'summary' if post.is_video else 'summary_large_image' }}{% endblock %}
 
 {% block content %}
-{% from '_feed_card.html' import feed_card %}
+{% from '_feed_card.html' import feed_card with context %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dart-feed.css') }}">
 <div class="feed-page" id="feedRoot"
      data-csrf="{{ csrf_token() }}"
@@ -48,7 +48,7 @@
           <div class="fp-c-head">
             {% if c.author_url %}<a href="{{ c.author_url }}" class="fp-c-name">{{ c.author }}</a>{% else %}<span class="fp-c-name">{{ c.author }}</span>{% endif %}
             {% if c.handle %}<span class="fp-c-handle" translate="no">{{ c.handle }}</span>{% endif %}
-            {% if c.is_athlete %}<span class="fp-c-tag">Athlete</span>{% elif c.role in ('Coach', 'Scout', 'Organization', 'Visitor') %}<span class="fp-c-role {{ 'fp-c-visitor' if not c.member }}">{{ c.role }}</span>{% endif %}
+            {% if c.is_athlete %}<span class="fp-c-tag">Athlete</span>{% elif c.role in ('Coach', 'Scout', 'Organization', 'Visitor', 'O-D.A.R.T user') %}<span class="fp-c-role {{ 'fp-c-visitor' if not c.member }}">{{ c.role }}{% if c.device %} · {{ c.device }}{% endif %}</span>{% endif %}
             <span class="fp-c-ago">· {{ c.ago }}</span>
             {% if c.edited %}<span class="fp-c-edited">· edited</span>{% endif %}
             {% if c.can_edit %}

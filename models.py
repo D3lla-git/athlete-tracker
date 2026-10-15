@@ -28,7 +28,7 @@ class User(UserMixin, db.Model):
 
     @property
     def role_label(self):
-        return {'System': 'D.A.R.T Admin', 'Statistician': 'Match Official'}.get(self.role, self.role)
+        return {'System': 'D.A.R.T Admin', 'Statistician': 'Match Official', 'Member': 'O-D.A.R.T user'}.get(self.role, self.role)
     school = db.Column(db.String(150), nullable=False)
     # Athlete / Coach category permissions
     athlete_category = db.Column(db.String(50), nullable=True)
@@ -195,6 +195,7 @@ class SportRecord(db.Model):
     trophy = db.Column(db.String(100), nullable=True)
     team = db.Column(db.String(100), nullable=True)
     team_played_against = db.Column(db.String(100), nullable=True)
+    venue = db.Column(db.String(150), nullable=True)     # where the game was played (required on new records)
     school = db.Column(db.String(150), nullable=True)
     # Competition category
     competition_category = db.Column(db.String(50),nullable=False,default='County Meet')
@@ -372,6 +373,7 @@ class AthleteHighlight(db.Model):
     size_bytes = db.Column(db.BigInteger, nullable=False)
     duration_seconds = db.Column(db.Numeric(6, 2), nullable=True)   # videos only
     caption = db.Column(db.String(150), nullable=True)
+    edited_at = db.Column(db.DateTime, nullable=True)   # caption / sport edited by the athlete
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     # Content safety. Only 'approved' highlights are ever shown to others.
@@ -496,6 +498,7 @@ class HighlightComment(db.Model):
     user_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=True, index=True)
     visitor_key = db.Column(db.String(64), nullable=True, index=True)
     visitor_name = db.Column(db.String(40), nullable=True)
+    visitor_device = db.Column(db.String(40), nullable=True)      # visitors are shown by their device ("iPhone", "Windows PC")
     ip_hash = db.Column(db.String(32), nullable=True)
     body = db.Column(db.String(300), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
@@ -528,6 +531,10 @@ class OrganizationProfile(db.Model):
     org_name = db.Column(db.String(150), nullable=False)
     org_type = db.Column(db.String(50), nullable=False)
     ownership = db.Column(db.String(40), nullable=True)   # ORG_OWNERSHIPS (government / private, local / international)
+    # Physical address + map pin (Google Maps directions; shown on the shareable card).
+    address = db.Column(db.String(200), nullable=True)
+    map_lat = db.Column(db.Float, nullable=True)
+    map_lng = db.Column(db.Float, nullable=True)
     sports = db.Column(db.String(200), nullable=True)
     country = db.Column(db.String(100), nullable=True)
     city = db.Column(db.String(100), nullable=True)
@@ -766,6 +773,19 @@ class ChatMessage(db.Model):
         nullable=False,
         server_default=db.func.now()
     )
+
+    # One message sent to several people (To + Cc + Bcc) is stored as one
+    # copy per recipient sharing group_key. header_line ("To: … · Cc: …")
+    # never names Bcc recipients; is_bcc marks a Bcc copy.
+    group_key = db.Column(db.String(32), nullable=True, index=True)
+    header_line = db.Column(db.String(600), nullable=True)
+    is_bcc = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    reply_to_id = db.Column(db.BigInteger, nullable=True)          # the message this one answers (quote)
+    forwarded = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    edited_at = db.Column(db.DateTime, nullable=True)              # the sender may edit for 1 minute
+    # "Delete for me": hidden for that person only, never for the other.
+    deleted_by_sender = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    deleted_by_recipient = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
 # ==========================================================
 # MONETIZATION / SUBSCRIPTION FOUNDATION
 # ==========================================================
@@ -1246,6 +1266,10 @@ class MarketMessage(db.Model):
     body = db.Column(db.String(1000), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     read_at = db.Column(db.DateTime, nullable=True)
+    reply_to_id = db.Column(db.BigInteger, nullable=True)          # the message this one answers (quote)
+    edited_at = db.Column(db.DateTime, nullable=True)              # the sender may edit for 1 minute
+    deleted_by_buyer = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    deleted_by_seller = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
 
 
 class MarketCartItem(db.Model):

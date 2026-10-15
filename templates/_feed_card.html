@@ -60,6 +60,7 @@
           {% if _org_url %}<a class="fp-org" href="{{ _org_url }}" title="{{ athlete.school }} on D.A.R.T.">{{ team_badge(athlete.school) }}{{ athlete.school }}</a>
           {% else %}<span>{{ team_badge(athlete.school) }}{{ athlete.school }}</span>{% endif %}{% endif %}
         {% if h.sport %}<span class="fp-sport fp-sport-{{ h.sport | lower }}">{{ h.sport }}</span>{% endif %}
+        {% if current_user.is_authenticated and current_user.id == athlete.id %}<a class="fp-edit-link" href="{{ url_for('student_dashboard') }}#highlights"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit post</a>{% endif %}
       </div>
     </div>
   </header>

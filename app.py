@@ -1810,7 +1810,7 @@ def suggestion_order(column, text):
 
 app.jinja_env.globals['search_words'] = search_words
 # The platform role 'System' is shown as "D.A.R.T Admin" everywhere.
-app.jinja_env.filters['role_label'] = lambda role: {'System': 'D.A.R.T Admin', 'Statistician': 'Match Official'}.get(role, role)
+app.jinja_env.filters['role_label'] = lambda role: {'System': 'D.A.R.T Admin', 'Statistician': 'Match Official', 'Member': 'O-D.A.R.T user'}.get(role, role)
 
 
 def name_or_username(text):
@@ -2900,6 +2900,8 @@ def register(registration_category=None):
         # ==========================================================
 
         existing = User.query.filter_by(email=email).first() if email else None
+        if existing is not None and existing.role == 'Member':
+            existing = None          # an O-D.A.R.T user upgrading their own account
 
         # ==========================================================
         # USERNAME (unique @handle; an existing account keeps its own)
@@ -3169,6 +3171,7 @@ def register(registration_category=None):
             # New rule: coach + the team's organization (if on D.A.R.T.).
             user.coach_verified = False
             start_org_approval(user)
+            user = adopt_member(user)
             db.session.add(user)
             db.session.flush()
             record_account_created(user)
@@ -3570,6 +3573,11 @@ def continue_login(user):
     if user.role == 'Athlete':
         login_user(user)
         return redirect_after_login('student_dashboard')
+
+    # O-D.A.R.T users (curious about D.A.R.T.): scroll, react and comment.
+    if user.role == 'Member':
+        login_user(user)
+        return redirect_after_login('feed')
 
     # Buyers: scroll D.A.R.T. and shop on D.A.R.T Market$.
     if user.role == 'Buyer':
@@ -3980,6 +3988,8 @@ def clean_optional_email(raw):
 def email_taken(email, exclude_id=None):
     if not email:
         return False
+    if exclude_id is None and upgrading_member():
+        exclude_id = current_user.id
     query = User.query.filter(func.lower(User.email) == email.lower())
     if exclude_id:
         query = query.filter(User.id != exclude_id)
@@ -4284,6 +4294,7 @@ ROLE_DASHBOARDS = {
     'Statistician': ('official_dashboard', 'Match Official', 'Official', 'fa-solid fa-clipboard-check'),
     'Vendor': ('market_mine', 'My Shop', 'Shop', 'fa-solid fa-store'),
     'Buyer': ('market_cart', 'My Cart', 'Cart', 'fa-solid fa-cart-shopping'),
+    'Member': ('feed', 'Highlights', 'Feed', 'fa-solid fa-clapperboard'),
 }
 
 
@@ -4306,6 +4317,143 @@ def inject_dashboard_nav():
 # ==========================================================
 # INBOX / MESSAGING
 # ==========================================================
+# Email-like on top of one-to-one chats: To + Cc + Bcc (one copy per
+# recipient, same group_key), Reply (quote one message), Reply all,
+# Forward, "Delete for me" (never for the other person) and Edit for
+# MESSAGE_EDIT_SECONDS after sending.
+MESSAGE_EDIT_SECONDS = 60
+MESSAGE_MAX_RECIPIENTS = 10
+MESSAGE_MAX_LENGTH = 5000
+
+
+def message_age_seconds(created_at):
+    if created_at is None:
+        return 0
+    now = datetime.now(timezone.utc) if created_at.tzinfo else datetime.utcnow()
+    return (now - created_at).total_seconds()
+
+
+def message_visible_to(message, user_id):
+    if message.sender_id == user_id:
+        return not message.deleted_by_sender
+    if message.recipient_id == user_id:
+        return not message.deleted_by_recipient
+    return False
+
+
+def visible_messages_filter(user_id):
+    return or_(and_(ChatMessage.sender_id == user_id, ChatMessage.deleted_by_sender.is_(False)),
+               and_(ChatMessage.recipient_id == user_id, ChatMessage.deleted_by_recipient.is_(False)))
+
+
+def message_can_edit(message, user_id):
+    return message.sender_id == user_id and message_age_seconds(message.created_at) <= MESSAGE_EDIT_SECONDS
+
+
+def message_group_people(message):
+    """Everyone (not Bcc) on this message: the sender + every visible recipient."""
+    if not message.group_key:
+        return {message.sender_id, message.recipient_id}
+    rows = ChatMessage.query.filter_by(group_key=message.group_key, sender_id=message.sender_id).all()
+    return {message.sender_id} | {r.recipient_id for r in rows if not r.is_bcc}
+
+
+def send_chat_message(sender, to_user, cc_users=(), bcc_users=(), body='', reply_to_id=None, forwarded=False):
+    """One copy per recipient. Returns (sent copies, names refused by the messaging rules)."""
+    seen, refused, plan = {sender.id}, [], []
+    for kind, people in (('to', [to_user]), ('cc', cc_users), ('bcc', bcc_users)):
+        for person in people:
+            if not person or person.id in seen:
+                continue
+            seen.add(person.id)
+            if can_message(sender, person):
+                plan.append((kind, person))
+            else:
+                refused.append(person.display_name)
+    if not plan:
+        return [], refused
+    visible = [p for k, p in plan if k != 'bcc']
+    header = None
+    if len(plan) > 1 or forwarded:
+        cc_names = [p.display_name for k, p in plan if k == 'cc']
+        header = 'To: ' + ', '.join(p.display_name for k, p in plan if k == 'to') + (
+            ' · Cc: ' + ', '.join(cc_names) if cc_names else '')
+        header = header[:600]
+    group_key = secrets.token_hex(16) if len(plan) > 1 else None
+    sent = []
+    for kind, person in plan:
+        msg = ChatMessage(sender_id=sender.id, recipient_id=person.id, body=body, group_key=group_key,
+                          header_line=header, is_bcc=(kind == 'bcc'), reply_to_id=reply_to_id, forwarded=forwarded)
+        db.session.add(msg)
+        sent.append(msg)
+    return sent, refused
+
+
+def message_quote(message_id, user_id):
+    """The quoted message (only one this user can see), or None."""
+    if not message_id:
+        return None
+    quoted = db.session.get(ChatMessage, message_id)
+    if quoted and (quoted.sender_id == user_id or quoted.recipient_id == user_id):
+        return quoted
+    return None
+
+
+app.jinja_env.globals.update(message_can_edit=message_can_edit, message_edit_seconds=MESSAGE_EDIT_SECONDS,
+                             message_age_seconds=message_age_seconds)
+
+
+@app.route('/messages/<int:message_id>/delete', methods=['POST'])
+@login_required
+def message_delete_for_me(message_id):
+    message = db.session.get(ChatMessage, message_id)
+    if not message or not message_visible_to(message, current_user.id):
+        abort(404)
+    other = message.recipient_id if message.sender_id == current_user.id else message.sender_id
+    if message.sender_id == current_user.id:
+        message.deleted_by_sender = True
+    else:
+        message.deleted_by_recipient = True
+    db.session.commit()
+    flash('Message deleted for you (the other person still has it).', 'info')
+    return redirect(url_for('conversation', user_id=other))
+
+
+@app.route('/conversation/<int:user_id>/delete', methods=['POST'])
+@login_required
+def conversation_delete_for_me(user_id):
+    """Clear the whole chat for me only."""
+    me = current_user.id
+    ChatMessage.query.filter(ChatMessage.sender_id == me, ChatMessage.recipient_id == user_id).update(
+        {'deleted_by_sender': True}, synchronize_session=False)
+    ChatMessage.query.filter(ChatMessage.sender_id == user_id, ChatMessage.recipient_id == me).update(
+        {'deleted_by_recipient': True}, synchronize_session=False)
+    db.session.commit()
+    flash('Chat deleted for you. The other person still has it.', 'info')
+    return redirect(url_for('inbox'))
+
+
+@app.route('/messages/<int:message_id>/edit', methods=['POST'])
+@login_required
+def message_edit(message_id):
+    message = db.session.get(ChatMessage, message_id)
+    if not message or message.sender_id != current_user.id or message.deleted_by_sender:
+        abort(404)
+    if not message_can_edit(message, current_user.id):
+        flash('Messages can be edited for 1 minute after sending.', 'warning')
+        return redirect(url_for('conversation', user_id=message.recipient_id))
+    body = (request.form.get('body') or '').strip()
+    if not body or len(body) > MESSAGE_MAX_LENGTH:
+        flash('Write the message (up to 5000 characters).', 'danger')
+        return redirect(url_for('conversation', user_id=message.recipient_id))
+    copies = (ChatMessage.query.filter_by(group_key=message.group_key, sender_id=current_user.id).all()
+              if message.group_key else [message])
+    for copy in copies:
+        copy.body = body
+        copy.edited_at = datetime.utcnow()
+    db.session.commit()
+    return redirect(url_for('conversation', user_id=message.recipient_id) + f'#m{message.id}')
+
 
 @app.route('/inbox')
 @login_required
@@ -4317,10 +4465,7 @@ def inbox():
         return redirect(url_for('index'))
 
     messages = ChatMessage.query.filter(
-        or_(
-            ChatMessage.sender_id == current_user.id,
-            ChatMessage.recipient_id == current_user.id
-        )
+        visible_messages_filter(current_user.id)
     ).order_by(
         ChatMessage.created_at.desc()
     ).all()
@@ -4402,9 +4547,30 @@ def new_message():
     # ==========================================================
 
     if request.method == 'GET':
-
+        prefill = {'to': None, 'cc': [], 'body': '', 'reply_to': None, 'forward_of': None}
+        source = None
+        if request.args.get('reply_all', type=int):
+            source = message_quote(request.args.get('reply_all', type=int), current_user.id)
+            if source and message_visible_to(source, current_user.id):
+                people = message_group_people(source) - {current_user.id}
+                first = source.sender_id if source.sender_id != current_user.id else source.recipient_id
+                to_user = db.session.get(User, first)
+                prefill['to'] = to_user
+                prefill['cc'] = [u for u in User.query.filter(User.id.in_(people - {first})).all() if can_message(current_user, u)] if people - {first} else []
+                prefill['reply_to'] = source.id
+        elif request.args.get('forward', type=int):
+            source = message_quote(request.args.get('forward', type=int), current_user.id)
+            if source and message_visible_to(source, current_user.id):
+                sender = db.session.get(User, source.sender_id)
+                prefill['body'] = ('\n\n---------- Forwarded message ----------\n'
+                                   f'From: {sender.display_name if sender else "D.A.R.T. member"}\n'
+                                   f'Date: {source.created_at.strftime("%d %b %Y, %H:%M")}\n\n{source.body}')[:MESSAGE_MAX_LENGTH]
+                prefill['forward_of'] = source.id
+        def _card(u):
+            return {'id': u.id, 'full_name': u.display_name, 'username': u.username or '', 'role': u.role_label}
+        prefill_js = {'to': _card(prefill['to']) if prefill['to'] else None, 'cc': [_card(u) for u in prefill['cc']]}
         return render_template(
-            'new_message.html'
+            'new_message.html', prefill=prefill, prefill_js=prefill_js
         )
 
 
@@ -4531,13 +4697,25 @@ def new_message():
     # CREATE MESSAGE
     # ==========================================================
 
-    message = ChatMessage(
-        sender_id=current_user.id,
-        recipient_id=recipient.id,
-        body=body
-    )
+    def _people(field):
+        ids = []
+        for raw in request.form.getlist(field)[:MESSAGE_MAX_RECIPIENTS]:
+            try:
+                ids.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+        return User.query.filter(User.id.in_(ids)).all() if ids else []
 
-    db.session.add(message)
+    cc_users, bcc_users = _people('cc_user_ids'), _people('bcc_user_ids')
+    if 1 + len(cc_users) + len(bcc_users) > MESSAGE_MAX_RECIPIENTS:
+        flash(f'A message can go to at most {MESSAGE_MAX_RECIPIENTS} people.', 'danger')
+        return redirect(url_for('new_message'))
+    reply_to = message_quote(request.form.get('reply_to', type=int), current_user.id)
+    forward_of = message_quote(request.form.get('forward_of', type=int), current_user.id)
+    sent, refused = send_chat_message(current_user, recipient, cc_users, bcc_users, body,
+                                      reply_to_id=reply_to.id if reply_to else None, forwarded=bool(forward_of))
+    if refused:
+        flash('Not sent to: ' + ', '.join(refused) + ' (D.A.R.T. messaging rules).', 'warning')
 
 
     # ==========================================================
@@ -4572,7 +4750,7 @@ def new_message():
     # ==========================================================
 
     flash(
-        f'Message sent to {recipient.full_name}.',
+        f'Message sent to {recipient.full_name}' + (f' and {len(sent) - 1} more.' if len(sent) > 1 else '.'),
         'success'
     )
 
@@ -4681,10 +4859,17 @@ def conversation(user_id):
                 )
             )
 
+        if len(body) > MESSAGE_MAX_LENGTH:
+            flash('Message cannot exceed 5000 characters.', 'danger')
+            return redirect(url_for('conversation', user_id=recipient.id))
+        reply_to = message_quote(request.form.get('reply_to', type=int), current_user.id)
+        if reply_to and {reply_to.sender_id, reply_to.recipient_id} != {current_user.id, recipient.id} and not reply_to.group_key:
+            reply_to = None
         message = ChatMessage(
             sender_id=current_user.id,
             recipient_id=recipient.id,
-            body=body
+            body=body,
+            reply_to_id=reply_to.id if reply_to else None
         )
 
         db.session.add(message)
@@ -4722,7 +4907,8 @@ def conversation(user_id):
             (
                 ChatMessage.recipient_id
                 == recipient.id
-            ),
+            )
+            & ChatMessage.deleted_by_sender.is_(False),
             (
                 ChatMessage.sender_id
                 == recipient.id
@@ -4732,15 +4918,23 @@ def conversation(user_id):
                 ChatMessage.recipient_id
                 == current_user.id
             )
+            & ChatMessage.deleted_by_recipient.is_(False)
         )
     ).order_by(
         ChatMessage.created_at.asc()
     ).all()
 
+    quote_ids = {m.reply_to_id for m in messages if m.reply_to_id}
+    quotes = {q.id: q for q in ChatMessage.query.filter(ChatMessage.id.in_(quote_ids)).all()} if quote_ids else {}
+    quotes = {k: v for k, v in quotes.items() if current_user.id in (v.sender_id, v.recipient_id) or v.group_key}
+    names = {u.id: u.display_name for u in User.query.filter(User.id.in_({q.sender_id for q in quotes.values()})).all()} if quotes else {}
+
     return render_template(
         'conversation.html',
         recipient=recipient,
-        messages=messages
+        messages=messages,
+        quotes=quotes,
+        quote_names=names
     )
 
 # ==========================================================
@@ -5495,6 +5689,39 @@ def highlight_complete():
     return jsonify({'ok': True, 'id': highlight.id, 'status': highlight.status})
 
 
+@app.route('/highlights/<int:highlight_id>/edit', methods=['POST'])
+@login_required
+def edit_highlight(highlight_id):
+    """The athlete edits the caption / sport of their post, before or after it is approved (the post stays as it is)."""
+    highlight = db.session.get(AthleteHighlight, highlight_id)
+    if not highlight or highlight.user_id != current_user.id or highlight.status == 'rejected':
+        abort(404)
+    back = safe_next_url(request.form.get('next')) or url_for('student_dashboard') + '#highlights'
+    caption = ' '.join((request.form.get('caption') or '').split())[:HIGHLIGHT_CAPTION_MAX]
+    if caption and feed_mod._LINK_RE.search(caption):
+        flash('Links are not allowed in captions.', 'danger')
+        return redirect(back)
+    sport = request.form.get('sport') or ''
+    if sport not in HIGHLIGHT_SPORTS:
+        flash('Choose the sport: football, basketball or kickball.', 'danger')
+        return redirect(back)
+    items = (AthleteHighlight.query.filter(AthleteHighlight.post_key == highlight.post_key,
+                                           AthleteHighlight.user_id == current_user.id).all()
+             if highlight.post_key else [highlight])
+    now = datetime.utcnow()
+    for item in items:
+        if item.status == 'rejected':
+            continue
+        item.caption = caption or None
+        item.sport = sport
+        item.edited_at = now
+    create_audit_log(action='highlight_edited', actor_user_id=current_user.id, target_type='AthleteHighlight',
+                     target_id=str(highlight.id), details={'caption': caption, 'sport': sport, 'files': len(items)})
+    db.session.commit()
+    flash('Post updated.', 'success')
+    return redirect(back)
+
+
 @app.route('/highlights/<int:highlight_id>/delete', methods=['POST'])
 @login_required
 def delete_highlight(highlight_id):
@@ -5790,6 +6017,36 @@ def can_edit_comment(comment, actor):
     return comment.user_id is None and comment.visitor_key == actor.visitor_key
 
 
+_DEVICE_RULES = (
+    (re.compile(r'iPad', re.I), 'iPad'), (re.compile(r'iPhone', re.I), 'iPhone'), (re.compile(r'iPod', re.I), 'iPod'),
+    (re.compile(r'CrOS', re.I), 'Chromebook'), (re.compile(r'Windows Phone', re.I), 'Windows Phone'),
+    (re.compile(r'Windows', re.I), 'Windows PC'), (re.compile(r'Macintosh|Mac OS X', re.I), 'Mac'),
+)
+_ANDROID_MODEL_RE = re.compile(r'Android [\d.]+; (?:[a-z]{2}[-_][a-z]{2}; )?([^;)]+?)(?: Build/|\)|;)', re.I)
+_ANDROID_BRANDS = (('SM-', 'Samsung '), ('TECNO', 'Tecno '), ('Infinix', 'Infinix '), ('itel', 'itel '), ('Redmi', ''), ('Pixel', ''),
+                   ('moto', 'Motorola '), ('Nokia', ''), ('HUAWEI', 'Huawei '), ('OPPO', 'Oppo '), ('vivo', 'vivo '), ('CPH', 'Oppo '),
+                   ('RMX', 'Realme '), ('M2', 'Xiaomi '))
+
+
+def device_label(user_agent):
+    """A short device name from the browser (\"iPhone\", \"Samsung SM-A146B\", \"Windows PC\")."""
+    ua = (user_agent or '')[:400]
+    if 'Android' in ua:
+        m = _ANDROID_MODEL_RE.search(ua)
+        model = (m.group(1).strip() if m else '')
+        if model and model.upper() not in ('K', 'MOBILE', 'WV', 'LINUX'):
+            for prefix, brand in _ANDROID_BRANDS:
+                if model.lower().startswith(prefix.lower()):
+                    model = (brand + model) if brand and not model.lower().startswith(brand.strip().lower()) else model
+                    break
+            return re.sub(r'[^\w .+-]', '', model)[:40] or 'Android phone'
+        return 'Android phone'
+    for pattern, name in _DEVICE_RULES:
+        if pattern.search(ua):
+            return name
+    return 'Linux PC' if 'Linux' in ua else 'Unknown device'
+
+
 def comment_payload(comment, highlight, actor):
     author = comment.user
     if author:
@@ -5808,9 +6065,44 @@ def comment_payload(comment, highlight, actor):
         'ago': feed_mod.time_ago(comment.created_at),
         'can_delete': bool(can_delete_comment(comment, highlight, actor)),
         'can_edit': bool(can_edit_comment(comment, actor)),
+        'device': '' if author else (comment.visitor_device or ''),
         'edited': comment.edited_at is not None,
         'is_athlete': bool(author and author.id == highlight.user_id),
     }
+
+
+def spotlight_athletes(limit=4):
+    """Home "Spotlight": the newest live action photo of different athletes, with their public card info."""
+    if 'spotlight' in g:
+        return g.spotlight
+    rows = (feed_mod.live_query().filter(AthleteHighlight.media_type == 'photo')
+            .order_by(AthleteHighlight.created_at.desc(), AthleteHighlight.id.desc()).limit(40).all())
+    picked, seen = [], set()
+    for h in rows:
+        if h.user_id in seen:
+            continue
+        seen.add(h.user_id)
+        picked.append(h)
+        if len(picked) >= limit:
+            break
+    viewer = current_user if current_user.is_authenticated else None
+    g.spotlight = [{'h': h, 'img': highlight_media_url(h), 'info': profile_card_info(h.user, viewer)} for h in picked]
+    return g.spotlight
+
+
+app.jinja_env.globals['spotlight_athletes'] = spotlight_athletes
+
+
+def my_bookmarks(limit=12):
+    """Posts the signed-in member saved (newest first) for the Bookmarks section of My Profile."""
+    if not current_user.is_authenticated:
+        return [], 0
+    query = feed_mod.feed_query('saved', '', feed_mod.Actor(user_id=current_user.id))
+    return query.limit(limit).all(), query.count()
+
+
+app.jinja_env.globals['my_bookmarks'] = my_bookmarks
+app.jinja_env.globals['highlight_sports'] = HIGHLIGHT_SPORTS
 
 
 app.jinja_env.globals.update(
@@ -5936,7 +6228,8 @@ def feed_comments(highlight_id):
     if feed_mod.comment_rate_limited(actor):
         return feed_json_error('You are commenting too fast. Please wait a minute.', 429)
 
-    comment = feed_mod.add_comment(highlight, actor, body, visitor_name)
+    device = None if actor.is_member else device_label(request.headers.get('User-Agent', ''))
+    comment = feed_mod.add_comment(highlight, actor, body, visitor_name, device)
     db.session.refresh(highlight)
     return feed_json({'comment': comment_payload(comment, highlight, actor), 'count': highlight.comment_count,
                       'label': feed_mod.compact_count(highlight.comment_count)})
@@ -6643,7 +6936,7 @@ def organization_dashboard_data(org, full):
 # ---------- Registration ----------
 @app.route('/register-organization', methods=['GET', 'POST'])
 def register_organization():
-    if current_user.is_authenticated:
+    if current_user.is_authenticated and not upgrading_member():
         return redirect(url_for(dashboard_endpoint_for(current_user)))
 
     form = request.form
@@ -6738,6 +7031,7 @@ def register_organization():
             id_document=document_path,
         )
         user.set_password(password)
+        user = adopt_member(user)
         db.session.add(user)
         db.session.flush()
 
@@ -6982,6 +7276,18 @@ def organization_settings():
             flash('Contact person: ' + name_error[0].lower() + name_error[1:], 'danger')
             return redirect(url_for('organization_settings'))
 
+        org_address = market_mod.clean(request.form.get('org_address'), 200)
+        pin = market_mod.valid_coords(request.form.get('lat'), request.form.get('lng')) if request.form.get('lat') else None
+        if not pin and (request.form.get('map_link') or '').strip():
+            pin = market_mod.parse_map_location(request.form.get('map_link'))
+            if not pin:
+                flash('That map link could not be read. Paste the full Google Maps link or coordinates (e.g. 6.3005, -10.7969).', 'danger')
+                return redirect(url_for('organization_settings') + '#orgLocation')
+        org.address = org_address or None
+        if pin:
+            org.map_lat, org.map_lng = pin
+        if request.form.get('clear_pin') == 'yes':
+            org.map_lat = org.map_lng = None
         ownership_changed = org.ownership != ownership
         org.ownership = ownership
         org.website = website or None
@@ -7098,6 +7404,9 @@ def private_image_url(path):
 
 
 app.jinja_env.globals['org_ownerships'] = ORG_OWNERSHIPS
+app.jinja_env.globals['org_directions_url'] = lambda org: market_mod.place_directions_url(
+    org.map_lat, org.map_lng, ', '.join(x for x in (org.address, org.city) if x)) if org else ''
+app.jinja_env.globals['org_map_embed'] = lambda org: market_mod.place_map_embed(org.map_lat, org.map_lng) if org else ''
 app.jinja_env.globals['coach_positions'] = coaching.COACH_POSITIONS
 app.jinja_env.globals['org_plan_for'] = lambda user: plan_for_user(user)
 app.jinja_env.globals['org_pro_from'] = lambda: min(p.price for p in PLANS.values() if p.ownerships)
@@ -7700,8 +8009,33 @@ def username_taken(name, exclude_user_id=None):
     return db.session.query(query.exists()).scalar()
 
 
+def upgrading_member():
+    """An O-D.A.R.T user filling in a registration form: their account is upgraded in place."""
+    return bool(has_request_context() and current_user.is_authenticated and current_user.role == 'Member')
+
+
+def adopt_member(new_user):
+    """
+    Upgrade: the registration's new account becomes the O-D.A.R.T user's own
+    account (same id: their comments, likes and bookmarks stay theirs).
+    """
+    if not upgrading_member():
+        return new_user
+    me = db.session.get(User, current_user.id)
+    for column in User.__table__.columns.keys():
+        if column in ('id', 'created_at') or column not in new_user.__dict__:
+            continue
+        setattr(me, column, new_user.__dict__[column])
+    create_audit_log(action='member_upgraded', actor_user_id=me.id, target_type='User', target_id=str(me.id),
+                     details={'role': me.role})
+    logout_user()          # sign in again as the new kind of account (some need approval first)
+    return me
+
+
 def check_new_username(raw, exclude_user_id=None):
     """(clean username, error or None): format, reserved words and uniqueness."""
+    if exclude_user_id is None and upgrading_member():
+        exclude_user_id = current_user.id
     name, error = uname.validate_username(raw)
     if error:
         return '', error
@@ -8362,7 +8696,7 @@ def admin_terms_acceptances_csv():
 # Only public sport information is used (age, never the date of birth).
 
 # Every account has a shareable card.
-PROFILE_CARD_ROLES = ('Athlete', 'Coach', 'Scout', 'Vendor', 'Buyer', 'Organization', 'Statistician', 'System')
+PROFILE_CARD_ROLES = ('Athlete', 'Coach', 'Scout', 'Vendor', 'Buyer', 'Organization', 'Statistician', 'System', 'Member')
 PROFILE_PHOTO_MAX_BYTES = 6 * MB
 
 
@@ -8408,13 +8742,19 @@ def profile_card_info(user, viewer=None):
 
     if user.role == 'Athlete':
         sports = [s for s in ('Football', 'Basketball', 'Kickball') if any(r.sport == s for r in approved)]
-        positions = {}
+        # The main position in EACH sport ("Football (CF) · Basketball (PG)").
+        by_sport = {}
         for r in approved:
             if r.position:
-                positions[r.position] = positions.get(r.position, 0) + 1
-        main_position = max(positions, key=positions.get) if positions else ''
-        sub = [' · '.join(sports) or 'Athlete']
-        if main_position:
+                counts = by_sport.setdefault(r.sport, {})
+                counts[r.position] = counts.get(r.position, 0) + 1
+        sport_position = {sport: max(c, key=c.get) for sport, c in by_sport.items()}
+        if len(sport_position) > 1:
+            main_position = ' · '.join(f'{sport}: {sport_position[sport]}' for sport in sports if sport in sport_position)
+        else:
+            main_position = next(iter(sport_position.values()), '')
+        sub = [' · '.join(f'{s} ({sport_position[s]})' if s in sport_position and len(sports) > 1 else s for s in sports) or 'Athlete']
+        if main_position and len(sports) <= 1:
             sub.append(main_position)
         if user.shirt_number:
             sub.append(f'#{user.shirt_number}')
@@ -8430,11 +8770,12 @@ def profile_card_info(user, viewer=None):
             ] if show else [
                 # Personal details are private: sport facts instead.
                 ('Sport', ' · '.join(sports) or '—'),
-                ('Position', main_position or '—'),
+                ('Position' if len(sport_position) <= 1 else 'Positions', main_position or '—'),
                 ('Shirt', f'#{user.shirt_number}' if user.shirt_number else '—'),
             ],
             'extra': [],
             'teams': athlete_teams(user, approved),
+            'sport_positions': [(s, sport_position[s]) for s in sports if s in sport_position],
             'career': career_summary(public_records_for(user, current_user)),
         })
     elif user.role == 'Coach':
@@ -8476,6 +8817,9 @@ def profile_card_info(user, viewer=None):
                 ('Sports', (org.sports if org and org.sports else '—')),
                 ('Location', ', '.join(x for x in ((org.city if org else None), (org.country if org else None)) if x) or '—'),
             ],
+            'extra': [('Address', org.address)] if org and org.address else [],
+            # The approved team badge also sits next to the name.
+            'name_badge': org_logo_url(org) if org_ok else '',
         })
     elif user.role == 'Statistician':
         journalist = user.official_type == 'Sports journalist'
@@ -8484,6 +8828,13 @@ def profile_card_info(user, viewer=None):
             'subtitle': user.school or ('Sports journalist' if journalist else 'Match Official'),
             'pill': user.official_type or 'Match Official',
             'stats': [('Role', user.official_type or 'Match Official'), ('Organization', user.school or '—')],
+        })
+    elif user.role == 'Member':
+        info.update({
+            'eyebrow': 'O-D.A.R.T Card',
+            'subtitle': 'Curious about D.A.R.T.',
+            'pill': 'O-D.A.R.T user',
+            'stats': [('Member since', user.created_at.strftime('%b %Y') if user.created_at else '—')],
         })
     elif user.role == 'Buyer':
         info.update({
@@ -9013,6 +9364,17 @@ def scout_dashboard():
         dash=dash,
         role_dash=role_analytics(current_user, kpis=dash.get('kpis')),
     )
+CLOSED_DOORS = 'Behind closed doors'
+
+
+def clean_venue(form):
+    """The game's venue (a stadium, field, court...) or "Behind closed doors". '' if missing."""
+    venue = ' '.join((form.get('venue') or '').split())[:150]
+    if form.get('closed_doors') in ('yes', 'on', '1', 'true'):
+        venue = venue or CLOSED_DOORS
+    return venue if len(venue) >= 2 else ''
+
+
 class RecordSubmissionError(Exception):
     """A submitted sports record failed validation."""
 
@@ -9147,6 +9509,9 @@ def build_sport_record_from_form(form):
     if is_individual_athlete(current_user):
         team = ''              # no team: the D.A.R.T Admin approves the record
     team_played_against = form.get('team_played_against', '').strip()
+    venue = clean_venue(form)
+    if not venue:
+        raise RecordSubmissionError('Enter the venue where the game was played (or tick "Behind closed doors").')
     match_minutes_played = form.get('match_minutes_played') or 0
     clean_sheets = form.get('clean_sheets') or 0
     saves = form.get('saves') or 0
@@ -9316,6 +9681,7 @@ def build_sport_record_from_form(form):
     trophy=trophy_value,
     team=team,
     team_played_against=team_played_against,
+    venue=venue,
     competition_category=competition_category,
     club_division=club_division,
     competition_team=competition_team,
@@ -9834,6 +10200,15 @@ def edit_record(record_id):
             ''
         ).strip()
 
+        venue = clean_venue(request.form)
+        if venue:
+            record.venue = venue
+        elif record.venue:
+            db.session.rollback()
+            flash('Enter the venue where the game was played (or tick "Behind closed doors").', 'danger')
+            return redirect(url_for('edit_record', record_id=record.id))
+        # (Records saved before venues existed can still be corrected; the form asks for the venue.)
+
         # =====================================================
         # COMPETITION CATEGORY
         # =====================================================
@@ -10237,6 +10612,7 @@ def super_admin_dashboard_stats():
         'coaches_total': users_by_role.get('Coach', 0),
         'scouts_total': total_scouts,
         'buyers_total': users_by_role.get('Buyer', 0),
+        'members_total': users_by_role.get('Member', 0),
     }
     by_type = dict(db.session.query(User.official_type, func.count(User.id)).filter(User.role == 'Statistician')
                    .group_by(User.official_type).all())
@@ -12274,6 +12650,7 @@ def register_coach(registration_category=None):
         )
         coach.set_password(password)
         attach_google_signup(coach)
+        coach = adopt_member(coach)
         db.session.add(coach)
         db.session.flush()
         record_account_created(coach)
@@ -12439,6 +12816,7 @@ def register_scout():
         attach_google_signup(scout)
 
         try:
+            scout = adopt_member(scout)
             db.session.add(scout)
             db.session.flush()
 
@@ -12987,9 +13365,13 @@ def record_history(record_id):
 
 
 # ---------- match officials ----------
+ODART_CHOICE = 'O-D.A.R.T user'
+app.jinja_env.globals.update(odart_choice=ODART_CHOICE, official_types_with_org=integrity.OFFICIAL_TYPES_WITH_ORG)
+
+
 @app.route('/register-official', methods=['GET', 'POST'])
 def register_official():
-    if current_user.is_authenticated:
+    if current_user.is_authenticated and not upgrading_member():
         return redirect(url_for(dashboard_endpoint_for(current_user)))
     if request.method == 'GET':
         # /register-official?as=journalist: the sports journalist sign-up.
@@ -12997,6 +13379,8 @@ def register_official():
         return render_template('register_official.html', form=form)
 
     form = request.form
+    if form.get('official_type') == ODART_CHOICE:
+        return redirect(url_for('register_member'))      # O-D.A.R.T users have their own quick sign-up
 
     def back(message):
         flash(message, 'danger')
@@ -13017,11 +13401,16 @@ def register_official():
     if not is_strong_password(password):
         return back('Password must meet the required security requirements.')
     official_type = form.get('official_type', '')
+    if official_type == ODART_CHOICE:
+        return redirect(url_for('register_member'))
     if official_type not in integrity.OFFICIAL_TYPES:
         return back('Choose what kind of match official you are.')
     organization = ' '.join((form.get('organization') or '').split())[:150]
-    if len(organization) < 3:
-        return back('Enter the newspaper, league, school or community group you work with.')
+    if official_type in integrity.OFFICIAL_TYPES_WITH_ORG:
+        if len(organization) < 3:
+            return back('Enter the newspaper, league, school or community group you work with.')
+    else:
+        organization = ''      # referees, linesmen and spectators don't belong to a newspaper / league
     phone = integrity.clean_phone(form.get('phone'))
     if not phone:
         return back('Enter a Liberian Orange (077) or Lonestar (088 / 055) mobile number.')
@@ -13050,6 +13439,7 @@ def register_official():
                     official_type=official_type, phone=phone, id_document=document_path, is_verified=False)
     official.set_password(password)
     try:
+        official = adopt_member(official)
         db.session.add(official)
         db.session.flush()
         record_account_created(official)
@@ -13677,7 +14067,7 @@ def _store_listing_images(listing, files):
 @app.route('/market/sell', methods=['GET', 'POST'])
 @login_required
 def market_sell():
-    if current_user.role == 'Buyer':
+    if current_user.role in ('Buyer', 'Member'):
         flash('Buyer accounts shop on D.A.R.T Market$. To sell sports gear, register a vendor account.', 'info')
         return redirect(url_for('market_home'))
     reason = market_block_reason()
@@ -13859,7 +14249,10 @@ def market_thread(thread_id):
         elif market_mod.message_rate_error(current_user):
             flash(market_mod.message_rate_error(current_user), 'warning')
         else:
-            db.session.add(MarketMessage(thread_id=thread.id, sender_id=current_user.id, body=body))
+            reply_to = request.form.get('reply_to', type=int)
+            quoted = db.session.get(MarketMessage, reply_to) if reply_to else None
+            db.session.add(MarketMessage(thread_id=thread.id, sender_id=current_user.id, body=body,
+                                         reply_to_id=quoted.id if quoted and quoted.thread_id == thread.id else None))
             thread.last_message_at = datetime.utcnow()
             db.session.commit()
         return redirect(url_for('market_thread', thread_id=thread.id) + '#last')
@@ -13867,10 +14260,40 @@ def market_thread(thread_id):
                                MarketMessage.read_at.is_(None)).update({'read_at': datetime.utcnow()}, synchronize_session=False)
     db.session.commit()
     db.session.refresh(thread)
-    response = make_response(render_template('market_thread.html', thread=thread, other=other,
+    mine_flag = 'deleted_by_buyer' if current_user.id == thread.buyer_id else 'deleted_by_seller'
+    shown = [m for m in thread.messages if not getattr(m, mine_flag)]
+    by_id = {m.id: m for m in thread.messages}
+    response = make_response(render_template('market_thread.html', thread=thread, other=other, shown=shown, by_id=by_id,
                                              block_reason=market_block_reason() or market_block_reason(other)))
     response.headers['Cache-Control'] = 'no-store'
     return response
+
+
+@app.route('/market/messages/<int:message_id>/<action>', methods=['POST'])
+@login_required
+def market_message_action(message_id, action):
+    """Market$ chat: delete a message for me only, or edit my message within 1 minute."""
+    message = db.session.get(MarketMessage, message_id)
+    thread = db.session.get(MarketThread, message.thread_id) if message else None
+    if not thread or current_user.id not in (thread.buyer_id, thread.seller_id) or action not in ('delete', 'edit'):
+        abort(404)
+    back = url_for('market_thread', thread_id=thread.id)
+    if action == 'delete':
+        setattr(message, 'deleted_by_buyer' if current_user.id == thread.buyer_id else 'deleted_by_seller', True)
+        db.session.commit()
+        flash('Message deleted for you (the other person still has it).', 'info')
+        return redirect(back)
+    if message.sender_id != current_user.id or message_age_seconds(message.created_at) > MESSAGE_EDIT_SECONDS:
+        flash('Messages can be edited for 1 minute after sending.', 'warning')
+        return redirect(back)
+    body = market_mod.clean_multiline(request.form.get('body'), 1000)
+    if not body:
+        flash('Write a message.', 'warning')
+        return redirect(back)
+    message.body = body
+    message.edited_at = datetime.utcnow()
+    db.session.commit()
+    return redirect(back + f'#mm{message.id}')
 
 
 @app.route('/market/item/<int:listing_id>/report', methods=['POST'])
@@ -14426,7 +14849,7 @@ app.jinja_env.filters['dict_without'] = lambda d, *keys: {k: v for k, v in d.ite
 # ---------- Vendors (sellers who are not athletes, coaches, scouts...) ----------
 @app.route('/register-vendor', methods=['GET', 'POST'])
 def register_vendor():
-    if current_user.is_authenticated:
+    if current_user.is_authenticated and not upgrading_member():
         return redirect(url_for('market_home'))
     form = request.form if request.method == 'POST' else {}
 
@@ -14481,6 +14904,7 @@ def register_vendor():
                       shop_lat=pin[0] if pin else None, shop_lng=pin[1] if pin else None)
         vendor.set_password(password)
         try:
+            vendor = adopt_member(vendor)
             db.session.add(vendor)
             db.session.flush()
             record_account_created(vendor)
@@ -14495,11 +14919,69 @@ def register_vendor():
     return render_template('register_vendor.html', form=form)
 
 
+# ---------- O-D.A.R.T users: curious about D.A.R.T., a username is enough ----------
+@app.route('/register-odart', methods=['GET', 'POST'])
+def register_member():
+    if current_user.is_authenticated:
+        return redirect(url_for('feed'))
+    form = request.form if request.method == 'POST' else {}
+
+    def back(message):
+        flash(message, 'danger')
+        return render_template('register_member.html', form=form), 400
+
+    if request.method == 'POST':
+        username, username_error = check_new_username(form.get('username'))
+        if username_error:
+            return back(username_error)
+        raw_name = ' '.join((form.get('full_name') or '').split())
+        full_name = username
+        if raw_name:
+            full_name, name_error = validate_full_name(raw_name)
+            if name_error:
+                return back(name_error)
+        email, email_error = clean_optional_email(form.get('email'))
+        if email_error:
+            return back(email_error)
+        if email_taken(email):
+            return back('An account with this email address already exists.')
+        password = form.get('password', '')
+        if password != form.get('confirm_password', ''):
+            return back('Passwords do not match.')
+        if not is_strong_password(password):
+            return back('Password must meet the required security requirements.')
+        if form.get('agree') != 'yes':
+            return back('Please accept the D.A.R.T. Terms of Use and community rules.')
+        member = User(full_name=full_name, username=username, email=email, role='Member', school='', is_verified=True)
+        member.set_password(password)
+        try:
+            db.session.add(member)
+            db.session.flush()
+            record_account_created(member)
+            create_audit_log(action='member_registration_created', actor_user_id=member.id, target_type='User', target_id=str(member.id))
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return back('This username or email is already in use.')
+        flash('Welcome to D.A.R.T.! Log in with @' + username + ' to react and comment.', 'success')
+        return redirect(url_for('login'))
+    return render_template('register_member.html', form=form)
+
+
+@app.route('/account/upgrade')
+@login_required
+def account_upgrade():
+    """O-D.A.R.T users pick the account they want: the same account is upgraded (history kept)."""
+    if current_user.role != 'Member':
+        return redirect(url_for(dashboard_endpoint_for(current_user)))
+    return render_template('account_upgrade.html')
+
+
 # ---------- Buyers: scroll D.A.R.T. and buy sports gear ----------
 # (A real-money D.A.R.T. wallet comes later, once cleared with the Central Bank of Liberia.)
 @app.route('/register-buyer', methods=['GET', 'POST'])
 def register_buyer():
-    if current_user.is_authenticated:
+    if current_user.is_authenticated and not upgrading_member():
         return redirect(url_for('market_home'))
     form = request.form if request.method == 'POST' else {}
 
@@ -14538,6 +15020,7 @@ def register_buyer():
                      is_verified=True, business_location=location)
         buyer.set_password(password)
         try:
+            buyer = adopt_member(buyer)
             db.session.add(buyer)
             db.session.flush()
             record_account_created(buyer)

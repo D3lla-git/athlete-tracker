@@ -32,7 +32,7 @@
         <div class="pc-head">
           <div class="pc-eyebrow">{{ info.eyebrow }}</div>
           <h1 class="pc-name" id="pcName{{ info.id }}">
-            {{ info.name }}
+            {% if info.name_badge %}<img class="pc-name-badge" src="{{ info.name_badge }}" alt="" title="Team badge">{% endif %}{{ info.name }}
             {% if info.verified %}<i class="fa-solid fa-circle-check pc-badge" title="Verified by D.A.R.T." aria-label="Verified"></i>{% endif %}
           </h1>
           {% if info.username %}<div class="pc-handle" translate="no">@{{ info.username }}</div>{% endif %}
@@ -55,12 +55,12 @@
             <div class="pc-stat"><span>Nationality</span><strong>{{ info.flag }} {{ info.nationality }}</strong></div>
           {% endif %}
           {% for label, value in info.extra %}
-            <div class="pc-stat"><span>{{ label }}</span><strong>{{ value }}</strong></div>
+            <div class="pc-stat"><span>{{ label }}</span><strong>{% if label == 'Team' %}{{ team_badge(value) }}{% endif %}{{ value }}</strong></div>
           {% endfor %}
           {# All Athlete playing for a school AND a club / community team: both, from approved records. #}
           {% if info.teams and info.teams | length > 1 %}
             <div class="pc-stat pc-teams"><span><i class="fa-solid fa-people-group" aria-hidden="true"></i> Plays for</span>
-              <strong>{% for team, kind in info.teams %}<span class="pc-team">{{ team }} <em>{{ kind }}</em></span>{% endfor %}</strong></div>
+              <strong>{% for team, kind in info.teams %}<span class="pc-team">{{ team_badge(team) }}{{ team }} <em>{{ kind }}</em></span>{% endfor %}</strong></div>
           {% endif %}
           {# Phone numbers: read-only (taken from the coach's account), also on the shareable card. #}
           {% for ct in info.contacts or [] %}
@@ -223,6 +223,8 @@
 
   .pc-head { min-width: 0; }
   .pc-eyebrow { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #a3b8ac; }
+  .pc-name-badge { width: 1.05em; height: 1.05em; border-radius: 50%; object-fit: contain; background: #fff; vertical-align: -0.12em; margin-right: 0.28em;
+    border: 1px solid rgba(255, 255, 255, 0.4); }
   .pc-name {
     margin: 4px 0 2px;
     font-size: clamp(1.4rem, 3.4vw, 2.1rem);

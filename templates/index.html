@@ -53,6 +53,7 @@
                     ('register_buyer', {}, 'fa-bag-shopping', 'Buyer', 'Scroll D.A.R.T. and buy sports gear'),
                     ('register_vendor', {}, 'fa-store', 'Vendor (Seller)', 'Sell sports gear on D.A.R.T Market$'),
                     ('register_official', {'as': 'journalist'}, 'fa-newspaper', 'Sports Journalist', 'Post sports content'),
+                    ('register_member', {}, 'fa-face-smile', 'O-D.A.R.T user', 'Just curious? A username is enough'),
                 ) %}
                 <li><a class="dropdown-item" href="{{ url_for(endpoint, **args) }}">
                     <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
@@ -118,6 +119,10 @@
     });
   });
 </script>
+{# Athlete spotlight slides (real athletes' approved action photos): after EVERY card below, one spotlight
+   (athletes repeat in turn when there are fewer athletes than cards). #}
+{% from '_home_spotlight.html' import spotlight_slide, spotlight_styles %}
+{% set spots = spotlight_athletes(4) %}
    <!--D.A.R.T. Hero Section-->   <!--D.A.R.T. Hero Section--> 
 <section class="dart-card-carousel-section">
 
@@ -214,6 +219,8 @@
 
             </div>
 
+
+            {% if spots %}{{ spotlight_slide(spots[0 % (spots | length)], spots[(0 + 1) % (spots | length)] if spots | length > 1 else None) }}{% endif %}
 
             <!-- ==================================================
                  CARD 2
@@ -326,6 +333,8 @@
             </div>
 
 
+            {% if spots %}{{ spotlight_slide(spots[1 % (spots | length)], spots[(1 + 1) % (spots | length)] if spots | length > 1 else None) }}{% endif %}
+
             <!-- ==================================================
                  CARD 3
             ================================================== -->
@@ -424,6 +433,8 @@
 
             </div>
 
+            {% if spots %}{{ spotlight_slide(spots[2 % (spots | length)], spots[(2 + 1) % (spots | length)] if spots | length > 1 else None) }}{% endif %}
+
             <!-- ==================================================
                  CARD 4
             ================================================== -->
@@ -493,6 +504,8 @@
             </div>
 
 
+            {% if spots %}{{ spotlight_slide(spots[3 % (spots | length)], spots[(3 + 1) % (spots | length)] if spots | length > 1 else None) }}{% endif %}
+
         </div>
 
 
@@ -513,6 +526,7 @@
 
 </section>
 
+{{ spotlight_styles() }}
 <!--D.A.R.T. ACTION BAR-css-->   <!--D.A.R.T. ACTION BAR-css-->
 <style>
 /* Two tiles: Search + one Register dropdown (side by side from tablets up). */

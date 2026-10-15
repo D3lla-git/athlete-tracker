@@ -323,6 +323,11 @@
         Register as Organization / Club / Academy
       </a>
     </li>
+    <li>
+      <a class="dropdown-item" href="{{ url_for('register_member') }}">
+        O-D.A.R.T user (just curious)
+      </a>
+    </li>
   </ul>
 </li>
           {% endif %}
@@ -345,6 +350,13 @@
       {% endfor %}
     {% endwith %}
     {% include '_approval_prompt.html' %}
+    {% if current_user.is_authenticated and current_user.role == 'Member' and request.endpoint in ('feed', 'profile', 'index') and not is_prefetch() %}
+      <div class="alert alert-success d-flex flex-wrap align-items-center gap-2 small odart-note" role="status">
+        <i class="fa-solid fa-face-smile"></i>
+        <span class="flex-grow-1">You're an <strong>O-D.A.R.T user</strong>. Want to post records, coach, scout, sell or buy? Upgrade this account (your activity is kept).</span>
+        <a class="btn btn-sm dart-btn" href="{{ url_for('account_upgrade') }}">Upgrade</a>
+      </div>
+    {% endif %}
     {# Vendors / buyers rejected by the D.A.R.T Admin: why, and how to resubmit. #}
     {% if current_user.is_authenticated and current_user.role in ('Vendor', 'Buyer') and current_user.market_status == 'rejected'
           and request.endpoint != 'market_account_review' and not is_prefetch() %}

@@ -137,6 +137,23 @@ def directions_url(user):
     return 'https://www.google.com/maps/dir/?api=1&destination=' + quote(destination, safe=',')
 
 
+def place_directions_url(lat, lng, text=''):
+    """Google Maps directions to a pin, else to written text (Liberia)."""
+    if lat is not None and lng is not None:
+        destination = f'{lat:.6f},{lng:.6f}'
+    elif text:
+        destination = text + ', Liberia'
+    else:
+        return ''
+    return 'https://www.google.com/maps/dir/?api=1&destination=' + quote(destination, safe=',')
+
+
+def place_map_embed(lat, lng):
+    if lat is None or lng is None:
+        return ''
+    return f'https://www.google.com/maps?q={lat:.6f},{lng:.6f}&z=17&output=embed'
+
+
 def map_embed_url(user):
     """A small embedded Google map of the pinned shop ('' without a pin)."""
     if not user or user.shop_lat is None or user.shop_lng is None:

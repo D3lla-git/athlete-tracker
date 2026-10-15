@@ -61,6 +61,14 @@
               </div>
             </div>
 
+            <div class="mb-3" id="orgLocation">
+              <label class="form-label" for="osAddress">Physical address <i class="fa-solid fa-location-dot"></i> <span class="text-muted small">(shown on your card + Google Maps directions)</span></label>
+              <input type="text" class="form-control" id="osAddress" name="org_address" maxlength="200" value="{{ org.address or '' }}" placeholder="e.g. Capitol Bypass, opposite the Ministry of Youth & Sports">
+            </div>
+            {% from '_shop_location_fields.html' import shop_location_fields %}
+            {{ shop_location_fields(lat=org.map_lat, lng=org.map_lng, show_address=false) }}
+            {% if org.map_lat is not none %}<label class="form-check small mb-3"><input class="form-check-input" type="checkbox" name="clear_pin" value="yes"> Remove the map pin</label>{% endif %}
+
             <div class="mb-3">
               <label class="form-label" for="osOwnership">Ownership <i class="fa-solid fa-landmark"></i></label>
               <select class="form-select" id="osOwnership" name="ownership" required>

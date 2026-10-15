@@ -52,8 +52,8 @@
         {% set _u = market_unread() %}{% if _u %}<span class="mk-badge">{{ '9+' if _u > 9 else _u }}</span>{% endif %}</a>
       <a class="mk-btn-pill" href="{{ url_for('market_cart') }}"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i> Cart
         {% set _c = market_cart_count() %}{% if _c %}<span class="mk-badge">{{ _c }}</span>{% endif %}</a>
-      {% if current_user.role != 'Buyer' %}<a class="mk-btn-pill" href="{{ url_for('market_mine') }}"><i class="fa-solid fa-box-open" aria-hidden="true"></i> My shop</a>{% endif %}
-      {% if not block_reason and current_user.role != 'Buyer' %}<a class="mk-btn-pill mk-btn-sell" href="{{ url_for('market_sell') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i> Sell</a>{% endif %}
+      {% if current_user.role not in ('Buyer', 'Member') %}<a class="mk-btn-pill" href="{{ url_for('market_mine') }}"><i class="fa-solid fa-box-open" aria-hidden="true"></i> My shop</a>{% endif %}
+      {% if not block_reason and current_user.role not in ('Buyer', 'Member') %}<a class="mk-btn-pill mk-btn-sell" href="{{ url_for('market_sell') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i> Sell</a>{% endif %}
     </div>
   </div>
   {% if block_reason %}<div class="alert alert-warning small"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> {{ block_reason }}</div>{% endif %}

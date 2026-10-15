@@ -207,6 +207,13 @@
 </div>
 
 <div class="mb-4">
+  <label class="form-label" for="venueInput">Venue <i class="fa-solid fa-location-dot" style="color: #198754;"></i></label>
+  <input type="text" name="venue" id="venueInput" class="form-control" maxlength="150" required value="{{ record.venue or '' }}" placeholder="e.g. SKD Sports Complex">
+  <label class="form-check small mt-1"><input class="form-check-input" type="checkbox" name="closed_doors" value="yes" {{ 'checked' if record.venue == 'Behind closed doors' }}
+         onchange="var i=document.getElementById('venueInput'); if (this.checked) { i.value='Behind closed doors'; } else if (i.value==='Behind closed doors') { i.value=''; }"> Behind closed doors</label>
+</div>
+
+<div class="mb-4">
     <label class="form-label">
         Competition Category
         <i class="fa-solid fa-medal"></i>

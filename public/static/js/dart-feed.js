@@ -171,10 +171,10 @@
       h.textContent = c.handle;
       head.appendChild(h);
     }
-    if (c.is_athlete || ['Coach', 'Scout', 'Organization', 'Visitor'].indexOf(c.role) >= 0) {
+    if (c.is_athlete || ['Coach', 'Scout', 'Organization', 'Visitor', 'O-D.A.R.T user'].indexOf(c.role) >= 0) {
       var tag = document.createElement('span');
       tag.className = c.is_athlete ? 'fp-c-tag' : 'fp-c-role' + (c.member ? '' : ' fp-c-visitor');
-      tag.textContent = c.is_athlete ? 'Athlete' : c.role;
+      tag.textContent = c.is_athlete ? 'Athlete' : c.role + (c.device ? ' · ' + c.device : '');
       head.appendChild(tag);
     }
     var ago = document.createElement('span');

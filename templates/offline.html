@@ -429,6 +429,10 @@
                         <label for="orfOpponent">Opponent</label>
                         <input type="text" id="orfOpponent" name="team_played_against" maxlength="100" required placeholder="e.g. St. Mary's">
                     </div>
+                    <div class="orf-field">
+                        <label for="orfVenue">Venue</label>
+                        <input type="text" id="orfVenue" name="venue" maxlength="150" required placeholder="e.g. SKD Sports Complex or Behind closed doors">
+                    </div>
                 </div>
             </fieldset>
 
@@ -701,6 +705,7 @@
         if (!date) return showError('Please enter the game date.');
         if (date > localToday()) return showError("The game date can't be in the future.");
         if (!$('orfTeam').value.trim() || !$('orfOpponent').value.trim()) return showError('Please enter both teams.');
+        if ($('orfVenue').value.trim().length < 2) return showError('Please enter the venue (or "Behind closed doors").');
         if (!$('orfPosition').value) return showError('Please choose your position.');
         if (shirt && !/^\d{1,2}$/.test(shirt)) return showError('Shirt number must be a number from 0 to 99.');
         var negative = Array.prototype.some.call(form.querySelectorAll('input[type=number]'), function (i) { return i.value !== '' && Number(i.value) < 0; });
@@ -711,6 +716,7 @@
             ['sport', sport],
             ['team', $('orfTeam').value.trim()],
             ['team_played_against', $('orfOpponent').value.trim()],
+            ['venue', $('orfVenue').value.trim()],
             ['competition', comp],
             ['competition_category', comp],
             ['year', date.slice(0, 4)],

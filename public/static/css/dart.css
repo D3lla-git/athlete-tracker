@@ -1809,3 +1809,15 @@ html[data-theme="dark"] .dart-slider-dot.is-active { background: #4cd38a; }
 /* The bell can sit anywhere in the bar: open its menu under the top bar, at the right edge, always on screen. */
 .admin-bell-menu.show { position: fixed !important; top: calc(var(--dart-nav-h, 70px) - 4px) !important; right: 12px !important; left: auto !important;
   width: min(360px, calc(100vw - 24px)); transform: none !important; z-index: 1060; }
+
+/* Bell count: always centred on the bell's top-right corner, whatever the number ("3", "12", "9+", "99+"). */
+.nav-bell { padding: 0; font: inherit; font-size: 1.15rem; line-height: 1; }
+.nav-bell .nav-bell-count {
+  top: 0; right: 0; transform: translate(35%, -35%); box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 5px; line-height: 1; letter-spacing: -0.02em;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; font-size: 0.68rem; font-weight: 800;
+  font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none;
+}
+.nav-bell .fp-edit-link { display: none; }
+.fp-edit-link { font-size: 0.75rem; font-weight: 700; color: #198754 !important; text-decoration: none; }

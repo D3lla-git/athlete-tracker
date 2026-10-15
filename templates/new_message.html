@@ -359,6 +359,21 @@ html[data-theme="dark"] .recipient-suggestions {
 
 
         <!-- ===================================================
+             BCC (hidden copy: other recipients never see these names)
+        ==================================================== -->
+
+        <div class="mb-4 recipient-wrapper">
+          <label for="bccName" class="form-label fw-bold">Bcc: <i class="fa-solid fa-user-secret"></i></label>
+          <input type="text" class="form-control form-control-lg" id="bccName" placeholder="Hidden copy: type a registered name..." autocomplete="off">
+          <div id="bccSuggestions" class="recipient-suggestions"></div>
+          <div id="bccSelected" class="selected-recipient-list"></div>
+          <small class="text-muted">People in Bcc get the message; nobody else sees that they did.</small>
+        </div>
+
+        {% if prefill and prefill.reply_to %}<input type="hidden" name="reply_to" value="{{ prefill.reply_to }}">{% endif %}
+        {% if prefill and prefill.forward_of %}<input type="hidden" name="forward_of" value="{{ prefill.forward_of }}">{% endif %}
+
+        <!-- ===================================================
              BODY
         ==================================================== -->
 
@@ -380,7 +395,7 @@ html[data-theme="dark"] .recipient-suggestions {
             class="form-control form-control-lg message-body-textarea"
             placeholder="Write your message..."
             maxlength="5000"
-            required></textarea>
+            required>{{ prefill.body if prefill else '' }}</textarea>
 
           <div class="text-end mt-1">
             <small class="text-muted">
@@ -730,7 +745,9 @@ document.addEventListener('DOMContentLoaded', function () {
   // ADD CC RECIPIENT
   // ==========================================================
 
-  function addCcRecipient(user) {
+  function addCcRecipient(user, field) {
+    field = field || 'cc_user_ids';
+    const list = field === 'bcc_user_ids' ? bccSelected : ccSelected;
 
     /*
      * Don't allow the To recipient to also be CC.
@@ -754,7 +771,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const existing =
       Array.from(
         document.querySelectorAll(
-          'input[name="cc_user_ids"]'
+          'input[name="cc_user_ids"], input[name="bcc_user_ids"]'
         )
       ).some(function (input) {
 
@@ -805,8 +822,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     hiddenInput.type = 'hidden';
 
-    hiddenInput.name =
-      'cc_user_ids';
+    hiddenInput.name = field;
 
     hiddenInput.value =
       user.id;
@@ -827,8 +843,44 @@ document.addEventListener('DOMContentLoaded', function () {
       );
 
 
-    ccSelected.appendChild(chip);
+    list.appendChild(chip);
   }
+
+  // ==========================================================
+  // BCC FIELD (same as Cc, hidden from the other recipients)
+  // ==========================================================
+  const bccName = document.getElementById('bccName');
+  const bccSuggestions = document.getElementById('bccSuggestions');
+  const bccSelected = document.getElementById('bccSelected');
+  let bccSearchTimer = null;
+  bccName.addEventListener('input', function () {
+    const query = this.value.trim();
+    clearTimeout(bccSearchTimer);
+    if (!query) { hideSuggestions(bccSuggestions); return; }
+    bccSearchTimer = setTimeout(async function () {
+      const users = await getRecipientSuggestions(query);
+      if (bccName.value.trim() !== query) return;
+      showSuggestions(bccSuggestions, users, function (user) {
+        addCcRecipient(user, 'bcc_user_ids');
+        bccName.value = '';
+        hideSuggestions(bccSuggestions);
+      });
+    }, 150);
+  });
+  document.addEventListener('click', function (event) {
+    if (!bccName.contains(event.target) && !bccSuggestions.contains(event.target)) hideSuggestions(bccSuggestions);
+  });
+
+  // ==========================================================
+  // PREFILL: Reply all (To + Cc) / Forward (body)
+  // ==========================================================
+  const prefill = {{ (prefill_js or {'to': None, 'cc': []}) | tojson }};
+  if (prefill.to) {
+    toName.value = prefill.to.full_name;
+    toUserId.value = prefill.to.id;
+  }
+  (prefill.cc || []).forEach(function (u) { addCcRecipient(u, 'cc_user_ids'); });
+  if (messageBody.value) { characterCount.textContent = messageBody.value.length; }
 
 
   // ==========================================================

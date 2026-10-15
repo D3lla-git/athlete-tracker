@@ -69,6 +69,22 @@
 </div>
 
 <div class="col-md-3">
+  <label class="form-label" for="venueInput">Venue <i class="fa-solid fa-location-dot" style="color: #198754;"></i></label>
+  <input type="text" name="venue" id="venueInput" class="form-control" maxlength="150" required placeholder="e.g. SKD Sports Complex / school field">
+  <label class="form-check small mt-1"><input class="form-check-input" type="checkbox" name="closed_doors" value="yes" data-closed-doors> Behind closed doors</label>
+</div>
+<script>
+(function () {
+  var box = document.querySelector('[data-closed-doors]'), input = document.getElementById('venueInput');
+  if (!box || !input) return;
+  box.addEventListener('change', function () {
+    if (box.checked) { input.value = 'Behind closed doors'; input.readOnly = true; }
+    else { if (input.value === 'Behind closed doors') input.value = ''; input.readOnly = false; }
+  });
+})();
+</script>
+
+<div class="col-md-3">
     <label for="competition" class="form-label">
         Competition Category
     </label>

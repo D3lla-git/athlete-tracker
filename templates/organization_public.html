@@ -15,6 +15,8 @@
         {% if org.city or org.country %}<span><i class="fa-solid fa-location-dot"></i> {{ [org.city, org.country] | select | join(', ') }}</span>{% endif %}
         {% if org.ownership %}<span><i class="fa-solid fa-landmark"></i> {{ org.ownership }}</span>{% endif %}
         {% if org.sports %}<span><i class="fa-solid fa-medal"></i> {{ org.sports }}</span>{% endif %}
+        {% if org.address %}<span><i class="fa-solid fa-map-pin"></i> {{ org.address }}</span>{% endif %}
+        {% if org_directions_url(org) %}<a href="{{ org_directions_url(org) }}" target="_blank" rel="noopener noreferrer" class="mk-directions"><i class="fa-solid fa-diamond-turn-right"></i> Directions</a>{% endif %}
         {% if org.website and org.website.startswith(('http://', 'https://')) %}
           <a href="{{ org.website }}" target="_blank" rel="noopener nofollow"><i class="fa-solid fa-globe"></i> Website</a>{% endif %}
       </div>
@@ -26,6 +28,10 @@
       <div><strong>{{ coaches | length }}</strong><span>Coach{{ 'es' if coaches | length != 1 }}</span></div>
     </div>
   </section>
+
+  {% if org_map_embed(org) %}
+    <iframe class="op-map" src="{{ org_map_embed(org) }}" title="{{ org.org_name }} on the map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+  {% endif %}
 
   <h2 class="op-title"><i class="fa-solid fa-list-check"></i> Official athletes</h2>
   <p class="text-muted small">Verified athletes of {{ org.org_name }}, sport by sport, from games approved by their coaches.</p>
@@ -62,6 +68,7 @@
 </div>
 <style>
   .op-page { max-width: 1040px; }
+  .op-map { display: block; width: 100%; height: 240px; margin-top: 14px; border: 0; border-radius: 20px; background: #e9ecef; }
   .op-hero { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 22px; border-radius: 24px; color: #fff;
     background: var(--dart-primary-gradient, linear-gradient(135deg, #0d2413, #198754)); box-shadow: 0 14px 38px rgba(0, 0, 0, 0.18); }
   .op-logo { width: 92px; height: 92px; border-radius: 22px; object-fit: contain; background: #fff; flex: 0 0 92px; }

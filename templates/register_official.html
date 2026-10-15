@@ -11,9 +11,9 @@
 
       <section class="integrity-hero text-center" aria-label="Match official registration">
         <i class="fa-solid fa-clipboard-check fa-2x mb-2" aria-hidden="true"></i>
-        <h2>Become a Match Official</h2>
-        <p class="mx-auto">For sports journalists, league secretaries, school sports coordinators, community youth leaders and referees.
-           Officials independently confirm athletes' records, so coaches can't publish fake numbers. Free.</p>
+        <h2>Other-D.A.R.T user</h2>
+        <p class="mx-auto">For sports journalists, Normal-users, league secretaries, school sports coordinators, community youth leaders and referees.
+           Officials independently confirm athletes' records, so coaches can't publish fake numbers.Help us shape and uplift the integrity of sports in Liberia+. Free.</p>
       </section>
 
       <div class="card shadow-sm border-0">
@@ -42,11 +42,12 @@
                 <select class="form-select" id="official_type" name="official_type" required>
                   <option value="">Choose…</option>
                   {% for t in official_types %}<option value="{{ t }}" {% if form.get('official_type') == t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+                  <option value="{{ odart_choice }}" data-odart>O-D.A.R.T user (just curious about D.A.R.T.)</option>
                 </select>
               </div>
-              <div class="col-md-6 mb-3">
+              <div class="col-md-6 mb-3" data-org-field>
                 <label class="form-label" for="organization">Newspaper / league / school / group</label>
-                <input class="form-control" id="organization" name="organization" maxlength="150" required value="{{ form.get('organization', '') }}">
+                <input class="form-control" id="organization" name="organization" maxlength="150" value="{{ form.get('organization', '') }}">
               </div>
             </div>
 
@@ -88,6 +89,24 @@
     </div>
   </div>
 </div>
+<script>
+(function () {
+  // Newspaper / league / school / group: only for journalists, league secretaries,
+  // school sports coordinators and community youth leaders.
+  var withOrg = {{ official_types_with_org | list | tojson }};
+  var select = document.getElementById('official_type');
+  var box = document.querySelector('[data-org-field]'), input = document.getElementById('organization');
+  function sync() {
+    if (select.value === {{ odart_choice | tojson }}) { window.location.href = {{ url_for('register_member') | tojson }}; return; }
+    var need = withOrg.indexOf(select.value) >= 0;
+    box.hidden = !need;
+    input.required = need;
+    if (!need) input.value = '';
+  }
+  select.addEventListener('change', sync);
+  sync();
+})();
+</script>
 {{ gov_name_assets() }}
 {{ username_assets() }}
 {% endblock %}

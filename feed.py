@@ -307,9 +307,10 @@ def comment_rate_limited(actor):
     return False
 
 
-def add_comment(highlight, actor, body, visitor_name=None):
+def add_comment(highlight, actor, body, visitor_name=None, visitor_device=None):
     comment = HighlightComment(highlight_id=highlight.id, body=body, **actor.fields(),
-                               visitor_name=None if actor.is_member else (visitor_name or 'Visitor'))
+                               visitor_name=None if actor.is_member else (visitor_name or 'Visitor'),
+                               visitor_device=None if actor.is_member else (visitor_device or None))
     db.session.add(comment)
     _bump(highlight.id, 'comment_count', +1)
     db.session.commit()

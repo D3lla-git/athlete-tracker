@@ -1,0 +1,131 @@
+{# Athlete "Spotlight" slides for the Home hero carousel: interleaved with the D.A.R.T. cards
+   (one card, then one spotlight). An athlete's live action photo, floating sport badges and
+   layered glass profile cards (public card info only).
+   spotlight_slide(s, back) - s / back: items of spotlight_athletes() #}
+{% macro spotlight_slide(s, back=None) %}
+{% set info = s.info %}
+{% set url = profile_share_path(s.h.user) %}
+<div class="carousel-item">
+  <div class="dart-card dart-card-spot" aria-label="Athlete spotlight: {{ info.name }}">
+    <div class="spot-copy">
+      <span class="dart-card-eyebrow"><i class="fa-solid fa-circle-dot"></i> ATHLETE SPOTLIGHT</span>
+      <h1 class="spot-name">{{ info.name }}</h1>
+      <p class="spot-sub">{{ info.subtitle }}{% if s.h.caption %} · “{{ s.h.caption }}”{% endif %}</p>
+      <div class="spot-cta">
+        <a class="btn spot-btn spot-btn-main" href="{{ url }}"><i class="fa-solid fa-id-card"></i> View profile</a>
+        <a class="btn spot-btn" href="{{ url_for('feed_post', highlight_id=s.h.id) }}"><i class="fa-solid fa-play"></i> Watch highlight</a>
+      </div>
+    </div>
+
+    <div class="spot-stage">
+      <span class="spot-glow" aria-hidden="true"></span>
+      <img class="spot-photo" src="{{ s.img }}" alt="{{ info.name }} in action{{ ' playing ' ~ s.h.sport if s.h.sport }}" loading="lazy">
+      {% for icon, cls in (('fa-futbol', 'b1'), ('fa-basketball', 'b2'), ('fa-baseball', 'b3'), ('fa-trophy', 'b4'), ('fa-stopwatch', 'b5'), ('fa-medal', 'b6')) %}
+        <span class="spot-blob spot-{{ cls }}" aria-hidden="true"><i class="fa-solid {{ icon }}"></i></span>
+      {% endfor %}
+
+      {% if back %}
+        <div class="spot-card spot-card-back" aria-hidden="true">
+          <div class="spot-card-top">
+            <img src="{{ back.img }}" alt="" class="spot-avatar" loading="lazy">
+            <div><span class="spot-eyebrow">Athlete profile</span><strong>{{ back.info.name }}</strong><small>{{ back.h.sport or 'Athlete' }}</small></div>
+          </div>
+          <span class="spot-tag">{{ back.info.pill }}</span>
+        </div>
+      {% endif %}
+
+      <a class="spot-card spot-card-front" href="{{ url }}" aria-label="Open {{ info.name }}'s profile">
+        <div class="spot-card-top">
+          {% if info.picture %}<img src="{{ url_for('profile_picture', filename=info.picture) }}" alt="" class="spot-avatar" loading="lazy">
+          {% else %}<img src="{{ s.img }}" alt="" class="spot-avatar" loading="lazy">{% endif %}
+          <div>
+            <span class="spot-eyebrow">Athlete profile</span>
+            <strong>{{ info.name }}{% if info.verified %} <i class="fa-solid fa-circle-check spot-check" aria-label="Verified"></i>{% endif %}</strong>
+            <small>{{ info.subtitle }}</small>
+          </div>
+          <span class="spot-card-tools" aria-hidden="true"><i class="fa-solid fa-share-nodes"></i></span>
+        </div>
+        <span class="spot-tag">{{ info.pill }}</span>
+        <div class="spot-stats">
+          {% for label, value in info.stats[:3] %}<div><span>{{ label }}</span><strong>{{ value }}</strong></div>{% endfor %}
+        </div>
+        <div class="spot-foot">
+          {% if info.nationality %}<span>{{ info.flag }} {{ info.nationality }}</span>{% else %}<span>{{ team_badge(s.h.user.school) }}{{ s.h.user.school or 'Individual athlete' }}</span>{% endif %}
+          <span class="spot-brand"><b>D</b>.A.R.T. <em>Verified</em></span>
+        </div>
+      </a>
+
+      <span class="spot-pill"><i class="fa-solid fa-bolt" aria-hidden="true"></i> Spotlight <i class="fa-solid fa-star" aria-hidden="true"></i></span>
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro spotlight_styles() %}
+<style>
+  .dart-card.dart-card-spot {
+    background: radial-gradient(circle at 75% 35%, rgba(57, 185, 114, 0.30), transparent 40%),
+                radial-gradient(circle at 90% 85%, rgba(13, 110, 253, 0.18), transparent 38%),
+                linear-gradient(135deg, #071208, #0d2413 55%, #061008);
+  }
+  .spot-copy { position: relative; z-index: 2; min-width: 0; }
+  .spot-name { margin: 14px 0 8px; font-size: clamp(2rem, 4.6vw, 3.6rem); font-weight: 900; line-height: 1.05; overflow-wrap: anywhere; }
+  .spot-sub { font-size: 1.05rem; opacity: 0.85; margin-bottom: 20px; overflow-wrap: anywhere; }
+  .spot-cta { display: flex; flex-wrap: wrap; gap: 10px; }
+  .spot-btn { padding: 11px 20px; border-radius: 999px; font-weight: 800; color: #fff !important; border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.08); }
+  .spot-btn-main { border: 0; background: var(--dart-primary-gradient, linear-gradient(135deg, #198754, #0d6efd)); }
+  .spot-stage { position: relative; min-height: 430px; display: grid; place-items: center; }
+  .spot-glow { position: absolute; width: 70%; aspect-ratio: 1; border-radius: 50%; filter: blur(50px);
+    background: radial-gradient(circle, rgba(57, 185, 114, 0.55), rgba(13, 110, 253, 0.25) 55%, transparent 70%); }
+  .spot-photo { position: relative; width: min(78%, 320px); aspect-ratio: 3 / 4; object-fit: cover; border-radius: 30px;
+    -webkit-mask-image: linear-gradient(#000 72%, transparent); mask-image: linear-gradient(#000 72%, transparent);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35); }
+  .spot-blob { position: absolute; z-index: 2; width: 56px; height: 56px; display: grid; place-items: center; font-size: 1.35rem; color: #fff;
+    border-radius: 42% 58% 55% 45% / 48% 42% 58% 52%;
+    background: var(--dart-primary-gradient, linear-gradient(135deg, #39b972, #0d6efd));
+    box-shadow: 0 10px 24px rgba(13, 110, 253, 0.35), inset 0 2px 6px rgba(255, 255, 255, 0.35);
+    animation: spotFloat 5s ease-in-out infinite; }
+  .spot-b1 { top: 4%; left: 8%; width: 70px; height: 70px; font-size: 1.7rem; }
+  .spot-b2 { top: 6%; right: 8%; animation-delay: -1s; }
+  .spot-b3 { top: 40%; left: 0; width: 46px; height: 46px; font-size: 1.05rem; animation-delay: -2s; }
+  .spot-b4 { top: 30%; right: 0; width: 50px; height: 50px; animation-delay: -3s; }
+  .spot-b5 { top: 22%; right: 22%; width: 38px; height: 38px; font-size: 0.9rem; animation-delay: -1.5s; }
+  .spot-b6 { bottom: 6%; right: 4%; width: 58px; height: 58px; animation-delay: -2.5s; }
+  @keyframes spotFloat { 50% { transform: translateY(-8px) rotate(4deg); } }
+  .spot-card { position: absolute; z-index: 3; display: block; padding: 12px; border-radius: 18px; text-decoration: none; color: #fff !important;
+    text-align: left; background: linear-gradient(145deg, rgba(20, 28, 24, 0.92), rgba(9, 16, 12, 0.92)); border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .spot-card-front { bottom: 11%; right: 2%; width: min(66%, 300px); }
+  .spot-card-back { bottom: 21%; left: 0; width: min(48%, 210px); transform: scale(0.92); opacity: 0.88; }
+  .spot-card-top { display: flex; gap: 10px; align-items: center; }
+  .spot-card-top > div { min-width: 0; flex: 1; }
+  .spot-avatar { width: 46px; height: 46px; flex: 0 0 46px; border-radius: 12px; object-fit: cover; background: #0d2413; }
+  .spot-eyebrow { display: block; font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.6; }
+  .spot-card strong { display: block; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spot-card small { display: block; font-size: 0.75rem; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spot-check { color: #4cd38a; font-size: 0.8em; }
+  .spot-card-tools { opacity: 0.7; font-size: 0.85rem; align-self: flex-start; }
+  .spot-tag { display: inline-block; margin-top: 8px; padding: 2px 10px; border-radius: 999px; font-size: 0.68rem; font-weight: 800;
+    background: var(--dart-primary-gradient, linear-gradient(135deg, #198754, #0d6efd)); }
+  .spot-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+  .spot-stats span { display: block; font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.55; }
+  .spot-stats strong { font-size: 0.82rem; }
+  .spot-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.72rem; opacity: 0.85; }
+  .spot-foot > span:first-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spot-brand { white-space: nowrap; font-weight: 800; }
+  .spot-brand b { color: #39b972; }
+  .spot-brand em { font-style: normal; font-size: 0.85em; color: #4cd38a; margin-left: 2px; }
+  .spot-pill { position: absolute; z-index: 4; bottom: 0; left: 50%; transform: translateX(-50%); padding: 8px 22px; border-radius: 999px;
+    font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; color: #fff; white-space: nowrap;
+    background: #061008; border: 1px solid rgba(57, 185, 114, 0.45); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4); }
+  .spot-pill i { color: #39b972; }
+  @media (max-width: 900px) {
+    .dart-card-spot .spot-cta { justify-content: center; }
+    .spot-stage { min-height: 380px; }
+    .spot-card-front { right: 0; width: min(78%, 280px); }
+    .spot-card-back { width: min(56%, 190px); }
+  }
+  @media (prefers-reduced-motion: reduce) { .spot-blob { animation: none; } }
+</style>
+{% endmacro %}

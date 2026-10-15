@@ -40,15 +40,41 @@
   </div>
 
   <div class="mk-chat" aria-live="polite">
-    {% for m in thread.messages %}
-      <div class="mk-msg {{ 'mk-msg-me' if m.sender_id == current_user.id else 'mk-msg-them' }}" {% if loop.last %}id="last"{% endif %}>{{ m.body }}<small>{{ m.created_at.strftime('%d %b, %H:%M') }} UTC</small></div>
+    {% for m in shown %}
+      {% set mine = m.sender_id == current_user.id %}
+      {% set editable = message_can_edit(m, current_user.id) %}
+      <div class="mk-msg {{ 'mk-msg-me' if mine else 'mk-msg-them' }}" id="mm{{ m.id }}">
+        {%- set q = by_id.get(m.reply_to_id) if m.reply_to_id else None -%}
+        {%- if q %}<a class="mk-quote" href="#mm{{ q.id }}"><strong>{{ 'You' if q.sender_id == current_user.id else other.display_name }}</strong>{{ q.body | truncate(120, True, '…') }}</a>{% endif -%}
+        <span class="mk-msg-body">{{ m.body }}</span>
+        <small>{{ m.created_at.strftime('%d %b, %H:%M') }} UTC{% if m.edited_at %} · edited{% endif %}
+          <button type="button" class="mk-msg-menu" data-mk-menu aria-label="Message options"><i class="fa-solid fa-ellipsis"></i></button></small>
+        <span class="mk-msg-actions" hidden>
+          {% if not block_reason %}<button type="button" data-mk-reply data-id="{{ m.id }}" data-name="{{ 'You' if mine else other.display_name }}" data-snippet="{{ m.body | truncate(80, True, '…') }}"><i class="fa-solid fa-reply"></i> Reply</button>{% endif %}
+          {% if editable %}<button type="button" data-mk-edit data-left="{{ (message_edit_seconds - message_age_seconds(m.created_at)) | int }}"><i class="fa-solid fa-pen"></i> Edit</button>{% endif %}
+          <form method="POST" action="{{ url_for('market_message_action', message_id=m.id, action='delete') }}" onsubmit="return confirm('Delete this message for you? The other person keeps it.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit"><i class="fa-solid fa-trash"></i> Delete for me</button></form>
+        </span>
+        {% if editable %}
+          <form class="mk-msg-edit" method="POST" action="{{ url_for('market_message_action', message_id=m.id, action='edit') }}" hidden>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <textarea class="form-control form-control-sm" name="body" rows="2" maxlength="1000" aria-label="Edit message">{{ m.body }}</textarea>
+            <button class="btn btn-sm btn-light mt-1" type="submit">Save</button>
+          </form>
+        {% endif %}
+      </div>
+      {% if loop.last %}<span id="last"></span>{% endif %}
     {% endfor %}
   </div>
   {% if block_reason %}
     <p class="small text-muted mt-2">{{ block_reason }}</p>
   {% else %}
+    <div class="mk-reply-bar" id="mkReplyBar" hidden><i class="fa-solid fa-reply"></i>
+      <span>Replying to <strong data-name></strong>: <span data-snippet></span></span>
+      <button type="button" class="btn btn-sm" data-mk-reply-cancel aria-label="Cancel reply"><i class="fa-solid fa-xmark"></i></button></div>
     <form method="POST" class="mk-chat-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="reply_to" id="mkReplyTo" value="">
       <label class="visually-hidden" for="mkReply">Message</label>
       <textarea class="form-control" id="mkReply" name="body" rows="2" maxlength="1000" required placeholder="Write a message…"></textarea>
       <button class="btn dart-btn" type="submit" aria-label="Send"><i class="fa-solid fa-paper-plane"></i></button>
@@ -58,5 +84,20 @@
 </div>
 <script>
   (function () { var c = document.querySelector('.mk-chat'); if (c) c.scrollTop = c.scrollHeight; })();
+  (function () {
+    var bar = document.getElementById('mkReplyBar'), to = document.getElementById('mkReplyTo'), box = document.getElementById('mkReply');
+    document.addEventListener('click', function (e) {
+      var menu = e.target.closest('[data-mk-menu]');
+      if (menu) { var a = menu.closest('.mk-msg').querySelector('.mk-msg-actions'); a.hidden = !a.hidden; return; }
+      var r = e.target.closest('[data-mk-reply]');
+      if (r && bar) { to.value = r.dataset.id; bar.querySelector('[data-name]').textContent = r.dataset.name;
+        bar.querySelector('[data-snippet]').textContent = r.dataset.snippet; bar.hidden = false; r.closest('.mk-msg-actions').hidden = true; box.focus(); return; }
+      if (e.target.closest('[data-mk-reply-cancel]')) { to.value = ''; bar.hidden = true; return; }
+      var ed = e.target.closest('[data-mk-edit]');
+      if (ed) { var m = ed.closest('.mk-msg'); m.querySelector('.mk-msg-edit').hidden = false; m.querySelector('.mk-msg-body').hidden = true;
+        ed.closest('.mk-msg-actions').hidden = true; }
+    });
+    document.querySelectorAll('[data-mk-edit]').forEach(function (b) { setTimeout(function () { b.remove(); }, Math.max(0, +b.dataset.left || 0) * 1000); });
+  })();
 </script>
 {% endblock %}

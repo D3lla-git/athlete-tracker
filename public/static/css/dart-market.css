@@ -261,3 +261,17 @@ html[data-theme="dark"] .mk-track-line { background: rgba(255, 255, 255, 0.15); 
 .mk-pin { padding: 12px; border-radius: 14px; border: 1px dashed rgba(220, 53, 69, 0.4); background: rgba(220, 53, 69, 0.04); }
 .mk-directions { white-space: nowrap; }
 @media (max-width: 575.98px) { .mk-map { height: 210px; } }
+
+/* Market$ chat: reply, edit (1 min), delete for me */
+.mk-msg-menu { border: 0; background: transparent; color: inherit; opacity: 0.6; padding: 0 4px; margin-left: 4px; }
+.mk-msg-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; white-space: normal; }
+.mk-msg-actions[hidden] { display: none; }
+.mk-msg-actions form { margin: 0; }
+.mk-msg-actions button { border: 0; border-radius: 999px; padding: 2px 9px; font-size: 0.72rem; font-weight: 700; color: inherit; background: rgba(127, 127, 127, 0.2); }
+.mk-quote { display: block; margin-bottom: 4px; padding: 4px 8px; border-left: 3px solid #39b972; border-radius: 6px; font-size: 0.78rem; white-space: normal;
+  text-decoration: none; color: inherit !important; background: rgba(127, 127, 127, 0.15); }
+.mk-quote strong { display: block; font-size: 0.72rem; }
+.mk-reply-bar { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 6px 10px; border-radius: 12px; border-left: 3px solid #39b972;
+  font-size: 0.82rem; background: rgba(127, 127, 127, 0.1); }
+.mk-reply-bar[hidden] { display: none; }
+.mk-reply-bar > span { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
