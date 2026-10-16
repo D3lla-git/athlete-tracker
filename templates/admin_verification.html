@@ -37,6 +37,7 @@
       </div>
       {{ proof_note(r) }}
       <a class="small" href="{{ url_for('record_history', record_id=r.id) }}"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Full history</a>
+      {% from '_record_admin_delete.html' import admin_delete_record with context %}{{ admin_delete_record(r) }}
       <form method="POST" action="{{ url_for('resolve_dispute', record_id=r.id) }}" class="mt-1">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {% for key, label in dispute_decisions.items() %}

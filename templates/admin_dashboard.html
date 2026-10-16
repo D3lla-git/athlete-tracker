@@ -476,6 +476,8 @@
             {{ proof_note(r) }}
             {% if r.status == 'pending' %}
             {# Equal Approve / Reject pair; Reject opens its reasons full width below. #}
+            {% from '_record_admin_delete.html' import admin_delete_record with context %}
+            <div class="text-center mt-2">{{ admin_delete_record(r, url_for('admin_dashboard') ~ '#pendingRecords') }}</div>
             <div class="rec-card-actions mt-3">
               {% if r.needs_proof and current_user.role != 'System' and integrity_on %}
               <span class="badge dart-status-proof rec-approve-btn"><i class="fa-solid fa-file-circle-exclamation" aria-hidden="true"></i> Proof needed</span>
@@ -577,6 +579,8 @@
                 {{ record_status_badge(r) }}
               {% endif %}
               {{ proof_note(r) }}
+              {% from '_record_admin_delete.html' import admin_delete_record with context %}
+              {{ admin_delete_record(r, url_for('admin_dashboard') ~ '#pendingRecords') }}
 
               {% if r.status == 'pending' %}
                 <div class="rt-actions justify-content-center">
@@ -605,6 +609,39 @@
     <p class="text-muted text-center">No records waiting for approval.</p>
   {% endif %}
 </div>
+
+{% if current_user.role == 'System' %}
+<!-- ==================== REJECTED RECORDS (D.A.R.T Admin: delete any time) ==================== -->
+{% set _rejected = admin_rejected_records() %}
+<div class="admin-pending-table-heading" id="rejectedRecords">
+  <h4 class="mt-5 mb-1">Rejected Records <i class="fa-solid fa-circle-xmark text-danger"></i>
+    {% if _rejected %}<span class="badge text-bg-danger ms-1">{{ _rejected | length }}</span>{% endif %}</h4>
+  <p class="text-muted small mb-3"><i class="fa-solid fa-trash-can"></i> Only the D.A.R.T Admin can delete a record, at any time, with a reason. Its history is kept.</p>
+</div>
+{% if _rejected %}
+  <div class="records-table-wrap admin-pending-table-wrap">
+    <table class="table records-table records-table-wide align-middle mb-0">
+      <thead><tr><th scope="col">Athlete</th>{{ record_header_cells() }}<th scope="col" class="text-center">Status &amp; Actions</th></tr></thead>
+      <tbody>
+        {% for r in _rejected %}
+          <tr>
+            {{ athlete_cell(r) }}
+            {{ record_cells(r) }}
+            <td class="text-center"><div class="d-flex flex-column align-items-center gap-2">
+              {{ rejection_badge(r) }}
+              <a class="small" href="{{ url_for('record_history', record_id=r.id) }}"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
+              {% from '_record_admin_delete.html' import admin_delete_record with context %}
+              {{ admin_delete_record(r, url_for('admin_dashboard') ~ '#rejectedRecords') }}
+            </div></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p class="text-muted text-center">No rejected records.</p>
+{% endif %}
+{% endif %}
 
 {% if current_user.role == 'Coach' %}
 <!-- ==================== APPROVED RECORDS (read-only) ==================== -->

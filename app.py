@@ -10252,35 +10252,48 @@ def api_submit_record():
 @app.route('/delete_record/<int:record_id>', methods=['POST'])
 @login_required
 def delete_record(record_id):
+    """Only the D.A.R.T Admin deletes a record (any status), with a reason. Its history is kept for good."""
     record = SportRecord.query.get_or_404(record_id)
-
-    # Security checks
-    if record.user_id != current_user.id:
-        flash('You can only delete your own records.', 'danger')
-        return redirect(url_for('student_dashboard'))
-
-    if record.status != 'rejected':
-        flash('You can only delete rejected records.', 'danger')
-        return redirect(url_for('student_dashboard'))
-
-    # Deleted rows are gone, so record the deletion for the
-    # D.A.R.T Admin dashboard's "records deleted" count.
+    if current_user.role != 'System':
+        flash('Only the D.A.R.T Admin can delete records. If one is wrong, ask your coach or the D.A.R.T Admin.', 'danger')
+        return redirect(url_for(dashboard_endpoint_for(current_user)))
+    back = safe_next_url(request.form.get('next')) or url_for('verification_center')
+    reason = ' '.join((request.form.get('reason') or '').split())[:200]
+    if len(reason) < 10:
+        flash('Say why the record is deleted (at least 10 characters).', 'warning')
+        return redirect(back)
+    # The chained history stays (the row is gone, its trail is not); counted on the dashboard as "records deleted".
+    integrity.log_event(record, current_user, 'deleted_by_admin', reason)
     create_audit_log(
         RECORD_DELETED_ACTION,
         actor_user_id=current_user.id,
         target_type='sport_record',
         target_id=str(record.id),
-        details={
-            'sport': record.sport,
-            'competition_category': record.competition_category,
-            'status': record.status
-        }
+        details={'sport': record.sport, 'competition_category': record.competition_category, 'status': record.status,
+                 'athlete_id': record.user_id, 'reason': reason}
     )
-
+    notif.notify(record.user_id, 'record_deleted', f'The D.A.R.T Admin deleted your {record.sport} record vs '
+                                                    f'{record.team_played_against or "-"}: {reason}', '/student#my-records')
+    proof_path = record.proof_path
+    # Rows that belong to the record go with it (pins, cross-signatures); the chained history stays on purpose.
+    PinnedSportRecord.query.filter_by(sport_record_id=record.id).delete(synchronize_session=False)
+    RecordCheck.query.filter_by(record_id=record.id).delete(synchronize_session=False)
     db.session.delete(record)
-    db.session.commit()
-    flash('Rejected record deleted successfully. You can now submit a new one.', 'success')
-    return redirect(url_for('student_dashboard'))
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.exception('Record delete failed: %s', e)
+        flash('The record could not be deleted. Nothing was changed; please try again.', 'danger')
+        return redirect(back)
+    # Its match-sheet proof file is removed from Supabase Storage too.
+    if proof_path:
+        try:
+            supabase.storage.from_('id-documents').remove([proof_path])
+        except Exception as e:
+            app.logger.warning('Proof file of deleted record %s not removed from storage: %s', record_id, e)
+    flash('Record deleted. Its history is kept.', 'success')
+    return redirect(back)
 
 # resubmit route============
 @app.route('/resubmit_record/<int:record_id>', methods=['POST'])
@@ -12491,6 +12504,11 @@ def delete_account():
     for h in AthleteHighlight.query.filter(AthleteHighlight.user_id == user_id,
                                            AthleteHighlight.status != 'rejected').all():
         highlight_files.setdefault(h.storage_bucket or HIGHLIGHTS_BUCKET, []).append(h.storage_path)
+    # Match-sheet proofs of the athlete's records (same private bucket as ID documents).
+    proof_files = [p for (p,) in db.session.query(SportRecord.proof_path).filter(
+        SportRecord.user_id == user_id, SportRecord.proof_path.isnot(None)).all()]
+    if proof_files:
+        highlight_files.setdefault('id-documents', []).extend(proof_files)
 
     # Remove associated Storage objects before deleting database data.
     # If Storage reports an error, keep the account intact.
@@ -16720,6 +16738,17 @@ def admin_publish_fixture_records(fixture_id):
     db.session.commit()
     flash(f'{published} record(s) published.' if published else 'No record is ready to publish yet.', 'success' if published else 'info')
     return redirect(url_for('fixture_match', fixture_id=fixture.id) + '#records')
+
+
+def admin_rejected_records(limit=100):
+    """Rejected records (newest first) for the D.A.R.T Admin, who can still delete them at any time."""
+    if not (current_user.is_authenticated and current_user.role == 'System'):
+        return []
+    return (SportRecord.query.options(joinedload(SportRecord.user)).filter(SportRecord.status == 'rejected')
+            .order_by(SportRecord.rejected_at.desc().nullslast(), SportRecord.id.desc()).limit(limit).all())
+
+
+app.jinja_env.globals.update(admin_rejected_records=admin_rejected_records)
 
 
 def fixture_records_ready_count():

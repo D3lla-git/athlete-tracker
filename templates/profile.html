@@ -414,6 +414,13 @@
 
 {% endif %}
 
+<style>
+  /* My Profile text colours. Parent / guardian contact: black text in light mode, white in dark mode. */
+  .gd-profile .form-control, .gd-profile .form-select { color: #000; }
+  html[data-theme="dark"] .gd-profile .form-control, html[data-theme="dark"] .gd-profile .form-select { color: #fff; }
+  .nin-age-wait { color: #000; background: rgba(255, 193, 7, 0.35); border: 1px solid #ffc107; }
+  html[data-theme="dark"] .nin-age-wait { color: #fff; background: rgba(255, 193, 7, 0.22); }
+</style>
 {% if is_minor_athlete(current_user) %}
 {# Parent / guardian contact: only for athletes under 17 (required); only coaches of the team and the D.A.R.T Admin see it. #}
 {% set minor = true %}
@@ -1065,7 +1072,7 @@ function toggleChangePassword() {
       {% else %}<span class="badge {{ 'text-bg-danger' if nin_missing() else 'text-bg-secondary' }}">No NIN yet</span>{% endif %}
       {% if current_user.age_verified_at %}<span class="badge text-bg-success"><i class="fa-solid fa-circle-check"></i> Age verified by D.A.R.T. ({{ age_sources.get(current_user.age_verified_source, '') }})</span>
       {% elif current_user.age_check_note %}<span class="badge text-bg-danger">Age not verified</span>
-      {% else %}<span class="badge text-bg-warning">Age check waiting</span>{% endif %}
+      {% else %}<span class="badge nin-age-wait">Age check waiting</span>{% endif %}
     </div>
     {% if current_user.age_check_note %}<div class="alert alert-danger small py-2"><strong>D.A.R.T. says:</strong> {{ current_user.age_check_note }}</div>{% endif %}
     <p class="small text-muted mb-2">Your NIN is never shown on your profile, card or to coaches, scouts or organizations, and never shown back to you.

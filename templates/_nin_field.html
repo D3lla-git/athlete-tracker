@@ -4,7 +4,7 @@
 {% macro nin_input(mode='athlete', input_id='nin') %}
 <div class="mb-3 nin-field" data-nin-mode="{{ mode }}">
   <label class="form-label" for="{{ input_id }}">National ID Number (NIN) <i class="fa-solid fa-id-card-clip" aria-hidden="true"></i>
-    <span class="nin-req badge rounded-pill text-bg-light" {% if mode != 'coach' %}hidden{% endif %}>Required</span></label>
+    <span class="nin-req badge rounded-pill" {% if mode != 'coach' %}hidden{% endif %}>Required</span></label>
   <input type="text" name="nin" id="{{ input_id }}" class="form-control nin-input" inputmode="numeric" autocomplete="off"
          spellcheck="false" maxlength="14" placeholder="10 digits, e.g. 2500750437" aria-describedby="{{ input_id }}Help {{ input_id }}Msg"
          {% if mode == 'coach' %}required{% endif %} data-lpignore="true">
@@ -43,6 +43,10 @@
   setTimeout(check, 0);
 })();
 </script>
+<style>
+  .nin-req { color: #000; background: transparent; border: 1px solid currentColor; font-weight: 800; }
+  html[data-theme="dark"] .nin-req { color: #fff; }
+</style>
 {% endmacro %}
 
 {# The D.A.R.T Admin's view of a person's NIN + age check (System only; renders nothing for anyone else). #}

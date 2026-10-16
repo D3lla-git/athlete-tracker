@@ -10,6 +10,8 @@
     <p>{{ user_link(record.user) }} · {{ record.sport }} · {{ record.game_date.strftime('%d %b %Y') if record.game_date else record.year }} ·
        {{ team_name_link(record.team) }} vs {{ team_name_link(record.team_played_against) }} · {{ record_line(record) }}</p>
     <div class="mt-2">{{ record_status_badge(record) }}</div>
+    {% from '_record_admin_delete.html' import admin_delete_record with context %}
+    <div class="mt-2">{{ admin_delete_record(record, url_for('verification_center')) }}</div>
   </section>
 
   <div class="integrity-panel">

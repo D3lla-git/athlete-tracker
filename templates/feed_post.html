@@ -1,11 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ post.user.full_name }}{{ ' · ' ~ post.sport if post.sport }} highlight · D.A.R.T.<script id="fpEditExpire">
-document.querySelectorAll('[data-edit-expires]').forEach(function (b) {
-  var s = parseInt(b.getAttribute('data-edit-expires'), 10);
-  if (!isNaN(s)) setTimeout(function () { b.remove(); }, Math.max(0, s) * 1000);
-});
-</script>
-{% endblock %}
+{% block title %}{{ post.user.full_name }}{{ ' · ' ~ post.sport if post.sport }} highlight · D.A.R.T.{% endblock %}
 {% block meta_description %}{{ post.caption or (post.user.full_name ~ "'s " ~ (post.sport or 'sports') ~ ' highlight on D.A.R.T.') }}{% endblock %}
 {% block robots %}<meta name="robots" content="{{ 'index, follow' if indexable else 'noindex, nofollow' }}">{% endblock %}
 {% block og_type %}{{ 'video.other' if post.is_video else 'article' }}{% endblock %}
@@ -75,4 +69,10 @@ document.querySelectorAll('[data-edit-expires]').forEach(function (b) {
   </section>
 </div>
 <script src="{{ url_for('static', filename='js/dart-feed.js') }}" defer></script>
+<script id="fpEditExpire">
+document.querySelectorAll('[data-edit-expires]').forEach(function (b) {
+  var s = parseInt(b.getAttribute('data-edit-expires'), 10);
+  if (!isNaN(s)) setTimeout(function () { b.remove(); }, Math.max(0, s) * 1000);
+});
+</script>
 {% endblock %}

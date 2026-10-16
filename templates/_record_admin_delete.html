@@ -1,0 +1,22 @@
+{# The D.A.R.T Admin deletes a record (any status) with a reason; nobody else can. Renders nothing for other users. #}
+{% macro admin_delete_record(r, next_url='') %}
+{% if current_user.is_authenticated and current_user.role == 'System' %}
+<details class="rad">
+  <summary><i class="fa-solid fa-trash-can" aria-hidden="true"></i> Delete record</summary>
+  <form method="POST" action="{{ url_for('delete_record', record_id=r.id) }}" class="rad-form"
+        onsubmit="return confirm('Delete this record for good? Its history is kept.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="next" value="{{ next_url or request.full_path }}">
+    <input class="form-control form-control-sm" name="reason" required minlength="10" maxlength="200" placeholder="Why? (the athlete sees it)" aria-label="Reason">
+    <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+  </form>
+</details>
+<style>
+  .rad { display: inline-block; font-size: 0.82rem; }
+  .rad summary { cursor: pointer; color: #dc3545; font-weight: 700; list-style: none; }
+  .rad summary::-webkit-details-marker { display: none; }
+  .rad-form { display: flex; gap: 6px; margin-top: 6px; }
+  .rad-form .form-control { min-width: 180px; }
+</style>
+{% endif %}
+{% endmacro %}

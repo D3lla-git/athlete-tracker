@@ -1642,9 +1642,10 @@ class PinnedSportRecord(db.Model):
         backref='pinned_sport_records'
     )
 
+    # Deleting a record deletes its pins (never "unlink" them: sport_record_id is NOT NULL).
     sport_record = db.relationship(
         'SportRecord',
-        backref='pinned_by_users'
+        backref=db.backref('pinned_by_users', cascade='all, delete-orphan', passive_deletes=True)
     )
 
     __table_args__ = (
