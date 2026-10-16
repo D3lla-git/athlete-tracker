@@ -12,6 +12,8 @@ head-to-head record and links to the players' match records.
 import io
 import json
 import re
+
+import fixtures as _fx
 from datetime import datetime, timedelta
 
 from fpdf import FPDF
@@ -24,12 +26,12 @@ LINEUP_SIZES = {'Football': (11, 12), 'Basketball': (5, 7), 'Kickball': (10, 10)
 LINEUP_LOCK_MINUTES = 5
 SUMMARY_MAX_WORDS = 10
 # Competitions on the national sporting agenda (standings are entered per competition).
-COMPETITIONS = (
-    'LFA First Division', 'LFA Second Division', 'LFA Third Division', "LFA Women's League", 'LFA Cup',
-    'LBA League', 'LBA Cup',
-    'MYS National County Sports Meet', 'MYS Kickball League', 'MYS Schools Sports',
-    'Friendly',
-)
+# Organization Pro games: every federation competition (fixtures.CATALOGUE: leagues, cups, grassroots,
+# national teams) plus the names used before, which stay valid on saved games.
+_LEGACY_COMPETITIONS = ('MYS National County Sports Meet', 'MYS Kickball League')
+COMPETITION_GROUPS = [(f"{_fx.BODIES[code]['name']} ({code})", tuple(dict.fromkeys(
+    _fx.BODIES[code]['competitions'] + (_LEGACY_COMPETITIONS if code == 'MYS' else ())))) for code in _fx.BODY_CODES]
+COMPETITIONS = tuple(dict.fromkeys(name for _label, names in COMPETITION_GROUPS for name in names)) + ('Friendly',)
 _NAME_RE = re.compile(r"^[A-Za-zÀ-ÿ' .-]{2,80}$")
 
 

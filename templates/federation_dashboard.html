@@ -2,7 +2,7 @@
 {% block title %}{{ code }} Dashboard | D.A.R.T.{% endblock %}
 
 {% block content %}
-{% from '_fixture_macros.html' import fixture_row, official_pickers with context %}
+{% from '_fixture_macros.html' import fixture_row, official_pickers, competition_select with context %}
 <div class="container py-3" style="max-width: 1100px">
   <section class="fx-hero" aria-label="Federation">
     <div>
@@ -33,7 +33,7 @@
       <div class="col-md-3"><label class="form-label" for="tSport">Sport</label>
         <select class="form-select" id="tSport" name="sport">{% for s in body.sports %}<option>{{ s }}</option>{% endfor %}</select></div>
       <div class="col-md-7"><label class="form-label" for="tComp">Competition</label>
-        <select class="form-select" id="tComp" name="competition">{% for c in body.competitions %}<option>{{ c }}</option>{% endfor %}</select></div>
+        {{ competition_select('tComp', [code], 'tSport', friendly=false) }}</div>
       <div class="col-12"><label class="form-label" for="tNames">Teams (one per line, or paste a CSV with the team name first)</label>
         <textarea class="form-control" id="tNames" name="teams" rows="4" required placeholder="LPRC Oilers&#10;Invincible Eleven&#10;Mighty Barrolle"></textarea></div>
       <div class="col-12"><button class="btn dart-btn" type="submit"><i class="fa-solid fa-upload"></i> Register teams</button></div>
@@ -68,7 +68,7 @@
         <div class="col-md-3"><label class="form-label" for="fSport">Sport</label>
           <select class="form-select" id="fSport" name="sport">{% for s in body.sports %}<option>{{ s }}</option>{% endfor %}</select></div>
         <div class="col-md-5"><label class="form-label" for="fComp">Competition</label>
-          <select class="form-select" id="fComp" name="competition">{% for c in body.competitions %}<option>{{ c }}</option>{% endfor %}<option>{{ fixtures_mod.FRIENDLY }}</option></select></div>
+          {{ competition_select('fComp', [code], 'fSport') }}</div>
         <div class="col-md-4"><label class="form-label" for="fKick">Kick-off (Liberia time)</label>
           <input class="form-control" id="fKick" name="kickoff_at" type="datetime-local" required></div>
         <div class="col-md-4"><label class="form-label" for="fHome">Home team</label>

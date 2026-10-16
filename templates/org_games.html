@@ -23,7 +23,8 @@
         <div class="col-md-4"><label class="form-label" for="ogSport">Sport</label>
           <select class="form-select" id="ogSport" name="sport" required>{% for s in gm.GAME_SPORTS %}<option>{{ s }}</option>{% endfor %}</select></div>
         <div class="col-md-4"><label class="form-label" for="ogComp">Competition</label>
-          <select class="form-select" id="ogComp" name="competition" required>{% for c in gm.COMPETITIONS %}<option>{{ c }}</option>{% endfor %}</select></div>
+          <select class="form-select" id="ogComp" name="competition" required><option>Friendly</option>
+            {% for label, names in gm.COMPETITION_GROUPS %}<optgroup label="{{ label }}">{% for c in names %}<option>{{ c }}</option>{% endfor %}</optgroup>{% endfor %}</select></div>
         <div class="col-md-4"><label class="form-label" for="ogOpp">Opponent</label>
           <input class="form-control" id="ogOpp" name="opponent" maxlength="150" required placeholder="e.g. LPRC Oilers"></div>
         <div class="col-md-4"><label class="form-label" for="ogKick">Kick-off (Liberia time)</label>

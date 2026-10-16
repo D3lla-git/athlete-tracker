@@ -15,18 +15,58 @@ is published, each team's coaches and the match officials must confirm it.
 import re
 from datetime import datetime, timedelta
 
-BODIES = {
-    'MYS': {'name': 'Ministry of Youth & Sports', 'sports': ('Football', 'Basketball', 'Kickball'),
-            'competitions': ('National County Sports Meet', 'MYS Schools Sports', 'MYS Community Games')},
-    'LFA': {'name': 'Liberia Football Association', 'sports': ('Football',),
-            'competitions': ('LFA First Division', 'LFA Second Division', 'LFA Third Division', "LFA Women's League", 'LFA Cup')},
-    'LBA': {'name': 'Liberia Basketball Federation', 'sports': ('Basketball',),
-            'competitions': ('LBA League', 'LBA Cup', "LBA Women's League")},
-    'LKF': {'name': 'Liberia Kickball Federation', 'sports': ('Kickball',),
-            'competitions': ('LKF National League', 'LKF Cup')},
-    'ISSA': {'name': 'Inter-High School Association', 'sports': ('Football', 'Basketball', 'Kickball'),
-             'competitions': ('ISSA Inter-High School League', 'ISSA Championship')},
+# Every competition each body runs, by sport and type (aligned with competitions.py: leagues, cups,
+# grassroots, national teams). Older names stay valid so saved fixtures and teams keep working.
+CATALOGUE = {
+    'MYS': [
+        ('Football', 'National meets', ('National County Sports Meet', 'County Meet', 'National High School Championship', 'MYS Schools Sports')),
+        ('Basketball', 'National meets', ('National County Sports Meet', 'County Meet', 'MYS Schools Sports')),
+        ('Kickball', 'National meets', ('National County Sports Meet', 'County Meet', 'National High School Championship', 'MYS Schools Sports')),
+        ('Football', 'Community & university', ('MYS Community Games', 'Community Trophy', 'University Championship')),
+        ('Basketball', 'Community & university', ('MYS Community Games', 'Community Trophy', 'University Championship')),
+        ('Kickball', 'Community & university', ('MYS Community Games', 'Community Trophy', 'University Championship')),
+    ],
+    'LFA': [
+        ('Football', 'Leagues', ('LFA First Division', 'LFA Second Division', 'LFA Third Division', "LFA Women's First Division",
+                                 "LFA Women's League")),
+        ('Football', 'Cups', ('LFA Cup', "LFA Women's Cup", 'LFA Super Cup')),
+        ('Football', 'Grassroots', ('LFA U-10 Grassroots Programme', 'LFA U-12 Grassroots League', 'LFA U-15 Grassroots League',
+                                    'LFA U-17 Grassroots League', 'LFA Grassroots School League')),
+        ('Football', 'National teams (Lone Star)', ('AFCON Finals', 'AFCON Qualifiers', 'WAFU Zone A Tournament', 'FIFA World Cup',
+                                                    'FIFA World Cup Qualifiers')),
+    ],
+    'LBA': [
+        ('Basketball', 'Leagues', ('LBA First Division', 'LBA Second Division', 'LBA Third Division', "LBA Women's Division",
+                                   'LBA League', "LBA Women's League")),
+        ('Basketball', 'Cups & Africa', ('LBA Cup', 'BAL Qualifiers')),
+        ('Basketball', 'National teams', ('FIBA Basketball World Cup Qualifiers', 'FIBA AfroBasket', 'FIBA AfroBasket Qualifiers')),
+    ],
+    'LKF': [
+        ('Kickball', 'Leagues', ('LKF First Division', 'LKF Second Division', 'LKF National League')),
+        ('Kickball', 'Cups', ('D. Zeogar Wilson Cup', 'LKF Cup')),
+    ],
+    'ISSA': [
+        ('Football', 'Schools', ('ISSA Inter-High School League', 'ISSA Championship', 'ISSA National Championship', 'Classes League')),
+        ('Basketball', 'Schools', ('ISSA Inter-High School League', 'ISSA Championship', 'Classes League')),
+        ('Kickball', 'Schools', ('ISSA Inter-High School League', 'ISSA Championship', 'Classes League')),
+    ],
 }
+_NAMES = {
+    'MYS': 'Ministry of Youth & Sports', 'LFA': 'Liberia Football Association', 'LBA': 'Liberia Basketball Federation',
+    'LKF': 'Liberia Kickball Federation', 'ISSA': 'Inter-High School Association',
+}
+
+
+def _body(code):
+    groups = CATALOGUE[code]
+    sports = tuple(dict.fromkeys(sport for sport, _g, _n in groups))
+    flat = tuple(dict.fromkeys(name for _s, _g, names in groups for name in names))
+    return {'name': _NAMES[code], 'sports': sports, 'competitions': flat,
+            'groups': [(f'{sport} · {group}' if len(sports) > 1 else group, sport, names) for sport, group, names in groups],
+            'by_sport': {s: tuple(dict.fromkeys(n for sp, _g, names in groups if sp == s for n in names)) for s in sports}}
+
+
+BODIES = {code: _body(code) for code in CATALOGUE}
 BODY_CODES = tuple(BODIES)
 SPORTS = ('Football', 'Basketball', 'Kickball')
 FRIENDLY = 'Friendly'
@@ -35,6 +75,19 @@ OFFICIAL_ROLE_TYPES = {'referee': 'Referee / match official', 'linesman': 'Lines
 MAX_LINESMEN = 2
 _SEASON_RE = re.compile(r'^(\d{4})(?:/(\d{2}))?$')
 MIN_LEAD_MINUTES = 30        # a fixture is published at least 30 minutes before kick-off
+
+
+def competition_ok(code, sport, name):
+    """Is this a competition the body runs for this sport (or a friendly)?"""
+    if name == FRIENDLY:
+        return True
+    body = BODIES.get(code or '')
+    return bool(body) and name in body['by_sport'].get(sport, ())
+
+
+def all_competitions():
+    """Every federation competition (any body / sport), A-Z, for the D.A.R.T Admin's lists."""
+    return sorted({name for body in BODIES.values() for name in body['competitions']})
 
 
 def body_label(code):

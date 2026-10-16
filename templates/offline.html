@@ -496,9 +496,7 @@
         return;
     }
     // Records now only come from confirmed fixtures (needs a connection): no free-form offline record.
-    if ({{ fixture_records_only() | tojson }}) {
-        return;
-    }
+    if (JSON.parse('{{ fixture_records_only() | tojson }}')) {return;}
 
     var rules = JSON.parse(document.getElementById('orfRules').textContent);
     var allowed = athlete.competitions || [];
@@ -809,7 +807,12 @@
         var formSaved = !!pages[0];
         var dashboardSaved = !!pages[1];
 
-        if ((!formSaved && !dashboardSaved) || {{ fixture_records_only() | tojson }}) {
+        if (!formSaved && !dashboardSaved) {
+            return;
+        }
+
+        var fixtureRecordsOnly = JSON.parse('{{ fixture_records_only()|tojson }}');
+        if (fixtureRecordsOnly) {
             return;
         }
 

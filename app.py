@@ -7618,7 +7618,7 @@ def org_games():
         if sport not in games_mod.GAME_SPORTS:
             error = 'Choose the sport.'
         elif competition not in games_mod.COMPETITIONS:
-            error = 'Choose the competition (LFA, LBA, MYS or Friendly).'
+            error = 'Choose the competition (MYS, LFA, LBA, LKF, ISSA or Friendly).'
         elif len(opponent) < 2:
             error = 'Enter the opponent.'
         elif normalize_team_name(opponent) in {normalize_team_name(n) for n in org.roster_names}:
@@ -15802,8 +15802,8 @@ def fixture_from_form(form, body, registered_only=True):
         return None, 'Choose the season (e.g. 2026 or 2025/26).'
     if sport not in (spec['sports'] if spec else fixtures_mod.SPORTS):
         return None, 'Choose the sport.'
-    if competition not in ((spec['competitions'] + (fixtures_mod.FRIENDLY,)) if spec else (fixtures_mod.FRIENDLY,)):
-        return None, 'Choose the competition.'
+    if not (fixtures_mod.competition_ok(body, sport, competition) if spec else competition == fixtures_mod.FRIENDLY):
+        return None, f'Choose a {sport} competition of this federation (or Friendly).'
     if len(home) < 2 or len(away) < 2:
         return None, 'Choose both teams.'
     if normalize_team_name(home) == normalize_team_name(away):
@@ -15946,8 +15946,9 @@ def federation_add_teams():
     spec = fixtures_mod.BODIES[code]
     names = fixtures_mod.parse_team_lines(form.get('teams'))
     back = url_for('federation_dashboard', season=season or '') + '#teams'
-    if not season or sport not in spec['sports'] or competition not in spec['competitions']:
-        flash('Choose the season, sport and competition.', 'danger')
+    if (not season or sport not in spec['sports'] or competition == fixtures_mod.FRIENDLY
+            or not fixtures_mod.competition_ok(code, sport, competition)):
+        flash('Choose the season, sport and a competition of that sport.', 'danger')
         return redirect(back)
     if not names:
         flash('Enter at least one team (one per line).', 'danger')

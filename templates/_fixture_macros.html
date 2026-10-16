@@ -33,3 +33,40 @@
     {% for o in linesmen %}<option value="{{ o.id }}">{{ o.display_name }}{% if o.username %} (@{{ o.username }}){% endif %}</option>{% endfor %}</select></div>
 {% endfor %}
 {% endmacro %}
+
+{# Competition picker grouped by sport and type (leagues, cups, grassroots, national teams). Only the
+   competitions of the chosen sport (and body, on the D.A.R.T Admin's form) can be picked. #}
+{% macro competition_select(select_id, codes, sport_select_id, body_select_id='', friendly=true) %}
+<select class="form-select" id="{{ select_id }}" name="competition" required data-comp-sport="{{ sport_select_id }}" data-comp-body="{{ body_select_id }}">
+  {% if friendly %}<option value="{{ fixtures_mod.FRIENDLY }}" data-sport="*" data-body="*">{{ fixtures_mod.FRIENDLY }}</option>{% endif %}
+  {% for code in codes %}{% set b = fixtures_mod.BODIES[code] %}
+    {% for label, sport, names in b.groups %}
+      <optgroup label="{{ (code ~ ' · ') if codes | length > 1 }}{{ label }}" data-sport="{{ sport }}" data-body="{{ code }}">
+        {% for n in names %}<option data-sport="{{ sport }}" data-body="{{ code }}">{{ n }}</option>{% endfor %}
+      </optgroup>
+    {% endfor %}
+  {% endfor %}
+</select>
+<script>
+(function () {
+  var sel = document.getElementById({{ select_id | tojson }});
+  var sport = document.getElementById(sel.getAttribute('data-comp-sport'));
+  var bodyId = sel.getAttribute('data-comp-body'), body = bodyId ? document.getElementById(bodyId) : null;
+  function fit(el) {
+    var s = sport ? sport.value : '*', b = body ? body.value : '*';
+    var ok = (el.getAttribute('data-sport') === '*' || s === '*' || el.getAttribute('data-sport') === s) &&
+             (el.getAttribute('data-body') === '*' || b === '*' || el.getAttribute('data-body') === b);
+    if (body && !b && el.getAttribute('data-body') !== '*') ok = false;   // no body chosen: friendlies only
+    return ok;
+  }
+  function update() {
+    sel.querySelectorAll('optgroup, option').forEach(function (el) { var ok = fit(el); el.hidden = !ok; el.disabled = !ok; });
+    var cur = sel.options[sel.selectedIndex];
+    if (!cur || cur.disabled) { var first = Array.prototype.find.call(sel.options, function (o) { return !o.disabled; }); if (first) first.selected = true; }
+  }
+  if (sport) sport.addEventListener('change', update);
+  if (body) body.addEventListener('change', update);
+  update();
+})();
+</script>
+{% endmacro %}

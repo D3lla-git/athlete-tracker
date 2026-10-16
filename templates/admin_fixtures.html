@@ -2,7 +2,7 @@
 {% block title %}Fixtures | D.A.R.T Admin{% endblock %}
 
 {% block content %}
-{% from '_fixture_macros.html' import fixture_row, official_pickers with context %}
+{% from '_fixture_macros.html' import fixture_row, official_pickers, competition_select with context %}
 <div class="container py-3" style="max-width: 1100px">
   <section class="fx-hero">
     <div><div class="fx-eyebrow"><i class="fa-solid fa-calendar-check"></i> D.A.R.T Admin</div><h1>Fixtures</h1>
@@ -54,8 +54,7 @@
       <div class="col-md-3"><label class="form-label" for="aSport">Sport</label>
         <select class="form-select" id="aSport" name="sport">{% for s in fixtures_mod.SPORTS %}<option>{{ s }}</option>{% endfor %}</select></div>
       <div class="col-md-3"><label class="form-label" for="aComp">Competition</label>
-        <select class="form-select" id="aComp" name="competition"><option>{{ fixtures_mod.FRIENDLY }}</option>
-          {% for c, b in fixtures_mod.BODIES.items() %}<optgroup label="{{ c }}">{% for comp in b.competitions %}<option>{{ comp }}</option>{% endfor %}</optgroup>{% endfor %}</select></div>
+        {{ competition_select('aComp', fixtures_mod.BODY_CODES, 'aSport', 'aBody') }}</div>
       <div class="col-md-4"><label class="form-label" for="aHome">Home team</label><input class="form-control" id="aHome" name="home_team" required maxlength="150"></div>
       <div class="col-md-4"><label class="form-label" for="aAway">Away team</label><input class="form-control" id="aAway" name="away_team" required maxlength="150"></div>
       <div class="col-md-4"><label class="form-label" for="aKick">Kick-off (Liberia time)</label><input class="form-control" id="aKick" name="kickoff_at" type="datetime-local" required></div>
