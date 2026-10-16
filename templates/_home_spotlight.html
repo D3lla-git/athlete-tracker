@@ -10,7 +10,7 @@
     <div class="spot-copy">
       <span class="dart-card-eyebrow"><i class="fa-solid fa-circle-dot"></i> ATHLETE SPOTLIGHT</span>
       <h1 class="spot-name">{{ info.name }}</h1>
-      <p class="spot-sub">{{ info.subtitle }}{% if s.h.caption %} · “{{ s.h.caption }}”{% endif %}</p>
+      <p class="spot-sub">{{ info.subtitle }}{% if s.h.caption %} · {% endif %}</p>
       <div class="spot-cta">
         <a class="btn spot-btn spot-btn-main" href="{{ url }}"><i class="fa-solid fa-id-card"></i> View profile</a>
         <a class="btn spot-btn" href="{{ url_for('feed_post', highlight_id=s.h.id) }}"><i class="fa-solid fa-play"></i> Watch highlight</a>

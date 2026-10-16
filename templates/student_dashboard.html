@@ -4,6 +4,12 @@
 {% block content %}
 {% from '_integrity.html' import record_status_badge, proof_form with context %}
 {% set proof_clips = (highlights or []) | selectattr('status', 'equalto', 'approved') | selectattr('media_type', 'equalto', 'video') | list %}
+{% set _fixtures_only = fixture_records_only() %}
+{% if _fixtures_only %}
+  {# Records page starts at My Plan; the record form only opens from a confirmed fixture (pop-up). #}
+  {% include '_plan_usage.html' %}
+  {% include '_fixture_games.html' %}
+{% else %}
 <div class="d-flex align-items-center mb-4">
   <!-- Profile Picture (Student ID) -->
   <div class="me-3">
@@ -27,8 +33,9 @@
   </div>
 </div>
 
+{% endif %}
 {% if current_user.is_verified %}
-  {% include '_record_form.html' %}
+  {% if not _fixtures_only %}{% include '_record_form.html' %}{% endif %}
 
 {% elif current_user.org_approval is not none %}
   {# New accounts: coach + the team's organization approve the profile. #}
@@ -79,7 +86,7 @@
 {% endif %}
 
 <!-- ==================== MY PLAN + THIS MONTH'S UPLOADS ==================== -->
-{% include '_plan_usage.html' %}
+{% if not _fixtures_only %}{% include '_plan_usage.html' %}{% endif %}
 
 <!-- ==================== MY HIGHLIGHTS ==================== -->
 {% from '_highlights.html' import highlights_section with context %}
@@ -96,8 +103,24 @@
       <em>Unofficial Game</em>) and highlights. Joined a team? <a href="{{ url_for('profile') }}">Change your category and team in My Profile</a>.</div>
   </div>
 {% endif %}
-<a class="btn btn-sm btn-outline-warning mb-2" href="{{ url_for('awards_page') }}"><i class="fa-solid fa-trophy" aria-hidden="true"></i> Awards: enter your best highlight, vote</a>
-<a class="btn btn-sm btn-outline-success mb-2" href="{{ url_for('market_home') }}"><i class="fa-solid fa-store" aria-hidden="true"></i> D.A.R.T Market$: sports gear</a>
+<nav class="sd-quick" aria-label="More on D.A.R.T.">
+  <a class="sd-quick-btn sd-quick-awards" href="{{ url_for('awards_page') }}"><i class="fa-solid fa-trophy" aria-hidden="true"></i><span>Awards: enter your best highlight, vote</span></a>
+  <a class="sd-quick-btn sd-quick-market" href="{{ url_for('market_home') }}"><i class="fa-solid fa-store" aria-hidden="true"></i><span>D.A.R.T Market$: sports gear</span></a>
+</nav>
+<style>
+  .sd-quick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 20px 0 18px; }
+  .sd-quick-btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 8px 14px; border-radius: 999px;
+    font-size: 0.9rem; font-weight: 800; line-height: 1.2; text-align: center; text-decoration: none; border: 2px solid; transition: background 0.15s ease, transform 0.15s ease; }
+  .sd-quick-btn:hover, .sd-quick-btn:focus-visible { transform: translateY(-1px); }
+  .sd-quick-btn i { flex: 0 0 auto; }
+  .sd-quick-awards { color: #9a6b00 !important; border-color: #f5c542; background: rgba(245, 197, 66, 0.1); }
+  .sd-quick-awards:hover { background: rgba(245, 197, 66, 0.22); }
+  .sd-quick-market { color: #146c43 !important; border-color: #198754; background: rgba(25, 135, 84, 0.07); }
+  .sd-quick-market:hover { background: rgba(25, 135, 84, 0.16); }
+  html[data-theme="dark"] .sd-quick-awards { color: #f5c542 !important; }
+  html[data-theme="dark"] .sd-quick-market { color: #4cd38a !important; border-color: #4cd38a; }
+  @media (max-width: 575.98px) { .sd-quick { grid-template-columns: 1fr; } }
+</style>
 <h4 class="mt-4 mb-3" id="my-records">My Submitted Records <i class="fa-solid fa-book"></i></h4>
 {% include '_record_warning.html' %}
 {% if is_minor_athlete(current_user) %}

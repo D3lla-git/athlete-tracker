@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Federation accounts | D.A.R.T Admin{% endblock %}
+
+{% block content %}
+<div class="container py-3" style="max-width: 1000px">
+  <section class="fx-hero">
+    <div><div class="fx-eyebrow"><i class="fa-solid fa-landmark-flag"></i> D.A.R.T Admin</div><h1>Federation accounts</h1>
+      <p class="mb-0 small">One account per body. They register each season's teams and publish fixtures. Two-factor authentication is required at first sign-in.</p></div>
+    <a class="btn btn-light btn-sm fw-bold" href="{{ url_for('admin_fixtures') }}"><i class="fa-solid fa-calendar-check"></i> Fixtures</a>
+  </section>
+
+  {% if created %}
+    <div class="fx-cred mb-3" role="alert">
+      <strong><i class="fa-solid fa-key"></i> {{ 'New password' if created.reset else 'Account created' }} · {{ created.name }} ({{ created.code }})</strong>
+      <p class="small mb-1">Give these to the federation privately (not by public chat). This password is shown <strong>only once</strong>; they set up the authenticator app at first sign-in.</p>
+      <div>Sign-in name: <code>{{ created.name }}</code></div>
+      <div>Email: <code>{{ created.email }}</code></div>
+      <div>Temporary password: <code>{{ created.password }}</code></div>
+    </div>
+  {% endif %}
+
+  {% for code, body, account in rows %}
+    <section class="fx-panel">
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+        <h2 class="mb-0 flex-grow-1">{{ body.name }} <span class="text-muted">({{ code }})</span></h2>
+        {% if account %}
+          <span class="badge {{ 'text-bg-danger' if account.is_suspended else 'text-bg-success' }}">{{ 'Suspended' if account.is_suspended else 'Active' }}</span>
+          <span class="badge {{ 'text-bg-success' if account.two_factor_enabled else 'text-bg-warning' }}">2FA {{ 'on' if account.two_factor_enabled else 'not set up yet' }}</span>
+        {% else %}<span class="badge text-bg-secondary">No account</span>{% endif %}
+      </div>
+      <p class="small text-muted mb-2">Sports: {{ body.sports | join(', ') }} · Competitions: {{ body.competitions | join(', ') }}</p>
+      {% if account %}
+        <div class="small mb-2">Email: {{ account.email or '—' }}{% if account.phone %} · Phone: {{ account.phone | phone }}{% endif %}</div>
+        <form method="POST" class="fx-actions">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="code" value="{{ code }}">
+          <button class="btn btn-sm btn-outline-warning" name="action" value="reset" onclick="return confirm('Reset the {{ code }} password and 2FA?');"><i class="fa-solid fa-rotate"></i> Reset password &amp; 2FA</button>
+          {% if account.is_suspended %}<button class="btn btn-sm btn-outline-success" name="action" value="reactivate">Reactivate</button>
+          {% else %}<button class="btn btn-sm btn-outline-danger" name="action" value="suspend" onclick="return confirm('Suspend {{ code }}?');">Suspend</button>{% endif %}
+        </form>
+      {% else %}
+        <form method="POST" class="row g-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="code" value="{{ code }}">
+          <input type="hidden" name="action" value="create">
+          <div class="col-md-6"><input class="form-control" type="email" name="email" required placeholder="Official email" aria-label="{{ code }} official email"></div>
+          <div class="col-md-3"><input class="form-control" type="tel" name="phone" placeholder="Phone (optional)" aria-label="{{ code }} phone"></div>
+          <div class="col-md-3"><button class="btn dart-btn w-100" type="submit"><i class="fa-solid fa-user-plus"></i> Create account</button></div>
+        </form>
+      {% endif %}
+    </section>
+  {% endfor %}
+</div>
+{% endblock %}

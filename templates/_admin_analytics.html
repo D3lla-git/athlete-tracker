@@ -120,6 +120,9 @@
       <a class="adx-action" href="{{ url_for('admin_organizations') }}"><i class="fa-solid fa-building-shield"></i> Organizations</a>
       <a class="adx-action" href="{{ url_for('admin_payments') }}"><i class="fa-solid fa-money-check-dollar"></i> Payments{% if payments_awaiting %} <span class="badge rounded-pill">{{ payments_awaiting }}</span>{% endif %}</a>
       <a class="adx-action" href="{{ url_for('admin_feed_analytics') }}"><i class="fa-solid fa-chart-simple"></i> Highlights analysis</a>
+      <a class="adx-action" href="{{ url_for('admin_fixtures') }}"><i class="fa-solid fa-calendar-check"></i> Fixtures</a>
+      <a class="adx-action" href="{{ url_for('admin_federations') }}"><i class="fa-solid fa-landmark-flag"></i> Federations</a>
+      <a class="adx-action" href="{{ url_for('admin_ages') }}"><i class="fa-solid fa-id-card-clip"></i> Age checks</a>
     </nav>
   </section>
 
@@ -128,10 +131,12 @@
     <div class="adx-kpi adx-kpi-live">
       <div class="adx-kpi-head"><span class="adx-kpi-icon adx-green"><i class="fa-solid fa-signal"></i></span> Live now <span class="adx-live-dot" aria-hidden="true"></span></div>
       <div class="adx-kpi-value" data-stat="live_total">{{ s.live_total }}</div>
-      <span class="adx-delta adx-delta-flat"><span data-stat="live_members">{{ s.live_members }}</span> members ·
-        <span data-stat="live_visitors">{{ s.live_visitors }}</span> visitors</span>
-      <span class="adx-delta adx-delta-flat">Last 24 h: <span data-stat="members_24h">{{ s.members_24h }}</span> members ·
-        <span data-stat="visitors_24h">{{ s.visitors_24h }}</span> visitors</span>
+      <div class="adx-live-split">
+        <div><strong data-stat="live_members">{{ s.live_members }}</strong><span>Members</span></div>
+        <div><strong data-stat="live_visitors">{{ s.live_visitors }}</strong><span>Visitors</span></div>
+      </div>
+      <div class="adx-live-day"><span>Last 24 h</span>
+        <b data-stat="members_24h">{{ s.members_24h }}</b> members · <b data-stat="visitors_24h">{{ s.visitors_24h }}</b> visitors</div>
     </div>
     <div class="adx-kpi">
       <div class="adx-kpi-head"><span class="adx-kpi-icon adx-blue"><i class="fa-solid fa-users"></i></span> Total users</div>
@@ -304,6 +309,8 @@
       {{ mini('vendors_total', 'Vendors', 'fa-solid fa-store', 'neutral') }}
       {{ mini('buyers_total', 'Buyers', 'fa-solid fa-bag-shopping', 'neutral') }}
       {{ mini('members_total', 'O-D.A.R.T users', 'fa-solid fa-face-smile', 'neutral') }}
+      {{ mini('reps_total', 'D.A.R.T Reps', 'fa-solid fa-user-check', 'neutral') }}
+      {{ mini('federations_total', 'Federations (MYS, LFA, LBA, LKF, ISSA)', 'fa-solid fa-landmark-flag', 'good') }}
       {{ mini('journalists_total', 'Sports journalists', 'fa-solid fa-newspaper', 'neutral') }}
       {{ mini('officials_referee', 'Referees', 'fa-solid fa-flag', 'neutral') }}
       {{ mini('officials_linesman', 'Linesmen / assistant referees', 'fa-regular fa-flag', 'neutral') }}

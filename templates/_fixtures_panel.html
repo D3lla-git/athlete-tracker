@@ -1,0 +1,58 @@
+{# Coach / match official dashboard: fixtures to confirm (+ coaches: request a fixture). #}
+{% from '_fixture_macros.html' import fixture_row with context %}
+{% set _parties = my_fixture_parties(current_user) %}
+<section class="fx-panel mt-3" id="fixtures" aria-labelledby="fxMineTitle">
+  <h2 id="fxMineTitle"><i class="fa-solid fa-calendar-check text-success"></i> Your next fixtures
+    {% set _waiting = _parties | selectattr('confirmed_at', 'none') | selectattr('declined_at', 'none') | list %}
+    {% if _waiting %}<span class="badge text-bg-warning ms-1">{{ _waiting | length }} to confirm</span>{% endif %}</h2>
+  <div class="fx-list">
+    {% for p in _parties %}
+      {% set f = p.fixture %}{% set st = party_status(p) %}
+      {% set extra %}
+        <div class="fx-actions">
+          <span class="fx-party is-{{ st }}">{{ fixtures_mod.PARTY_ROLES[p.role] }} · {{ st }}</span>
+          {% if st != 'confirmed' and f.kickoff_at > now_utc() %}
+            <form method="POST" action="{{ url_for('fixture_respond', fixture_id=f.id) }}" class="m-0">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="party_id" value="{{ p.id }}">
+              <input type="hidden" name="next" value="{{ request.path }}#fixtures">
+              <button class="btn btn-sm btn-success" name="action" value="confirm"><i class="fa-solid fa-check"></i> Confirm</button>
+            </form>
+          {% endif %}
+          {% if st == 'confirmed' and p.role != 'linesman' and f.kickoff_at <= now_utc() %}
+            <a class="btn btn-sm dart-btn" href="{{ url_for('fixture_match', fixture_id=f.id) }}"><i class="fa-solid fa-clipboard-list"></i>
+              {{ 'Referee report & records' if p.role == 'referee' else 'Team sheet & records' }}</a>
+          {% endif %}
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('fixture_detail', fixture_id=f.id) }}">Details</a>
+        </div>
+      {% endset %}
+      {{ fixture_row(f, show_parties=false, extra=extra) }}
+    {% else %}
+      <p class="small text-muted mb-0">No fixtures yet. Your federation (LFA, LBA, LKF, ISSA, MYS) publishes them; you are notified to confirm.</p>
+    {% endfor %}
+  </div>
+
+  {% if current_user.role == 'Coach' and current_user.is_verified %}
+    <details class="mt-3">
+      <summary class="fw-bold"><i class="fa-solid fa-calendar-plus"></i> Request a fixture (e.g. a friendly)</summary>
+      <form method="POST" action="{{ url_for('fixture_request') }}" class="row g-2 mt-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-3"><label class="form-label" for="rqSport">Sport</label>
+          <select class="form-select" id="rqSport" name="sport">{% for s in fixtures_mod.SPORTS %}<option>{{ s }}</option>{% endfor %}</select></div>
+        <div class="col-md-5"><label class="form-label" for="rqOpp">Opponent</label>
+          <input class="form-control" id="rqOpp" name="opponent" required maxlength="150"></div>
+        <div class="col-md-4"><label class="form-label" for="rqSide">{{ current_user.school }} plays</label>
+          <select class="form-select" id="rqSide" name="side"><option value="home">Home</option><option value="away">Away</option></select></div>
+        <div class="col-md-4"><label class="form-label" for="rqKick">Kick-off</label>
+          <input class="form-control" id="rqKick" name="kickoff_at" type="datetime-local" required></div>
+        <div class="col-md-8"><label class="form-label" for="rqVenue">Venue</label>
+          <input class="form-control" id="rqVenue" name="venue" required maxlength="150"></div>
+        <div class="col-12"><input class="form-control" name="note" maxlength="300" placeholder="Note for the D.A.R.T Admin (optional)" aria-label="Note"></div>
+        <div class="col-12"><button class="btn dart-btn" type="submit"><i class="fa-solid fa-paper-plane"></i> Send request</button>
+          <small class="text-muted ms-2">The D.A.R.T Admin approves it before it goes live.</small></div>
+      </form>
+      {% set _reqs = my_fixture_requests(current_user) %}
+      {% if _reqs %}<div class="fx-list mt-2">{% for f in _reqs %}{{ fixture_row(f, show_parties=false) }}{% endfor %}</div>{% endif %}
+    </details>
+  {% endif %}
+</section>

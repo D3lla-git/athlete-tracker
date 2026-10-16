@@ -1,0 +1,95 @@
+{# Athlete Records page: games from confirmed fixtures. The record form only opens here,
+   as a pop-up, after the game ("I played in this game"). #}
+{% set _games = athlete_fixtures() %}
+<section class="fx-panel fg-panel" id="fixtureGames" aria-labelledby="fgTitle">
+  <h2 id="fgTitle"><i class="fa-solid fa-calendar-check text-success"></i> My games
+    {% set _open = _games | selectattr('state', 'equalto', 'open') | list %}
+    {% if _open %}<span class="badge text-bg-warning ms-1">{{ _open | length }} to record</span>{% endif %}</h2>
+  {% if not current_user.is_verified %}
+    <p class="small text-muted mb-0">Once your profile is live, your games appear here when your coach confirms a fixture.</p>
+  {% else %}
+  <div class="fx-list">
+    {% for g in _games %}{% set f = g.fixture %}
+      <article class="fx-row">
+        <div class="fx-when"><strong>{{ f.kickoff_at.strftime('%d %b') }}</strong><span>{{ f.kickoff_at.strftime('%H:%M') }}</span></div>
+        <div class="fx-main">
+          <div class="fx-title">{{ team_badge(current_user.school) }}{{ side_team_label(f, g.side) }} <span class="text-muted">vs</span> {{ team_badge(g.opponent) }}{{ g.opponent }}</div>
+          <div class="fx-sub">{{ f.sport }} · {{ f.competition }} · <i class="fa-solid fa-location-dot"></i> {{ f.venue }}</div>
+        </div>
+        <div class="fx-actions">
+          {% if g.state == 'open' %}
+            <button type="button" class="btn dart-btn" data-bs-toggle="modal" data-bs-target="#fgModal{{ f.id }}" data-fg-open="{{ f.id }}">
+              <i class="fa-solid fa-hand"></i> I played in this game</button>
+          {% elif g.state == 'upcoming' %}
+            <span class="fx-party is-waiting"><i class="fa-solid fa-hourglass-half"></i> Recording opens after the game</span>
+          {% else %}
+            <span class="fx-party is-confirmed"><i class="fa-solid fa-paper-plane"></i> Record sent · {{ g.record.status | capitalize }}</span>
+          {% endif %}
+        </div>
+      </article>
+
+      {% if g.state == 'open' %}
+      <div class="modal fade" id="fgModal{{ f.id }}" tabindex="-1" aria-labelledby="fgModalTitle{{ f.id }}" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+          <form class="modal-content fg-form" method="POST" action="{{ url_for('fixture_my_record', fixture_id=f.id) }}" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-header fg-head">
+              <div><div class="fx-eyebrow">Submit record · {{ f.kickoff_at.strftime('%d %b %Y') }}</div>
+                <h5 class="modal-title" id="fgModalTitle{{ f.id }}">{{ side_team_label(f, g.side) }} vs {{ g.opponent }}</h5></div>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <div class="row g-2">
+                <div class="col-6"><label class="form-label" for="fgSport{{ f.id }}">Sport</label>
+                  <select class="form-select" id="fgSport{{ f.id }}" name="sport" required><option>{{ f.sport }}</option></select></div>
+                <div class="col-6"><label class="form-label" for="fgOpp{{ f.id }}">Opponent</label>
+                  <select class="form-select" id="fgOpp{{ f.id }}" name="opponent" required><option>{{ g.opponent }}</option></select></div>
+                {% set show_q = current_user.gender == 'Female' %}{% set show_m = current_user.gender != 'Female' %}
+                {% if show_m %}
+                <div class="col-6"><label class="form-label" for="fgMotm{{ f.id }}">Man of the Match</label>
+                  <select class="form-select" id="fgMotm{{ f.id }}" name="motm"><option value="no">No</option><option value="yes">Yes</option></select></div>
+                {% endif %}
+                {% if show_q %}
+                <div class="col-6"><label class="form-label" for="fgQotm{{ f.id }}">Queen of the Match</label>
+                  <select class="form-select" id="fgQotm{{ f.id }}" name="qotm"><option value="no">No</option><option value="yes">Yes</option></select></div>
+                {% endif %}
+                <div class="col-6"><label class="form-label" for="fgShirt{{ f.id }}">Shirt number</label>
+                  <input class="form-control" id="fgShirt{{ f.id }}" name="shirt_number" inputmode="numeric" maxlength="2" value="{{ current_user.shirt_number or '' }}"></div>
+                <div class="col-12"><label class="form-label" for="fgTrophy{{ f.id }}">Trophy won (in this game)</label>
+                  <select class="form-select" id="fgTrophy{{ f.id }}" name="trophy"><option value="none">No trophy</option>
+                    {% for t in fixture_trophies(f.sport) %}<option>{{ t }}</option>{% endfor %}</select></div>
+                {% for stat in fixture_rec.ATHLETE_STATS[f.sport] %}
+                  <div class="col-6"><label class="form-label" for="fg{{ stat }}{{ f.id }}">{{ fixture_rec.STAT_LABELS[stat] }}</label>
+                    <input class="form-control" id="fg{{ stat }}{{ f.id }}" name="{{ stat }}" type="number" min="0" max="{{ fixture_rec.STAT_MAX[stat] }}" value="0" inputmode="numeric">
+                    <small class="fg-sign">Cross-signed by {{ fixture_rec.SIGNERS[stat] | map('replace', '_', ' ') | join(', ') | replace('team coach', 'your coach') | replace('opponent coach', "opponent's coach") }}</small></div>
+                {% endfor %}
+              </div>
+              <p class="small text-muted mt-3 mb-0"><i class="fa-solid fa-circle-info"></i> Your coach adds MVP, minutes, position{% if f.sport == 'Football' %}, passes{% elif f.sport == 'Kickball' %}, cut base{% endif %}, competition and venue;
+                the main referee adds cards and fouls. Everything is combined and checked by the D.A.R.T Admin before it goes on your profile.</p>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button class="btn dart-btn" type="submit"><i class="fa-solid fa-paper-plane"></i> Submit record</button></div>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+    {% else %}
+      <p class="small text-muted mb-0"><i class="fa-solid fa-bell"></i> No games yet. When your coach confirms your team's next fixture you get a notification;
+        after the game you tap <strong>I played in this game</strong> here.</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+<style>
+  .fg-head { color: #fff; background: radial-gradient(circle at 85% 20%, rgba(57, 185, 114, 0.3), transparent 42%), linear-gradient(135deg, #071208, #0d2413 55%, #061008); }
+  .fg-head .fx-eyebrow { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #4cd38a; }
+  .fg-sign { display: block; font-size: 0.68rem; color: var(--muted-text, #6c757d); }
+</style>
+<script>
+// Opened from the notification (/student?fixture=ID): show that game's pop-up.
+document.addEventListener('DOMContentLoaded', function () {
+  var id = new URLSearchParams(location.search).get('fixture');
+  var el = id && document.getElementById('fgModal' + id.replace(/\D/g, ''));
+  if (el && window.bootstrap) bootstrap.Modal.getOrCreateInstance(el).show();
+});
+</script>

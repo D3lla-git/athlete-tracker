@@ -1,0 +1,35 @@
+{# One fixture as a row: date chip, teams, competition / venue, who confirmed. #}
+{% macro fixture_row(f, show_parties=true, extra='') %}
+<article class="fx-row">
+  <div class="fx-when"><strong>{{ f.kickoff_at.strftime('%d %b') }}</strong><span>{{ f.kickoff_at.strftime('%H:%M') }}</span></div>
+  <div class="fx-main">
+    <a class="fx-title" href="{{ url_for('fixture_detail', fixture_id=f.id) }}">{{ team_badge(f.home_team) }}{{ f.home_team }} <span class="text-muted">vs</span> {{ team_badge(f.away_team) }}{{ f.away_team }}</a>
+    <div class="fx-sub">{{ f.sport }} · {{ f.competition }} · {{ f.season }} · <i class="fa-solid fa-location-dot"></i> {{ f.venue }}
+      {% if f.status != 'scheduled' %} · <span class="badge text-bg-{{ {'requested': 'warning', 'cancelled': 'danger', 'rejected': 'secondary'}.get(f.status, 'secondary') }}">{{ f.status | capitalize }}</span>{% endif %}</div>
+    {% if show_parties and f.parties %}
+      <div class="fx-parties">
+        {% for p in f.parties %}{% set st = party_status(p) %}
+          <span class="fx-party is-{{ st }}" title="{{ fixtures_mod.PARTY_ROLES[p.role] }}: {{ st }}">
+            <i class="fa-solid {{ {'confirmed': 'fa-check', 'declined': 'fa-xmark', 'waiting': 'fa-hourglass-half'}[st] }}"></i>
+            {{ fixtures_mod.PARTY_ROLES[p.role] }} · {{ p.user.display_name if p.user else '?' }}<span class="visually-hidden"> ({{ st }})</span></span>
+        {% endfor %}
+      </div>
+    {% elif show_parties and f.status == 'scheduled' %}
+      <div class="fx-sub text-warning-emphasis"><i class="fa-solid fa-triangle-exclamation"></i> No coach of these teams is on D.A.R.T. yet.</div>
+    {% endif %}
+  </div>
+  {{ extra }}
+</article>
+{% endmacro %}
+
+{# Referee + 2 linesmen pickers (verified match officials). #}
+{% macro official_pickers(referees, linesmen) %}
+<div class="col-md-4"><label class="form-label" for="fxRef">Referee</label>
+  <select class="form-select" id="fxRef" name="referee_id"><option value="">Assign later</option>
+    {% for o in referees %}<option value="{{ o.id }}">{{ o.display_name }}{% if o.username %} (@{{ o.username }}){% endif %}</option>{% endfor %}</select></div>
+{% for i in (1, 2) %}
+<div class="col-md-4"><label class="form-label" for="fxLine{{ i }}">Linesman {{ i }}</label>
+  <select class="form-select" id="fxLine{{ i }}" name="linesman{{ i }}_id"><option value="">Assign later</option>
+    {% for o in linesmen %}<option value="{{ o.id }}">{{ o.display_name }}{% if o.username %} (@{{ o.username }}){% endif %}</option>{% endfor %}</select></div>
+{% endfor %}
+{% endmacro %}

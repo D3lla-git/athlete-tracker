@@ -391,6 +391,14 @@
         </form>
       </div>
     {% endif %}
+    {# Athletes 18+ and coaches: add the NIN (only the D.A.R.T Admin sees it) for age verification. #}
+    {% if not is_prefetch() and request.endpoint != 'profile' and nin_missing() %}
+      <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 nin-note" role="status">
+        <i class="fa-solid fa-id-card-clip" aria-hidden="true"></i>
+        <span class="flex-grow-1">Add your 10-digit <strong>National ID Number (NIN)</strong> from your NIR card. Only the D.A.R.T Admin can see it; it is used to verify your age.</span>
+        <a class="btn btn-sm dart-btn" href="{{ url_for('profile') }}#nin">Add NIN</a>
+      </div>
+    {% endif %}
     <!--dart-flash-end-->
 
     {% block content %}{% endblock %}

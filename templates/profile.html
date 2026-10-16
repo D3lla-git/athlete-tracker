@@ -1030,6 +1030,64 @@ function toggleChangePassword() {
   </div>
 
 {% if current_user.role == 'Athlete' %}
+{# Athletes with more than one team (e.g. a school and a club): each team's head coach confirms. #}
+<section class="card shadow mt-4" id="alsoPlays" aria-labelledby="alsoPlaysTitle">
+  <div class="card-header"><h5 class="mb-0" id="alsoPlaysTitle"><i class="fa-solid fa-people-group"></i> Teams I play for</h5></div>
+  <div class="card-body">
+    <p class="small text-muted mb-2">Registered team: <strong>{{ current_user.school or 'none (individual athlete)' }}</strong>.
+      Also play for a club or another team? Add it: its head coach confirms, then you get that team's fixtures and can send records for its games.</p>
+    {% set _extra = my_extra_teams() %}
+    {% if _extra %}
+      <ul class="list-unstyled mb-3">
+        {% for t in _extra %}
+          <li class="d-flex flex-wrap align-items-center gap-2 mb-1">{{ team_badge(t.team_name) }}<strong>{{ t.team_name }}</strong>
+            <span class="badge text-bg-{{ {'approved': 'success', 'pending': 'warning', 'declined': 'danger'}[t.status] }}">{{ {'approved': 'Confirmed by the coach', 'pending': 'Waiting for the coach', 'declined': 'Not confirmed'}[t.status] }}</span>
+            <form method="POST" action="{{ url_for('profile_remove_team', row_id=t.id) }}" class="m-0">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-link text-danger p-0" type="submit">Remove</button></form></li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+    {% if _extra | rejectattr('status', 'equalto', 'declined') | list | length < max_extra_teams %}
+      <form method="POST" action="{{ url_for('profile_add_team') }}" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-8"><label class="visually-hidden" for="alsoTeam">Team name</label>
+          <input class="form-control" id="alsoTeam" name="team_name" required maxlength="150" placeholder="e.g. Lofa Lions FC (exactly as the team writes it)"></div>
+        <div class="col-md-4"><button class="btn dart-btn w-100" type="submit"><i class="fa-solid fa-plus"></i> Add team</button></div>
+      </form>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+{% if current_user.role in ('Athlete', 'Coach') %}
+{# National ID number (NIN): only the D.A.R.T Admin can see it; used to verify age. #}
+<section class="card shadow mt-4 nin-card" id="nin" aria-labelledby="ninTitle">
+  <div class="card-header"><h5 class="mb-0" id="ninTitle"><i class="fa-solid fa-id-card-clip"></i> National ID &amp; age verification</h5></div>
+  <div class="card-body">
+    <div class="d-flex flex-wrap gap-2 mb-2">
+      {% if current_user.nin_cipher %}<span class="badge text-bg-success"><i class="fa-solid fa-lock"></i> NIN on file (hidden)</span>
+      {% else %}<span class="badge {{ 'text-bg-danger' if nin_missing() else 'text-bg-secondary' }}">No NIN yet</span>{% endif %}
+      {% if current_user.age_verified_at %}<span class="badge text-bg-success"><i class="fa-solid fa-circle-check"></i> Age verified by D.A.R.T. ({{ age_sources.get(current_user.age_verified_source, '') }})</span>
+      {% elif current_user.age_check_note %}<span class="badge text-bg-danger">Age not verified</span>
+      {% else %}<span class="badge text-bg-warning">Age check waiting</span>{% endif %}
+    </div>
+    {% if current_user.age_check_note %}<div class="alert alert-danger small py-2"><strong>D.A.R.T. says:</strong> {{ current_user.age_check_note }}</div>{% endif %}
+    <p class="small text-muted mb-2">Your NIN is never shown on your profile, card or to coaches, scouts or organizations, and never shown back to you.
+      {% if current_user.role == 'Athlete' %}Required from age 18; under 18 your birth certificate can be used instead.{% endif %}</p>
+    <form method="POST" action="{{ url_for('profile_nin') }}" class="row g-2 align-items-start" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-8">
+        {% from '_nin_field.html' import nin_input with context %}
+        {{ nin_input('coach', 'profileNin') }}
+      </div>
+      <div class="col-md-4 pt-md-4"><button class="btn dart-btn w-100" type="submit"><i class="fa-solid fa-floppy-disk"></i> {{ 'Replace NIN' if current_user.nin_cipher else 'Save NIN' }}</button></div>
+    </form>
+  </div>
+</section>
+{% endif %}
+
+{% if current_user.role == 'Athlete' %}
   {% from '_highlights.html' import highlights_section with context %}
   {{ highlights_section(highlights, owner=current_user, can_manage=true) }}
 

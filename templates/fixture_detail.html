@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ fixture.home_team }} vs {{ fixture.away_team }} | Fixture{% endblock %}
+
+{% block content %}
+{% from '_fixture_macros.html' import official_pickers with context %}
+<div class="container py-3" style="max-width: 900px">
+  <section class="fx-hero">
+    <div>
+      <div class="fx-eyebrow">{{ body_label(fixture.body) }} · {{ fixture.competition }} · {{ fixture.season }}</div>
+      <h1>{{ team_badge(fixture.home_team) }}{{ team_name_link(fixture.home_team) }} <span style="opacity:.6">vs</span> {{ team_badge(fixture.away_team) }}{{ team_name_link(fixture.away_team) }}</h1>
+      <div class="fx-chips mt-2">
+        <span><i class="fa-solid fa-futbol"></i> {{ fixture.sport }}</span>
+        <span><i class="fa-regular fa-clock"></i> {{ fixture.kickoff_at.strftime('%A %d %B %Y, %H:%M') }}</span>
+        <span><i class="fa-solid fa-location-dot"></i> {{ fixture.venue }}</span>
+        <span>{{ fixture.status | capitalize }}</span>
+      </div>
+    </div>
+  </section>
+
+  {% if fixture.status == 'scheduled' and (current_user.role in ('System', 'Rep') or mine | selectattr('confirmed_at') | list) %}
+    <a class="btn dart-btn mb-3" href="{{ url_for('fixture_match', fixture_id=fixture.id) }}"><i class="fa-solid fa-clipboard-list"></i> Match: team sheets, referee report &amp; records</a>
+  {% endif %}
+  {% if fixture.status in ('cancelled', 'rejected') and fixture.note %}<div class="alert alert-danger">{{ fixture.status | capitalize }}: {{ fixture.note }}</div>{% endif %}
+
+  {% for p in mine %}
+    <section class="fx-panel" aria-label="Your part">
+      <h2><i class="fa-solid fa-user-check text-success"></i> You: {{ fixtures_mod.PARTY_ROLES[p.role] }}</h2>
+      {% set st = party_status(p) %}
+      <p class="mb-2"><span class="fx-party is-{{ st }}">{{ st | capitalize }}</span>{% if p.decline_reason %} · {{ p.decline_reason }}{% endif %}</p>
+      {% if fixture.status == 'scheduled' and fixture.kickoff_at > now %}
+        <form method="POST" action="{{ url_for('fixture_respond', fixture_id=fixture.id) }}" class="row g-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="party_id" value="{{ p.id }}">
+          <div class="col-md-3"><button class="btn btn-success w-100" name="action" value="confirm"><i class="fa-solid fa-check"></i> Confirm</button></div>
+          <div class="col-md-6"><input class="form-control" name="reason" maxlength="200" placeholder="Can't take part? Say why" aria-label="Reason"></div>
+          <div class="col-md-3"><button class="btn btn-outline-danger w-100" name="action" value="decline">Decline</button></div>
+        </form>
+      {% endif %}
+    </section>
+  {% endfor %}
+
+  <section class="fx-panel" aria-labelledby="fdParties">
+    <h2 id="fdParties"><i class="fa-solid fa-people-arrows text-success"></i> Confirmations</h2>
+    {% if fixture.parties %}
+      <ul class="list-unstyled mb-0">
+        {% for p in fixture.parties %}{% set st = party_status(p) %}
+          <li class="mb-1"><span class="fx-party is-{{ st }}">{{ st | capitalize }}</span> {{ fixtures_mod.PARTY_ROLES[p.role] }}: {{ user_link(p.user) }}
+            {% if p.decline_reason %}<small class="text-muted">· {{ p.decline_reason }}</small>{% endif %}</li>
+        {% endfor %}
+      </ul>
+    {% else %}<p class="small text-muted mb-0">{{ 'Waiting for D.A.R.T Admin approval.' if fixture.status == 'requested' else 'No coach of these teams is on D.A.R.T. yet.' }}</p>{% endif %}
+  </section>
+
+  {% if can_delete_fixture(fixture) %}
+    <section class="fx-panel" aria-labelledby="fdDelete">
+      <h2 id="fdDelete"><i class="fa-solid fa-trash-can text-danger"></i> Delete this fixture</h2>
+      <p class="small text-muted">Only for a genuine mistake, before any athlete sends a record. Everyone involved is told the reason.
+        If the game is simply off, cancel it instead.</p>
+      <form method="POST" action="{{ url_for('fixture_delete', fixture_id=fixture.id) }}" class="row g-2"
+            onsubmit="return confirm('Delete this fixture for good?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-5"><label class="form-label" for="fdReason">Reason</label>
+          <select class="form-select" id="fdReason" name="reason" required><option value="">Choose…</option>
+            {% for k, label in fixture_delete_reasons.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></div>
+        <div class="col-md-7"><label class="form-label" for="fdExplain">What was wrong?</label>
+          <input class="form-control" id="fdExplain" name="explain" required minlength="10" maxlength="300" placeholder="e.g. Typed Lions FC instead of Lofa Lions"></div>
+        <div class="col-12"><button class="btn btn-outline-danger" type="submit"><i class="fa-solid fa-trash-can"></i> Delete fixture</button></div>
+      </form>
+    </section>
+  {% endif %}
+
+  {% if manage and fixture.status == 'scheduled' %}
+    <section class="fx-panel" aria-labelledby="fdManage">
+      <h2 id="fdManage"><i class="fa-solid fa-sliders text-success"></i> Manage</h2>
+      <form method="POST" action="{{ url_for('fixture_officials', fixture_id=fixture.id) }}" class="row g-2 mb-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ official_pickers(referees, linesmen) }}
+        <div class="col-12"><button class="btn btn-sm dart-btn" type="submit"><i class="fa-solid fa-user-plus"></i> Add officials</button></div>
+      </form>
+      <form method="POST" action="{{ url_for('fixture_cancel', fixture_id=fixture.id) }}" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-9"><input class="form-control" name="reason" maxlength="300" required placeholder="Why is it cancelled?" aria-label="Cancel reason"></div>
+        <div class="col-md-3"><button class="btn btn-outline-danger w-100" type="submit">Cancel fixture</button></div>
+      </form>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

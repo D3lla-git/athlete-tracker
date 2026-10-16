@@ -1,0 +1,108 @@
+{# National Identification Number (NIN) input (athletes and coaches only).
+   nin_input(mode)  mode: 'coach' (always required) or 'athlete' (required from 18:
+   the age comes from #age / #date_of_birth on the athlete form). #}
+{% macro nin_input(mode='athlete', input_id='nin') %}
+<div class="mb-3 nin-field" data-nin-mode="{{ mode }}">
+  <label class="form-label" for="{{ input_id }}">National ID Number (NIN) <i class="fa-solid fa-id-card-clip" aria-hidden="true"></i>
+    <span class="nin-req badge rounded-pill text-bg-light" {% if mode != 'coach' %}hidden{% endif %}>Required</span></label>
+  <input type="text" name="nin" id="{{ input_id }}" class="form-control nin-input" inputmode="numeric" autocomplete="off"
+         spellcheck="false" maxlength="14" placeholder="10 digits, e.g. 2500750437" aria-describedby="{{ input_id }}Help {{ input_id }}Msg"
+         {% if mode == 'coach' %}required{% endif %} data-lpignore="true">
+  <div class="invalid-feedback" id="{{ input_id }}Msg"></div>
+  <small class="form-text d-block" id="{{ input_id }}Help"><i class="fa-solid fa-lock" aria-hidden="true"></i>
+    From your National Identification Registry (NIR) card. Only the D.A.R.T Admin can see it (stored encrypted), to verify your age.
+    {% if mode != 'coach' %}<span class="nin-minor">Under 18? You may leave it empty and upload your birth certificate below.</span>{% endif %}</small>
+</div>
+<script>
+(function () {
+  var box = document.currentScript.previousElementSibling, input = box.querySelector('.nin-input'), msg = box.querySelector('.invalid-feedback');
+  var mode = box.getAttribute('data-nin-mode'), badge = box.querySelector('.nin-req');
+  var SEQ = ['0123456789', '1234567890', '9876543210', '0987654321'];
+  function adult() {
+    if (mode === 'coach') return true;
+    var age = document.getElementById('age');
+    var n = age && age.value !== '' ? parseInt(age.value, 10) : NaN;
+    return !isNaN(n) && n >= 18;
+  }
+  function check() {
+    var v = input.value.replace(/[\s\-./]/g, ''), needed = adult(), m = '';
+    badge.hidden = !needed;
+    input.required = needed;
+    if (!v) m = needed ? (mode === 'coach' ? 'Enter your 10-digit NIN.' : 'Athletes aged 18 or over must enter their NIN.') : '';
+    else if (!/^\d+$/.test(v)) m = 'The NIN has numbers only.';
+    else if (v.length !== 10) m = 'The NIN must be exactly 10 digits (' + v.length + ' entered).';
+    else if (/^(\d)\1+$/.test(v) || SEQ.indexOf(v) !== -1) m = 'That is not a valid NIN.';
+    input.setCustomValidity(m);
+    msg.textContent = m;
+    input.classList.toggle('is-invalid', !!m && (input.value !== '' || input.dataset.touched === '1'));
+    input.classList.toggle('is-valid', !m && v.length === 10);
+  }
+  input.addEventListener('input', function () { input.value = input.value.replace(/[^\d\s-]/g, ''); check(); });
+  input.addEventListener('blur', function () { input.dataset.touched = '1'; check(); });
+  ['age', 'date_of_birth'].forEach(function (id) { var el = document.getElementById(id); if (el) { el.addEventListener('input', check); el.addEventListener('change', check); } });
+  setTimeout(check, 0);
+})();
+</script>
+{% endmacro %}
+
+{# The D.A.R.T Admin's view of a person's NIN + age check (System only; renders nothing for anyone else). #}
+{% macro nin_admin(u, next_url='') %}
+{% if current_user.is_authenticated and current_user.role == 'System' and u.role in ('Athlete', 'Coach') %}
+<div class="nin-admin" data-nin-admin>
+  <div class="nin-admin-row">
+    <span class="nin-admin-label"><i class="fa-solid fa-id-card-clip"></i> NIN</span>
+    {% if u.nin_cipher %}
+      <code class="nin-admin-value" data-nin-value>••••••••••</code>
+      <button type="button" class="btn btn-sm btn-outline-secondary nin-admin-reveal" data-nin-reveal="{{ url_for('admin_reveal_nin', user_id=u.id) }}"
+              data-csrf="{{ csrf_token() }}">Show</button>
+    {% else %}<span class="small text-muted">none{% if u.role == 'Athlete' and u.date_of_birth %} (birth certificate?){% endif %}</span>{% endif %}
+  </div>
+  <div class="nin-admin-row">
+    <span class="nin-admin-label"><i class="fa-solid fa-cake-candles"></i> Age</span>
+    {% if u.age_verified_at %}<span class="badge text-bg-success"><i class="fa-solid fa-circle-check"></i> Verified · {{ age_sources.get(u.age_verified_source, '') }}</span>
+    {% elif u.age_check_note %}<span class="badge text-bg-danger" title="{{ u.age_check_note }}">Mismatch</span> <small>{{ u.age_check_note }}</small>
+    {% else %}<span class="badge text-bg-warning">Not verified</span>{% endif %}
+  </div>
+  {% if not u.age_verified_at %}
+    <form method="POST" action="{{ url_for('admin_verify_age', user_id=u.id) }}" class="nin-admin-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ next_url or request.full_path }}">
+      <button class="btn btn-sm btn-success" name="action" value="nir_card">Matches NIR card</button>
+      <button class="btn btn-sm btn-success" name="action" value="birth_certificate">Matches birth certificate</button>
+      <input class="form-control form-control-sm" name="note" maxlength="200" placeholder="If not: what does not match?" aria-label="Mismatch reason">
+      <button class="btn btn-sm btn-outline-danger" name="action" value="mismatch">Does not match</button>
+    </form>
+  {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro nin_admin_assets() %}
+<style>
+  .nin-admin { margin-top: 6px; padding: 8px 10px; border-radius: 12px; border: 1px dashed rgba(25, 135, 84, 0.45); background: rgba(25, 135, 84, 0.05); font-size: 0.85rem; }
+  .nin-admin-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .nin-admin-label { min-width: 52px; font-weight: 800; }
+  .nin-admin-value { font-size: 0.95rem; letter-spacing: 0.08em; }
+  .nin-admin-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .nin-admin-form .form-control { flex: 1 1 180px; width: auto; }
+</style>
+<script>
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest('[data-nin-reveal]');
+  if (!btn) return;
+  var box = btn.closest('[data-nin-admin]'), out = box.querySelector('[data-nin-value]');
+  if (btn.dataset.shown === '1') { out.textContent = '••••••••••'; btn.textContent = 'Show'; btn.dataset.shown = ''; return; }
+  btn.disabled = true;
+  fetch(btn.getAttribute('data-nin-reveal'), { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+    headers: { 'X-CSRFToken': btn.getAttribute('data-csrf'), 'X-Requested-With': 'fetch' } })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      out.textContent = d.ok ? d.nin : (d.error || 'Not available');
+      btn.textContent = 'Hide'; btn.dataset.shown = '1';
+      setTimeout(function () { if (btn.dataset.shown === '1') btn.click(); }, 30000);   // hide again after 30 s
+    })
+    .catch(function () { out.textContent = 'Not available'; })
+    .finally(function () { btn.disabled = false; });
+});
+</script>
+{% endmacro %}

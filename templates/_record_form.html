@@ -214,13 +214,6 @@
     </select>
 </div>
 
-    <div class="col-md-2">
-      <label class="form-label">Year / Season <i class="fa-regular fa-calendar" style="color: green;"></i></label>
-      <input type="number" name="year" id="recordYear" class="form-control" placeholder="e.g. 2025"
-             max="{{ today_iso()[:4] }}" data-no-future-year required>
-      <div class="invalid-feedback" id="recordYearFeedback"></div>
-    </div>
-
 <div class="col-md-2">
     <label for="game_date" class="form-label">
         Game Date
@@ -236,22 +229,32 @@
         required>
 </div>
 
+    <div class="col-md-2">
+      <label class="form-label">Year / Season <i class="fa-regular fa-calendar" style="color: green;"></i></label>
+      <input type="number" name="year" id="recordYear" class="form-control record-year-auto" placeholder="From game date"
+             max="{{ today_iso()[:4] }}" data-no-future-year required readonly tabindex="-1"
+             aria-describedby="recordYearHelp" title="Filled in from the game date">
+      <div class="form-text" id="recordYearHelp"><i class="fa-solid fa-wand-magic-sparkles"></i> Filled in from the game date</div>
+      <div class="invalid-feedback" id="recordYearFeedback"></div>
+    </div>
+
 <script>
-// Year / Season must be the year of the game date (the server checks
-// this too). An empty year is filled in from the game date.
+// Year / Season is always the year of the game date: it fills in by itself
+// when the game date is entered or changed (the server checks it too).
 document.addEventListener('DOMContentLoaded', function () {
 
     const yearInput = document.getElementById('recordYear');
     const gameDateInput = document.getElementById('game_date');
     const feedback = document.getElementById('recordYearFeedback');
 
-    function checkYearMatchesGameDate() {
+    function checkYearMatchesGameDate(event) {
+        const syncFromDate = !event || event.target === gameDateInput;
 
         const gameYear = gameDateInput.value
             ? gameDateInput.value.slice(0, 4)
             : '';
 
-        if (gameYear && !yearInput.value) {
+        if (syncFromDate) {
             yearInput.value = gameYear;
         }
 
@@ -270,8 +273,13 @@ document.addEventListener('DOMContentLoaded', function () {
     yearInput.addEventListener('input', checkYearMatchesGameDate);
     gameDateInput.addEventListener('input', checkYearMatchesGameDate);
     gameDateInput.addEventListener('change', checkYearMatchesGameDate);
+    if (gameDateInput.value) checkYearMatchesGameDate();
 });
 </script>
+<style>
+  .record-year-auto[readonly] { background-color: rgba(25, 135, 84, 0.07); cursor: default; font-weight: 700; }
+  html[data-theme="dark"] .record-year-auto[readonly] { background-color: rgba(76, 211, 138, 0.1); }
+</style>
 
     <div class="col-md-3">
   <label class="form-label">

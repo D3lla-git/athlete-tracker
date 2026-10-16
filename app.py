@@ -5,7 +5,7 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import MultiDict
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare, RecordVerificationEvent, MatchReport, MatchReportLine, AwardContest, AwardEntry, MarketListing, MarketImage, MarketThread, MarketMessage, MarketReport, PredictionQuestion, PredictionPick, MarketCartItem, SitePresence, OrgGame)
+from models import (db,User,SportRecord,LoginAttempt,Registration,ChatMessage,Subscription,Payment,Entitlement,AuditLog,PremiumProfile,PinnedSportRecord, ScoutProfile, SavedSearch, AthleteHighlight, OrganizationProfile, OrganizationRosterExclusion, TermsAcceptance, CoachTeam, CoachGameRecord, CoachAchievement, HighlightComment, HighlightShare, RecordVerificationEvent, MatchReport, MatchReportLine, AwardContest, AwardEntry, MarketListing, MarketImage, MarketThread, MarketMessage, MarketReport, PredictionQuestion, PredictionPick, MarketCartItem, SitePresence, OrgGame, FederationTeam, Fixture, FixtureParty, FixtureSheet, FixtureSheetLine, FixtureDiscipline, RecordCheck, AthleteTeam)
 from dotenv import load_dotenv
 load_dotenv(override=True)  # This forces Python to read your local .env file
 from config import Config
@@ -57,6 +57,10 @@ import predictions as predictions_mod
 import json
 import presence as presence_mod
 import org_games as games_mod
+import nin as nin_mod
+import fixtures as fixtures_mod
+import fixture_records as fixture_rec
+from competitions import TROPHIES as COMPETITION_TROPHIES
 from plans import is_premium_vendor, premium_vendor_ids
 from competitions import (
     CLUB_DIVISIONS,
@@ -1812,7 +1816,7 @@ def suggestion_order(column, text):
 
 app.jinja_env.globals['search_words'] = search_words
 # The platform role 'System' is shown as "D.A.R.T Admin" everywhere.
-app.jinja_env.filters['role_label'] = lambda role: {'System': 'D.A.R.T Admin', 'Statistician': 'Match Official', 'Member': 'O-D.A.R.T user'}.get(role, role)
+app.jinja_env.filters['role_label'] = lambda role: {'System': 'D.A.R.T Admin', 'Statistician': 'Match Official', 'Member': 'O-D.A.R.T user', 'Rep': 'D.A.R.T Rep'}.get(role, role)
 
 
 def name_or_username(text):
@@ -3005,6 +3009,16 @@ def register(registration_category=None):
             user = None
 
         # ==========================================================
+        # NATIONAL ID NUMBER (NIN): required from 18 (under 18: the
+        # birth certificate can be the ID document). Never shown to anyone
+        # but the D.A.R.T Admin.
+        # ==========================================================
+        nin_value, nin_error = nin_from_form(request.form, 'Athlete', calculated_age, existing)
+        if nin_error and not (existing is not None and existing.nin_cipher and not (request.form.get('nin') or '').strip()):
+            flash(nin_error, 'danger')
+            return redirect(url_for('register', registration_category=registration_category))
+
+        # ==========================================================
         # ID DOCUMENT HANDLING
         #
         # RULE C:
@@ -3029,7 +3043,7 @@ def register(registration_category=None):
 
             if not file or file.filename == '':
                 flash(
-                    'Student ID or Passport is required.',
+                    'Upload your NIR card, birth certificate, student ID or passport.',
                     'danger'
                 )
                 return redirect(
@@ -3199,6 +3213,9 @@ def register(registration_category=None):
             existing.nationality = nationality
             existing.height_cm = height_cm
             existing.weight_kg = weight_kg
+
+        if nin_value:
+            set_nin(user, nin_value)
 
         # ==========================================================
         # CHECK FOR DUPLICATE CATEGORY REGISTRATION
@@ -3498,7 +3515,7 @@ def redirect_after_login(default_endpoint):
 
 
 # Roles that must use two-factor authentication (authenticator app).
-TWO_FACTOR_ROLES = ('Coach', 'System', 'Scout', 'Organization', 'Statistician')
+TWO_FACTOR_ROLES = ('Coach', 'System', 'Scout', 'Organization', 'Statistician', 'Federation', 'Rep')
 
 
 def dashboard_endpoint_for(user):
@@ -3543,6 +3560,16 @@ def continue_login(user):
     # Match officials (counter-sign records) are checked by the D.A.R.T Admin first.
     if user.role == 'Statistician' and not user.is_verified:
         flash('Your match official account is waiting for D.A.R.T Admin verification.', 'warning')
+        return redirect(url_for('login'))
+
+    # D.A.R.T Reps (attest records) are checked by the D.A.R.T Admin first.
+    if user.role == 'Rep' and not user.is_verified:
+        flash('Your D.A.R.T Rep application is waiting for D.A.R.T Admin verification.', 'warning')
+        return redirect(url_for('login'))
+
+    # Federation accounts are created (verified) by the D.A.R.T Admin only.
+    if user.role == 'Federation' and (not user.is_verified or user.federation_code not in fixtures_mod.BODIES):
+        flash('This federation account is not active. Contact D.A.R.T.', 'danger')
         return redirect(url_for('login'))
 
     # Organizations must be verified by the D.A.R.T Admin first.
@@ -4297,6 +4324,8 @@ ROLE_DASHBOARDS = {
     'Vendor': ('market_mine', 'My Shop', 'Shop', 'fa-solid fa-store'),
     'Buyer': ('market_cart', 'My Cart', 'Cart', 'fa-solid fa-cart-shopping'),
     'Member': ('feed', 'Highlights', 'Feed', 'fa-solid fa-clapperboard'),
+    'Federation': ('federation_dashboard', 'Federation', 'Federation', 'fa-solid fa-landmark-flag'),
+    'Rep': ('rep_dashboard', 'D.A.R.T Rep', 'Rep', 'fa-solid fa-user-check'),
 }
 
 
@@ -5699,6 +5728,9 @@ def edit_highlight(highlight_id):
     if not highlight or highlight.user_id != current_user.id or highlight.status == 'rejected':
         abort(404)
     back = safe_next_url(request.form.get('next')) or url_for('student_dashboard') + '#highlights'
+    if message_age_seconds(highlight.created_at) > MESSAGE_EDIT_SECONDS:
+        flash('Captions can be edited for 1 minute after posting.', 'warning')
+        return redirect(back)
     caption = ' '.join((request.form.get('caption') or '').split())[:HIGHLIGHT_CAPTION_MAX]
     if caption and feed_mod._LINK_RE.search(caption):
         flash('Links are not allowed in captions.', 'danger')
@@ -6011,8 +6043,8 @@ def can_delete_comment(comment, highlight, actor):
 
 
 def can_edit_comment(comment, actor):
-    """Only the writer (member or visitor on the same device) edits their comment."""
-    if actor is None:
+    """Only the writer (member or visitor on the same device) edits their comment, within 1 minute of posting it."""
+    if actor is None or message_age_seconds(comment.created_at) > MESSAGE_EDIT_SECONDS:
         return False
     if actor.is_member:
         return comment.user_id == actor.user_id
@@ -6067,6 +6099,7 @@ def comment_payload(comment, highlight, actor):
         'ago': feed_mod.time_ago(comment.created_at),
         'can_delete': bool(can_delete_comment(comment, highlight, actor)),
         'can_edit': bool(can_edit_comment(comment, actor)),
+        'edit_left': edit_seconds_left(comment.created_at),
         'device': '' if author else (comment.visitor_device or ''),
         'edited': comment.edited_at is not None,
         'is_athlete': bool(author and author.id == highlight.user_id),
@@ -8196,7 +8229,7 @@ def sitemap_xml():
 
 
 # ---------- Legal pages ----------
-LEGAL_UPDATED = 'October 15, 2026'
+LEGAL_UPDATED = 'October 16, 2026'
 
 
 @app.route('/privacy')
@@ -8230,7 +8263,7 @@ def organization_terms():
 # registering, or on their next login for existing accounts). Raise
 # TERMS_VERSION when the terms change: everyone is asked again, and each
 # acceptance is stored in TermsAcceptance as a permanent record.
-TERMS_VERSION = '2026-10-15'
+TERMS_VERSION = '2026-10-16'
 
 # The D.A.R.T Admin runs the platform and is not asked.
 TERMS_EXEMPT_ROLES = ('System',)
@@ -8956,7 +8989,7 @@ def admin_terms_acceptances_csv():
 # Only public sport information is used (age, never the date of birth).
 
 # Every account has a shareable card.
-PROFILE_CARD_ROLES = ('Athlete', 'Coach', 'Scout', 'Vendor', 'Buyer', 'Organization', 'Statistician', 'System', 'Member')
+PROFILE_CARD_ROLES = ('Athlete', 'Coach', 'Scout', 'Vendor', 'Buyer', 'Organization', 'Statistician', 'System', 'Member', 'Federation')
 PROFILE_PHOTO_MAX_BYTES = 6 * MB
 
 
@@ -9088,6 +9121,24 @@ def profile_card_info(user, viewer=None):
             'subtitle': user.school or ('Sports journalist' if journalist else 'Match Official'),
             'pill': user.official_type or 'Match Official',
             'stats': [('Role', user.official_type or 'Match Official'), ('Organization', user.school or '—')],
+        })
+    elif user.role == 'Federation':
+        body = fixtures_mod.BODIES.get(user.federation_code or '', {})
+        season = fixtures_mod.current_season()
+        active = bool(user.is_verified and not user.is_suspended and body)
+        info.update({
+            'name': body.get('name') or user.full_name,
+            'eyebrow': 'Federation Card',
+            'subtitle': ' · '.join(body.get('sports', ())) or 'Federation',
+            'pill': f'Verified federation · {user.federation_code}' if active else 'Federation',
+            'verified': active,
+            'nationality': '', 'flag': '', 'code': '',
+            'stats': [
+                ('Body', user.federation_code or '—'),
+                (f'Teams {season}', FederationTeam.query.filter_by(body=user.federation_code, season=season).count()),
+                ('Fixtures', Fixture.query.filter(Fixture.body == user.federation_code, Fixture.status == 'scheduled').count()),
+            ],
+            'extra': [('Country', 'Liberia')] + ([('Competitions', ', '.join(body.get('competitions', ())[:3]))] if body else []),
         })
     elif user.role == 'Member':
         info.update({
@@ -9455,6 +9506,9 @@ def record_form_page():
     """
     if current_user.role != 'Athlete':
         return redirect(url_for(dashboard_endpoint_for(current_user)))
+    if fixture_records_only():
+        flash(FIXTURES_ONLY_MESSAGE, 'info')
+        return redirect(url_for('student_dashboard') + '#fixtureGames')
 
     response = make_response(render_template(
         'record_form.html',
@@ -10072,6 +10126,9 @@ def submit_record():
     if current_user.role != 'Athlete' or not current_user.is_verified:
         flash('You are not allowed to submit records.', 'danger')
         return redirect(url_for('student_dashboard'))
+    if fixture_records_only():
+        flash(FIXTURES_ONLY_MESSAGE, 'info')
+        return redirect(url_for('student_dashboard') + '#fixtureGames')
 
     try:
         record = build_sport_record_from_form(request.form)
@@ -10139,6 +10196,9 @@ def api_submit_record():
             'reason': 'not_allowed',
             'error': 'You are not allowed to submit records.'
         }, 403)
+
+    if fixture_records_only():
+        return _no_store_json({'ok': False, 'reason': 'fixtures_only', 'error': FIXTURES_ONLY_MESSAGE}, 422)
 
     try:
         record = build_sport_record_from_form(request.form)
@@ -10244,6 +10304,9 @@ def edit_record(record_id):
     if record.user_id != current_user.id:
         flash('You can only edit your own records.', 'danger')
         return redirect(url_for('student_dashboard'))
+    if record.fixture_id:
+        flash('Fixture records can not be edited. If one is rejected as inaccurate, send it again from the fixture.', 'info')
+        return redirect(url_for('student_dashboard') + '#fixtureGames')
 
     # A disputed record is frozen until the D.A.R.T Admin decides.
     if record.status == 'disputed':
@@ -10904,6 +10967,8 @@ def super_admin_dashboard_stats():
         'scouts_total': total_scouts,
         'buyers_total': users_by_role.get('Buyer', 0),
         'members_total': users_by_role.get('Member', 0),
+        'federations_total': users_by_role.get('Federation', 0),
+        'reps_total': users_by_role.get('Rep', 0),
     }
     by_type = dict(db.session.query(User.official_type, func.count(User.id)).filter(User.role == 'Statistician')
                    .group_by(User.official_type).all())
@@ -12581,6 +12646,9 @@ def approve_record(record_id):
         return redirect(url_for('index'))
 
     record = SportRecord.query.get_or_404(record_id)
+    if record.fixture_id:
+        flash('Fixture records are cross-signed on the match page (team sheet, referee, opponent coach).', 'info')
+        return redirect(url_for('fixture_match', fixture_id=record.fixture_id) + '#records')
 
     # System can manage every record; Coaches are restricted to their school/team and category.
     if current_user.role != 'System':
@@ -12924,6 +12992,33 @@ def register_coach(registration_category=None):
                 registration_category=registration_category
             ))
 
+        # National ID number (NIN) - required for every coach.
+        nin_value, nin_error = nin_from_form(request.form, 'Coach', None)
+        if nin_error:
+            flash(nin_error, 'danger')
+            return redirect(url_for('register_coach', registration_category=registration_category))
+
+        # NIR card / passport: checked by the D.A.R.T Admin (private storage).
+        document = request.files.get('id_document')
+        coach_document = None
+        if not document or not document.filename:
+            flash('Upload your NIR card or passport.', 'danger')
+            return redirect(url_for('register_coach', registration_category=registration_category))
+        document.stream.seek(0, os.SEEK_END)
+        document_size = document.stream.tell()
+        document.stream.seek(0)
+        document_kind = valid_file_content(document)
+        if not document_kind or document_size > 5 * 1024 * 1024:
+            flash('The ID document must be a JPG, PNG or PDF up to 5 MB.', 'danger')
+            return redirect(url_for('register_coach', registration_category=registration_category))
+        coach_document = f'coaches/{uuid.uuid4().hex}.{document_kind}'
+        try:
+            upload_to_supabase(document, 'id-documents', coach_document)
+        except Exception as e:
+            app.logger.exception('Coach ID upload failed: %s', e)
+            flash('We could not upload your ID document. Please try again.', 'danger')
+            return redirect(url_for('register_coach', registration_category=registration_category))
+
         # Two coaches may share a full name (even on the same team): the
         # unique username tells them apart, and emails are unique.
 
@@ -12937,6 +13032,7 @@ def register_coach(registration_category=None):
             coach_category=selected_category,
             coach_position=coach_position,
             username=username,
+            id_document=coach_document,
             is_verified=False          # Pending D.A.R.T Admin approval
         )
         coach.set_password(password)
@@ -12945,6 +13041,7 @@ def register_coach(registration_category=None):
         db.session.add(coach)
         db.session.flush()
         record_account_created(coach)
+        set_nin(coach, nin_value)
 
         # Save the selected coach category for the current registration year.
         current_year = datetime.utcnow().year
@@ -13498,7 +13595,8 @@ def verification_counts():
         'overdue': SportRecord.query.filter(SportRecord.status == 'verifying', SportRecord.coach_approved_at < overdue).count(),
         'disputed': SportRecord.query.filter_by(status='disputed').count(),
         'proof': SportRecord.query.filter(SportRecord.status == 'pending', SportRecord.proof_required.is_(True)).count(),
-        'officials': User.query.filter_by(role='Statistician', is_verified=False, is_suspended=False).count(),
+        'officials': User.query.filter(User.role.in_(('Statistician', 'Rep')), User.is_verified.is_(False),
+                                       User.is_suspended.is_(False)).count(),
         'flagged': User.query.filter(User.role == 'Coach', User.fraud_flags > 0).count(),
     }
 
@@ -13619,6 +13717,9 @@ def record_proof(record_id):
 def countersign_record(record_id):
     record = SportRecord.query.get_or_404(record_id)
     back = _back_to(request.form.get('next', ''))
+    if record.fixture_id and not (current_user.role == 'System' and record.countersign_target == 'dart_admin'):
+        flash('Fixture records are cross-signed on the match page.', 'info')
+        return redirect(url_for('fixture_match', fixture_id=record.fixture_id) + '#records')
     if not integrity.can_countersign(current_user, record):
         flash('You can\'t counter-sign this record (it may already be settled, or you are tied to one of the teams).', 'warning')
         return redirect(back)
@@ -13843,7 +13944,8 @@ def verification_center():
     proofs = load.filter(SportRecord.status == 'pending', SportRecord.proof_required.is_(True)).order_by(SportRecord.created_at.asc()).limit(200).all()
     people_ids = {i for r in verifying + disputed for i in (r.coach_approved_by, r.disputed_by) if i}
     people = {u.id: u for u in User.query.filter(User.id.in_(people_ids or {0})).all()}
-    officials = User.query.filter_by(role='Statistician', is_verified=False, is_suspended=False).order_by(User.created_at).all()
+    officials = (User.query.filter(User.role.in_(('Statistician', 'Rep')), User.is_verified.is_(False), User.is_suspended.is_(False))
+                 .order_by(User.created_at).all())
     coaches = (User.query.filter(User.role == 'Coach', or_(User.fraud_flags > 0, User.license_revoked.is_(True)))
                .order_by(User.fraud_flags.desc(), User.full_name).all())
     phones = (User.query.filter(User.role.in_(('Coach', 'Statistician')), User.phone.isnot(None), User.phone_verified_at.is_(None))
@@ -13884,7 +13986,7 @@ def resolve_dispute(record_id):
 def review_official(user_id):
     _admin_only()
     official = User.query.get_or_404(user_id)
-    if official.role != 'Statistician' or official.is_verified:
+    if official.role not in ('Statistician', 'Rep') or official.is_verified:
         abort(400)
     if request.form.get('action') == 'approve':
         official.is_verified = True
@@ -14734,6 +14836,13 @@ def admin_queues():
         ('org_games', 'Organization line-ups to confirm', 'fa-people-line',
          OrgGame.query.filter(OrgGame.lineup_saved_at.isnot(None), OrgGame.lineup_confirmed_at.is_(None),
                               OrgGame.kickoff_at <= datetime.utcnow()).count(), url_for('admin_org_games'), 'content'),
+        ('fixtures', 'Fixture requests (coaches)', 'fa-calendar-plus', Fixture.query.filter_by(status='requested').count(),
+         url_for('admin_fixtures'), 'content'),
+        ('fixture_records', 'Fixture records to publish', 'fa-circle-check', fixture_records_ready_count(),
+         url_for('admin_fixtures') + '#ready', 'content'),
+        ('ages', 'Ages to verify (NIN / birth certificate)', 'fa-id-card', User.query.filter(
+            User.role.in_(('Athlete', 'Coach')), User.age_verified_at.is_(None), User.age_check_note.is_(None),
+            or_(User.nin_cipher.isnot(None), User.id_document.isnot(None))).count(), url_for('admin_ages'), 'accounts'),
         ('payments', 'Payments', 'fa-money-check-dollar', Payment.query.filter_by(status='awaiting_review').count(),
          url_for('admin_payments'), 'money'),
     ]
@@ -15446,6 +15555,1446 @@ def admin_prediction_action(question_id, action):
     db.session.commit()
     flash('Prediction settled: points added.' if action == 'settle' else 'Prediction cancelled.', 'success')
     return redirect(url_for('admin_predictions'))
+
+
+# ==========================================================
+# NATIONAL ID NUMBER (NIN) + AGE VERIFICATION
+# Only the D.A.R.T Admin can read a NIN (encrypted, see nin.py). It is never
+# written to logs, audit details, flash messages or exports.
+# ==========================================================
+def nin_from_form(form, role, age, user=None):
+    """(nin or None, error): format, whether it's required, and one NIN per account."""
+    raw = (form.get('nin') or '').strip()
+    if not raw:
+        if nin_mod.required_for(role, age):
+            if role == 'Coach':
+                return None, 'Enter your 10-digit National Identification Number (NIN) from your NIR card.'
+            return None, 'Athletes aged 18 or over must enter their 10-digit NIN (from the NIR card).'
+        return None, None
+    value, error = nin_mod.validate(raw)
+    if error:
+        return None, error
+    query = User.query.filter(User.nin_hash == nin_mod.fingerprint(value))
+    if user is not None and getattr(user, 'id', None):
+        query = query.filter(User.id != user.id)
+    if query.first():
+        return None, 'This NIN is already used by another D.A.R.T. account. Contact D.A.R.T. if this is a mistake.'
+    return value, None
+
+
+def set_nin(user, value):
+    """Save a (validated) NIN. A new number must be age-verified again."""
+    fingerprint = nin_mod.fingerprint(value)
+    if user.nin_hash == fingerprint:
+        return
+    user.nin_cipher = nin_mod.encrypt(value)
+    user.nin_hash = fingerprint
+    user.nin_added_at = datetime.utcnow()
+    user.age_verified_at = None
+    user.age_verified_by = None
+    user.age_verified_source = None
+
+
+def nin_missing(user):
+    """An athlete (18+) or coach who still has to add their NIN."""
+    if not getattr(user, 'is_authenticated', False) or not nin_mod.applies_to(user) or user.nin_cipher:
+        return False
+    return nin_mod.required_for(user.role, athlete_age(user) if user.role == 'Athlete' else None)
+
+
+AGE_SOURCES = {'nir_card': 'NIR card', 'birth_certificate': 'Birth certificate'}
+
+app.jinja_env.globals.update(nin_missing=lambda: nin_missing(current_user), nin_masked=nin_mod.masked, nin_help=nin_mod.NIN_HELP,
+                             age_sources=AGE_SOURCES)
+
+
+@app.route('/profile/nin', methods=['POST'])
+@login_required
+def profile_nin():
+    if not nin_mod.applies_to(current_user):
+        abort(404)
+    age = athlete_age(current_user) if current_user.role == 'Athlete' else None
+    value, error = nin_from_form(request.form, 'Coach' if current_user.role == 'Coach' else 'Athlete', 18, current_user)
+    if not error and not value:
+        error = 'Enter your 10-digit National Identification Number (NIN).'
+    if error:
+        flash(error, 'danger')
+        return redirect(url_for('profile') + '#nin')
+    changed = bool(current_user.nin_cipher)
+    set_nin(current_user, value)
+    create_audit_log(action='nin_updated' if changed else 'nin_added', actor_user_id=current_user.id, target_type='User',
+                     target_id=str(current_user.id), details={'age': age})
+    db.session.commit()
+    flash('Your NIN is saved. Only the D.A.R.T Admin can see it; it is used to verify your age.', 'success')
+    return redirect(url_for('profile') + '#nin')
+
+
+@app.route('/admin/users/<int:user_id>/nin', methods=['POST'])
+@login_required
+def admin_reveal_nin(user_id):
+    """The D.A.R.T Admin reads one NIN (each view is audit-logged)."""
+    require_super_admin()
+    user = db.session.get(User, user_id)
+    if not user or not user.nin_cipher:
+        abort(404)
+    value = nin_mod.decrypt(user.nin_cipher)
+    create_audit_log(action='nin_viewed', actor_user_id=current_user.id, target_type='User', target_id=str(user.id), details={})
+    db.session.commit()
+    return _no_store_json({'ok': bool(value), 'nin': value or '', 'error': '' if value else 'The NIN could not be read (encryption key changed).'})
+
+
+@app.route('/admin/users/<int:user_id>/age', methods=['POST'])
+@login_required
+def admin_verify_age(user_id):
+    """Age verification against the NIR card or birth certificate (or 'mismatch' with a reason)."""
+    require_super_admin()
+    user = db.session.get(User, user_id)
+    if not user or user.role not in ('Athlete', 'Coach'):
+        abort(404)
+    action = request.form.get('action')
+    note = ' '.join((request.form.get('note') or '').split())[:200]
+    back = safe_next_url(request.form.get('next')) or url_for('admin_dashboard')
+    if action in AGE_SOURCES:
+        user.age_verified_at = datetime.utcnow()
+        user.age_verified_by = current_user.id
+        user.age_verified_source = action
+        user.age_check_note = None
+        notif.notify(user.id, 'age_verified', f'D.A.R.T. verified your age with your {AGE_SOURCES[action]}.', '/profile')
+    elif action == 'mismatch':
+        if not note:
+            flash('Say what does not match (the athlete / coach sees it).', 'warning')
+            return redirect(back)
+        user.age_verified_at = None
+        user.age_verified_source = None
+        user.age_check_note = note
+        notif.notify(user.id, 'age_check', f'D.A.R.T. could not verify your age: {note}. Check your date of birth and NIN in My Profile.',
+                     '/profile#nin')
+    else:
+        abort(400)
+    create_audit_log(action=f'age_{action}', actor_user_id=current_user.id, target_type='User', target_id=str(user.id),
+                     details={'note': note} if note else {})
+    db.session.commit()
+    flash('Age verification saved.', 'success')
+    return redirect(back)
+
+
+# ==========================================================
+# FEDERATIONS (MYS, LFA, LBA, LKF, ISSA) + FIXTURES
+# ==========================================================
+def federation_user(code):
+    return User.query.filter_by(role='Federation', federation_code=code).first()
+
+
+def require_federation():
+    """The signed-in federation's code (MYS / LFA / LBA / LKF / ISSA)."""
+    if (not current_user.is_authenticated or current_user.role != 'Federation' or not current_user.is_verified
+            or current_user.is_suspended or current_user.federation_code not in fixtures_mod.BODIES):
+        abort(403)
+    return current_user.federation_code
+
+
+def _temp_password():
+    return secrets.token_urlsafe(10) + 'a7!K'
+
+
+@app.route('/admin/federations', methods=['GET', 'POST'])
+@login_required
+def admin_federations():
+    """Create / suspend / reset the five federation accounts."""
+    require_super_admin()
+    created = None
+    if request.method == 'POST':
+        action = request.form.get('action', 'create')
+        code = request.form.get('code')
+        if code not in fixtures_mod.BODIES:
+            abort(400)
+        account = federation_user(code)
+        if action == 'create':
+            email, email_error = clean_optional_email(request.form.get('email'))
+            phone = integrity.clean_phone(request.form.get('phone')) if (request.form.get('phone') or '').strip() else None
+            error = None
+            if account:
+                error = f'{code} already has an account.'
+            elif not email or email_error:
+                error = email_error or 'Enter the federation\'s official email (for password resets).'
+            elif email_taken(email):
+                error = 'An account with this email address already exists.'
+            elif (request.form.get('phone') or '').strip() and not phone:
+                error = 'Enter a Liberian Orange (077) or Lonestar (088 / 055) mobile number, or leave it empty.'
+            if error:
+                flash(error, 'danger')
+                return redirect(url_for('admin_federations'))
+            password = _temp_password()
+            account = User(full_name=fixtures_mod.BODIES[code]['name'], email=email, phone=phone, role='Federation',
+                           federation_code=code, school=fixtures_mod.BODIES[code]['name'], is_verified=True)
+            account.set_password(password)
+            db.session.add(account)
+            db.session.flush()
+            record_account_created(account)
+            create_audit_log(action='federation_account_created', actor_user_id=current_user.id, target_type='User',
+                             target_id=str(account.id), details={'code': code})
+            db.session.commit()
+            created = {'code': code, 'name': account.full_name, 'email': email, 'password': password}
+        elif account and action == 'reset':
+            password = _temp_password()
+            account.set_password(password)
+            account.two_factor_enabled = False
+            account.two_factor_secret = None
+            create_audit_log(action='federation_password_reset', actor_user_id=current_user.id, target_type='User',
+                             target_id=str(account.id), details={'code': code})
+            db.session.commit()
+            created = {'code': code, 'name': account.full_name, 'email': account.email, 'password': password, 'reset': True}
+        elif account and action in ('suspend', 'reactivate'):
+            account.is_suspended = action == 'suspend'
+            account.suspended_at = datetime.utcnow() if action == 'suspend' else None
+            create_audit_log(action=f'federation_{action}', actor_user_id=current_user.id, target_type='User',
+                             target_id=str(account.id), details={'code': code})
+            db.session.commit()
+            flash(f'{code} account ' + ('suspended.' if action == 'suspend' else 'reactivated.'), 'success')
+            return redirect(url_for('admin_federations'))
+        else:
+            abort(400)
+    rows = [(code, body, federation_user(code)) for code, body in fixtures_mod.BODIES.items()]
+    response = make_response(render_template('admin_federations.html', rows=rows, created=created))
+    response.headers['Cache-Control'] = 'no-store'       # a temporary password may be on the page
+    return response
+
+
+def match_officials(kind=None):
+    """Verified referees / linesmen who can be assigned to fixtures."""
+    types = [fixtures_mod.OFFICIAL_ROLE_TYPES[kind]] if kind == 'referee' else list(fixtures_mod.OFFICIAL_ROLE_TYPES.values())
+    return (User.query.filter(User.role == 'Statistician', User.is_verified.is_(True), User.is_suspended.is_(False),
+                              User.official_type.in_(types)).order_by(User.full_name).all())
+
+
+def body_teams(body, season, sport=None):
+    query = FederationTeam.query.filter_by(body=body, season=season)
+    if sport:
+        query = query.filter_by(sport=sport)
+    return query.order_by(FederationTeam.sport, FederationTeam.name).all()
+
+
+def fixture_from_form(form, body, registered_only=True):
+    """(Fixture, error) - not added to the session."""
+    season = fixtures_mod.valid_season(form.get('season'))
+    sport = form.get('sport')
+    competition = fixtures_mod.clean(form.get('competition'), 80)
+    home = fixtures_mod.clean(form.get('home_team'), 150)
+    away = fixtures_mod.clean(form.get('away_team'), 150)
+    venue = fixtures_mod.clean(form.get('venue'), 150)
+    kickoff = fixtures_mod.parse_kickoff(form.get('kickoff_at'))
+    spec = fixtures_mod.BODIES.get(body)
+    if not season:
+        return None, 'Choose the season (e.g. 2026 or 2025/26).'
+    if sport not in (spec['sports'] if spec else fixtures_mod.SPORTS):
+        return None, 'Choose the sport.'
+    if competition not in ((spec['competitions'] + (fixtures_mod.FRIENDLY,)) if spec else (fixtures_mod.FRIENDLY,)):
+        return None, 'Choose the competition.'
+    if len(home) < 2 or len(away) < 2:
+        return None, 'Choose both teams.'
+    if normalize_team_name(home) == normalize_team_name(away):
+        return None, 'A team can not play itself.'
+    if registered_only and spec:
+        names = {normalize_team_name(t.name): t.name for t in body_teams(body, season, sport)}
+        if normalize_team_name(home) not in names or normalize_team_name(away) not in names:
+            return None, f'Both teams must be registered for {sport} in the {season} season first (Teams section).'
+        home, away = names[normalize_team_name(home)], names[normalize_team_name(away)]
+    error = fixtures_mod.kickoff_error(kickoff)
+    if error:
+        return None, error
+    if len(venue) < 2:
+        return None, 'Enter the venue.'
+    return Fixture(body=body, season=season, sport=sport, competition=competition, home_team=home, away_team=away,
+                   kickoff_at=kickoff, venue=venue), None
+
+
+def officials_from_form(form):
+    """(referee or None, [linesmen], error) from the official pickers."""
+    def pick(field, kind):
+        raw = (form.get(field) or '').strip()
+        if not raw:
+            return None, None
+        user = db.session.get(User, int(raw)) if raw.isdigit() else None
+        if not user or user not in match_officials(kind):
+            return None, 'Choose a verified ' + ('referee.' if kind == 'referee' else 'linesman / referee.')
+        return user, None
+    referee, error = pick('referee_id', 'referee')
+    if error:
+        return None, [], error
+    linesmen = []
+    for i in range(1, fixtures_mod.MAX_LINESMEN + 1):
+        user, error = pick(f'linesman{i}_id', 'linesman')
+        if error:
+            return None, [], error
+        if user and user not in linesmen and user != referee:
+            linesmen.append(user)
+    return referee, linesmen, None
+
+
+def _add_party(fixture, user, role, now):
+    exists = any(p.user_id == user.id and p.role == role for p in fixture.parties)
+    if exists:
+        return None
+    party = FixtureParty(user_id=user.id, role=role, notified_at=now)
+    fixture.parties.append(party)
+    when = fixture.kickoff_at.strftime('%a %d %b, %H:%M')
+    label = fixtures_mod.PARTY_ROLES[role].lower()
+    notif.notify(user.id, 'fixture', f'Next fixture: {fixture.home_team} vs {fixture.away_team} ({fixture.sport}, {when}, {fixture.venue}). '
+                                     f'Confirm as {label}.', f'/fixtures/{fixture.id}')
+    return party
+
+
+def publish_fixture(fixture, actor, referee=None, linesmen=()):
+    """Live: each team's coaches and the officials are asked to confirm (bell notification)."""
+    now = datetime.utcnow()
+    fixture.status = 'scheduled'
+    fixture.approved_by = actor.id
+    fixture.approved_at = now
+    if fixture.id is None:
+        db.session.add(fixture)
+        db.session.flush()
+    for coach in integrity._active_coaches_of(fixture.home_team):
+        _add_party(fixture, coach, 'home_coach', now)
+    for coach in integrity._active_coaches_of(fixture.away_team):
+        _add_party(fixture, coach, 'away_coach', now)
+    if referee:
+        _add_party(fixture, referee, 'referee', now)
+    for official in linesmen:
+        _add_party(fixture, official, 'linesman', now)
+
+
+def can_manage_fixture(fixture, user=None):
+    user = user or current_user
+    if not user.is_authenticated:
+        return False
+    if user.role == 'System':
+        return True
+    return user.role == 'Federation' and fixture.body and user.federation_code == fixture.body and not user.is_suspended
+
+
+def can_see_fixture(fixture, user=None):
+    user = user or current_user
+    if can_manage_fixture(fixture, user):
+        return True
+    if not user.is_authenticated:
+        return False
+    if any(p.user_id == user.id for p in fixture.parties) or fixture.requested_by == user.id:
+        return True
+    if user.role == 'Coach':
+        keys = coaching.team_keys(user)
+        return normalize_team_name(fixture.home_team) in keys or normalize_team_name(fixture.away_team) in keys
+    return False
+
+
+def my_fixture_parties(user, limit=12):
+    """Upcoming fixtures this coach / official is asked to confirm (or has confirmed)."""
+    if not getattr(user, 'is_authenticated', False):
+        return []
+    rows = (FixtureParty.query.join(Fixture).filter(FixtureParty.user_id == user.id, Fixture.status == 'scheduled',
+                                                     Fixture.kickoff_at >= datetime.utcnow() - timedelta(hours=6))
+            .order_by(Fixture.kickoff_at).limit(limit).all())
+    return rows
+
+
+def my_fixture_requests(user, limit=6):
+    if not getattr(user, 'is_authenticated', False):
+        return []
+    return (Fixture.query.filter(Fixture.requested_by == user.id).order_by(Fixture.created_at.desc()).limit(limit).all())
+
+
+app.jinja_env.globals.update(now_utc=datetime.utcnow, fixtures_mod=fixtures_mod, my_fixture_parties=my_fixture_parties, my_fixture_requests=my_fixture_requests,
+                             body_label=fixtures_mod.body_label, party_status=fixtures_mod.party_status)
+
+
+@app.route('/federation')
+@login_required
+def federation_dashboard():
+    code = require_federation()
+    season = fixtures_mod.valid_season(request.args.get('season')) or fixtures_mod.current_season()
+    teams = body_teams(code, season)
+    upcoming = (Fixture.query.filter(Fixture.body == code, Fixture.status == 'scheduled', Fixture.kickoff_at >= datetime.utcnow())
+                .order_by(Fixture.kickoff_at).all())
+    recent = (Fixture.query.filter(Fixture.body == code, or_(Fixture.kickoff_at < datetime.utcnow(), Fixture.status == 'cancelled'))
+              .order_by(Fixture.kickoff_at.desc()).limit(20).all())
+    return render_template('federation_dashboard.html', code=code, body=fixtures_mod.BODIES[code], season=season, teams=teams,
+                           upcoming=upcoming, recent=recent, referees=match_officials('referee'), linesmen=match_officials('linesman'),
+                           seasons=fixtures_mod.season_choices())
+
+
+@app.route('/federation/teams', methods=['POST'])
+@login_required
+def federation_add_teams():
+    code = require_federation()
+    form = request.form
+    season = fixtures_mod.valid_season(form.get('season'))
+    sport = form.get('sport')
+    competition = fixtures_mod.clean(form.get('competition'), 80)
+    spec = fixtures_mod.BODIES[code]
+    names = fixtures_mod.parse_team_lines(form.get('teams'))
+    back = url_for('federation_dashboard', season=season or '') + '#teams'
+    if not season or sport not in spec['sports'] or competition not in spec['competitions']:
+        flash('Choose the season, sport and competition.', 'danger')
+        return redirect(back)
+    if not names:
+        flash('Enter at least one team (one per line).', 'danger')
+        return redirect(back)
+    existing = {t.name_key for t in body_teams(code, season, sport)}
+    added = 0
+    for name in names:
+        key = normalize_team_name(name)
+        if key and key not in existing:
+            db.session.add(FederationTeam(body=code, season=season, sport=sport, competition=competition, name=name,
+                                          name_key=key, created_by=current_user.id))
+            existing.add(key)
+            added += 1
+    create_audit_log(action='federation_teams_added', actor_user_id=current_user.id, target_type='FederationTeam', target_id=code,
+                     details={'season': season, 'sport': sport, 'added': added})
+    db.session.commit()
+    flash(f'{added} team(s) registered for {season}.' + (f' {len(names) - added} were already on the list.' if added < len(names) else ''),
+          'success')
+    return redirect(back)
+
+
+@app.route('/federation/teams/<int:team_id>/delete', methods=['POST'])
+@login_required
+def federation_delete_team(team_id):
+    code = require_federation()
+    team = db.session.get(FederationTeam, team_id)
+    if not team or team.body != code:
+        abort(404)
+    season = team.season
+    create_audit_log(action='federation_team_removed', actor_user_id=current_user.id, target_type='FederationTeam',
+                     target_id=str(team.id), details={'name': team.name, 'season': season})
+    db.session.delete(team)
+    db.session.commit()
+    flash('Team removed from the season list (published fixtures keep it).', 'success')
+    return redirect(url_for('federation_dashboard', season=season) + '#teams')
+
+
+@app.route('/federation/fixtures', methods=['POST'])
+@login_required
+def federation_add_fixture():
+    code = require_federation()
+    back = url_for('federation_dashboard', season=request.form.get('season') or '') + '#fixtures'
+    fixture, error = fixture_from_form(request.form, code)
+    referee, linesmen, off_error = officials_from_form(request.form)
+    error = error or off_error
+    if error:
+        flash(error, 'danger')
+        return redirect(back)
+    fixture.created_by = current_user.id
+    publish_fixture(fixture, current_user, referee, linesmen)
+    create_audit_log(action='fixture_published', actor_user_id=current_user.id, target_type='Fixture', target_id=str(fixture.id),
+                     details={'body': code, 'home': fixture.home_team, 'away': fixture.away_team})
+    db.session.commit()
+    flash(f'Fixture published: {fixture.home_team} vs {fixture.away_team}. Coaches and officials were asked to confirm.', 'success')
+    return redirect(back)
+
+
+@app.route('/admin/fixtures', methods=['GET', 'POST'])
+@login_required
+def admin_fixtures():
+    require_super_admin()
+    if request.method == 'POST':
+        body = request.form.get('body') or None
+        if body and body not in fixtures_mod.BODIES:
+            abort(400)
+        fixture, error = fixture_from_form(request.form, body, registered_only=False)
+        referee, linesmen, off_error = officials_from_form(request.form)
+        error = error or off_error
+        if error:
+            flash(error, 'danger')
+            return redirect(url_for('admin_fixtures') + '#new')
+        fixture.created_by = current_user.id
+        publish_fixture(fixture, current_user, referee, linesmen)
+        create_audit_log(action='fixture_published', actor_user_id=current_user.id, target_type='Fixture', target_id=str(fixture.id),
+                         details={'body': body, 'home': fixture.home_team, 'away': fixture.away_team})
+        db.session.commit()
+        flash('Fixture published. Coaches and officials were asked to confirm.', 'success')
+        return redirect(url_for('admin_fixtures'))
+    requests_ = Fixture.query.filter_by(status='requested').order_by(Fixture.kickoff_at).all()
+    upcoming = (Fixture.query.filter(Fixture.status == 'scheduled', Fixture.kickoff_at >= datetime.utcnow() - timedelta(hours=6))
+                .order_by(Fixture.kickoff_at).limit(200).all())
+    ready = Fixture.query.filter(Fixture.id.in_(ready_fixture_ids() or [0])).order_by(Fixture.kickoff_at.desc()).all()
+    return render_template('admin_fixtures.html', requests_=requests_, upcoming=upcoming, ready=ready, referees=match_officials('referee'),
+                           linesmen=match_officials('linesman'), seasons=fixtures_mod.season_choices(),
+                           requesters={u.id: u for u in User.query.filter(User.id.in_([f.requested_by for f in requests_ if f.requested_by])).all()})
+
+
+@app.route('/admin/fixtures/<int:fixture_id>/decide', methods=['POST'])
+@login_required
+def admin_fixture_decide(fixture_id):
+    """Approve or reject a coach's fixture request."""
+    require_super_admin()
+    fixture = db.session.get(Fixture, fixture_id)
+    if not fixture or fixture.status != 'requested':
+        abort(404)
+    action = request.form.get('action')
+    note = fixtures_mod.clean(request.form.get('note'), 300)
+    if action == 'approve':
+        if fixtures_mod.kickoff_error(fixture.kickoff_at):
+            flash('Kick-off is too close or already passed: reject it and ask for a new date.', 'warning')
+            return redirect(url_for('admin_fixtures'))
+        referee, linesmen, error = officials_from_form(request.form)
+        if error:
+            flash(error, 'danger')
+            return redirect(url_for('admin_fixtures'))
+        publish_fixture(fixture, current_user, referee, linesmen)
+        if fixture.requested_by:
+            notif.notify(fixture.requested_by, 'fixture', f'Your fixture request ({fixture.home_team} vs {fixture.away_team}) was approved.',
+                         f'/fixtures/{fixture.id}')
+    elif action == 'reject':
+        if not note:
+            flash('Say why the request is rejected (the coach sees it).', 'warning')
+            return redirect(url_for('admin_fixtures'))
+        fixture.status = 'rejected'
+        fixture.note = note
+        if fixture.requested_by:
+            notif.notify(fixture.requested_by, 'fixture', f'Your fixture request ({fixture.home_team} vs {fixture.away_team}) was not approved: {note}',
+                         '/admin')
+    else:
+        abort(400)
+    create_audit_log(action=f'fixture_request_{action}', actor_user_id=current_user.id, target_type='Fixture', target_id=str(fixture.id),
+                     details={'note': note})
+    db.session.commit()
+    flash('Fixture request ' + ('approved and published.' if action == 'approve' else 'rejected.'), 'success')
+    return redirect(url_for('admin_fixtures'))
+
+
+@app.route('/fixtures/<int:fixture_id>')
+@login_required
+def fixture_detail(fixture_id):
+    fixture = db.session.get(Fixture, fixture_id)
+    if not fixture or not can_see_fixture(fixture):
+        abort(404)
+    mine = [p for p in fixture.parties if p.user_id == current_user.id]
+    return render_template('fixture_detail.html', fixture=fixture, mine=mine, manage=can_manage_fixture(fixture),
+                           referees=match_officials('referee'), linesmen=match_officials('linesman'), now=datetime.utcnow())
+
+
+@app.route('/fixtures/<int:fixture_id>/respond', methods=['POST'])
+@login_required
+def fixture_respond(fixture_id):
+    """A coach / official confirms (or declines, with a reason) their part in a fixture."""
+    fixture = db.session.get(Fixture, fixture_id)
+    party_id = request.form.get('party_id', type=int)
+    party = db.session.get(FixtureParty, party_id) if party_id else None
+    if not fixture or not party or party.fixture_id != fixture.id or party.user_id != current_user.id:
+        abort(404)
+    back = safe_next_url(request.form.get('next')) or url_for('fixture_detail', fixture_id=fixture.id)
+    if fixture.status != 'scheduled' or fixture.kickoff_at <= datetime.utcnow():
+        flash('This fixture can no longer be confirmed.', 'warning')
+        return redirect(back)
+    action = request.form.get('action')
+    reason = fixtures_mod.clean(request.form.get('reason'), 200)
+    if action == 'confirm':
+        party.confirmed_at, party.declined_at, party.decline_reason = datetime.utcnow(), None, None
+        db.session.flush()
+        maybe_notify_players(fixture)
+    elif action == 'decline':
+        if not reason:
+            flash('Say why you can not take part (the organizer sees it).', 'warning')
+            return redirect(back)
+        party.declined_at, party.confirmed_at, party.decline_reason = datetime.utcnow(), None, reason
+        organizer = fixture.created_by or fixture.approved_by
+        if organizer:
+            notif.notify(organizer, 'fixture', f'{current_user.display_name} ({fixtures_mod.PARTY_ROLES[party.role].lower()}) declined '
+                                               f'{fixture.home_team} vs {fixture.away_team}: {reason}', f'/fixtures/{fixture.id}')
+    else:
+        abort(400)
+    create_audit_log(action=f'fixture_{action}', actor_user_id=current_user.id, target_type='Fixture', target_id=str(fixture.id),
+                     details={'role': party.role})
+    db.session.commit()
+    flash('Fixture confirmed.' if action == 'confirm' else 'You declined this fixture.', 'success')
+    return redirect(back)
+
+
+@app.route('/fixtures/<int:fixture_id>/officials', methods=['POST'])
+@login_required
+def fixture_officials(fixture_id):
+    """The federation (or D.A.R.T Admin) assigns / adds the referee and linesmen."""
+    fixture = db.session.get(Fixture, fixture_id)
+    if not fixture or not can_manage_fixture(fixture) or fixture.status != 'scheduled':
+        abort(404)
+    referee, linesmen, error = officials_from_form(request.form)
+    if error:
+        flash(error, 'danger')
+    else:
+        now = datetime.utcnow()
+        if referee:
+            _add_party(fixture, referee, 'referee', now)
+        for official in linesmen:
+            _add_party(fixture, official, 'linesman', now)
+        create_audit_log(action='fixture_officials', actor_user_id=current_user.id, target_type='Fixture', target_id=str(fixture.id),
+                         details={'referee': referee.id if referee else None, 'linesmen': [u.id for u in linesmen]})
+        db.session.commit()
+        flash('Match officials added and notified.', 'success')
+    return redirect(url_for('fixture_detail', fixture_id=fixture.id))
+
+
+@app.route('/fixtures/<int:fixture_id>/cancel', methods=['POST'])
+@login_required
+def fixture_cancel(fixture_id):
+    fixture = db.session.get(Fixture, fixture_id)
+    if not fixture or not can_manage_fixture(fixture) or fixture.status != 'scheduled':
+        abort(404)
+    reason = fixtures_mod.clean(request.form.get('reason'), 300)
+    if not reason:
+        flash('Say why the fixture is cancelled (coaches and officials see it).', 'warning')
+        return redirect(url_for('fixture_detail', fixture_id=fixture.id))
+    fixture.status = 'cancelled'
+    fixture.note = reason
+    for party in fixture.parties:
+        notif.notify(party.user_id, 'fixture', f'Cancelled: {fixture.home_team} vs {fixture.away_team} '
+                                               f'({fixture.kickoff_at.strftime("%d %b")}). {reason}', f'/fixtures/{fixture.id}')
+    create_audit_log(action='fixture_cancelled', actor_user_id=current_user.id, target_type='Fixture', target_id=str(fixture.id),
+                     details={'reason': reason})
+    db.session.commit()
+    flash('Fixture cancelled; coaches and officials were told.', 'success')
+    return redirect(url_for('fixture_detail', fixture_id=fixture.id))
+
+
+@app.route('/fixtures/request', methods=['POST'])
+@login_required
+def fixture_request():
+    """A coach asks for a fixture (e.g. a friendly): the D.A.R.T Admin approves it before it is live."""
+    if current_user.role not in ('Coach', 'Rep') or not current_user.is_verified or current_user.is_suspended:
+        abort(403)
+    form = request.form
+    sport = form.get('sport')
+    opponent = fixtures_mod.clean(form.get('opponent'), 150)
+    own = current_user.school or ''
+    if current_user.role == 'Rep':          # a rep names both teams
+        own = fixtures_mod.clean(form.get('home_team'), 150)
+        opponent = fixtures_mod.clean(form.get('away_team'), 150)
+    data = {'season': fixtures_mod.current_season(), 'sport': sport, 'competition': fixtures_mod.FRIENDLY, 'venue': form.get('venue'),
+            'kickoff_at': form.get('kickoff_at'),
+            'home_team': own if form.get('side') != 'away' else opponent, 'away_team': opponent if form.get('side') != 'away' else own}
+    fixture, error = fixture_from_form(data, None, registered_only=False)
+    back = url_for('rep_dashboard') if current_user.role == 'Rep' else url_for('admin_dashboard') + '#fixtures'
+    if not own:
+        error = 'Your team is not set on your account.'
+    if error:
+        flash(error, 'danger')
+        return redirect(back)
+    fixture.status = 'requested'
+    fixture.requested_by = current_user.id
+    fixture.note = fixtures_mod.clean(form.get('note'), 300) or None
+    db.session.add(fixture)
+    db.session.flush()
+    create_audit_log(action='fixture_requested', actor_user_id=current_user.id, target_type='Fixture', target_id=str(fixture.id),
+                     details={'opponent': opponent})
+    db.session.commit()
+    flash('Fixture request sent: the D.A.R.T Admin approves it before it goes live.', 'success')
+    return redirect(back)
+
+
+@app.route('/admin/ages')
+@login_required
+def admin_ages():
+    """Athletes and coaches whose age is waiting for verification (NIN / NIR card / birth certificate)."""
+    require_super_admin()
+    show = request.args.get('show', 'waiting')
+    query = User.query.filter(User.role.in_(('Athlete', 'Coach')))
+    if show == 'verified':
+        query = query.filter(User.age_verified_at.isnot(None))
+    elif show == 'mismatch':
+        query = query.filter(User.age_check_note.isnot(None))
+    elif show == 'missing':
+        query = query.filter(User.nin_cipher.is_(None))
+    else:
+        show = 'waiting'
+        query = query.filter(User.age_verified_at.is_(None), User.age_check_note.is_(None),
+                             or_(User.nin_cipher.isnot(None), User.id_document.isnot(None)))
+    users = query.order_by(User.created_at.desc()).limit(200).all()
+    response = make_response(render_template('admin_ages.html', users=users, show=show, age_of=athlete_age))
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+# ==========================================================
+# FIXTURE RECORDS (phase 2): athletes record a game only from a confirmed
+# fixture ("I played in this game"); coaches, the main referee and the
+# opponent's coach cross-sign; the D.A.R.T Admin publishes.
+# ==========================================================
+def fixture_records_only():
+    """New records only come from fixtures (FIXTURE_RECORDS_ONLY, on by default)."""
+    return bool(app.config.get('FIXTURE_RECORDS_ONLY', True))
+
+
+FIXTURES_ONLY_MESSAGE = ('Records now come from fixtures: when your coach confirms your next game you get a notification, '
+                         'and after the game you tap "I played in this game" on your Records page.')
+
+
+def team_key(name):
+    return coaching._key(name or '')
+
+
+def team_athletes(team_name):
+    """
+    Verified athletes who play for this team: it is their registered team / school,
+    they have approved records for it (e.g. a club besides the school), or its head
+    coach approved them as a player ("I also play for").
+    """
+    key = normalize_team_name(team_name or '')
+    if not key:
+        return []
+    live = (User.role == 'Athlete', User.is_verified.is_(True), User.is_suspended.is_(False))
+    ids = {uid for uid, school in db.session.query(User.id, User.school).filter(*live).all() if normalize_team_name(school or '') == key}
+    ids |= {uid for uid, team in db.session.query(SportRecord.user_id, SportRecord.team).join(User, User.id == SportRecord.user_id)
+            .filter(SportRecord.status == 'approved', *live).distinct().all() if normalize_team_name(team or '') == key}
+    ids |= {aid for (aid,) in db.session.query(AthleteTeam.athlete_id).join(User, User.id == AthleteTeam.athlete_id)
+            .filter(AthleteTeam.status == 'approved', AthleteTeam.team_key == key, *live).all()}
+    if not ids:
+        return []
+    return User.query.filter(User.id.in_(ids)).order_by(User.full_name).all()
+
+
+def athlete_team_keys(user):
+    """Normalized names of every team the athlete plays for (registered team, approved records, approved extra teams)."""
+    keys = {normalize_team_name(user.school or '')}
+    keys |= {normalize_team_name(t or '') for (t,) in db.session.query(SportRecord.team).filter(
+        SportRecord.user_id == user.id, SportRecord.status == 'approved').distinct()}
+    keys |= {t.team_key for t in AthleteTeam.query.filter_by(athlete_id=user.id, status='approved').all()}
+    keys.discard('')
+    return keys
+
+
+def fixture_side(fixture, team_name):
+    key = normalize_team_name(team_name or '')
+    if key and key == normalize_team_name(fixture.home_team):
+        return 'home'
+    if key and key == normalize_team_name(fixture.away_team):
+        return 'away'
+    return None
+
+
+def athlete_side(fixture, keys):
+    """The side of the fixture the athlete plays for (any of their teams)."""
+    for side in ('home', 'away'):
+        if normalize_team_name(side_team(fixture, side)) in keys:
+            return side
+    return None
+
+
+def side_team(fixture, side):
+    return fixture.home_team if side == 'home' else fixture.away_team
+
+
+def other_side(side):
+    return 'away' if side == 'home' else 'home'
+
+
+def side_coach_parties(fixture, side):
+    return [p for p in fixture.parties if p.role == f'{side}_coach']
+
+
+def side_confirmed(fixture, side):
+    return any(p.confirmed_at for p in side_coach_parties(fixture, side))
+
+
+def referee_party(fixture):
+    return next((p for p in fixture.parties if p.role == 'referee' and not p.declined_at), None)
+
+
+def maybe_notify_players(fixture):
+    """Once the coaches of both teams confirmed: tell the teams' athletes (once)."""
+    if fixture.players_notified_at or fixture.status != 'scheduled':
+        return 0
+    sides = [s for s in ('home', 'away') if side_coach_parties(fixture, s)]
+    if not sides or not all(side_confirmed(fixture, s) for s in sides):
+        return 0
+    when = fixture.kickoff_at.strftime('%a %d %b, %H:%M')
+    told = 0
+    for side in sides:
+        opponent = side_team(fixture, other_side(side))
+        for athlete in team_athletes(side_team(fixture, side)):
+            notif.notify(athlete.id, 'fixture_player',
+                         f'Your next game: {side_team(fixture, side)} vs {opponent} ({fixture.sport}, {when}, {fixture.venue}). '
+                         'After the game, tap "I played in this game" to send your record.', f'/student?fixture={fixture.id}')
+            told += 1
+    fixture.players_notified_at = datetime.utcnow()
+    return told
+
+
+def athlete_fixtures(user, now=None):
+    """The athlete's notified fixtures: [{'fixture', 'side', 'opponent', 'state', 'record'}]."""
+    now = now or datetime.utcnow()
+    keys = athlete_team_keys(user) if user.role == 'Athlete' else set()
+    if not keys:
+        return []
+    window = timedelta(days=fixture_rec.RECORD_WINDOW_DAYS)
+    fixtures = [f for f in Fixture.query.filter(Fixture.status == 'scheduled', Fixture.players_notified_at.isnot(None),
+                                                Fixture.kickoff_at >= now - window).order_by(Fixture.kickoff_at).all()
+                if athlete_side(f, keys)]
+    if not fixtures:
+        return []
+    records = {}
+    for r in SportRecord.query.filter(SportRecord.user_id == user.id, SportRecord.fixture_id.in_([f.id for f in fixtures])).all():
+        if r.status != 'rejected' or r.rejection_reason != 'inaccurate' or r.fixture_id not in records:
+            records[r.fixture_id] = r
+    rows = []
+    for f in fixtures:
+        side = athlete_side(f, keys)
+        if not side or not side_confirmed(f, side):
+            continue
+        record = records.get(f.id)
+        if record and not (record.status == 'rejected' and record.rejection_reason == 'inaccurate'):
+            state = 'submitted'
+        elif now < f.kickoff_at:
+            state = 'upcoming'
+        else:
+            state = 'open'
+        rows.append({'fixture': f, 'side': side, 'opponent': side_team(f, other_side(side)), 'state': state, 'record': record})
+    return rows
+
+
+def record_side(record, fixture):
+    return fixture_side(fixture, record.team)
+
+
+def record_checks(record):
+    return {c.role: c for c in RecordCheck.query.filter_by(record_id=record.id).all()}
+
+
+def signer_roles(user, fixture, record):
+    """Which cross-sign roles this user can take for this fixture record."""
+    if not user.is_authenticated or user.is_suspended:
+        return []
+    side = record_side(record, fixture)
+    roles = []
+    if user.role == 'Coach':
+        for p in fixture.parties:
+            if p.user_id == user.id and p.confirmed_at and p.role in ('home_coach', 'away_coach'):
+                roles.append(fixture_rec.TEAM_COACH if p.role == f'{side}_coach' else fixture_rec.OPPONENT_COACH)
+    elif user.role == 'Statistician':
+        ref = referee_party(fixture)
+        if ref and ref.user_id == user.id and ref.confirmed_at and record.sport in ('Football', 'Basketball'):
+            roles.append(fixture_rec.REFEREE)
+    elif user.role == 'Rep' and user.is_verified:
+        roles.append(fixture_rec.REP)
+    elif user.role == 'System':
+        # The D.A.R.T Admin signs only for a role nobody can take (no opponent coach / referee on D.A.R.T.).
+        if not side_coach_parties(fixture, other_side(side)):
+            roles.append(fixture_rec.OPPONENT_COACH)
+        if not referee_party(fixture) and record.sport in ('Football', 'Basketball'):
+            roles.append(fixture_rec.REFEREE)
+    needed = fixture_rec.required_roles(record.sport) | {fixture_rec.REP}
+    return [r for r in dict.fromkeys(roles) if r in needed]
+
+
+def apply_discipline(record, row):
+    """Copy the referee's numbers into the record's sport columns."""
+    if record.sport == 'Football':
+        record.yellow_cards, record.red_cards, record.foul_played = row.yellow_cards, row.red_cards, row.fouls
+    elif record.sport == 'Basketball':
+        record.foul_played, record.sent_off = row.fouls, row.sent_off
+    else:
+        record.kickball_yellow_cards, record.kickball_red_cards, record.sent_off = row.yellow_cards, row.red_cards, row.sent_off
+
+
+def try_finalize(record):
+    """
+    All cross-signatures, the team sheet and the referee report are in: combine
+    them into the record and send it to the D.A.R.T Admin to publish.
+    Returns True if the record is now ready. Caller commits.
+    """
+    if not record.fixture_id or record.status != 'pending' or record.needs_proof:
+        return False
+    fixture = db.session.get(Fixture, record.fixture_id)
+    if not fixture:
+        return False
+    side = record_side(record, fixture)
+    checks = record_checks(record)
+    if any(c.decision == 'disputed' for c in checks.values()):
+        return False
+    sheet = FixtureSheet.query.filter_by(fixture_id=fixture.id, side=side).first()
+    line = next((l for l in sheet.lines if l.athlete_id == record.user_id), None) if sheet else None
+    if not line:
+        return False
+    if not line.played:
+        coach = db.session.get(User, sheet.coach_id)
+        integrity._dispute(record, coach, "The team's coach sheet says this athlete did not play in this game.", auto=True)
+        notif.notify(record.user_id, 'record_disputed', f'Your record vs {record.team_played_against} is disputed: your coach\'s team sheet '
+                                                        'says you did not play. The D.A.R.T Admin will decide.', '/student#my-records')
+        return False
+    if referee_party(fixture) and not fixture.referee_report_at:
+        return False
+    needed = fixture_rec.required_roles(record.sport)
+    if any(role not in checks or checks[role].decision != 'confirmed' for role in needed):
+        return False
+    # combine: the coach's team sheet + the referee's report + the athlete's numbers
+    record.mvp = 1 if line.mvp else 0
+    record.match_minutes_played = line.minutes or 0
+    record.position = line.position or record.position
+    if record.sport == 'Football':
+        record.passes_completed = line.passes
+    if record.sport == 'Kickball':
+        record.cut_base = line.cut_base or 0
+    record.competition_category = sheet.competition_category
+    record.venue = sheet.venue
+    row = FixtureDiscipline.query.filter_by(fixture_id=fixture.id, athlete_id=record.user_id).first()
+    if row:
+        apply_discipline(record, row)
+    record.coach_approved_by = checks[fixture_rec.TEAM_COACH].user_id
+    record.coach_approved_at = checks[fixture_rec.TEAM_COACH].created_at
+    record.status = 'verifying'
+    record.countersign_target = 'dart_admin'
+    signed = ', '.join(fixture_rec.CHECK_ROLES[r] for r in sorted(needed))
+    integrity.log_event(record, None, 'fixture_checks_complete', f'Cross-signed by: {signed}; team sheet and referee report combined')
+    return True
+
+
+def fixture_records_for(fixture):
+    return (SportRecord.query.options(joinedload(SportRecord.user)).filter(SportRecord.fixture_id == fixture.id)
+            .order_by(SportRecord.team, SportRecord.id).all())
+
+
+def can_open_match(fixture, user=None):
+    user = user or current_user
+    if not user.is_authenticated:
+        return False
+    if user.role in ('System', 'Rep') and (user.role == 'System' or user.is_verified):
+        return True
+    return any(p.user_id == user.id and p.confirmed_at for p in fixture.parties)
+
+
+def _notify_signers(record, fixture):
+    side = record_side(record, fixture)
+    for p in fixture.parties:
+        if not p.confirmed_at:
+            continue
+        if p.role in ('home_coach', 'away_coach') or (p.role == 'referee' and record.sport in ('Football', 'Basketball')):
+            notif.notify(p.user_id, 'record_check', f'{record.user.display_name} ({side_team(fixture, side)}) sent a record for '
+                                                     f'{fixture.home_team} vs {fixture.away_team}: please cross-sign it.',
+                         f'/fixtures/{fixture.id}/match#records')
+
+
+@app.route('/fixtures/<int:fixture_id>/my-record', methods=['POST'])
+@login_required
+def fixture_my_record(fixture_id):
+    """'I played in this game': the athlete's short record for a confirmed fixture."""
+    if current_user.role != 'Athlete' or not current_user.is_verified or current_user.is_suspended:
+        abort(403)
+    row = next((r for r in athlete_fixtures(current_user) if r['fixture'].id == fixture_id), None)
+    back = url_for('student_dashboard') + '#fixtureGames'
+    if not row:
+        abort(404)
+    if row['state'] != 'open':
+        flash('Recording opens after the game.' if row['state'] == 'upcoming' else 'You already sent your record for this game.', 'warning')
+        return redirect(back)
+    fixture, form = row['fixture'], request.form
+    if form.get('sport') != fixture.sport:
+        flash('The sport must be the fixture\'s sport.', 'danger')
+        return redirect(back)
+    if form.get('opponent') != row['opponent']:
+        flash(f'The opponent must be exactly {row["opponent"]} (from the fixture).', 'danger')
+        return redirect(back)
+    stats, error = fixture_rec.parse_athlete_stats(form, fixture.sport)
+    shirt = (form.get('shirt_number') or '').strip()
+    if not error and shirt and (not shirt.isdigit() or int(shirt) > 99):
+        error = 'Shirt number must be 0 to 99.'
+    trophy = fixtures_mod.clean(form.get('trophy'), 100)
+    if not error and trophy and trophy.lower() not in ('none', '-') and trophy not in fixture_rec.trophy_choices(fixture.sport, COMPETITION_TROPHIES):
+        error = 'Choose the trophy from the list (or "No trophy").'
+    if error:
+        flash(error, 'danger')
+        return redirect(back)
+    record = SportRecord(user_id=current_user.id, sport=fixture.sport, year=fixture.kickoff_at.year, game_date=fixture.kickoff_at.date(),
+                         team=side_team(fixture, row['side']), team_played_against=row['opponent'], venue=fixture.venue,
+                         school=current_user.school, competition_category=fixture.competition[:50], games_played=1,
+                         shirt_number=shirt or None, trophy=trophy if trophy and trophy.lower() not in ('none', '-') else None,
+                         man_of_the_match=fixture_rec.yes_no(form.get('motm')), queen_of_the_match=fixture_rec.yes_no(form.get('qotm')),
+                         fixture_id=fixture.id, **stats)
+    db.session.add(record)
+    held = integrity.on_submit(record, current_user, check_anomalies=integrity_enabled())
+    _notify_signers(record, fixture)
+    try_finalize(record)
+    create_audit_log(action='fixture_record_submitted', actor_user_id=current_user.id, target_type='sport_record', target_id=str(record.id),
+                     details={'fixture': fixture.id})
+    db.session.commit()
+    queue_record_prompt(record, 'submitted')
+    flash_proof_needed(held)
+    return redirect(url_for('student_dashboard') + '#my-records')
+
+
+@app.route('/fixtures/<int:fixture_id>/match')
+@login_required
+def fixture_match(fixture_id):
+    """After kick-off: team sheets (coaches), the referee report (main referee) and cross-signing."""
+    fixture = db.session.get(Fixture, fixture_id)
+    if not fixture or fixture.status != 'scheduled' or not can_open_match(fixture):
+        abort(404)
+    my_sides = [p.role.split('_')[0] for p in fixture.parties
+                if p.user_id == current_user.id and p.confirmed_at and p.role in ('home_coach', 'away_coach')]
+    ref = referee_party(fixture)
+    is_referee = bool(ref and ref.user_id == current_user.id and ref.confirmed_at)
+    records = fixture_records_for(fixture)
+    sheets = {s.side: s for s in FixtureSheet.query.filter_by(fixture_id=fixture.id).all()}
+    players = {side: team_athletes(side_team(fixture, side)) for side in ('home', 'away')}
+    discipline = {d.athlete_id: d for d in FixtureDiscipline.query.filter_by(fixture_id=fixture.id).all()}
+    checks = {r.id: record_checks(r) for r in records}
+    roles = {r.id: signer_roles(current_user, fixture, r) for r in records}
+    return render_template('fixture_match.html', fixture=fixture, my_sides=my_sides, is_referee=is_referee, records=records,
+                           sheets=sheets, players=players, discipline=discipline, checks=checks, roles=roles, now=datetime.utcnow(),
+                           started=datetime.utcnow() >= fixture.kickoff_at, fr=fixture_rec, side_of=lambda r: record_side(r, fixture),
+                           competitions=competitions_for(fixture.sport), positions=sorted(VALID_POSITIONS.get(fixture.sport, ())))
+
+
+@app.route('/fixtures/<int:fixture_id>/sheet', methods=['POST'])
+@login_required
+def fixture_sheet_save(fixture_id):
+    """A team's coach sends the team sheet: competition, venue and a line per player."""
+    fixture = db.session.get(Fixture, fixture_id)
+    side = request.form.get('side')
+    back = url_for('fixture_match', fixture_id=fixture_id) + '#sheet'
+    if (not fixture or fixture.status != 'scheduled' or side not in ('home', 'away') or current_user.role != 'Coach'
+            or not any(p.user_id == current_user.id and p.confirmed_at and p.role == f'{side}_coach' for p in fixture.parties)):
+        abort(404)
+    if datetime.utcnow() < fixture.kickoff_at:
+        flash('Send the team sheet after the game.', 'warning')
+        return redirect(back)
+    form = request.form
+    competition = form.get('competition_category')
+    venue = fixtures_mod.clean(form.get('venue'), 150) or fixture.venue
+    if competition not in competitions_for(fixture.sport):
+        flash('Choose the competition category.', 'danger')
+        return redirect(back)
+    sheet = FixtureSheet.query.filter_by(fixture_id=fixture.id, side=side).first()
+    if sheet and any(r.status == 'approved' and fixture_side(fixture, r.team) == side for r in fixture_records_for(fixture)):
+        flash('Records of this game are already published: the team sheet is locked.', 'warning')
+        return redirect(back)
+    positions = VALID_POSITIONS.get(fixture.sport, set())
+    lines = []
+    for athlete in team_athletes(side_team(fixture, side)):
+        played = form.get(f'played_{athlete.id}') == 'yes'
+        minutes = fixture_rec.as_int(form.get(f'minutes_{athlete.id}'), 0, fixture_rec.MAX_MINUTES[fixture.sport])
+        passes = fixture_rec.as_int(form.get(f'passes_{athlete.id}'), 0, 500)
+        cut = fixture_rec.as_int(form.get(f'cut_{athlete.id}'), 0, 30)
+        position = (form.get(f'position_{athlete.id}') or '').strip()
+        if minutes is None or passes is None or cut is None:
+            flash(f'Check the numbers for {athlete.full_name} (whole numbers only).', 'danger')
+            return redirect(back)
+        if played and position not in positions:
+            flash(f'Choose the position {athlete.full_name} played.', 'danger')
+            return redirect(back)
+        lines.append(FixtureSheetLine(athlete_id=athlete.id, played=played, mvp=played and form.get(f'mvp_{athlete.id}') == 'yes',
+                                      minutes=minutes if played else 0, position=position if played else None,
+                                      passes=passes if played and fixture.sport == 'Football' else None,
+                                      cut_base=cut if played and fixture.sport == 'Kickball' else None))
+    if sum(1 for l in lines if l.mvp) > 1:
+        flash('Only one player can be MVP.', 'danger')
+        return redirect(back)
+    if not sheet:
+        sheet = FixtureSheet(fixture_id=fixture.id, side=side, coach_id=current_user.id, competition_category=competition, venue=venue)
+        db.session.add(sheet)
+    sheet.coach_id, sheet.competition_category, sheet.venue, sheet.submitted_at = current_user.id, competition, venue, datetime.utcnow()
+    sheet.lines = lines
+    db.session.flush()
+    ready = sum(1 for r in fixture_records_for(fixture) if try_finalize(r))
+    create_audit_log(action='fixture_sheet_sent', actor_user_id=current_user.id, target_type='Fixture', target_id=str(fixture.id),
+                     details={'side': side, 'players': len(lines)})
+    db.session.commit()
+    flash('Team sheet sent to the D.A.R.T Admin.' + (f' {ready} record(s) now ready to publish.' if ready else ''), 'success')
+    return redirect(back)
+
+
+@app.route('/fixtures/<int:fixture_id>/referee', methods=['POST'])
+@login_required
+def fixture_referee_report(fixture_id):
+    """Only the main referee: cards, fouls and sent off for every player."""
+    fixture = db.session.get(Fixture, fixture_id)
+    ref = referee_party(fixture) if fixture else None
+    back = url_for('fixture_match', fixture_id=fixture_id) + '#referee'
+    if not fixture or fixture.status != 'scheduled' or not ref or ref.user_id != current_user.id or not ref.confirmed_at:
+        abort(404)
+    if datetime.utcnow() < fixture.kickoff_at:
+        flash('Send the referee report after the game.', 'warning')
+        return redirect(back)
+    fields = {name: high for name, _label, high in fixture_rec.DISCIPLINE_FIELDS[fixture.sport]}
+    column = {'yellow_cards': 'yellow_cards', 'kickball_yellow_cards': 'yellow_cards', 'red_cards': 'red_cards',
+              'kickball_red_cards': 'red_cards', 'foul_played': 'fouls', 'sent_off': 'sent_off'}
+    rows = []
+    for side in ('home', 'away'):
+        for athlete in team_athletes(side_team(fixture, side)):
+            values = {'yellow_cards': 0, 'red_cards': 0, 'fouls': 0, 'sent_off': 0}
+            for name, high in fields.items():
+                value = fixture_rec.as_int(request.form.get(f'{name}_{athlete.id}'), 0, high)
+                if value is None:
+                    flash(f'Check the numbers for {athlete.full_name} (0 to {high}).', 'danger')
+                    return redirect(back)
+                values[column[name]] = value
+            rows.append(FixtureDiscipline(fixture_id=fixture.id, athlete_id=athlete.id, referee_id=current_user.id, **values))
+    FixtureDiscipline.query.filter_by(fixture_id=fixture.id).delete()
+    for row in rows:
+        db.session.add(row)
+    fixture.referee_report_at = datetime.utcnow()
+    fixture.referee_report_by = current_user.id
+    db.session.flush()
+    ready = sum(1 for r in fixture_records_for(fixture) if try_finalize(r))
+    create_audit_log(action='fixture_referee_report', actor_user_id=current_user.id, target_type='Fixture', target_id=str(fixture.id),
+                     details={'players': len(rows)})
+    db.session.commit()
+    flash('Referee report sent to the D.A.R.T Admin.' + (f' {ready} record(s) now ready to publish.' if ready else ''), 'success')
+    return redirect(back)
+
+
+@app.route('/fixtures/<int:fixture_id>/records/<int:record_id>/check', methods=['POST'])
+@login_required
+def fixture_record_check(fixture_id, record_id):
+    """Cross-sign (confirm) or dispute one athlete's numbers."""
+    fixture = db.session.get(Fixture, fixture_id)
+    record = db.session.get(SportRecord, record_id)
+    back = url_for('fixture_match', fixture_id=fixture_id) + '#records'
+    if not fixture or not record or record.fixture_id != fixture.id:
+        abort(404)
+    role = request.form.get('role')
+    if role not in signer_roles(current_user, fixture, record):
+        abort(403)
+    if record.status not in ('pending', 'verifying') or (role != fixture_rec.REP and record.status != 'pending'):
+        flash('This record is already settled.', 'warning')
+        return redirect(back)
+    decision = request.form.get('decision')
+    note = fixtures_mod.clean(request.form.get('note'), 300)
+    if decision not in ('confirmed', 'disputed'):
+        abort(400)
+    if decision == 'disputed' and len(note) < 10:
+        flash('Say what is wrong with the numbers (at least 10 characters).', 'warning')
+        return redirect(back)
+    check = RecordCheck.query.filter_by(record_id=record.id, role=role).first()
+    if check and check.decision == 'disputed':
+        flash('You already disputed this record: the D.A.R.T Admin decides.', 'warning')
+        return redirect(back)
+    if not check:
+        check = RecordCheck(record_id=record.id, role=role)
+        db.session.add(check)
+    check.user_id, check.decision, check.note, check.created_at = current_user.id, decision, note or None, datetime.utcnow()
+    label = fixture_rec.CHECK_ROLES[role]
+    if decision == 'disputed':
+        integrity._dispute(record, current_user, f'{label}: {note}')
+        notif.notify(record.user_id, 'record_disputed', f'{label} disputed your record vs {record.team_played_against}: {note}. '
+                                                        'The D.A.R.T Admin will decide.', '/student#my-records')
+    else:
+        integrity.log_event(record, current_user, 'cross_signed', label)
+        try_finalize(record)
+    create_audit_log(action=f'fixture_record_{decision}', actor_user_id=current_user.id, target_type='sport_record', target_id=str(record.id),
+                     details={'role': role})
+    db.session.commit()
+    flash(f'Record {"cross-signed" if decision == "confirmed" else "disputed"} as {label.lower()}.', 'success')
+    return redirect(safe_next_url(request.form.get('next')) or back)
+
+
+@app.route('/admin/fixtures/<int:fixture_id>/publish', methods=['POST'])
+@login_required
+def admin_publish_fixture_records(fixture_id):
+    """The D.A.R.T Admin publishes the combined, fully cross-signed records of a fixture."""
+    require_super_admin()
+    fixture = db.session.get(Fixture, fixture_id)
+    if not fixture:
+        abort(404)
+    only = request.form.get('record_id', type=int)
+    published = 0
+    for record in fixture_records_for(fixture):
+        if record.status != 'verifying' or record.countersign_target != 'dart_admin' or (only and record.id != only):
+            continue
+        integrity._countersign(record, current_user, 'admin', 'Published by the D.A.R.T Admin: fixture checks complete')
+        # (the athlete's "record approved" bell notification is sent automatically)
+        published += 1
+    create_audit_log(action='fixture_records_published', actor_user_id=current_user.id, target_type='Fixture', target_id=str(fixture.id),
+                     details={'published': published})
+    db.session.commit()
+    flash(f'{published} record(s) published.' if published else 'No record is ready to publish yet.', 'success' if published else 'info')
+    return redirect(url_for('fixture_match', fixture_id=fixture.id) + '#records')
+
+
+def fixture_records_ready_count():
+    return SportRecord.query.filter(SportRecord.status == 'verifying', SportRecord.countersign_target == 'dart_admin').count()
+
+
+def ready_fixture_ids():
+    return [fid for (fid,) in db.session.query(SportRecord.fixture_id).filter(
+        SportRecord.status == 'verifying', SportRecord.countersign_target == 'dart_admin').distinct().all() if fid]
+
+
+app.jinja_env.globals.update(side_team_label=side_team, fixture_records_only=fixture_records_only, athlete_fixtures=lambda: athlete_fixtures(current_user),
+                             fixture_rec=fixture_rec, fixture_trophies=lambda sport: fixture_rec.trophy_choices(sport, COMPETITION_TROPHIES),
+                             fixtures_only_message=FIXTURES_ONLY_MESSAGE)
+
+
+# ==========================================================
+# D.A.R.T REPS (an O-D.A.R.T user type): attest records to the D.A.R.T Admin
+# ==========================================================
+@app.route('/join/odart')
+def odart_choose():
+    """O-D.A.R.T user: choose between a D.A.R.T Rep and a regular O-D.A.R.T user."""
+    if current_user.is_authenticated and not upgrading_member():
+        return redirect(url_for(dashboard_endpoint_for(current_user)))
+    return render_template('odart_choose.html')
+
+
+@app.route('/register-rep', methods=['GET', 'POST'])
+def register_rep():
+    if current_user.is_authenticated and not upgrading_member():
+        return redirect(url_for(dashboard_endpoint_for(current_user)))
+    form = request.form if request.method == 'POST' else {}
+
+    def back(message):
+        flash(message, 'danger')
+        return render_template('register_rep.html', form=form), 400
+
+    if request.method == 'POST':
+        full_name, name_error = validate_full_name(form.get('full_name', ''))
+        if name_error:
+            return back(name_error)
+        username, username_error = check_new_username(form.get('username'))
+        if username_error:
+            return back(username_error)
+        email, email_error = clean_optional_email(form.get('email'))
+        if email_error:
+            return back(email_error)
+        password = form.get('password', '')
+        if password != form.get('confirm_password', ''):
+            return back('Passwords do not match.')
+        if not is_strong_password(password):
+            return back('Password must meet the required security requirements.')
+        community = fixtures_mod.clean(form.get('community'), 150)
+        if len(community) < 3:
+            return back('Enter the county, community or organization you represent.')
+        phone = integrity.clean_phone(form.get('phone'))
+        if not phone:
+            return back('Enter a Liberian Orange (077) or Lonestar (088 / 055) mobile number.')
+        if integrity.phone_taken(phone) or User.query.filter(User.role == 'Rep', User.phone == phone).first():
+            return back('This number is already tied to another D.A.R.T. account.')
+        if email_taken(email):
+            return back('An account with this email address already exists.')
+        if form.get('agree') != 'yes':
+            return back('Please accept the D.A.R.T. Terms of Use and the D.A.R.T Rep rules.')
+        document = request.files.get('id_document')
+        if not document or not document.filename:
+            return back('Upload your NIR card or passport.')
+        document.stream.seek(0, os.SEEK_END)
+        size = document.stream.tell()
+        document.stream.seek(0)
+        kind = valid_file_content(document)
+        if not kind or size > 5 * 1024 * 1024:
+            return back('The ID document must be a JPG, PNG or PDF up to 5 MB.')
+        path = f'reps/{uuid.uuid4().hex}.{kind}'
+        try:
+            upload_to_supabase(document, 'id-documents', path)
+        except Exception as e:
+            app.logger.exception('Rep ID upload failed: %s', e)
+            return back('We could not upload your ID document. Please try again.')
+        rep = User(full_name=full_name, username=username, email=email, role='Rep', school=community, phone=phone,
+                   id_document=path, is_verified=False)
+        rep.set_password(password)
+        rep = adopt_member(rep)
+        db.session.add(rep)
+        db.session.flush()
+        record_account_created(rep)
+        create_audit_log(action='rep_registration_created', actor_user_id=rep.id, target_type='User', target_id=str(rep.id))
+        db.session.commit()
+        flash('Application sent. The D.A.R.T Admin verifies D.A.R.T Reps; you can sign in once you are approved.', 'success')
+        return redirect(url_for('login'))
+    return render_template('register_rep.html', form=form)
+
+
+def rep_queue(limit=60):
+    """Fixture records a D.A.R.T Rep can attest (waiting or ready, last 30 days)."""
+    since = datetime.utcnow() - timedelta(days=30)
+    return (SportRecord.query.options(joinedload(SportRecord.user))
+            .filter(SportRecord.fixture_id.isnot(None), SportRecord.status.in_(('pending', 'verifying')), SportRecord.created_at >= since)
+            .order_by(SportRecord.created_at.desc()).limit(limit).all())
+
+
+@app.route('/rep')
+@login_required
+def rep_dashboard():
+    if current_user.role != 'Rep' or not current_user.is_verified or current_user.is_suspended:
+        return redirect(url_for(dashboard_endpoint_for(current_user)))
+    records = rep_queue()
+    attested = {c.record_id: c for c in RecordCheck.query.filter(RecordCheck.role == fixture_rec.REP,
+                                                                RecordCheck.record_id.in_([r.id for r in records] or [0])).all()}
+    fixtures = {f.id: f for f in Fixture.query.filter(Fixture.id.in_({r.fixture_id for r in records} or {0})).all()}
+    return render_template('rep_dashboard.html', records=records, attested=attested, fixtures=fixtures, fr=fixture_rec,
+                           seasons=fixtures_mod.season_choices())
+
+
+
+# ---------- "I also play for": athletes with more than one team ----------
+MAX_EXTRA_TEAMS = 3
+
+
+def team_head_coaches(team_name):
+    return [c for c in integrity._active_coaches_of(team_name) if not coaching.is_assistant(c)]
+
+
+@app.route('/profile/teams', methods=['POST'])
+@login_required
+def profile_add_team():
+    """An athlete adds another team they play for (e.g. a club besides the school); its head coach approves."""
+    if current_user.role != 'Athlete':
+        abort(404)
+    name = fixtures_mod.clean(request.form.get('team_name'), 150)
+    key = normalize_team_name(name)
+    back = url_for('profile') + '#alsoPlays'
+    if len(name) < 2 or not key:
+        flash('Enter the team name exactly as it is written by the team.', 'danger')
+        return redirect(back)
+    if key == normalize_team_name(current_user.school or ''):
+        flash('That is already your registered team.', 'info')
+        return redirect(back)
+    rows = AthleteTeam.query.filter(AthleteTeam.athlete_id == current_user.id, AthleteTeam.status != 'declined').all()
+    if any(r.team_key == key for r in AthleteTeam.query.filter_by(athlete_id=current_user.id).all()):
+        flash('You already asked to be added to this team.', 'info')
+        return redirect(back)
+    if len(rows) >= MAX_EXTRA_TEAMS:
+        flash(f'You can add up to {MAX_EXTRA_TEAMS} other teams.', 'warning')
+        return redirect(back)
+    row = AthleteTeam(athlete_id=current_user.id, team_name=name, team_key=key)
+    db.session.add(row)
+    coaches = team_head_coaches(name)
+    for coach in coaches:
+        notif.notify(coach.id, 'team_join', f'{current_user.display_name} says they also play for {name}. Confirm on your dashboard.',
+                     '/admin#teamRequests')
+    create_audit_log(action='athlete_team_requested', actor_user_id=current_user.id, target_type='User', target_id=str(current_user.id),
+                     details={'team': name})
+    db.session.commit()
+    flash(f'Sent to the coach of {name} to confirm.' if coaches else
+          f'Saved. {name} has no head coach on D.A.R.T. yet: it is confirmed when their coach joins.', 'success')
+    return redirect(back)
+
+
+@app.route('/profile/teams/<int:row_id>/delete', methods=['POST'])
+@login_required
+def profile_remove_team(row_id):
+    row = db.session.get(AthleteTeam, row_id)
+    if not row or row.athlete_id != current_user.id:
+        abort(404)
+    db.session.delete(row)
+    db.session.commit()
+    flash('Team removed.', 'success')
+    return redirect(url_for('profile') + '#alsoPlays')
+
+
+def team_join_requests(coach):
+    """Pending "I also play for" requests for the teams this head coach manages."""
+    if getattr(coach, 'role', None) != 'Coach' or coaching.is_assistant(coach):
+        return []
+    keys = {normalize_team_name(name) for _key, name, _cat in coaching.active_teams(coach)}
+    keys |= {normalize_team_name(coach.school or '')}
+    keys.discard('')
+    if not keys:
+        return []
+    return (AthleteTeam.query.filter(AthleteTeam.status == 'pending', AthleteTeam.team_key.in_(keys))
+            .order_by(AthleteTeam.created_at).all())
+
+
+@app.route('/coach/team-requests/<int:row_id>', methods=['POST'])
+@login_required
+def coach_team_request(row_id):
+    row = db.session.get(AthleteTeam, row_id)
+    if not row or row.status != 'pending' or row not in team_join_requests(current_user):
+        abort(404)
+    action = request.form.get('action')
+    if action not in ('approve', 'decline'):
+        abort(400)
+    row.status = 'approved' if action == 'approve' else 'declined'
+    row.decided_by, row.decided_at = current_user.id, datetime.utcnow()
+    if action == 'approve':
+        notif.notify(row.athlete_id, 'team_join', f'{current_user.display_name} confirmed you play for {row.team_name}. '
+                                                  "You now get that team's fixtures too.", '/student#fixtureGames')
+        # Fixtures of that team the players were already told about: tell this athlete too.
+        athlete = db.session.get(User, row.athlete_id)
+        for fixture in Fixture.query.filter(Fixture.status == 'scheduled', Fixture.players_notified_at.isnot(None),
+                                            Fixture.kickoff_at >= datetime.utcnow() - timedelta(days=fixture_rec.RECORD_WINDOW_DAYS)).all():
+            side = fixture_side(fixture, row.team_name)
+            if side and side_confirmed(fixture, side) and athlete:
+                notif.notify(athlete.id, 'fixture_player', f'Your next game: {side_team(fixture, side)} vs {side_team(fixture, other_side(side))} '
+                                                           f'({fixture.sport}, {fixture.kickoff_at.strftime("%a %d %b, %H:%M")}). After the game, '
+                                                           'tap "I played in this game".', f'/student?fixture={fixture.id}')
+    else:
+        notif.notify(row.athlete_id, 'team_join', f'The coach of {row.team_name} did not confirm you play for them.', '/profile#alsoPlays')
+    create_audit_log(action=f'athlete_team_{action}', actor_user_id=current_user.id, target_type='User', target_id=str(row.athlete_id),
+                     details={'team': row.team_name})
+    db.session.commit()
+    flash('Player confirmed for your team.' if action == 'approve' else 'Request declined.', 'success')
+    return redirect(url_for('admin_dashboard') + '#teamRequests')
+
+
+app.jinja_env.globals.update(team_join_requests=lambda: team_join_requests(current_user),
+                             my_extra_teams=lambda: AthleteTeam.query.filter_by(athlete_id=current_user.id).order_by(AthleteTeam.created_at).all()
+                             if current_user.is_authenticated else [], max_extra_teams=MAX_EXTRA_TEAMS)
+
+
+# ---------- deleting a fixture (a genuine reason only) ----------
+FIXTURE_DELETE_REASONS = {
+    'typing': 'Typing mistake (wrong team, date, time or venue)',
+    'duplicate': 'Duplicate fixture (entered twice)',
+    'wrong_competition': 'Entered under the wrong competition / federation',
+    'never_agreed': 'The game was never agreed (created by mistake)',
+}
+
+
+def can_delete_fixture(fixture, user=None):
+    """The D.A.R.T Admin, the federation that published it, or the coach / rep who requested it - and no athlete record yet."""
+    user = user or current_user
+    if not user.is_authenticated or SportRecord.query.filter_by(fixture_id=fixture.id).first():
+        return False
+    if can_manage_fixture(fixture, user):
+        return True
+    return user.role in ('Coach', 'Rep') and fixture.requested_by == user.id
+
+
+@app.route('/fixtures/<int:fixture_id>/delete', methods=['POST'])
+@login_required
+def fixture_delete(fixture_id):
+    fixture = db.session.get(Fixture, fixture_id)
+    if not fixture or not can_see_fixture(fixture):
+        abort(404)
+    back = url_for('fixture_detail', fixture_id=fixture.id)
+    if not can_delete_fixture(fixture):
+        flash('This fixture can not be deleted (athletes already sent records for it, or it is not yours). Cancel it instead.', 'warning')
+        return redirect(back)
+    reason = request.form.get('reason')
+    explain = fixtures_mod.clean(request.form.get('explain'), 300)
+    if reason not in FIXTURE_DELETE_REASONS or len(explain) < 10:
+        flash('Choose the reason and explain what was wrong (at least 10 characters).', 'warning')
+        return redirect(back)
+    label = f'{fixture.home_team} vs {fixture.away_team} ({fixture.kickoff_at.strftime("%d %b %Y %H:%M")})'
+    told = {p.user_id for p in fixture.parties} | ({fixture.requested_by} if fixture.requested_by else set())
+    told.discard(current_user.id)
+    for uid in told:
+        notif.notify(uid, 'fixture', f'Fixture removed: {label}. Reason: {FIXTURE_DELETE_REASONS[reason]} - {explain}', '/admin#fixtures')
+    create_audit_log(action='fixture_deleted', actor_user_id=current_user.id, target_type='Fixture', target_id=str(fixture.id),
+                     details={'reason': reason, 'explain': explain, 'body': fixture.body, 'home': fixture.home_team,
+                              'away': fixture.away_team, 'kickoff': fixture.kickoff_at.isoformat(), 'venue': fixture.venue,
+                              'status': fixture.status})
+    FixtureDiscipline.query.filter_by(fixture_id=fixture.id).delete()
+    for sheet in FixtureSheet.query.filter_by(fixture_id=fixture.id).all():
+        db.session.delete(sheet)
+    db.session.delete(fixture)
+    db.session.commit()
+    flash('Fixture deleted. Everyone involved was told why.', 'success')
+    if current_user.role == 'Federation':
+        return redirect(url_for('federation_dashboard') + '#fixtures')
+    if current_user.role == 'System':
+        return redirect(url_for('admin_fixtures'))
+    return redirect(url_for(dashboard_endpoint_for(current_user)))
+
+
+app.jinja_env.globals.update(can_delete_fixture=can_delete_fixture, fixture_delete_reasons=FIXTURE_DELETE_REASONS)
+
+
+# ---------- 1-minute edit window for captions (messages and comments use the same) ----------
+def caption_editable(highlight):
+    return message_age_seconds(highlight.created_at) <= MESSAGE_EDIT_SECONDS
+
+
+def edit_seconds_left(created_at):
+    return max(0, int(MESSAGE_EDIT_SECONDS - message_age_seconds(created_at)))
+
+
+app.jinja_env.globals.update(caption_editable=caption_editable, edit_seconds_left=edit_seconds_left)
 
 
 if __name__ == '__main__':

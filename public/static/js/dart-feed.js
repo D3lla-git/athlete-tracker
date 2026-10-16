@@ -192,10 +192,12 @@
       edb.type = 'button';
       edb.className = 'fp-c-edit';
       edb.dataset.editComment = c.id;
-      edb.setAttribute('aria-label', 'Edit comment');
-      edb.title = 'Edit';
+      edb.setAttribute('aria-label', 'Edit comment (1 minute)');
+      edb.title = 'Edit (1 minute)';
       edb.innerHTML = '<i class="fa-solid fa-pen"></i>';
       head.appendChild(edb);
+      // Comments can be edited for 1 minute after posting: the pen goes away then.
+      if (typeof c.edit_left === 'number') setTimeout(function () { edb.remove(); }, Math.max(0, c.edit_left) * 1000);
     }
     if (c.can_delete) {
       var del = document.createElement('button');

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Age verification | D.A.R.T Admin{% endblock %}
+
+{% block content %}
+{% from '_nin_field.html' import nin_admin, nin_admin_assets with context %}
+{{ nin_admin_assets() }}
+<div class="container py-3" style="max-width: 1000px">
+  <section class="fx-hero">
+    <div><div class="fx-eyebrow"><i class="fa-solid fa-id-card-clip"></i> D.A.R.T Admin · private</div><h1>Age verification</h1>
+      <p class="mb-0 small">Compare the date of birth with the NIR card (NIN) or birth certificate. Every NIN view is logged.</p></div>
+  </section>
+  <nav class="d-flex flex-wrap gap-2 mb-3" aria-label="Filter">
+    {% for key, label in (('waiting', 'Waiting'), ('mismatch', 'Did not match'), ('verified', 'Verified'), ('missing', 'No NIN')) %}
+      <a class="btn btn-sm {{ 'dart-btn' if show == key else 'btn-outline-secondary' }}" href="{{ url_for('admin_ages', show=key) }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <div class="fx-list">
+    {% for u in users %}{% set age = age_of(u) %}
+      <article class="fx-row">
+        <div class="fx-main">
+          <div class="fx-title">{{ user_link(u) }} <span class="badge text-bg-light">{{ u.role }}</span></div>
+          <div class="fx-sub">{{ team_name_link(u.school) if u.school }}{% if u.date_of_birth %} · born {{ u.date_of_birth.strftime('%d %b %Y') }}{% endif %}
+            {% if age is not none %} · {{ age }} yrs{% endif %}</div>
+          {% if u.id_document %}<a class="small" href="{{ url_for('id_document', filename=u.id_document) }}" target="_blank" rel="noopener"><i class="fa-solid fa-id-card"></i> ID document</a>{% endif %}
+          {{ nin_admin(u) }}
+        </div>
+      </article>
+    {% else %}<p class="text-muted">Nobody here.</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}

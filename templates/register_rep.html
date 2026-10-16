@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Apply as a D.A.R.T Rep | D.A.R.T.{% endblock %}
+
+{% block content %}
+{% from '_username_field.html' import username_field, username_assets %}
+<div class="container py-3" style="max-width: 680px">
+  <section class="fx-hero" aria-label="D.A.R.T Rep">
+    <div><div class="fx-eyebrow"><i class="fa-solid fa-user-check"></i> O-D.A.R.T user · D.A.R.T Rep</div>
+      <h1>Apply as a D.A.R.T Rep</h1>
+      <p class="mb-0 small">Reps attest to the records athletes, coaches, referees and linesmen send, so the D.A.R.T Admin can trust them.
+        The D.A.R.T Admin checks your ID and number before you can sign in.</p></div>
+  </section>
+  <form method="POST" action="{{ url_for('register_rep') }}" enctype="multipart/form-data" class="fx-panel" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3"><label class="form-label" for="repName">Full government name</label>
+      <input class="form-control" id="repName" name="full_name" required maxlength="100" autocomplete="name" value="{{ form.get('full_name', '') }}" placeholder="Example: John Felix Brown"></div>
+    <div class="mb-3">{{ username_field('repUsername', value=form.get('username', ''), name_source_id='repName') }}</div>
+    <div class="mb-3"><label class="form-label" for="repCommunity">County, community or organization you represent</label>
+      <input class="form-control" id="repCommunity" name="community" required maxlength="150" value="{{ form.get('community', '') }}" placeholder="e.g. Nimba County Sports Committee"></div>
+    <div class="row">
+      <div class="col-md-6 mb-3"><label class="form-label" for="repPhone">Liberian mobile number</label>
+        <input class="form-control" id="repPhone" name="phone" type="tel" required inputmode="tel" maxlength="20" value="{{ form.get('phone', '') }}" placeholder="0770 123 456"></div>
+      <div class="col-md-6 mb-3"><label class="form-label" for="repEmail">Email <span class="text-muted small">(optional)</span></label>
+        <input class="form-control" id="repEmail" name="email" type="email" maxlength="150" autocomplete="email" value="{{ form.get('email', '') }}"></div>
+    </div>
+    <div class="mb-3"><label class="form-label" for="repId">NIR card or passport (JPG / PNG / PDF, up to 5 MB)</label>
+      <input class="form-control" id="repId" name="id_document" type="file" required accept=".png,.jpg,.jpeg,.pdf">
+      <small class="text-muted">Only the D.A.R.T Admin sees it.</small></div>
+    <div class="row">
+      <div class="col-md-6 mb-3"><label class="form-label" for="repPw">Password</label>
+        <input class="form-control" id="repPw" name="password" type="password" required minlength="8" autocomplete="new-password"></div>
+      <div class="col-md-6 mb-3"><label class="form-label" for="repPw2">Confirm password</label>
+        <input class="form-control" id="repPw2" name="confirm_password" type="password" required minlength="8" autocomplete="new-password"></div>
+    </div>
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" id="repAgree" name="agree" value="yes" required>
+      <label class="form-check-label small" for="repAgree">I accept the D.A.R.T. <a href="{{ url_for('terms_page') }}" target="_blank" rel="noopener">Terms of Use</a>.
+        I attest only to what I saw or can check, I never take money or favours to attest, and false attestations end my D.A.R.T Rep account.</label>
+    </div>
+    <button class="btn dart-btn w-100 py-2" type="submit"><i class="fa-solid fa-paper-plane"></i> Send application</button>
+    <p class="small text-center mt-3 mb-0"><a href="{{ url_for('odart_choose') }}">Back</a> · Already on D.A.R.T.? <a href="{{ url_for('login') }}">Log in</a></p>
+  </form>
+</div>
+{{ username_assets() }}
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Fixtures | D.A.R.T Admin{% endblock %}
+
+{% block content %}
+{% from '_fixture_macros.html' import fixture_row, official_pickers with context %}
+<div class="container py-3" style="max-width: 1100px">
+  <section class="fx-hero">
+    <div><div class="fx-eyebrow"><i class="fa-solid fa-calendar-check"></i> D.A.R.T Admin</div><h1>Fixtures</h1>
+      <div class="fx-chips mt-2"><span>{{ requests_ | length }} requests</span><span>{{ upcoming | length }} upcoming</span></div></div>
+    <a class="btn btn-light btn-sm fw-bold" href="{{ url_for('admin_federations') }}"><i class="fa-solid fa-landmark-flag"></i> Federation accounts</a>
+  </section>
+
+  <section class="fx-panel" id="ready" aria-labelledby="frReady">
+    <h2 id="frReady"><i class="fa-solid fa-circle-check text-success"></i> Records ready to publish</h2>
+    <p class="small text-muted">Fully cross-signed, with both team sheets and the referee report combined.</p>
+    <div class="fx-list">
+      {% for f in ready %}
+        {% set extra %}<div class="fx-actions"><a class="btn btn-sm btn-success" href="{{ url_for('fixture_match', fixture_id=f.id) }}#records">Review &amp; publish</a></div>{% endset %}
+        {{ fixture_row(f, show_parties=false, extra=extra) }}
+      {% else %}<p class="text-muted small mb-0">Nothing waiting.</p>{% endfor %}
+    </div>
+  </section>
+
+  <section class="fx-panel" id="requests" aria-labelledby="frTitle">
+    <h2 id="frTitle"><i class="fa-solid fa-inbox text-warning"></i> Coaches' fixture requests</h2>
+    <div class="fx-list">
+      {% for f in requests_ %}
+        {% set who = requesters.get(f.requested_by) %}
+        {% set extra %}
+          <div class="w-100 small">Requested by {{ user_link(who) if who else '?' }}{% if f.note %} · “{{ f.note }}”{% endif %}</div>
+          <form method="POST" action="{{ url_for('admin_fixture_decide', fixture_id=f.id) }}" class="row g-2 w-100">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {{ official_pickers(referees, linesmen) }}
+            <div class="col-md-8"><input class="form-control form-control-sm" name="note" maxlength="300" placeholder="Reason (required to reject)" aria-label="Reason"></div>
+            <div class="col-md-4 fx-actions">
+              <button class="btn btn-sm btn-success" name="action" value="approve"><i class="fa-solid fa-check"></i> Approve &amp; publish</button>
+              <button class="btn btn-sm btn-outline-danger" name="action" value="reject">Reject</button></div>
+          </form>
+        {% endset %}
+        {{ fixture_row(f, show_parties=false, extra=extra) }}
+      {% else %}<p class="text-muted small mb-0">No requests waiting.</p>{% endfor %}
+    </div>
+  </section>
+
+  <section class="fx-panel" id="new" aria-labelledby="fnTitle">
+    <h2 id="fnTitle"><i class="fa-solid fa-calendar-plus text-success"></i> Publish a fixture</h2>
+    <form method="POST" class="row g-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-4"><label class="form-label" for="aBody">Body</label>
+        <select class="form-select" id="aBody" name="body"><option value="">D.A.R.T. (friendly)</option>
+          {% for c, b in fixtures_mod.BODIES.items() %}<option value="{{ c }}">{{ b.name }} ({{ c }})</option>{% endfor %}</select></div>
+      <div class="col-md-2"><label class="form-label" for="aSeason">Season</label>
+        <select class="form-select" id="aSeason" name="season">{% for s in seasons %}<option {{ 'selected' if loop.index == 3 }}>{{ s }}</option>{% endfor %}</select></div>
+      <div class="col-md-3"><label class="form-label" for="aSport">Sport</label>
+        <select class="form-select" id="aSport" name="sport">{% for s in fixtures_mod.SPORTS %}<option>{{ s }}</option>{% endfor %}</select></div>
+      <div class="col-md-3"><label class="form-label" for="aComp">Competition</label>
+        <select class="form-select" id="aComp" name="competition"><option>{{ fixtures_mod.FRIENDLY }}</option>
+          {% for c, b in fixtures_mod.BODIES.items() %}<optgroup label="{{ c }}">{% for comp in b.competitions %}<option>{{ comp }}</option>{% endfor %}</optgroup>{% endfor %}</select></div>
+      <div class="col-md-4"><label class="form-label" for="aHome">Home team</label><input class="form-control" id="aHome" name="home_team" required maxlength="150"></div>
+      <div class="col-md-4"><label class="form-label" for="aAway">Away team</label><input class="form-control" id="aAway" name="away_team" required maxlength="150"></div>
+      <div class="col-md-4"><label class="form-label" for="aKick">Kick-off (Liberia time)</label><input class="form-control" id="aKick" name="kickoff_at" type="datetime-local" required></div>
+      <div class="col-md-12"><label class="form-label" for="aVenue">Venue</label><input class="form-control" id="aVenue" name="venue" required maxlength="150"></div>
+      {{ official_pickers(referees, linesmen) }}
+      <div class="col-12"><button class="btn dart-btn" type="submit"><i class="fa-solid fa-paper-plane"></i> Publish</button></div>
+    </form>
+  </section>
+
+  <section class="fx-panel" aria-labelledby="fuTitle">
+    <h2 id="fuTitle"><i class="fa-solid fa-calendar-days text-success"></i> Upcoming (all bodies)</h2>
+    <div class="fx-list">{% for f in upcoming %}{{ fixture_row(f) }}{% else %}<p class="text-muted small mb-0">No upcoming fixtures.</p>{% endfor %}</div>
+  </section>
+</div>
+{% endblock %}

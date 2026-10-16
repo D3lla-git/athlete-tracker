@@ -3,6 +3,8 @@ import os
 
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY")
+    # New records only come from fixtures ("I played in this game"). Set to 0 only to reopen the old free-form record form.
+    FIXTURE_RECORDS_ONLY = os.environ.get("FIXTURE_RECORDS_ONLY", "1") != "0"
 
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False

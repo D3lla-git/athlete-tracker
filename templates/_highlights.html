@@ -4,8 +4,9 @@
      can_manage - true on the athlete's own pages (upload + delete) #}
 
 {% macro hl_edit_form(h, count=1) %}
-{# The athlete edits the caption / sport, before or after approval. #}
-<details class="hl-edit">
+{# The athlete edits the caption / sport for 1 minute after posting (then it is final). #}
+{% if caption_editable(h) %}
+<details class="hl-edit" data-edit-expires="{{ edit_seconds_left(h.created_at) }}">
   <summary><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit {{ 'post' if count > 1 else 'caption' }}</summary>
   <form method="POST" action="{{ url_for('edit_highlight', highlight_id=h.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -19,8 +20,13 @@
       </select>
       <button class="btn btn-sm dart-btn" type="submit">Save</button>
     </div>
+    <small class="text-muted d-block mt-1">You can edit for 1 minute after posting.</small>
   </form>
 </details>
+<script>
+(function (el) { var s = parseInt(el.getAttribute('data-edit-expires'), 10); if (s >= 0) setTimeout(function () { el.remove(); }, s * 1000); })(document.currentScript.previousElementSibling);
+</script>
+{% endif %}
 {% endmacro %}
 
 {# One tile for a post with several photos / videos (desktop). #}

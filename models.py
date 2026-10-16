@@ -145,6 +145,19 @@ class User(UserMixin, db.Model):
     is_suspended = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
     suspended_at = db.Column(db.DateTime, nullable=True)
     suspension_reason = db.Column(db.String(200), nullable=True)
+    # Liberia National Identification Number (NIN, 10 digits, from the NIR card).
+    # Only the D.A.R.T Admin can read it: stored encrypted (nin_cipher) with a
+    # keyed fingerprint (nin_hash) so one NIN can't open two accounts.
+    nin_cipher = db.Column(db.Text, nullable=True)
+    nin_hash = db.Column(db.String(64), nullable=True, unique=True)
+    nin_added_at = db.Column(db.DateTime, nullable=True)
+    # Age verification by the D.A.R.T Admin against the NIR card or birth certificate.
+    age_verified_at = db.Column(db.DateTime, nullable=True)
+    age_verified_by = db.Column(db.BigInteger, nullable=True)
+    age_verified_source = db.Column(db.String(20), nullable=True)   # nir_card / birth_certificate
+    age_check_note = db.Column(db.String(200), nullable=True)       # why the age could not be verified
+    # Federation accounts (role 'Federation'): MYS, LFA, LBA, LKF or ISSA.
+    federation_code = db.Column(db.String(8), nullable=True, unique=True)
 
     # (No "same name + same team" rule any more: two people can share a full
     # name, even on one team. Their unique username tells them apart.)
@@ -238,6 +251,12 @@ class SportRecord(db.Model):
     # Awards
     man_of_the_match = db.Column(db.Integer, default=0)
     mvp = db.Column(db.Integer, default=0)
+    queen_of_the_match = db.Column(db.Integer, default=0, server_default='0')
+    # Fixture records (the only way to add a new record): the fixture it was played in,
+    # basketball dunks, and football passes completed (from the coach's team sheet).
+    fixture_id = db.Column(db.BigInteger, nullable=True, index=True)
+    dunks = db.Column(db.Integer, default=0, server_default='0')
+    passes_completed = db.Column(db.Integer, nullable=True)
 
     status = db.Column(db.String(20), default='pending')  # pending / approved / rejected
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -1740,3 +1759,147 @@ class SitePresence(db.Model):
     user_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=True, index=True)
     first_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     last_seen = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class FederationTeam(db.Model):
+    """A team registered for a season by a federation (LFA, LBA, LKF, ISSA) or the Ministry (MYS)."""
+    __tablename__ = 'federation_team'
+    __table_args__ = (db.UniqueConstraint('body', 'season', 'sport', 'name_key', name='uq_federation_team'),)
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    body = db.Column(db.String(8), nullable=False, index=True)
+    season = db.Column(db.String(9), nullable=False, index=True)
+    sport = db.Column(db.String(20), nullable=False)
+    competition = db.Column(db.String(80), nullable=False)
+    name = db.Column(db.String(150), nullable=False)
+    name_key = db.Column(db.String(150), nullable=False)        # normalized name (duplicates)
+    created_by = db.Column(db.BigInteger, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Fixture(db.Model):
+    """
+    A scheduled match. Federations / the Ministry and the D.A.R.T Admin publish
+    fixtures directly ('scheduled'); coaches can only request one ('requested'),
+    which the D.A.R.T Admin approves. Athletes' records come from fixtures.
+    """
+    __tablename__ = 'fixture'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    body = db.Column(db.String(8), nullable=True, index=True)        # MYS / LFA / LBA / LKF / ISSA (None: friendly request)
+    season = db.Column(db.String(9), nullable=False)
+    sport = db.Column(db.String(20), nullable=False)
+    competition = db.Column(db.String(80), nullable=False)
+    home_team = db.Column(db.String(150), nullable=False)
+    away_team = db.Column(db.String(150), nullable=False)
+    kickoff_at = db.Column(db.DateTime, nullable=False, index=True)   # Liberia time (UTC)
+    venue = db.Column(db.String(150), nullable=False)
+    status = db.Column(db.String(12), nullable=False, default='scheduled', index=True)   # requested / scheduled / rejected / cancelled
+    note = db.Column(db.String(300), nullable=True)                  # request note / rejection or cancel reason
+    requested_by = db.Column(db.BigInteger, nullable=True)
+    created_by = db.Column(db.BigInteger, nullable=True)
+    approved_by = db.Column(db.BigInteger, nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    players_notified_at = db.Column(db.DateTime, nullable=True)      # both teams' coaches confirmed: athletes told
+    referee_report_at = db.Column(db.DateTime, nullable=True)        # the main referee sent the discipline report
+    referee_report_by = db.Column(db.BigInteger, nullable=True)
+
+    parties = db.relationship('FixtureParty', backref='fixture', cascade='all, delete-orphan', lazy='selectin')
+
+
+class FixtureParty(db.Model):
+    """Who must confirm a fixture: each team's coaches and the match officials (referee, linesmen)."""
+    __tablename__ = 'fixture_party'
+    __table_args__ = (db.UniqueConstraint('fixture_id', 'user_id', 'role', name='uq_fixture_party'),)
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    fixture_id = db.Column(db.BigInteger, db.ForeignKey('fixture.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    role = db.Column(db.String(12), nullable=False)          # home_coach / away_coach / referee / linesman
+    notified_at = db.Column(db.DateTime, nullable=True)
+    confirmed_at = db.Column(db.DateTime, nullable=True)
+    declined_at = db.Column(db.DateTime, nullable=True)
+    decline_reason = db.Column(db.String(200), nullable=True)
+
+    user = db.relationship('User')
+
+
+class FixtureSheet(db.Model):
+    """A team's sheet for a fixture, sent by its coach: competition, venue and a line per player."""
+    __tablename__ = 'fixture_sheet'
+    __table_args__ = (db.UniqueConstraint('fixture_id', 'side', name='uq_fixture_sheet'),)
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    fixture_id = db.Column(db.BigInteger, db.ForeignKey('fixture.id', ondelete='CASCADE'), nullable=False, index=True)
+    side = db.Column(db.String(4), nullable=False)                 # home / away
+    coach_id = db.Column(db.BigInteger, nullable=False)
+    competition_category = db.Column(db.String(50), nullable=False)
+    venue = db.Column(db.String(150), nullable=False)
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    lines = db.relationship('FixtureSheetLine', backref='sheet', cascade='all, delete-orphan', lazy='selectin')
+
+
+class FixtureSheetLine(db.Model):
+    __tablename__ = 'fixture_sheet_line'
+    __table_args__ = (db.UniqueConstraint('sheet_id', 'athlete_id', name='uq_fixture_sheet_line'),)
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    sheet_id = db.Column(db.BigInteger, db.ForeignKey('fixture_sheet.id', ondelete='CASCADE'), nullable=False, index=True)
+    athlete_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    played = db.Column(db.Boolean, nullable=False, default=False)
+    mvp = db.Column(db.Boolean, nullable=False, default=False)
+    minutes = db.Column(db.Integer, nullable=True)
+    position = db.Column(db.String(50), nullable=True)
+    passes = db.Column(db.Integer, nullable=True)                  # football: passes completed
+    cut_base = db.Column(db.Integer, nullable=True)                # kickball
+
+
+class FixtureDiscipline(db.Model):
+    """The main referee's report for one player: cards, fouls, sent off."""
+    __tablename__ = 'fixture_discipline'
+    __table_args__ = (db.UniqueConstraint('fixture_id', 'athlete_id', name='uq_fixture_discipline'),)
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    fixture_id = db.Column(db.BigInteger, db.ForeignKey('fixture.id', ondelete='CASCADE'), nullable=False, index=True)
+    athlete_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    referee_id = db.Column(db.BigInteger, nullable=False)
+    yellow_cards = db.Column(db.Integer, nullable=False, default=0)
+    red_cards = db.Column(db.Integer, nullable=False, default=0)
+    fouls = db.Column(db.Integer, nullable=False, default=0)
+    sent_off = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class RecordCheck(db.Model):
+    """One cross-signature on a fixture record: team coach, opponent coach, main referee or a D.A.R.T Rep."""
+    __tablename__ = 'record_check'
+    __table_args__ = (db.UniqueConstraint('record_id', 'role', name='uq_record_check'),)
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    record_id = db.Column(db.Integer, db.ForeignKey('sport_record.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
+    role = db.Column(db.String(16), nullable=False)        # team_coach / opponent_coach / referee / rep
+    decision = db.Column(db.String(10), nullable=False)    # confirmed / disputed
+    note = db.Column(db.String(300), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship('User')
+
+
+class AthleteTeam(db.Model):
+    """Another team an athlete plays for (e.g. a club besides the school). That team's head coach approves it."""
+    __tablename__ = 'athlete_team'
+    __table_args__ = (db.UniqueConstraint('athlete_id', 'team_key', name='uq_athlete_team'),)
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    athlete_id = db.Column(db.BigInteger, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    team_name = db.Column(db.String(150), nullable=False)
+    team_key = db.Column(db.String(150), nullable=False, index=True)       # normalized name
+    status = db.Column(db.String(10), nullable=False, default='pending')   # pending / approved / declined
+    decided_by = db.Column(db.BigInteger, nullable=True)
+    decided_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    athlete = db.relationship('User', foreign_keys=[athlete_id])

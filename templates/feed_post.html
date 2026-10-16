@@ -1,5 +1,11 @@
 {% extends "base.html" %}
-{% block title %}{{ post.user.full_name }}{{ ' · ' ~ post.sport if post.sport }} highlight · D.A.R.T.{% endblock %}
+{% block title %}{{ post.user.full_name }}{{ ' · ' ~ post.sport if post.sport }} highlight · D.A.R.T.<script id="fpEditExpire">
+document.querySelectorAll('[data-edit-expires]').forEach(function (b) {
+  var s = parseInt(b.getAttribute('data-edit-expires'), 10);
+  if (!isNaN(s)) setTimeout(function () { b.remove(); }, Math.max(0, s) * 1000);
+});
+</script>
+{% endblock %}
 {% block meta_description %}{{ post.caption or (post.user.full_name ~ "'s " ~ (post.sport or 'sports') ~ ' highlight on D.A.R.T.') }}{% endblock %}
 {% block robots %}<meta name="robots" content="{{ 'index, follow' if indexable else 'noindex, nofollow' }}">{% endblock %}
 {% block og_type %}{{ 'video.other' if post.is_video else 'article' }}{% endblock %}
@@ -52,7 +58,7 @@
             <span class="fp-c-ago">· {{ c.ago }}</span>
             {% if c.edited %}<span class="fp-c-edited">· edited</span>{% endif %}
             {% if c.can_edit %}
-              <button type="button" class="fp-c-edit" data-edit-comment="{{ c.id }}" aria-label="Edit comment" title="Edit"><i class="fa-solid fa-pen"></i></button>
+              <button type="button" class="fp-c-edit" data-edit-comment="{{ c.id }}" data-edit-expires="{{ c.edit_left }}" aria-label="Edit comment (1 minute)" title="Edit (1 minute)"><i class="fa-solid fa-pen"></i></button>
             {% endif %}
             {% if c.can_delete %}
               <button type="button" class="fp-c-del" data-delete-comment="{{ c.id }}" aria-label="Delete comment" title="Delete"><i class="fa-solid fa-trash"></i></button>

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}O-D.A.R.T user | D.A.R.T.{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 860px">
+  <section class="fx-hero" aria-label="O-D.A.R.T user">
+    <div><div class="fx-eyebrow"><i class="fa-solid fa-users"></i> O-D.A.R.T user</div>
+      <h1>Which O-D.A.R.T user are you?</h1>
+      <p class="mb-0 small">Choose one. You can upgrade later.</p></div>
+  </section>
+  <div class="oc-grid">
+    <a class="oc-card oc-rep" href="{{ url_for('register_rep') }}">
+      <span class="oc-icon"><i class="fa-solid fa-user-check"></i></span>
+      <strong>D.A.R.T Rep</strong>
+      <span>Attest to the records that athletes, coaches, referees and linesmen send from their dashboards, for the D.A.R.T Admin.
+        Verified by the D.A.R.T Admin (ID + Liberian mobile number), sign-in with an authenticator app.</span>
+      <span class="oc-go">Apply as a D.A.R.T Rep <i class="fa-solid fa-arrow-right"></i></span>
+    </a>
+    <a class="oc-card" href="{{ url_for('register_member') }}">
+      <span class="oc-icon"><i class="fa-solid fa-face-smile"></i></span>
+      <strong>O-D.A.R.T user</strong>
+      <span>Just curious about D.A.R.T.: scroll the highlights, react and comment. A username and a password is enough.</span>
+      <span class="oc-go">Join in seconds <i class="fa-solid fa-arrow-right"></i></span>
+    </a>
+  </div>
+  <p class="small text-center mt-3">Referee, linesman, league secretary or sports journalist? <a href="{{ url_for('register_official') }}">Register as a match official</a></p>
+</div>
+<style>
+  .oc-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+  .oc-card { display: flex; flex-direction: column; gap: 8px; padding: 20px; border-radius: 22px; text-decoration: none; color: inherit !important;
+    background: var(--surface-bg, #fff); border: 2px solid rgba(25, 135, 84, 0.35); transition: transform 0.15s ease, box-shadow 0.15s ease; }
+  .oc-card:hover, .oc-card:focus-visible { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(16, 24, 20, 0.15); }
+  .oc-card strong { font-size: 1.25rem; font-weight: 900; }
+  .oc-card > span:not(.oc-icon):not(.oc-go) { font-size: 0.92rem; color: var(--muted-text, #6c757d); }
+  .oc-icon { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; color: #fff; font-size: 1.3rem;
+    background: var(--dart-primary-gradient, linear-gradient(135deg, #198754, #0d6efd)); }
+  .oc-go { margin-top: auto; font-weight: 800; color: #198754; }
+  html[data-theme="dark"] .oc-go { color: #4cd38a; }
+  .oc-rep { border-color: rgba(255, 193, 7, 0.6); }
+</style>
+{% endblock %}

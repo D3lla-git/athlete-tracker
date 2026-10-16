@@ -4,7 +4,33 @@
 {% block content %}
 {% from '_record_reject.html' import reject_controls, rejection_badge, reject_styles with context %}
 {{ reject_styles() }}
+{% from '_nin_field.html' import nin_admin, nin_admin_assets with context %}
+{% if current_user.role == 'System' %}{{ nin_admin_assets() }}{% endif %}
 {% include '_admin_dashboard_overview.html' %}
+{% if current_user.role == 'Coach' %}
+  {% set _joins = team_join_requests() %}
+  {% if _joins %}
+    <section class="fx-panel mt-3" id="teamRequests" aria-labelledby="trTitle">
+      <h2 id="trTitle"><i class="fa-solid fa-user-plus text-success"></i> Players who say they also play for your team
+        <span class="badge text-bg-warning ms-1">{{ _joins | length }}</span></h2>
+      <p class="small text-muted">Confirm only players who really play for this team: they then get its fixtures and can send records for its games.</p>
+      <div class="fx-list">
+        {% for j in _joins %}
+          <article class="fx-row">
+            <div class="fx-main"><div class="fx-title">{{ user_link(j.athlete) }} {{ handle_tag(j.athlete) }}</div>
+              <div class="fx-sub">Registered team: {{ team_name_link(j.athlete.school) }} · says they also play for <strong>{{ j.team_name }}</strong></div></div>
+            <form method="POST" action="{{ url_for('coach_team_request', row_id=j.id) }}" class="fx-actions m-0">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-success" name="action" value="approve"><i class="fa-solid fa-check"></i> Plays for us</button>
+              <button class="btn btn-sm btn-outline-danger" name="action" value="decline">Not our player</button>
+            </form>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+  {% include '_fixtures_panel.html' %}
+{% endif %}
 <!-- ========== PENDING VERIFICATIONS ========== -->
 {% if pending_coaches %}
 <div class="card mb-4 border-warning" id="pendingCoaches">
@@ -24,7 +50,9 @@
         <tbody>
           {% for coach in pending_coaches %}
           <tr>
-            <td><a href="{% if current_user.id == coach.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=coach.id) }}{% endif %}" class="text-decoration-none"><strong>{{ coach.full_name }}</strong></a> {{ handle_tag(coach) }}</td>
+            <td><a href="{% if current_user.id == coach.id %}{{ url_for('profile') }}{% else %}{{ url_for('user_profile', user_id=coach.id) }}{% endif %}" class="text-decoration-none"><strong>{{ coach.full_name }}</strong></a> {{ handle_tag(coach) }}
+              {% if coach.id_document %}<a class="btn btn-sm btn-outline-primary mt-1" href="{{ url_for('id_document', filename=coach.id_document) }}" target="_blank" rel="noopener">View NIR card / passport</a>{% endif %}
+              {{ nin_admin(coach) }}</td>
             <td>{{ team_badge(coach.school) }}{{ team_name_link(coach.school) }}
               <span class="badge {{ 'text-bg-info' if coach.coach_position == 'Assistant coach' else 'text-bg-success' }} ms-1">{{ coach.coach_position or 'Head coach' }}</span></td>
             <td>
@@ -221,6 +249,7 @@
         {% else %}
         <span class="badge bg-warning text-dark mt-1">No ID document uploaded</span>
         {% endif %}
+        {{ nin_admin(u) }}
         {% if u.org_approval is not none %}
           {# New accounts: coach + the team's organization must approve. #}
           <div class="approval-steps mt-2">

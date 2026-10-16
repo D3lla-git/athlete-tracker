@@ -96,7 +96,7 @@
     {% for o in officials %}
     <article class="integrity-cs-card">
       <header><strong>{{ user_link(o) }}</strong>{% if o.username %} <span class="text-muted">@{{ o.username }}</span>{% endif %}</header>
-      <div class="small">{{ o.official_type }} · {{ team_name_link(o.school) }}<br>{{ o.email }} · {{ o.phone or 'no phone' }}<br>Registered {{ o.created_at.strftime('%d %b %Y') if o.created_at }}</div>
+      <div class="small">{{ 'D.A.R.T Rep' if o.role == 'Rep' else o.official_type }} · {{ team_name_link(o.school) }}<br>{{ o.email }} · {{ o.phone or 'no phone' }}<br>Registered {{ o.created_at.strftime('%d %b %Y') if o.created_at }}</div>
       {% if o.id_document %}<a class="small" href="{{ url_for('id_document', filename=o.id_document) }}" target="_blank" rel="noopener"><i class="fa-solid fa-id-card" aria-hidden="true"></i> View ID document</a>{% endif %}
       <form method="POST" action="{{ url_for('review_official', user_id=o.id) }}" class="d-flex flex-wrap gap-2 align-items-center mt-1">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

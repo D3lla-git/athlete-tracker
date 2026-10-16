@@ -99,9 +99,11 @@
             <label class="form-label">Coach Secret Code <i class="fa-solid fa-unlock"></i></label>
             <input type="password" name="secret_code" class="form-control" placeholder="Enter secret code" required>
           </div>
+          {% from '_nin_field.html' import nin_input with context %}
+          {{ nin_input('coach') }}
 <div class="mb-3">
-            <label>ID or Passport (PNG/JPG/PDF) <i class="fa-solid fa-id-card"></i></label>
-            <input type="file" name="id_document" class="form-control" accept=".png,.jpg,.jpeg,.pdf" required>
+            <label for="coachIdDocument">NIR card or passport (PNG/JPG/PDF) <i class="fa-solid fa-id-card"></i></label>
+            <input type="file" name="id_document" id="coachIdDocument" class="form-control" accept=".png,.jpg,.jpeg,.pdf" required>
           </div>
           <button type="submit" class="btn w-100 dart-btn">Create Coach Account</button> 
         </form>

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} Dashboard | D.A.R.T.{% endblock %}
+
+{% block content %}
+{% from '_fixture_macros.html' import fixture_row, official_pickers with context %}
+<div class="container py-3" style="max-width: 1100px">
+  <section class="fx-hero" aria-label="Federation">
+    <div>
+      <div class="fx-eyebrow"><i class="fa-solid fa-landmark-flag"></i> Federation dashboard · {{ code }}</div>
+      <h1>{{ body.name }}</h1>
+      <div class="fx-chips mt-2"><span>Season {{ season }}</span><span>{{ teams | length }} teams</span><span>{{ upcoming | length }} upcoming fixtures</span></div>
+    </div>
+    <form method="GET" class="d-flex gap-2 align-items-center">
+      <label class="small fw-bold" for="fxSeasonPick">Season</label>
+      <select class="form-select form-select-sm" id="fxSeasonPick" name="season" onchange="this.form.submit()">
+        {% for s in seasons %}<option {{ 'selected' if s == season }}>{{ s }}</option>{% endfor %}
+        {% if season not in seasons %}<option selected>{{ season }}</option>{% endif %}
+      </select>
+    </form>
+  </section>
+
+  {# Shareable D.A.R.T. verified federation card. #}
+  {% from '_profile_card.html' import profile_hero %}
+  {{ profile_hero(profile_card_info(current_user, current_user), can_edit=false) }}
+
+  {# ---------- Teams ---------- #}
+  <section class="fx-panel" id="teams" aria-labelledby="fxTeamsTitle">
+    <h2 id="fxTeamsTitle"><i class="fa-solid fa-people-group text-success"></i> Registered teams · {{ season }}</h2>
+    <form method="POST" action="{{ url_for('federation_add_teams') }}" class="row g-2 mb-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-2"><label class="form-label" for="tSeason">Season</label>
+        <input class="form-control" id="tSeason" name="season" value="{{ season }}" required pattern="\d{4}(/\d{2})?" placeholder="2026 or 2025/26"></div>
+      <div class="col-md-3"><label class="form-label" for="tSport">Sport</label>
+        <select class="form-select" id="tSport" name="sport">{% for s in body.sports %}<option>{{ s }}</option>{% endfor %}</select></div>
+      <div class="col-md-7"><label class="form-label" for="tComp">Competition</label>
+        <select class="form-select" id="tComp" name="competition">{% for c in body.competitions %}<option>{{ c }}</option>{% endfor %}</select></div>
+      <div class="col-12"><label class="form-label" for="tNames">Teams (one per line, or paste a CSV with the team name first)</label>
+        <textarea class="form-control" id="tNames" name="teams" rows="4" required placeholder="LPRC Oilers&#10;Invincible Eleven&#10;Mighty Barrolle"></textarea></div>
+      <div class="col-12"><button class="btn dart-btn" type="submit"><i class="fa-solid fa-upload"></i> Register teams</button></div>
+    </form>
+    {% for sport in body.sports %}
+      {% set list = teams | selectattr('sport', 'equalto', sport) | list %}
+      {% if list %}
+        <h3 class="h6 fw-bold mt-2">{{ sport }} <span class="text-muted small">({{ list | length }})</span></h3>
+        <div class="fx-teams">
+          {% for t in list %}
+            <div class="fx-team"><span>{{ team_badge(t.name) }}{{ team_name_link(t.name) }} <small class="text-muted">· {{ t.competition }}</small></span>
+              <form method="POST" action="{{ url_for('federation_delete_team', team_id=t.id) }}" onsubmit="return confirm('Remove {{ t.name | e }} from the {{ season }} list?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" aria-label="Remove {{ t.name }}"><i class="fa-solid fa-xmark"></i></button></form></div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% else %}{% endfor %}
+    {% if not teams %}<p class="text-muted small mb-0">No teams registered for {{ season }} yet.</p>{% endif %}
+  </section>
+
+  {# ---------- Fixtures ---------- #}
+  <section class="fx-panel" id="fixtures" aria-labelledby="fxFixTitle">
+    <h2 id="fxFixTitle"><i class="fa-solid fa-calendar-plus text-success"></i> Publish a fixture</h2>
+    {% if teams | length < 2 %}
+      <p class="small text-muted">Register at least two teams for {{ season }} first.</p>
+    {% else %}
+      <form method="POST" action="{{ url_for('federation_add_fixture') }}" class="row g-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="season" value="{{ season }}">
+        <datalist id="fxTeamList">{% for t in teams %}<option value="{{ t.name }}">{{ t.sport }}</option>{% endfor %}</datalist>
+        <div class="col-md-3"><label class="form-label" for="fSport">Sport</label>
+          <select class="form-select" id="fSport" name="sport">{% for s in body.sports %}<option>{{ s }}</option>{% endfor %}</select></div>
+        <div class="col-md-5"><label class="form-label" for="fComp">Competition</label>
+          <select class="form-select" id="fComp" name="competition">{% for c in body.competitions %}<option>{{ c }}</option>{% endfor %}<option>{{ fixtures_mod.FRIENDLY }}</option></select></div>
+        <div class="col-md-4"><label class="form-label" for="fKick">Kick-off (Liberia time)</label>
+          <input class="form-control" id="fKick" name="kickoff_at" type="datetime-local" required></div>
+        <div class="col-md-4"><label class="form-label" for="fHome">Home team</label>
+          <input class="form-control" id="fHome" name="home_team" list="fxTeamList" required autocomplete="off"></div>
+        <div class="col-md-4"><label class="form-label" for="fAway">Away team</label>
+          <input class="form-control" id="fAway" name="away_team" list="fxTeamList" required autocomplete="off"></div>
+        <div class="col-md-4"><label class="form-label" for="fVenue">Venue</label>
+          <input class="form-control" id="fVenue" name="venue" maxlength="150" required placeholder="e.g. SKD Sports Complex"></div>
+        {{ official_pickers(referees, linesmen) }}
+        <div class="col-12 small text-muted"><i class="fa-solid fa-bell"></i> Publishing notifies each team's coaches and the officials to confirm.</div>
+        <div class="col-12"><button class="btn dart-btn" type="submit"><i class="fa-solid fa-paper-plane"></i> Publish fixture</button></div>
+      </form>
+    {% endif %}
+  </section>
+
+  <section class="fx-panel" aria-labelledby="fxUpTitle">
+    <h2 id="fxUpTitle"><i class="fa-solid fa-calendar-days text-success"></i> Upcoming fixtures</h2>
+    <div class="fx-list">{% for f in upcoming %}{{ fixture_row(f) }}{% else %}<p class="text-muted small mb-0">No upcoming fixtures.</p>{% endfor %}</div>
+  </section>
+  <section class="fx-panel" aria-labelledby="fxPastTitle">
+    <h2 id="fxPastTitle"><i class="fa-solid fa-clock-rotate-left text-success"></i> Played &amp; cancelled</h2>
+    <div class="fx-list">{% for f in recent %}{{ fixture_row(f, show_parties=false) }}{% else %}<p class="text-muted small mb-0">Nothing yet.</p>{% endfor %}</div>
+  </section>
+</div>
+{% endblock %}

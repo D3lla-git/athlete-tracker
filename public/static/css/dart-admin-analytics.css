@@ -238,3 +238,13 @@ a.adx-mini:hover { transform: translateY(-1px); box-shadow: var(--adx-shadow); }
 .adx-everyone { grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); }
 /* KPI row: as many tiles as fit (Live now was added). */
 .adx-kpis:not(.adx-kpis-4) { grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }
+/* Live now: members / visitors as two equal mini-stats, then the 24 h line (wraps as normal text). */
+.adx-kpi-live .adx-kpi-head { min-width: 0; }
+.adx-live-split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.adx-live-split > div { min-width: 0; padding: 5px 8px; border-radius: 10px; background: color-mix(in srgb, var(--adx-good) 9%, transparent); }
+.adx-live-split strong { display: block; font-size: 1rem; font-weight: 800; line-height: 1.15; color: var(--adx-ink); }
+.adx-live-split span { display: block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em; color: var(--adx-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adx-live-day { font-size: 0.74rem; font-weight: 600; line-height: 1.35; color: var(--adx-muted); overflow-wrap: anywhere; }
+.adx-live-day > span { display: block; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.adx-live-day b { color: var(--adx-ink); font-weight: 800; }

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}D.A.R.T Rep | D.A.R.T.{% endblock %}
+
+{% block content %}
+<div class="container py-3" style="max-width: 1000px">
+  <section class="fx-hero">
+    <div><div class="fx-eyebrow"><i class="fa-solid fa-user-check"></i> D.A.R.T Rep · {{ current_user.school }}</div>
+      <h1>Records to attest</h1>
+      <div class="fx-chips mt-2"><span>{{ records | length }} recent fixture records</span><span>{{ attested | length }} attested by a Rep</span></div></div>
+  </section>
+  <p class="small text-muted">Attest only what you saw at the game or can check (match sheet, video, officials). If something is wrong, dispute it with the reason:
+    the D.A.R.T Admin decides.</p>
+  <div class="fx-list">
+    {% for r in records %}{% set f = fixtures.get(r.fixture_id) %}{% set c = attested.get(r.id) %}
+      <article class="fx-row">
+        <div class="fx-main">
+          <div class="fx-title">{{ user_link(r.user) }} <small class="text-muted">· {{ r.team }} vs {{ r.team_played_against }} · {{ r.game_date.strftime('%d %b %Y') if r.game_date }}</small></div>
+          <div class="fx-sub">{{ r.sport }}: {% for stat in fr.ATHLETE_STATS[r.sport] %}{{ r[stat] or 0 }} {{ fr.STAT_LABELS[stat] | lower }}{{ ', ' if not loop.last }}{% endfor %}
+            {% if r.man_of_the_match %} · Man of the Match{% endif %}{% if r.queen_of_the_match %} · Queen of the Match{% endif %}</div>
+        </div>
+        <div class="fx-actions">
+          {% if c %}<span class="fx-party is-{{ 'confirmed' if c.decision == 'confirmed' else 'declined' }}">Rep: {{ c.decision }}{% if c.user %} by {{ c.user.display_name }}{% endif %}</span>
+          {% else %}
+            <form method="POST" action="{{ url_for('fixture_record_check', fixture_id=r.fixture_id, record_id=r.id) }}" class="fx-actions m-0">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="role" value="rep"><input type="hidden" name="next" value="{{ url_for('rep_dashboard') }}">
+              <button class="btn btn-sm btn-success" name="decision" value="confirmed"><i class="fa-solid fa-check"></i> Attest</button>
+              <input class="form-control form-control-sm" name="note" maxlength="300" placeholder="Wrong? say what" aria-label="Reason" style="width: 170px">
+              <button class="btn btn-sm btn-outline-danger" name="decision" value="disputed">Dispute</button>
+            </form>
+          {% endif %}
+          {% if f %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('fixture_match', fixture_id=f.id) }}">Match</a>{% endif %}
+        </div>
+      </article>
+    {% else %}<p class="text-muted">No fixture records to attest right now.</p>{% endfor %}
+  </div>
+
+  <details class="fx-panel mt-3">
+    <summary class="fw-bold"><i class="fa-solid fa-calendar-plus"></i> Request a fixture (e.g. a community game)</summary>
+    <form method="POST" action="{{ url_for('fixture_request') }}" class="row g-2 mt-1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-3"><label class="form-label" for="rpSport">Sport</label>
+        <select class="form-select" id="rpSport" name="sport">{% for s in fixtures_mod.SPORTS %}<option>{{ s }}</option>{% endfor %}</select></div>
+      <div class="col-md-4"><label class="form-label" for="rpHome">Home team</label><input class="form-control" id="rpHome" name="home_team" required maxlength="150"></div>
+      <div class="col-md-5"><label class="form-label" for="rpAway">Away team</label><input class="form-control" id="rpAway" name="away_team" required maxlength="150"></div>
+      <div class="col-md-4"><label class="form-label" for="rpKick">Kick-off</label><input class="form-control" id="rpKick" name="kickoff_at" type="datetime-local" required></div>
+      <div class="col-md-8"><label class="form-label" for="rpVenue">Venue</label><input class="form-control" id="rpVenue" name="venue" required maxlength="150"></div>
+      <div class="col-12"><input class="form-control" name="note" maxlength="300" placeholder="Note for the D.A.R.T Admin (optional)" aria-label="Note"></div>
+      <div class="col-12"><button class="btn dart-btn" type="submit"><i class="fa-solid fa-paper-plane"></i> Send request</button></div>
+    </form>
+  </details>
+</div>
+{% endblock %}

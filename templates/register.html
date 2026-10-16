@@ -274,9 +274,12 @@
   <input type="password" name="password" id="password" placeholder="Example: @Xxxxx" class="form-control" required>
 </div>
 
+          {% from '_nin_field.html' import nin_input with context %}
+          {{ nin_input('athlete') }}
           <div class="mb-3">
-            <label>ID or Passport (PNG/JPG/PDF) <i class="fa-solid fa-id-card"></i></label>
-            <input type="file" name="id_document" class="form-control" accept=".png,.jpg,.jpeg,.pdf">
+            <label for="regIdDocument">NIR card, birth certificate, student ID or passport (PNG/JPG/PDF) <i class="fa-solid fa-id-card"></i></label>
+            <input type="file" name="id_document" id="regIdDocument" class="form-control" accept=".png,.jpg,.jpeg,.pdf">
+            <small class="form-text">Used to verify your age. Under 18 without a NIN: upload your birth certificate.</small>
           </div>
           <button type="submit"  class="btn btn-lg rounded-5 dart-btn"
                   style="border: 2px solid black; color: white;">Register 

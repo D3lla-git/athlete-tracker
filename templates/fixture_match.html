@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Match: {{ fixture.home_team }} vs {{ fixture.away_team }}{% endblock %}
+
+{% block content %}
+<div class="container py-3" style="max-width: 1100px">
+  <section class="fx-hero">
+    <div>
+      <div class="fx-eyebrow">{{ body_label(fixture.body) }} · {{ fixture.competition }} · {{ fixture.kickoff_at.strftime('%d %b %Y, %H:%M') }}</div>
+      <h1>{{ team_badge(fixture.home_team) }}{{ fixture.home_team }} <span style="opacity:.6">vs</span> {{ team_badge(fixture.away_team) }}{{ fixture.away_team }}</h1>
+      <div class="fx-chips mt-2">
+        {% for side in ('home', 'away') %}{% set s = sheets.get(side) %}
+          <span><i class="fa-solid {{ 'fa-circle-check' if s else 'fa-hourglass-half' }}"></i> {{ side_team_label(fixture, side) }} team sheet {{ 'sent' if s else 'waiting' }}</span>
+        {% endfor %}
+        <span><i class="fa-solid {{ 'fa-circle-check' if fixture.referee_report_at else 'fa-hourglass-half' }}"></i> Referee report {{ 'sent' if fixture.referee_report_at else 'waiting' }}</span>
+        <span>{{ records | length }} athlete record(s)</span>
+      </div>
+    </div>
+    <a class="btn btn-light btn-sm fw-bold" href="{{ url_for('fixture_detail', fixture_id=fixture.id) }}">Fixture</a>
+  </section>
+
+  {% if not started %}<div class="alert alert-info"><i class="fa-solid fa-clock"></i> Team sheets, the referee report and records open after kick-off.</div>{% endif %}
+
+  {# ---------- team sheets (each team's coach) ---------- #}
+  {% for side in my_sides %}{% set sheet = sheets.get(side) %}{% set lines = {} %}
+    {% if sheet %}{% for l in sheet.lines %}{% set _ = lines.update({l.athlete_id: l}) %}{% endfor %}{% endif %}
+    <section class="fx-panel" id="sheet" aria-labelledby="shTitle{{ side }}">
+      <h2 id="shTitle{{ side }}"><i class="fa-solid fa-clipboard-list text-success"></i> {{ side_team_label(fixture, side) }}: team sheet
+        {% if sheet %}<span class="badge text-bg-success ms-1">Sent {{ sheet.submitted_at.strftime('%d %b %H:%M') }}</span>{% endif %}</h2>
+      {% if started %}
+      <form method="POST" action="{{ url_for('fixture_sheet_save', fixture_id=fixture.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="side" value="{{ side }}">
+        <div class="row g-2 mb-2">
+          <div class="col-md-6"><label class="form-label" for="shComp{{ side }}">Competition category</label>
+            <select class="form-select" id="shComp{{ side }}" name="competition_category" required>
+              {% for c in competitions %}<option {{ 'selected' if sheet and sheet.competition_category == c }}>{{ c }}</option>{% endfor %}</select></div>
+          <div class="col-md-6"><label class="form-label" for="shVenue{{ side }}">Venue</label>
+            <input class="form-control" id="shVenue{{ side }}" name="venue" maxlength="150" value="{{ sheet.venue if sheet else fixture.venue }}"></div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle fm-table">
+            <thead><tr><th>Player</th><th>Played</th><th>MVP</th><th>Minutes</th><th>Position</th>
+              {% if fixture.sport == 'Football' %}<th>Passes completed</th>{% elif fixture.sport == 'Kickball' %}<th>Cut base</th>{% endif %}</tr></thead>
+            <tbody>
+              {% for a in players[side] %}{% set l = lines.get(a.id) %}
+                <tr>
+                  <td class="fm-name">{{ user_link(a) }}{% if a.shirt_number %} <small class="text-muted">#{{ a.shirt_number }}</small>{% endif %}</td>
+                  <td><select class="form-select form-select-sm" name="played_{{ a.id }}" aria-label="{{ a.full_name }} played">
+                    <option value="no">No</option><option value="yes" {{ 'selected' if l and l.played }}>Yes</option></select></td>
+                  <td><select class="form-select form-select-sm" name="mvp_{{ a.id }}" aria-label="{{ a.full_name }} MVP">
+                    <option value="no">No</option><option value="yes" {{ 'selected' if l and l.mvp }}>Yes</option></select></td>
+                  <td><input class="form-control form-control-sm" name="minutes_{{ a.id }}" type="number" min="0" max="{{ fr.MAX_MINUTES[fixture.sport] }}" value="{{ l.minutes if l and l.minutes else '' }}" aria-label="{{ a.full_name }} minutes"></td>
+                  <td><select class="form-select form-select-sm" name="position_{{ a.id }}" aria-label="{{ a.full_name }} position"><option value="">—</option>
+                    {% for pos in positions %}<option {{ 'selected' if l and l.position == pos }}>{{ pos }}</option>{% endfor %}</select></td>
+                  {% if fixture.sport == 'Football' %}<td><input class="form-control form-control-sm" name="passes_{{ a.id }}" type="number" min="0" max="500" value="{{ l.passes if l and l.passes is not none else '' }}" aria-label="{{ a.full_name }} passes"></td>
+                  {% elif fixture.sport == 'Kickball' %}<td><input class="form-control form-control-sm" name="cut_{{ a.id }}" type="number" min="0" max="30" value="{{ l.cut_base if l and l.cut_base is not none else '' }}" aria-label="{{ a.full_name }} cut base"></td>{% endif %}
+                </tr>
+              {% else %}<tr><td colspan="6" class="text-muted small">No athletes of this team are on D.A.R.T. yet.</td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <button class="btn dart-btn" type="submit"><i class="fa-solid fa-paper-plane"></i> {{ 'Update' if sheet else 'Send' }} team sheet to the D.A.R.T Admin</button>
+      </form>
+      {% endif %}
+    </section>
+  {% endfor %}
+
+  {# ---------- referee report (main referee only) ---------- #}
+  {% if is_referee %}
+    <section class="fx-panel" id="referee" aria-labelledby="rfTitle">
+      <h2 id="rfTitle"><i class="fa-solid fa-flag text-warning"></i> Referee report: cards &amp; fouls
+        {% if fixture.referee_report_at %}<span class="badge text-bg-success ms-1">Sent {{ fixture.referee_report_at.strftime('%d %b %H:%M') }}</span>{% endif %}</h2>
+      {% if started %}
+      <form method="POST" action="{{ url_for('fixture_referee_report', fixture_id=fixture.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% set colmap = {'yellow_cards': 'yellow_cards', 'kickball_yellow_cards': 'yellow_cards', 'red_cards': 'red_cards', 'kickball_red_cards': 'red_cards', 'foul_played': 'fouls', 'sent_off': 'sent_off'} %}
+        {% for side in ('home', 'away') %}
+          <h3 class="h6 fw-bold mt-2">{{ side_team_label(fixture, side) }}</h3>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle fm-table">
+              <thead><tr><th>Player</th>{% for name, label, high in fr.DISCIPLINE_FIELDS[fixture.sport] %}<th>{{ label }}</th>{% endfor %}</tr></thead>
+              <tbody>
+                {% for a in players[side] %}{% set d = discipline.get(a.id) %}
+                  <tr><td class="fm-name">{{ a.display_name }}</td>
+                    {% for name, label, high in fr.DISCIPLINE_FIELDS[fixture.sport] %}
+                      <td><input class="form-control form-control-sm" type="number" min="0" max="{{ high }}" name="{{ name }}_{{ a.id }}"
+                                 value="{{ d[colmap[name]] if d else 0 }}" aria-label="{{ a.display_name }} {{ label }}"></td>
+                    {% endfor %}</tr>
+                {% else %}<tr><td colspan="4" class="text-muted small">No athletes of this team are on D.A.R.T.</td></tr>{% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endfor %}
+        <button class="btn dart-btn" type="submit"><i class="fa-solid fa-paper-plane"></i> {{ 'Update' if fixture.referee_report_at else 'Send' }} referee report to the D.A.R.T Admin</button>
+      </form>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  {# ---------- athlete records: cross-sign ---------- #}
+  <section class="fx-panel" id="records" aria-labelledby="rcTitle">
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+      <h2 id="rcTitle" class="mb-0 flex-grow-1"><i class="fa-solid fa-file-signature text-success"></i> Athletes' records</h2>
+      {% if current_user.role == 'System' and records | selectattr('countersign_target', 'equalto', 'dart_admin') | selectattr('status', 'equalto', 'verifying') | list %}
+        <form method="POST" action="{{ url_for('admin_publish_fixture_records', fixture_id=fixture.id) }}" class="m-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-success" type="submit"><i class="fa-solid fa-circle-check"></i> Publish all ready records</button></form>
+      {% endif %}
+    </div>
+    <div class="fx-list">
+      {% for r in records %}{% set ch = checks[r.id] %}{% set needed = fr.required_roles(r.sport) | sort %}
+        <article class="fx-row fm-rec">
+          <div class="fx-main">
+            <div class="fx-title">{{ user_link(r.user) }} <small class="text-muted">· {{ r.team }}{% if r.shirt_number %} · #{{ r.shirt_number }}{% endif %}</small>
+              {% set st = {'pending': 'warning', 'verifying': 'info', 'approved': 'success', 'disputed': 'danger', 'rejected': 'secondary'} %}
+              <span class="badge text-bg-{{ st.get(r.status, 'secondary') }}">{{ 'Ready to publish' if r.status == 'verifying' and r.countersign_target == 'dart_admin' else r.status | capitalize }}</span></div>
+            <div class="fm-stats">
+              {% for stat in fr.ATHLETE_STATS[r.sport] %}<span><b>{{ r[stat] or 0 }}</b> {{ fr.STAT_LABELS[stat] }}</span>{% endfor %}
+              {% if r.man_of_the_match %}<span><b>Yes</b> Man of the Match</span>{% endif %}
+              {% if r.queen_of_the_match %}<span><b>Yes</b> Queen of the Match</span>{% endif %}
+              {% if r.trophy %}<span><i class="fa-solid fa-trophy"></i> {{ r.trophy }}</span>{% endif %}
+            </div>
+            <div class="fx-parties">
+              {% for role in needed + ['rep'] %}{% set c = ch.get(role) %}
+                {% if c or role != 'rep' %}
+                  <span class="fx-party is-{{ 'confirmed' if c and c.decision == 'confirmed' else ('declined' if c else 'waiting') }}" title="{{ c.note if c and c.note else '' }}">
+                    {{ fr.CHECK_ROLES[role] }} · {{ ('signed by ' ~ c.user.display_name) if c and c.user else 'waiting' }}{% if c and c.decision == 'disputed' %} (disputed){% endif %}</span>
+                {% endif %}
+              {% endfor %}
+            </div>
+            {% if r.status == 'disputed' and r.dispute_reason %}<div class="small text-danger mt-1"><i class="fa-solid fa-triangle-exclamation"></i> {{ r.dispute_reason }}</div>{% endif %}
+          </div>
+          <div class="fm-act">
+            {% for role in roles[r.id] if role not in ch and (r.status == 'pending' or (role == 'rep' and r.status == 'verifying')) %}
+              <form method="POST" action="{{ url_for('fixture_record_check', fixture_id=fixture.id, record_id=r.id) }}" class="fm-check">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="role" value="{{ role }}">
+                <div class="small fw-bold">As {{ fr.CHECK_ROLES[role].lower() }}</div>
+                <button class="btn btn-sm btn-success" name="decision" value="confirmed"><i class="fa-solid fa-check"></i> {{ 'Attest' if role == 'rep' else 'Cross-sign' }}</button>
+                <input class="form-control form-control-sm" name="note" maxlength="300" placeholder="Wrong? say what" aria-label="Reason">
+                <button class="btn btn-sm btn-outline-danger" name="decision" value="disputed">Dispute</button>
+              </form>
+            {% endfor %}
+            {% if current_user.role == 'System' and r.status == 'verifying' and r.countersign_target == 'dart_admin' %}
+              <form method="POST" action="{{ url_for('admin_publish_fixture_records', fixture_id=fixture.id) }}" class="m-0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="record_id" value="{{ r.id }}">
+                <button class="btn btn-sm btn-success" type="submit">Publish</button></form>
+            {% endif %}
+          </div>
+        </article>
+      {% else %}<p class="small text-muted mb-0">No athlete has sent a record for this game yet.</p>{% endfor %}
+    </div>
+  </section>
+</div>
+<style>
+  .fm-table th { font-size: 0.75rem; white-space: nowrap; }
+  .fm-table td { min-width: 70px; }
+  .fm-table td.fm-name { min-width: 150px; font-weight: 700; }
+  .fm-stats { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.85rem; margin: 4px 0; }
+  .fm-act { display: flex; flex-direction: column; gap: 6px; flex: 0 1 260px; }
+  .fm-check { display: grid; grid-template-columns: auto 1fr auto; gap: 4px; align-items: center; }
+  .fm-check .small { grid-column: 1 / -1; }
+  @media (max-width: 575.98px) { .fm-act { flex-basis: 100%; } }
+</style>
+{% endblock %}
