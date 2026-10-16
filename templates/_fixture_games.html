@@ -13,7 +13,7 @@
       <article class="fx-row">
         <div class="fx-when"><strong>{{ f.kickoff_at.strftime('%d %b') }}</strong><span>{{ f.kickoff_at.strftime('%H:%M') }}</span></div>
         <div class="fx-main">
-          <div class="fx-title">{{ team_badge(current_user.school) }}{{ side_team_label(f, g.side) }} <span class="text-muted">vs</span> {{ team_badge(g.opponent) }}{{ g.opponent }}</div>
+          <div class="fx-title">{% set _mine = side_team_label(f, g.side) %}{{ team_badge(_mine) }}{{ _mine }} <span class="text-muted">vs</span> {{ team_badge(g.opponent) }}{{ g.opponent }}</div>
           <div class="fx-sub">{{ f.sport }} · {{ f.competition }} · <i class="fa-solid fa-location-dot"></i> {{ f.venue }}</div>
         </div>
         <div class="fx-actions">

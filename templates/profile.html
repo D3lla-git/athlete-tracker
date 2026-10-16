@@ -151,11 +151,6 @@
                      class="rounded-circle shadow"
                      style="width: 150px; height: 150px; object-fit: cover; border: 3px solid #dee2e6;"
                      alt="Profile Picture">
-              {% elif current_user.id_document %}
-                <img src="{{ url_for('id_document', filename=current_user.id_document) }}"
-                     class="rounded-circle shadow"
-                     style="width: 150px; height: 150px; object-fit: cover; border: 3px solid #dee2e6;"
-                     alt="ID Document">
               {% else %}
                 <div class="rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center shadow"
                      style="width: 150px; height: 150px; font-size: 3.5rem; font-weight: 600;">

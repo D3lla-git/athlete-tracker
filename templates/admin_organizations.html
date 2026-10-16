@@ -64,7 +64,7 @@
       <div class="ao-card-main d-flex gap-3 align-items-center">
         <img src="{{ market_image_url_path(org.logo_pending_path) }}" alt="Proposed logo of {{ org.org_name }}" class="org-logo-preview">
         <div><strong>{{ org_link(org) }}</strong><div class="small text-muted">{{ org.org_type }}{% if org.city %} · {{ org.city }}{% endif %}</div>
-          {% if org.logo_path %}<div class="small">Current: <img src="{{ org_logo_url(org) }}" alt="" class="team-badge"></div>{% endif %}</div>
+          {% if org_logo_approved(org) %}<div class="small">Current: <img src="{{ org_logo_url(org) }}" alt="" class="team-badge"></div>{% endif %}</div>
       </div>
       <div class="d-flex flex-wrap gap-2 mt-2">
         <form method="POST" action="{{ url_for('admin_organization_logo', org_id=org.id, action='approve') }}">

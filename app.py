@@ -394,7 +394,7 @@ csrf = CSRFProtect(app)
 def add_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
-    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')   # a route may set a stricter one
     response.headers['Permissions-Policy'] = (
         'camera=(), microphone=(), geolocation=(self)'   # location: only our own pages (vendors pin their shop)
     )
@@ -7362,8 +7362,13 @@ def organization_settings():
 ORG_LOGO_PREFIX = 'org-logos'
 
 
+def org_logo_approved(org):
+    """A logo shows only for a verified organization whose logo the D.A.R.T Admin approved."""
+    return bool(org and org.logo_path and org.logo_reviewed_at and org.verification_status == 'verified')
+
+
 def org_logo_url(org):
-    if org and org.logo_path:
+    if org_logo_approved(org):
         try:
             return highlight_public_url(org.logo_path)
         except Exception as e:
@@ -7376,8 +7381,9 @@ def _team_logo_index():
     if has_request_context() and '_team_logos' in g:
         return g._team_logos
     index = {}
-    for org in OrganizationProfile.query.filter(OrganizationProfile.logo_path.isnot(None),
-                                                OrganizationProfile.verification_status == 'verified').all():
+    for org in (OrganizationProfile.query.join(User, User.id == OrganizationProfile.user_id)
+                .filter(OrganizationProfile.logo_path.isnot(None), OrganizationProfile.logo_reviewed_at.isnot(None),
+                        OrganizationProfile.verification_status == 'verified', User.is_suspended.is_(False)).all()):
         url = org_logo_url(org)
         if not url:
             continue
@@ -7476,7 +7482,7 @@ app.jinja_env.globals['org_map_embed'] = lambda org: market_mod.place_map_embed(
 app.jinja_env.globals['coach_positions'] = coaching.COACH_POSITIONS
 app.jinja_env.globals['org_plan_for'] = lambda user: plan_for_user(user)
 app.jinja_env.globals['org_pro_from'] = lambda: min(p.price for p in PLANS.values() if p.ownerships)
-app.jinja_env.globals.update(team_badge=team_badge, team_logo_url=team_logo_url, org_logo_url=org_logo_url, team_org_url=team_org_url,
+app.jinja_env.globals.update(org_logo_approved=org_logo_approved, team_badge=team_badge, team_logo_url=team_logo_url, org_logo_url=org_logo_url, team_org_url=team_org_url,
                              market_image_url_path=private_image_url)
 
 
@@ -9419,9 +9425,10 @@ def id_document(filename):
     # D.A.R.T Admin can view documents from all schools
     is_super_admin = current_user.role == 'System'
 
-    # Coaches can only view ID documents of athletes on a team they manage.
+    # Coaches can only view ID documents of athletes on a team they manage (verified, active coaches only).
     if not is_super_admin:
-        if current_user.role != 'Coach' or owner.role != 'Athlete' or not coaching.manages_athlete(current_user, owner):
+        if (current_user.role != 'Coach' or not current_user.is_verified or current_user.is_suspended or current_user.license_revoked
+                or owner.role != 'Athlete' or not coaching.manages_athlete(current_user, owner)):
             flash(
                 'You are not authorized to view this ID document.',
                 'danger'
@@ -9429,9 +9436,10 @@ def id_document(filename):
             return redirect(url_for('admin_dashboard'))
 
     try:
+        # A short-lived link (2 minutes): enough to open it, useless if copied or forwarded.
         result = supabase.storage.from_('id-documents').create_signed_url(
             filename,
-            3600
+            120
         )
 
         if isinstance(result, dict):
@@ -9442,7 +9450,13 @@ def id_document(filename):
             )
 
             if signed_url:
-                return redirect(signed_url)
+                create_audit_log(action='id_document_viewed', actor_user_id=current_user.id, target_type='User',
+                                 target_id=str(owner.id), details={})
+                db.session.commit()
+                response = redirect(signed_url)
+                response.headers['Cache-Control'] = 'no-store'
+                response.headers['Referrer-Policy'] = 'no-referrer'
+                return response
 
         flash('ID document could not be loaded.', 'danger')
         return redirect(url_for('admin_dashboard'))

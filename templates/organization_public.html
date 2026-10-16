@@ -6,7 +6,7 @@
 <div class="container py-4 op-page">
   {# Read only: a verified organization's public page. #}
   <section class="op-hero" aria-labelledby="opName">
-    {% if org.logo_path %}<img class="op-logo" src="{{ org_logo_url(org) }}" alt="{{ org.org_name }} badge">
+    {% if org_logo_approved(org) %}<img class="op-logo" src="{{ org_logo_url(org) }}" alt="{{ org.org_name }} badge">
     {% else %}<span class="op-logo op-logo-empty" aria-hidden="true"><i class="fa-solid fa-building-shield"></i></span>{% endif %}
     <div class="op-head">
       <span class="op-eyebrow">{{ org.org_type }}</span>

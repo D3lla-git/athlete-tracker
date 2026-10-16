@@ -49,7 +49,7 @@
     {% set o = item.org %}
     <article class="os-card">
       <div class="os-head">
-        {% if o.logo_path %}
+        {% if org_logo_approved(o) %}
           <img class="os-logo" src="{{ org_logo_url(o) }}" alt="{{ o.org_name }} badge" loading="lazy" style="object-fit: contain; background: #fff">
         {% else %}
           <span class="os-logo" aria-hidden="true"><i class="fa-solid fa-building-shield"></i></span>
